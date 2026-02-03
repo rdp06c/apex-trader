@@ -1165,15 +1165,57 @@
 
         // Stock sector mapping
         const stockSectors = {
-            'AAPL': 'Technology',
-            'GOOGL': 'Technology',
-            'MSFT': 'Technology',
+            // Tech - AI/Software
             'NVDA': 'Technology',
+            'AMD': 'Technology',
+            'GOOGL': 'Technology',
             'META': 'Technology',
+            'PLTR': 'Technology',
+            'SNOW': 'Technology',
+            'MSFT': 'Technology',
+            
+            // Tech - Hardware
+            'AAPL': 'Technology',
+            'QCOM': 'Technology',
+            'INTC': 'Technology',
+            'MU': 'Technology',
+            'ARM': 'Technology',
+            
+            // EV/Automotive
             'TSLA': 'Automotive',
-            'AMZN': 'Consumer Cyclical',
+            'RIVN': 'Automotive',
+            'F': 'Automotive',
+            'GM': 'Automotive',
+            
+            // Finance
+            'JPM': 'Financial',
+            'BAC': 'Financial',
+            'V': 'Financial',
+            'MA': 'Financial',
+            'COIN': 'Financial',
+            
+            // Growth Tech
+            'DKNG': 'Technology',
+            'RBLX': 'Technology',
+            
+            // Healthcare
+            'JNJ': 'Healthcare',
+            'UNH': 'Healthcare',
+            'LLY': 'Healthcare',
+            'PFE': 'Healthcare',
+            'MRNA': 'Healthcare',
+            
+            // Consumer
+            'AMZN': 'Consumer',
+            'WMT': 'Consumer',
+            'COST': 'Consumer',
+            'SBUX': 'Consumer',
+            'NKE': 'Consumer',
+            
+            // Index Funds
             'SPY': 'Index Fund',
             'QQQ': 'Index Fund',
+            'IWM': 'Index Fund',
             'VOO': 'Index Fund'
         };
 
@@ -1419,51 +1461,67 @@
                     });
                 }
                 
-                // Get base price for the index
-                const indexBasePrice = {
-                    '^GSPC': 5800,
-                    '^IXIC': 18500,
-                    '^DJI': 42500
-                }[compareSymbol] || 5800;
+                // Try to get real index data via ETF
+                const indexData = await getIndexPrice(compareSymbol, 0);
                 
-                // Update comparison data (normalized to portfolio starting value)
-                const indexData = await getIndexPrice(compareSymbol, indexBasePrice);
-                const normalizedValue = portfolio.initialBalance * (1 + indexData.changePercent / 100);
-                
-                // Fill with simulated data points matching portfolio history length
-                const comparisonData = portfolio.performanceHistory.map((_, index) => {
-                    const progress = index / Math.max(portfolio.performanceHistory.length - 1, 1);
-                    return portfolio.initialBalance + (normalizedValue - portfolio.initialBalance) * progress;
-                });
-                
-                const indexName = {
-                    '^GSPC': 'S&P 500',
-                    '^IXIC': 'NASDAQ',
-                    '^DJI': 'Dow Jones'
-                }[compareSymbol] || compareSymbol;
-                
-                performanceChart.data.datasets[1].data = comparisonData;
-                performanceChart.data.datasets[1].label = indexName + ' (Normalized)';
-                
-                // Calculate outperformance (with safety checks)
-                const performanceHistory = portfolio.performanceHistory || [];
-                if (performanceHistory.length > 0) {
-                    const currentPortfolioValue = performanceHistory[performanceHistory.length - 1].value;
-                    const currentIndexValue = comparisonData[comparisonData.length - 1];
-                    
-                    const initialBalance = portfolio.initialBalance || 0;
-                    const portfolioReturn = initialBalance > 0 ? ((currentPortfolioValue - initialBalance) / initialBalance) * 100 : 0;
-                    const indexReturn = initialBalance > 0 ? ((currentIndexValue - initialBalance) / initialBalance) * 100 : 0;
-                    const outperformance = portfolioReturn - indexReturn;
-                    
+                // Check if we got real data
+                if (indexData.error || !indexData.isReal) {
+                    // Show error message
                     const outperformanceText = document.getElementById('outperformanceText');
-                    outperformanceText.textContent = (outperformance >= 0 ? '+' : '') + outperformance.toFixed(2) + '%';
-                    outperformanceText.style.color = outperformance >= 0 ? '#34d399' : '#f87171';
-                } else {
-                    // No performance history yet
-                    const outperformanceText = document.getElementById('outperformanceText');
-                    outperformanceText.textContent = '0.00%';
+                    outperformanceText.textContent = '--';
                     outperformanceText.style.color = '#94a3b8';
+                    
+                    // Hide comparison line
+                    performanceChart.data.datasets[1].data = [];
+                    performanceChart.data.datasets[1].label = 'Comparison unavailable';
+                    
+                    console.warn(`Unable to fetch ${compareSymbol} data for comparison`);
+                } else {
+                    // We have real data! Calculate comparison
+                    // Store initial ETF price for this comparison session
+                    if (!window.comparisonBasePrice || window.lastCompareSymbol !== compareSymbol) {
+                        window.comparisonBasePrice = indexData.price;
+                        window.lastCompareSymbol = compareSymbol;
+                    }
+                    
+                    // Calculate what portfolio would be worth if it tracked the ETF
+                    const etfReturn = ((indexData.price - window.comparisonBasePrice) / window.comparisonBasePrice);
+                    const hypotheticalValue = portfolio.initialBalance * (1 + etfReturn);
+                    
+                    // Fill comparison data matching portfolio history length
+                    const comparisonData = portfolio.performanceHistory.map((_, index) => {
+                        const progress = index / Math.max(portfolio.performanceHistory.length - 1, 1);
+                        return portfolio.initialBalance + (hypotheticalValue - portfolio.initialBalance) * progress;
+                    });
+                    
+                    const indexName = {
+                        '^GSPC': 'S&P 500',
+                        '^IXIC': 'NASDAQ',
+                        '^DJI': 'Dow Jones'
+                    }[compareSymbol] || compareSymbol;
+                    
+                    performanceChart.data.datasets[1].data = comparisonData;
+                    performanceChart.data.datasets[1].label = `${indexName} (via ${indexData.etfSymbol})`;
+                    
+                    // Calculate outperformance
+                    const performanceHistory = portfolio.performanceHistory || [];
+                    if (performanceHistory.length > 0) {
+                        const currentPortfolioValue = performanceHistory[performanceHistory.length - 1].value;
+                        const currentIndexValue = comparisonData[comparisonData.length - 1];
+                        
+                        const initialBalance = portfolio.initialBalance || 0;
+                        const portfolioReturn = initialBalance > 0 ? ((currentPortfolioValue - initialBalance) / initialBalance) * 100 : 0;
+                        const indexReturn = initialBalance > 0 ? ((currentIndexValue - initialBalance) / initialBalance) * 100 : 0;
+                        const outperformance = portfolioReturn - indexReturn;
+                        
+                        const outperformanceText = document.getElementById('outperformanceText');
+                        outperformanceText.textContent = (outperformance >= 0 ? '+' : '') + outperformance.toFixed(2) + '%';
+                        outperformanceText.style.color = outperformance >= 0 ? '#34d399' : '#f87171';
+                    } else {
+                        const outperformanceText = document.getElementById('outperformanceText');
+                        outperformanceText.textContent = '--';
+                        outperformanceText.style.color = '#94a3b8';
+                    }
                 }
                 
                 const outperformanceDetail = document.getElementById('outperformanceDetail');
@@ -1911,24 +1969,78 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
             const overallReasoning = response.overall_reasoning || '';
             const researchSummary = response.research_summary || '';
             
-            // Add overall reasoning to decision panel
+            // VALIDATE BUDGET BEFORE SHOWING DECISIONS
+            // Calculate total cost of all BUY decisions
+            let totalCost = 0;
+            let budgetWarning = '';
+            const validatedDecisions = [];
+            
+            for (const decision of decisions) {
+                if (decision.action === 'BUY') {
+                    const price = marketData[decision.symbol]?.price || 0;
+                    const cost = price * decision.shares;
+                    totalCost += cost;
+                }
+            }
+            
+            // If total cost exceeds available cash, filter out decisions that won't work
+            if (totalCost > portfolio.cash) {
+                budgetWarning = `⚠️ APEX's original plan required $${totalCost.toFixed(2)} but only $${portfolio.cash.toFixed(2)} available. Adjusting trades...`;
+                addActivity(budgetWarning, 'warning');
+                
+                // Keep only decisions that fit within budget (prioritize by conviction)
+                const buyDecisions = decisions.filter(d => d.action === 'BUY')
+                    .sort((a, b) => (b.conviction || 5) - (a.conviction || 5)); // Highest conviction first
+                
+                let remainingCash = portfolio.cash;
+                for (const decision of buyDecisions) {
+                    const price = marketData[decision.symbol]?.price || 0;
+                    const cost = price * decision.shares;
+                    
+                    if (cost <= remainingCash) {
+                        validatedDecisions.push(decision);
+                        remainingCash -= cost;
+                    } else {
+                        // Try to buy fewer shares if possible
+                        const affordableShares = Math.floor(remainingCash / price);
+                        if (affordableShares > 0) {
+                            validatedDecisions.push({
+                                ...decision,
+                                shares: affordableShares,
+                                reasoning: decision.reasoning + ` (reduced from ${decision.shares} to ${affordableShares} shares due to budget)`
+                            });
+                            remainingCash -= affordableShares * price;
+                        }
+                    }
+                }
+                
+                // Add SELL decisions (they don't cost money)
+                validatedDecisions.push(...decisions.filter(d => d.action === 'SELL'));
+                
+            } else {
+                // Budget is fine, use all decisions
+                validatedDecisions.push(...decisions);
+            }
+            
+            // Add overall reasoning to decision panel (with validated decisions)
             addDecisionReasoning({
-                action: decisions.length > 0 ? 'MULTI' : 'HOLD',
+                action: validatedDecisions.length > 0 ? 'MULTI' : 'HOLD',
                 reasoning: overallReasoning,
                 research_summary: researchSummary,
-                decisions: decisions
+                decisions: validatedDecisions,
+                budgetWarning: budgetWarning
             }, marketData);
             
-            // If no decisions, it's a HOLD
-            if (decisions.length === 0) {
-                addActivity(`APEX is holding steady – "${overallReasoning}"`, 'hold');
+            // If no decisions after validation, it's a HOLD
+            if (validatedDecisions.length === 0) {
+                addActivity(`APEX wanted to trade but insufficient funds for any positions`, 'error');
                 return;
             }
             
             // Execute each trade
             let successCount = 0;
             let failCount = 0;
-            for (const decision of decisions) {
+            for (const decision of validatedDecisions) {
                 try {
                     const success = await executeSingleTrade(decision, marketData, overallReasoning);
                     if (success) {
@@ -1944,12 +2056,12 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
             }
             
             // Summary message
-            if (successCount === decisions.length) {
+            if (successCount === validatedDecisions.length) {
                 addActivity(`✅ APEX executed ${successCount} trade(s) successfully!`, 'success');
             } else if (successCount > 0) {
-                addActivity(`⚠️ APEX executed ${successCount}/${decisions.length} trades (${failCount} failed due to insufficient funds)`, 'warning');
+                addActivity(`⚠️ APEX executed ${successCount}/${validatedDecisions.length} trades (${failCount} failed)`, 'warning');
             } else {
-                addActivity(`❌ No trades executed - all ${failCount} trades failed (insufficient funds)`, 'error');
+                addActivity(`❌ No trades executed - all ${failCount} trades failed`, 'error');
             }
             
             await updateUI();
@@ -2187,18 +2299,50 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                 let html = '';
                 for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
                     const priceData = await getStockPrice(symbol);
-                    const value = priceData.price * shares;
+                    const currentValue = priceData.price * shares;
                     const changeClass = priceData.change >= 0 ? 'positive' : 'negative';
                     
+                    // Find purchase info from transactions
+                    const buyTransactions = portfolio.transactions.filter(t => t.type === 'BUY' && t.symbol === symbol);
+                    let avgPurchasePrice = 0;
+                    let earliestDate = null;
+                    
+                    if (buyTransactions.length > 0) {
+                        const totalCost = buyTransactions.reduce((sum, t) => sum + t.cost, 0);
+                        const totalShares = buyTransactions.reduce((sum, t) => sum + t.shares, 0);
+                        avgPurchasePrice = totalCost / totalShares;
+                        earliestDate = new Date(buyTransactions[0].timestamp);
+                    }
+                    
+                    const gainLoss = currentValue - (avgPurchasePrice * shares);
+                    const gainLossPercent = avgPurchasePrice > 0 ? ((priceData.price - avgPurchasePrice) / avgPurchasePrice) * 100 : 0;
+                    const gainLossClass = gainLoss >= 0 ? 'positive' : 'negative';
+                    
+                    // Get stock name (simplified - just use symbol for now, could add a name mapping later)
+                    const stockName = symbol;
+                    
                     html += `
-                        <div class="holding-item">
-                            <div>
-                                <div class="holding-symbol">${symbol}</div>
-                                <div class="holding-shares">${shares} shares</div>
+                        <div class="holding-item" style="flex-direction: column; align-items: stretch; padding: 15px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <div class="holding-symbol" style="font-size: 18px; font-weight: 700;">${symbol}</div>
+                                    <div class="holding-shares" style="font-size: 12px; color: #94a3b8;">${shares} shares</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div class="holding-price" style="font-size: 16px; font-weight: 600;">$${currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                    <div class="stat-change ${gainLossClass}" style="font-size: 12px;">${gainLoss >= 0 ? '+' : ''}$${Math.abs(gainLoss).toFixed(2)} (${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}%)</div>
+                                </div>
                             </div>
-                            <div class="holding-value">
-                                <div class="holding-price">$${value.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                                <div class="stat-change ${changeClass}">${priceData.changePercent >= 0 ? '+' : ''}${priceData.changePercent.toFixed(2)}%</div>
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748b; padding-top: 8px; border-top: 1px solid rgba(100, 116, 139, 0.2);">
+                                <div>
+                                    <span style="color: #94a3b8;">Avg Cost:</span> $${avgPurchasePrice.toFixed(2)}
+                                </div>
+                                <div>
+                                    <span style="color: #94a3b8;">Current:</span> $${priceData.price.toFixed(2)} <span class="stat-change ${changeClass}" style="font-size: 10px;">${priceData.changePercent >= 0 ? '+' : ''}${priceData.changePercent.toFixed(2)}%</span>
+                                </div>
+                                <div>
+                                    <span style="color: #94a3b8;">Purchased:</span> ${earliestDate ? earliestDate.toLocaleDateString() : 'N/A'}
+                                </div>
                             </div>
                         </div>
                     `;
@@ -2629,21 +2773,38 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                 });
                 
                 reasoningCard.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
                         <div style="font-size: 16px; font-weight: 700; color: #6366f1;">
-                            🎯 APEX's Multi-Stock Analysis (${decision.decisions.length} picks)
+                            🎯 APEX's Analysis (${decision.decisions.length} pick${decision.decisions.length > 1 ? 's' : ''})
                         </div>
                         <div style="font-size: 11px; color: #64748b;">
                             ${timestamp.toLocaleTimeString()}
                         </div>
                     </div>
-                    <div style="color: #cbd5e1; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">
-                        "${decision.reasoning}"
-                    </div>
+                    ${decision.budgetWarning ? `
+                        <div style="background: rgba(251, 191, 36, 0.1); border-left: 3px solid #fbbf24; padding: 8px 12px; margin-bottom: 12px; border-radius: 4px; font-size: 12px; color: #fbbf24;">
+                            ${decision.budgetWarning}
+                        </div>
+                    ` : ''}
                     ${stocksList}
+                    ${decision.reasoning ? `
+                        <div style="margin-top: 12px; padding: 12px; background: rgba(99, 102, 241, 0.05); border-radius: 6px;">
+                            <div style="font-size: 11px; font-weight: 600; color: #818cf8; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                💭 APEX's Thoughts
+                            </div>
+                            <div style="color: #cbd5e1; font-size: 13px; line-height: 1.7; font-style: italic;">
+                                ${decision.reasoning}
+                            </div>
+                        </div>
+                    ` : ''}
                     ${decision.research_summary ? `
-                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(100, 116, 139, 0.3); font-size: 12px; color: #94a3b8;">
-                            📰 Research: ${decision.research_summary}
+                        <div style="margin-top: 12px; padding: 12px; background: rgba(34, 197, 94, 0.05); border-radius: 6px;">
+                            <div style="font-size: 11px; font-weight: 600; color: #4ade80; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                📰 Research Summary
+                            </div>
+                            <div style="font-size: 12px; color: #94a3b8; line-height: 1.6;">
+                                ${decision.research_summary}
+                            </div>
                         </div>
                     ` : ''}
                 `;
@@ -2925,43 +3086,40 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
 
         // Get index price using Alpha Vantage (real data, uses API calls)
         async function getIndexPrice(symbol, basePrice) {
-            // Alpha Vantage doesn't support symbols with ^, so we map to ETFs
+            // Map indices to their corresponding ETFs for tracking
             const etfMapping = {
                 '^GSPC': 'SPY',   // S&P 500 ETF
                 '^IXIC': 'QQQ',   // NASDAQ ETF
-                '^DJI': 'DIA',    // Dow Jones ETF
-                '^RUT': 'IWM'     // Russell 2000 ETF
+                '^DJI': 'DIA'     // Dow Jones ETF
             };
             
             const etfSymbol = etfMapping[symbol];
             
             if (!etfSymbol) {
                 console.error('No ETF mapping for', symbol);
-                return { price: basePrice, changePercent: 0, change: 0, isReal: false };
+                return { price: 0, changePercent: 0, change: 0, isReal: false, error: true };
             }
             
             try {
-                // Use Alpha Vantage to get real ETF prices
+                // Get the ETF price data
                 const priceData = await getStockPrice(etfSymbol);
                 
-                // Scale ETF price to match index ranges (approximate)
-                const scaleFactor = {
-                    'SPY': 12,    // SPY ~$580 vs S&P ~6,000
-                    'QQQ': 60,    // QQQ ~$500 vs NASDAQ ~23,000
-                    'DIA': 125,   // DIA ~$450 vs Dow ~48,000
-                    'IWM': 10     // IWM ~$230 vs Russell ~2,600
-                };
+                if (!priceData || !priceData.isReal) {
+                    throw new Error('Failed to get real ETF data');
+                }
                 
+                // Return the ETF data directly - we'll normalize it in the chart
                 return {
-                    price: priceData.price * scaleFactor[etfSymbol],
-                    changePercent: priceData.changePercent,
-                    change: priceData.change * scaleFactor[etfSymbol],
-                    isReal: priceData.isReal
+                    price: priceData.price,
+                    changePercent: priceData.changePercent || 0,
+                    change: priceData.change || 0,
+                    isReal: priceData.isReal,
+                    etfSymbol: etfSymbol
                 };
             } catch (error) {
-                console.error(`Error fetching index price for ${symbol}:`, error);
+                console.error(`Error fetching index ETF price for ${symbol} (${etfSymbol}):`, error);
                 
-                // If we can't get data, show error instead of fake data
+                // Return error state
                 return {
                     price: 0,
                     changePercent: 0,
