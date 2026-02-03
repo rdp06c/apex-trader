@@ -823,7 +823,7 @@
                     <p style="color: #94a3b8; font-size: 14px; margin-top: 5px;">Autonomous Portfolio EXpert</p>
                 </div>
                 <div style="display: flex; gap: 15px; align-items: center;">
-                    <div id="cloudSyncStatus" style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; padding: 8px 12px; background: rgba(99, 102, 241, 0.1); border-radius: 8px;">
+                    <div id="cloudSyncStatus" onclick="handleCloudSyncClick()" style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; padding: 8px 12px; background: rgba(99, 102, 241, 0.1); border-radius: 8px; cursor: pointer;">
                         <span id="syncIcon">☁️</span>
                         <span id="syncText">Not synced</span>
                     </div>
@@ -1100,6 +1100,42 @@
         function initGdriveConfig() {
             GDRIVE_CONFIG.CLIENT_ID = GOOGLE_CLIENT_ID;
             GDRIVE_CONFIG.API_KEY = GOOGLE_API_KEY;
+        }
+
+        // Handle cloud sync button click
+        function handleCloudSyncClick() {
+            // Check if Google Drive is configured
+            if (!GDRIVE_CONFIG.CLIENT_ID || !GDRIVE_CONFIG.API_KEY || 
+                GDRIVE_CONFIG.CLIENT_ID === '' || GDRIVE_CONFIG.API_KEY === '') {
+                alert('⚙️ Google Drive Not Configured\n\nPlease configure your Google API keys first:\n\n1. Click "Account Controls & Settings"\n2. Go to "API Configuration" → Show\n3. Enter your Google Client ID and API Key\n4. Click "Save Locally"\n5. Then come back and click this cloud icon');
+                
+                // Auto-open settings
+                const controls = document.getElementById('controlsContent');
+                const toggle = document.getElementById('controlsToggle');
+                if (controls.style.display === 'none') {
+                    controls.style.display = 'block';
+                    toggle.textContent = '▲';
+                }
+                
+                // Auto-open API config
+                const apiPanel = document.getElementById('apiConfigPanel');
+                const apiToggle = document.getElementById('apiConfigToggle');
+                if (apiPanel && apiPanel.style.display === 'none') {
+                    apiPanel.style.display = 'block';
+                    apiToggle.textContent = 'Hide';
+                    loadApiKeysToForm();
+                }
+                
+                return;
+            }
+
+            // If configured but not authorized yet, trigger authorization
+            if (!gdriveAuthorized && tokenClient) {
+                tokenClient.requestAccessToken();
+            } else if (gdriveAuthorized) {
+                // Already authorized, maybe sync portfolio
+                savePortfolioToGoogleDrive();
+            }
         }
 
         let gdriveReady = false;
