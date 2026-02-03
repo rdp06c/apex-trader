@@ -1166,57 +1166,142 @@
         // Stock sector mapping
         const stockSectors = {
             // Tech - AI/Software
-            'NVDA': 'Technology',
-            'AMD': 'Technology',
-            'GOOGL': 'Technology',
-            'META': 'Technology',
-            'PLTR': 'Technology',
-            'SNOW': 'Technology',
-            'MSFT': 'Technology',
+            'NVDA': 'Technology', 'AMD': 'Technology', 'GOOGL': 'Technology', 'GOOG': 'Technology',
+            'META': 'Technology', 'PLTR': 'Technology', 'SNOW': 'Technology', 'MSFT': 'Technology',
+            'ORCL': 'Technology', 'CRM': 'Technology', 'ADBE': 'Technology', 'NOW': 'Technology',
+            'AI': 'Technology', 'BBAI': 'Technology', 'SOUN': 'Technology', 'PATH': 'Technology',
+            'S': 'Technology', 'HUBS': 'Technology', 'ZM': 'Technology', 'DOCU': 'Technology',
+            'TEAM': 'Technology', 'WDAY': 'Technology', 'VEEV': 'Technology', 'ESTC': 'Technology',
+            'DDOG': 'Technology', 'NET': 'Technology', 'MDB': 'Technology', 'CRWD': 'Technology',
+            'PANW': 'Technology', 'ZS': 'Technology', 'OKTA': 'Technology', 'CFLT': 'Technology',
+            'GTLB': 'Technology', 'FROG': 'Technology', 'BILL': 'Technology', 'DOCN': 'Technology',
+            'ZI': 'Technology', 'MNDY': 'Technology', 'PCOR': 'Technology', 'APP': 'Technology',
             
-            // Tech - Hardware
-            'AAPL': 'Technology',
-            'QCOM': 'Technology',
-            'INTC': 'Technology',
-            'MU': 'Technology',
-            'ARM': 'Technology',
+            // Tech - Hardware/Semiconductors
+            'AAPL': 'Technology', 'QCOM': 'Technology', 'INTC': 'Technology', 'MU': 'Technology',
+            'ARM': 'Technology', 'AVGO': 'Technology', 'TXN': 'Technology', 'ADI': 'Technology',
+            'NXPI': 'Technology', 'KLAC': 'Technology', 'ASML': 'Technology', 'TSM': 'Technology',
+            'SNPS': 'Technology', 'CDNS': 'Technology', 'ON': 'Technology', 'MPWR': 'Technology',
+            'SWKS': 'Technology', 'QRVO': 'Technology', 'DELL': 'Technology', 'HPQ': 'Technology',
+            'AMAT': 'Technology', 'LRCX': 'Technology', 'MRVL': 'Technology', 'ENTG': 'Technology',
+            'FORM': 'Technology', 'MKSI': 'Technology', 'COHR': 'Technology', 'IPGP': 'Technology',
+            'LITE': 'Technology', 'AMBA': 'Technology', 'SLAB': 'Technology', 'CRUS': 'Technology',
+            'SYNA': 'Technology', 'MCHP': 'Technology', 'SMCI': 'Technology', 'WDC': 'Technology',
+            'STX': 'Technology', 'PSTG': 'Technology', 'NTAP': 'Technology', 'CHKP': 'Technology',
             
             // EV/Automotive
-            'TSLA': 'Automotive',
-            'RIVN': 'Automotive',
-            'F': 'Automotive',
-            'GM': 'Automotive',
+            'TSLA': 'Automotive', 'RIVN': 'Automotive', 'LCID': 'Automotive', 'NIO': 'Automotive',
+            'XPEV': 'Automotive', 'LI': 'Automotive', 'F': 'Automotive', 'GM': 'Automotive',
+            'STLA': 'Automotive', 'TM': 'Automotive', 'HMC': 'Automotive', 'RACE': 'Automotive',
+            'VWAGY': 'Automotive', 'BMWYY': 'Automotive', 'NSANY': 'Automotive', 'HYMTF': 'Automotive',
+            'MBGYY': 'Automotive', 'POAHY': 'Automotive', 'FUJHY': 'Automotive', 
+            'GOEV': 'Automotive', 'FSR': 'Automotive', 'RIDE': 'Automotive', 'ARVL': 'Automotive',
+            'LEV': 'Automotive', 'BLNK': 'Automotive', 'CHPT': 'Automotive', 'EVGO': 'Automotive',
+            'VLTA': 'Automotive', 'WOLF': 'Automotive', 'TPIC': 'Automotive', 'QS': 'Automotive',
+            'ALB': 'Materials', 'SQM': 'Materials', 'LAC': 'Materials', 'LTHM': 'Materials',
+            'PLL': 'Materials', 'NOVRF': 'Materials', 'OROCF': 'Materials', 'MP': 'Materials', 'CMR': 'Materials',
             
             // Finance
-            'JPM': 'Financial',
-            'BAC': 'Financial',
-            'V': 'Financial',
-            'MA': 'Financial',
-            'COIN': 'Financial',
+            'JPM': 'Financial', 'BAC': 'Financial', 'V': 'Financial', 'MA': 'Financial',
+            'COIN': 'Financial', 'SOFI': 'Financial', 'PYPL': 'Financial', 'SQ': 'Financial',
+            'WFC': 'Financial', 'GS': 'Financial', 'MS': 'Financial', 'C': 'Financial',
+            'BLK': 'Financial', 'SCHW': 'Financial', 'AFRM': 'Financial', 'UPST': 'Financial',
+            'LC': 'Financial', 'NU': 'Financial', 'MELI': 'Financial', 'HOOD': 'Financial',
+            'AXP': 'Financial', 'DFS': 'Financial', 'COF': 'Financial', 'ALLY': 'Financial',
+            'USB': 'Financial', 'PNC': 'Financial', 'TFC': 'Financial', 'RF': 'Financial',
+            'KEY': 'Financial', 'FITB': 'Financial', 'CFG': 'Financial', 'HBAN': 'Financial',
+            'MTB': 'Financial', 'STT': 'Financial', 'BK': 'Financial', 'NTRS': 'Financial',
+            'STATE': 'Financial', 'CMA': 'Financial', 'ZION': 'Financial', 'FHN': 'Financial',
             
-            // Growth Tech
-            'DKNG': 'Technology',
-            'RBLX': 'Technology',
+            // Growth Tech/Consumer
+            'DKNG': 'Technology', 'RBLX': 'Technology', 'U': 'Technology', 'PINS': 'Technology',
+            'SNAP': 'Technology', 'SPOT': 'Technology', 'ROKU': 'Technology', 'ABNB': 'Consumer',
+            'LYFT': 'Technology', 'DASH': 'Consumer', 'UBER': 'Technology', 'CPNG': 'Consumer',
+            'SHOP': 'Technology', 'SE': 'Consumer', 'BABA': 'Consumer', 'JD': 'Consumer',
+            'PDD': 'Consumer', 'BKNG': 'Consumer', 'EXPE': 'Consumer', 'TCOM': 'Consumer', 'TRIP': 'Consumer',
             
             // Healthcare
-            'JNJ': 'Healthcare',
-            'UNH': 'Healthcare',
-            'LLY': 'Healthcare',
-            'PFE': 'Healthcare',
-            'MRNA': 'Healthcare',
+            'JNJ': 'Healthcare', 'UNH': 'Healthcare', 'LLY': 'Healthcare', 'PFE': 'Healthcare',
+            'MRNA': 'Healthcare', 'ABBV': 'Healthcare', 'VRTX': 'Healthcare', 'REGN': 'Healthcare',
+            'BMY': 'Healthcare', 'GILD': 'Healthcare', 'AMGN': 'Healthcare', 'CVS': 'Healthcare',
+            'CI': 'Healthcare', 'HUM': 'Healthcare', 'ISRG': 'Healthcare', 'TMO': 'Healthcare',
+            'DHR': 'Healthcare', 'ABT': 'Healthcare', 'SYK': 'Healthcare', 'BSX': 'Healthcare',
+            'MDT': 'Healthcare', 'BDX': 'Healthcare', 'BAX': 'Healthcare', 'ZBH': 'Healthcare',
+            'HCA': 'Healthcare', 'DVA': 'Healthcare', 'CANO': 'Healthcare', 'IONQ': 'Technology',
+            'EXAS': 'Healthcare', 'ILMN': 'Healthcare', 'BIIB': 'Healthcare', 'ALNY': 'Healthcare',
+            'INCY': 'Healthcare', 'NBIX': 'Healthcare', 'UTHR': 'Healthcare', 'JAZZ': 'Healthcare',
+            'SRPT': 'Healthcare', 'BMRN': 'Healthcare', 'IONS': 'Healthcare', 'RGEN': 'Healthcare',
             
             // Consumer
-            'AMZN': 'Consumer',
-            'WMT': 'Consumer',
-            'COST': 'Consumer',
-            'SBUX': 'Consumer',
-            'NKE': 'Consumer',
+            'AMZN': 'Consumer', 'WMT': 'Consumer', 'COST': 'Consumer', 'TGT': 'Consumer',
+            'HD': 'Consumer', 'LOW': 'Consumer', 'SBUX': 'Consumer', 'MCD': 'Consumer',
+            'CMG': 'Consumer', 'YUM': 'Consumer', 'NKE': 'Consumer', 'LULU': 'Consumer',
+            'ETSY': 'Consumer', 'W': 'Consumer', 'CHWY': 'Consumer',
+            'DIS': 'Consumer', 'NFLX': 'Consumer', 'PARA': 'Consumer', 'WBD': 'Consumer',
+            'FOXA': 'Consumer', 'CMCSA': 'Consumer', 'T': 'Consumer', 'VZ': 'Consumer', 'TMUS': 'Consumer',
+            'KO': 'Consumer', 'PEP': 'Consumer', 'PM': 'Consumer', 'MO': 'Consumer',
+            'BUD': 'Consumer', 'TAP': 'Consumer', 'STZ': 'Consumer', 'MNST': 'Consumer',
+            'CELH': 'Consumer', 'KDP': 'Consumer',
             
-            // Index Funds
-            'SPY': 'Index Fund',
-            'QQQ': 'Index Fund',
-            'IWM': 'Index Fund',
-            'VOO': 'Index Fund'
+            // Energy
+            'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'SLB': 'Energy',
+            'EOG': 'Energy', 'OXY': 'Energy', 'MPC': 'Energy', 'PSX': 'Energy',
+            'VLO': 'Energy', 'HES': 'Energy', 'DVN': 'Energy', 'FANG': 'Energy',
+            'MRO': 'Energy', 'APA': 'Energy', 'HAL': 'Energy', 'BKR': 'Energy',
+            'NOV': 'Energy', 'FTI': 'Energy', 'NEE': 'Energy', 'DUK': 'Energy',
+            'SO': 'Energy', 'D': 'Energy', 'AEP': 'Energy', 'EXC': 'Energy',
+            'ENPH': 'Energy', 'SEDG': 'Energy', 'RUN': 'Energy', 'NOVA': 'Energy',
+            'FSLR': 'Energy', 'PLUG': 'Energy', 'PBF': 'Energy', 'DK': 'Energy',
+            'CTRA': 'Energy', 'OVV': 'Energy', 'PR': 'Energy', 'SM': 'Energy',
+            'MGY': 'Energy', 'MTDR': 'Energy', 'CHRD': 'Energy', 'VNOM': 'Energy',
+            
+            // Industrials
+            'BA': 'Industrials', 'CAT': 'Industrials', 'DE': 'Industrials', 'GE': 'Industrials',
+            'HON': 'Industrials', 'MMM': 'Industrials', 'UNP': 'Industrials', 'NSC': 'Industrials',
+            'CSX': 'Industrials', 'UPS': 'Industrials', 'FDX': 'Industrials', 'CHRW': 'Industrials',
+            'CMI': 'Industrials', 'EMR': 'Industrials', 'ETN': 'Industrials', 'PH': 'Industrials',
+            'ROK': 'Industrials', 'AME': 'Industrials', 'DOV': 'Industrials', 'ITW': 'Industrials',
+            'DHI': 'Industrials', 'LEN': 'Industrials', 'NVR': 'Industrials', 'PHM': 'Industrials',
+            'TOL': 'Industrials', 'BLD': 'Industrials', 'BLDR': 'Industrials', 'JBHT': 'Industrials',
+            'KNX': 'Industrials', 'ODFL': 'Industrials', 'XPO': 'Industrials',
+            
+            // Real Estate
+            'AMT': 'Real Estate', 'PLD': 'Real Estate', 'CCI': 'Real Estate', 'EQIX': 'Real Estate',
+            'PSA': 'Real Estate', 'DLR': 'Real Estate', 'WELL': 'Real Estate', 'O': 'Real Estate',
+            'VICI': 'Real Estate', 'SPG': 'Real Estate', 'AVB': 'Real Estate', 'EQR': 'Real Estate',
+            'MAA': 'Real Estate', 'UDR': 'Real Estate', 'CPT': 'Real Estate', 'ESS': 'Real Estate',
+            'AIV': 'Real Estate', 'ELS': 'Real Estate', 'SUI': 'Real Estate', 'NXRT': 'Real Estate',
+            'VTR': 'Real Estate', 'PEAK': 'Real Estate', 'DOC': 'Real Estate', 'OHI': 'Real Estate',
+            'SBRA': 'Real Estate', 'LTC': 'Real Estate', 'HR': 'Real Estate', 'MPW': 'Real Estate',
+            'NHI': 'Real Estate', 'CTRE': 'Real Estate', 'IRM': 'Real Estate', 'CUBE': 'Real Estate',
+            'LSI': 'Real Estate', 'NSA': 'Real Estate', 'REXR': 'Real Estate', 'PSB': 'Real Estate',
+            'TRNO': 'Real Estate', 'SELF': 'Real Estate', 'STOR': 'Real Estate', 'SAFE': 'Real Estate',
+            
+            // Materials
+            'NEM': 'Materials', 'FCX': 'Materials', 'GOLD': 'Materials', 'AU': 'Materials',
+            'AEM': 'Materials', 'WPM': 'Materials', 'FNV': 'Materials', 'RGLD': 'Materials',
+            'KGC': 'Materials', 'HL': 'Materials', 'NUE': 'Materials', 'STLD': 'Materials',
+            'RS': 'Materials', 'CLF': 'Materials', 'X': 'Materials', 'MT': 'Materials',
+            'TX': 'Materials', 'CMC': 'Materials', 'ZEUS': 'Materials', 'ATI': 'Materials',
+            'DOW': 'Materials', 'LYB': 'Materials', 'EMN': 'Materials', 'CE': 'Materials',
+            'APD': 'Materials', 'LIN': 'Materials', 'ECL': 'Materials', 
+            'SHW': 'Materials', 'PPG': 'Materials', 'RPM': 'Materials', 'AXTA': 'Materials',
+            'FUL': 'Materials', 'NEU': 'Materials', 'KWR': 'Materials',
+            
+            // Defense
+            'LMT': 'Defense', 'RTX': 'Defense', 'NOC': 'Defense', 'GD': 'Defense',
+            'LHX': 'Defense', 'HII': 'Defense', 'TXT': 'Defense', 'HWM': 'Defense',
+            'AXON': 'Defense', 'KTOS': 'Defense', 'AVAV': 'Defense', 'AIR': 'Defense',
+            'SAIC': 'Defense', 'LDOS': 'Defense', 'CACI': 'Defense', 'BAH': 'Defense',
+            'BWXT': 'Defense', 'WWD': 'Defense', 'MOG.A': 'Defense', 'TDG': 'Defense',
+            'HEI': 'Defense', 'ROCK': 'Defense', 'SPR': 'Defense', 'CW': 'Defense',
+            'AIN': 'Defense', 'GMS': 'Defense', 'MLI': 'Defense', 'B': 'Defense',
+            'RUSHA': 'Defense', 'AMSWA': 'Defense', 'PLXS': 'Defense', 'NPAB': 'Defense',
+            'VECO': 'Defense', 'POWI': 'Defense', 'VICR': 'Defense', 'MYRG': 'Defense',
+            'DY': 'Defense', 'APOG': 'Defense', 'HSII': 'Defense',
+            
+            // Index Funds (not tracked in portfolio)
+            'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund'
         };
 
         // API Configuration
@@ -1705,31 +1790,92 @@
             }
         }
 
-        // Smart Stock Screener - Rotating diverse watchlists
+        // Smart Stock Screener - Samples across ALL sectors every time
         async function screenStocks() {
-            // With limited API calls (30/day), we use curated rotating lists instead of momentum sampling
-            // Each day, APEX sees different stocks to find opportunities across the market
+            // With unlimited API calls, we can sample from all sectors to find the best opportunities
+            // This gives APEX a comprehensive view of the entire market
             
             const stockLists = {
-                techAI: ['NVDA', 'AMD', 'AVGO', 'GOOGL', 'MSFT', 'META', 'ORCL', 'CRM', 'PLTR', 'SNOW', 'SPY', 'QQQ'],
-                techHardware: ['AAPL', 'QCOM', 'INTC', 'MU', 'ARM', 'DELL', 'HPQ', 'AMAT', 'LRCX', 'MRVL', 'SPY', 'QQQ'],
-                evAuto: ['TSLA', 'RIVN', 'LCID', 'NIO', 'F', 'GM', 'TM', 'GOOGL', 'AAPL', 'NVDA', 'SPY', 'IWM'],
-                finance: ['JPM', 'BAC', 'WFC', 'GS', 'V', 'MA', 'COIN', 'SOFI', 'PYPL', 'SQ', 'SPY', 'IWM'],
-                growth: ['PLTR', 'SNOW', 'DKNG', 'RBLX', 'COIN', 'NET', 'DDOG', 'MDB', 'CRWD', 'PANW', 'SPY', 'QQQ'],
-                healthcare: ['JNJ', 'UNH', 'LLY', 'ABBV', 'PFE', 'MRNA', 'VRTX', 'REGN', 'BMY', 'GILD', 'SPY', 'IWM'],
-                consumer: ['AMZN', 'WMT', 'COST', 'TGT', 'HD', 'SBUX', 'MCD', 'NKE', 'LULU', 'SHOP', 'SPY', 'IWM'],
-                energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'OXY', 'NEE', 'ENPH', 'PLUG', 'BE', 'SPY', 'IWM']
+                techAI: ['NVDA', 'AMD', 'AVGO', 'GOOGL', 'MSFT', 'META', 'ORCL', 'CRM', 'ADBE', 'NOW', 
+                         'PLTR', 'SNOW', 'AI', 'BBAI', 'SOUN', 'PATH', 'S', 'HUBS', 'ZM', 'DOCU',
+                         'TEAM', 'WDAY', 'VEEV', 'ESTC', 'DDOG', 'NET', 'MDB', 'CRWD', 'PANW', 'ZS',
+                         'OKTA', 'CFLT', 'GTLB', 'FROG', 'BILL', 'DOCN', 'ZI', 'MNDY', 'PCOR', 'APP'],
+                
+                techHardware: ['AAPL', 'QCOM', 'INTC', 'MU', 'ARM', 'DELL', 'HPQ', 'AMAT', 'LRCX', 'MRVL',
+                               'AVGO', 'TXN', 'ADI', 'NXPI', 'KLAC', 'ASML', 'TSM', 'SNPS', 'CDNS', 'ON',
+                               'MPWR', 'SWKS', 'QRVO', 'ENTG', 'FORM', 'MKSI', 'COHR', 'IPGP', 'LITE', 'AMBA',
+                               'SLAB', 'CRUS', 'SYNA', 'MCHP', 'SMCI', 'WDC', 'STX', 'PSTG', 'NTAP', 'CHKP'],
+                
+                evAuto: ['TSLA', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'F', 'GM', 'STLA', 'TM',
+                         'HMC', 'RACE', 'VWAGY', 'BMWYY', 'NSANY', 'HYMTF', 'MBGYY', 'POAHY', 'FUJHY', 'ALB',
+                         'SQM', 'LAC', 'LTHM', 'PLL', 'NOVRF', 'OROCF', 'MP', 'CMR', 'TPIC', 'QS',
+                         'GOEV', 'FSR', 'RIDE', 'ARVL', 'LEV', 'BLNK', 'CHPT', 'EVGO', 'VLTA', 'WOLF'],
+                
+                finance: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'V', 'MA',
+                          'PYPL', 'SQ', 'COIN', 'SOFI', 'AFRM', 'UPST', 'LC', 'NU', 'MELI', 'HOOD',
+                          'AXP', 'DFS', 'COF', 'ALLY', 'USB', 'PNC', 'TFC', 'RF', 'KEY', 'FITB',
+                          'CFG', 'HBAN', 'MTB', 'STT', 'BK', 'NTRS', 'STATE', 'CMA', 'ZION', 'FHN'],
+                
+                growth: ['PLTR', 'SNOW', 'DKNG', 'RBLX', 'COIN', 'NET', 'DDOG', 'MDB', 'CRWD', 'PANW',
+                         'ZS', 'OKTA', 'CFLT', 'S', 'GTLB', 'FROG', 'PATH', 'AI', 'BILL', 'DOCN',
+                         'U', 'PINS', 'SNAP', 'SPOT', 'ROKU', 'ABNB', 'LYFT', 'DASH', 'UBER', 'CPNG',
+                         'SHOP', 'MELI', 'SE', 'BABA', 'JD', 'PDD', 'BKNG', 'EXPE', 'TCOM', 'TRIP'],
+                
+                healthcare: ['JNJ', 'UNH', 'LLY', 'ABBV', 'PFE', 'MRNA', 'VRTX', 'REGN', 'BMY', 'GILD',
+                             'AMGN', 'CVS', 'CI', 'HUM', 'ISRG', 'TMO', 'DHR', 'ABT', 'SYK', 'BSX',
+                             'MDT', 'BDX', 'BAX', 'ZBH', 'HCA', 'DVA', 'CANO', 'IONQ', 'EXAS', 'ILMN',
+                             'BIIB', 'ALNY', 'INCY', 'NBIX', 'UTHR', 'JAZZ', 'SRPT', 'BMRN', 'IONS', 'RGEN'],
+                
+                consumer: ['AMZN', 'WMT', 'COST', 'TGT', 'HD', 'LOW', 'SBUX', 'MCD', 'CMG', 'YUM',
+                           'NKE', 'LULU', 'SHOP', 'ETSY', 'W', 'CHWY', 'BABA', 'JD', 'PDD', 'SE',
+                           'DIS', 'NFLX', 'PARA', 'WBD', 'FOXA', 'CMCSA', 'T', 'VZ', 'TMUS', 'GOOG',
+                           'KO', 'PEP', 'PM', 'MO', 'BUD', 'TAP', 'STZ', 'MNST', 'CELH', 'KDP'],
+                
+                energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'OXY', 'MPC', 'PSX', 'VLO', 'HES',
+                         'DVN', 'FANG', 'MRO', 'APA', 'HAL', 'BKR', 'NOV', 'FTI', 'NEE', 'DUK',
+                         'SO', 'D', 'AEP', 'EXC', 'ENPH', 'SEDG', 'RUN', 'NOVA', 'FSLR', 'PLUG',
+                         'PBF', 'DK', 'CTRA', 'OVV', 'PR', 'SM', 'MGY', 'MTDR', 'CHRD', 'VNOM'],
+                
+                // NEW SECTORS ADDED:
+                
+                industrials: ['BA', 'LMT', 'RTX', 'NOC', 'GD', 'HII', 'TXT', 'LHX', 'HWM', 'AXON',
+                              'CAT', 'DE', 'CMI', 'EMR', 'ETN', 'PH', 'ROK', 'AME', 'DOV', 'ITW',
+                              'GE', 'HON', 'MMM', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'BLD', 'BLDR',
+                              'UNP', 'NSC', 'CSX', 'UPS', 'FDX', 'CHRW', 'JBHT', 'KNX', 'ODFL', 'XPO'],
+                
+                realEstate: ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'WELL', 'O', 'VICI', 'SPG',
+                             'AVB', 'EQR', 'MAA', 'UDR', 'CPT', 'ESS', 'AIV', 'ELS', 'SUI', 'NXRT',
+                             'VTR', 'PEAK', 'DOC', 'OHI', 'SBRA', 'LTC', 'HR', 'MPW', 'NHI', 'CTRE',
+                             'IRM', 'CUBE', 'LSI', 'NSA', 'REXR', 'PSB', 'TRNO', 'SELF', 'STOR', 'SAFE'],
+                
+                materials: ['NEM', 'FCX', 'GOLD', 'AU', 'AEM', 'WPM', 'FNV', 'RGLD', 'KGC', 'HL',
+                            'NUE', 'STLD', 'RS', 'CLF', 'X', 'MT', 'TX', 'CMC', 'ZEUS', 'ATI',
+                            'DOW', 'LYB', 'EMN', 'CE', 'APD', 'LIN', 'ECL', 'ALB', 'SQM', 'LAC',
+                            'MP', 'LTHM', 'PLL', 'SHW', 'PPG', 'RPM', 'AXTA', 'FUL', 'NEU', 'KWR'],
+                
+                defense: ['LMT', 'RTX', 'NOC', 'GD', 'BA', 'LHX', 'HII', 'TXT', 'HWM', 'AXON',
+                          'KTOS', 'AVAV', 'AIR', 'SAIC', 'LDOS', 'CACI', 'BAH', 'BWXT', 'WWD', 'MOG.A',
+                          'TDG', 'HEI', 'ROCK', 'SPR', 'CW', 'AIN', 'GMS', 'MLI', 'B', 'RUSHA',
+                          'AMSWA', 'PLXS', 'NPAB', 'VECO', 'POWI', 'VICR', 'MYRG', 'DY', 'APOG', 'HSII']
             };
             
-            // Rotate through lists based on day of week
-            const dayOfWeek = new Date().getDay(); // 0-6
-            const listNames = Object.keys(stockLists);
-            const todaysList = listNames[dayOfWeek % listNames.length];
+            // Sample stocks from EVERY sector for comprehensive cross-sector analysis
+            // With unlimited API calls, we can analyze many more stocks
+            const stocksPerSector = 40; // 40 stocks from each of 12 sectors = 480 total
+            const selectedStocks = [];
             
-            console.log(`Today's focus: ${todaysList.toUpperCase()}`);
-            console.log('Analyzing:', stockLists[todaysList]);
+            for (const [sector, stocks] of Object.entries(stockLists)) {
+                // Take first N stocks from each sector
+                const sectorSample = stocks.slice(0, Math.min(stocksPerSector, stocks.length));
+                selectedStocks.push(...sectorSample);
+            }
             
-            return stockLists[todaysList];
+            console.log(`🔍 COMPREHENSIVE Cross-Sector Analysis`);
+            console.log(`📊 Analyzing ${selectedStocks.length} stocks across ${Object.keys(stockLists).length} sectors`);
+            console.log(`📈 Breakdown: ${stocksPerSector} stocks per sector`);
+            console.log(`⚡ Full market coverage enabled`);
+            
+            return selectedStocks;
         }
 
         // AI Analysis using Claude API
@@ -1753,11 +1899,10 @@
                     try {
                         marketData[symbol] = await getStockPrice(symbol);
                         
-                        // Add delay between requests to respect rate limits (5 per minute)
-                        // Wait 13 seconds between calls (60 seconds / 5 calls = 12 seconds, add buffer)
+                        // Small delay to prevent overwhelming the API (Polygon has no rate limits, just being polite)
                         if (i < symbols.length - 1) {
-                            thinkingDetail.textContent = `Fetched ${symbol}. Waiting for rate limit... (${i + 1}/${symbols.length})`;
-                            await new Promise(resolve => setTimeout(resolve, 13000));
+                            thinkingDetail.textContent = `Fetched ${symbol}. (${i + 1}/${symbols.length})`;
+                            await new Promise(resolve => setTimeout(resolve, 100)); // 0.1 second
                         }
                     } catch (error) {
                         fetchErrors.push({ symbol, error: error.message });
