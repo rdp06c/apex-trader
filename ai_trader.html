@@ -1694,24 +1694,31 @@
             
             
             try {
-                // Use Polygon.io API - Previous Close endpoint (part of Starter tier)
-                const response = await fetch(`https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${POLYGON_API_KEY}`);
+                // Use Polygon.io Snapshot endpoint for current trading day
+                // Free tier: 15-minute delayed data
+                // URL: /v2/snapshot/locale/us/markets/stocks/tickers/{ticker}
+                const response = await fetch(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
                 const data = await response.json();
                 
-                // Polygon returns: { results: [{ c: close, h: high, l: low, o: open, v: volume, vw: vwap }] }
-                if (data && data.results && data.results.length > 0) {
-                    const result = data.results[0];
+                // Polygon snapshot returns: { ticker: {...}, status: "OK" }
+                if (data && data.status === 'OK' && data.ticker) {
+                    const ticker = data.ticker;
+                    const day = ticker.day; // Today's data
+                    const prevDay = ticker.prevDay; // Previous day for comparison
                     
-                    // Calculate change from open to close
-                    const change = result.c - result.o;
-                    const changePercent = (change / result.o) * 100;
+                    // Calculate change from previous close to current price
+                    const currentPrice = day.c || day.l; // Use close if available, otherwise last price
+                    const prevClose = prevDay.c;
+                    const change = currentPrice - prevClose;
+                    const changePercent = (change / prevClose) * 100;
                     
                     const priceData = {
-                        price: parseFloat(result.c),           // Close price
-                        change: parseFloat(change),            // Change from open
-                        changePercent: parseFloat(changePercent), // Change percent
+                        price: parseFloat(currentPrice),
+                        change: parseFloat(change),
+                        changePercent: parseFloat(changePercent),
                         timestamp: new Date().toISOString(),
-                        isReal: true
+                        isReal: true,
+                        note: '15min delayed'
                     };
                     
                     // Cache the data
