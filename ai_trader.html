@@ -2100,6 +2100,14 @@ DECISION RULES:
 6. **SIZE PROPERLY**: Allocate more to higher conviction + better research
 
 Respond in this EXACT JSON format only, no other text:
+
+CRITICAL JSON RULES:
+- Valid JSON only - no markdown, no code blocks, no extra text
+- No trailing commas before closing braces
+- All strings must be properly escaped
+- Use \\n for newlines within strings, never literal newlines
+- Double-check JSON is valid before responding
+
 {
   "decisions": [
     {
@@ -2246,10 +2254,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 
                 let jsonString = jsonText.substring(startIndex, endIndex + 1);
                 
-                // CRITICAL: Remove citation tags that break JSON parsing
-                // Web search results include <cite> tags that must be stripped
+                // CRITICAL: Clean up common JSON formatting issues
+                
+                // 1. Remove citation tags from web search
                 jsonString = jsonString.replace(/<cite[^>]*>/g, '');
                 jsonString = jsonString.replace(/<\/cite>/g, '');
+                
+                // 2. Fix trailing commas before closing braces/brackets (invalid JSON)
+                jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+                
+                // 3. Remove any literal \n\n that breaks JSON
+                jsonString = jsonString.replace(/\\n\\n/g, '\\n');
+                
+                // 4. Fix any unescaped newlines in strings
+                jsonString = jsonString.replace(/"\s*\n\s*"/g, '" "');
                 
                 console.log('Extracted JSON:', jsonString.substring(0, 500) + '...');
                 
