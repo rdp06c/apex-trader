@@ -1814,7 +1814,7 @@
             
             // Sample stocks from EVERY sector for comprehensive cross-sector analysis
             // With unlimited API calls, we can analyze many more stocks
-            const stocksPerSector = 40; // 40 stocks from each of 12 sectors = 480 total
+            const stocksPerSector = 25; // 25 stocks from each of 12 sectors = 300 total
             const selectedStocks = [];
             
             for (const [sector, stocks] of Object.entries(stockLists)) {
@@ -2989,8 +2989,23 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                         <div style="font-size: 20px; font-weight: 700; color: #6366f1;">
                             🎯 APEX's Analysis (${decision.decisions.length} pick${decision.decisions.length > 1 ? 's' : ''})
                         </div>
-                        <div style="font-size: 14px; color: #94a3b8;">
-                            ${timestamp.toLocaleTimeString()}
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div style="font-size: 14px; color: #94a3b8;">
+                                ${timestamp.toLocaleTimeString()}
+                            </div>
+                            <button onclick="saveDecisionReasoning(this)" style="
+                                background: rgba(99, 102, 241, 0.2);
+                                border: 1px solid #6366f1;
+                                color: #818cf8;
+                                padding: 6px 12px;
+                                border-radius: 6px;
+                                cursor: pointer;
+                                font-size: 13px;
+                                font-weight: 600;
+                                transition: all 0.2s;
+                            " onmouseover="this.style.background='rgba(99, 102, 241, 0.3)'" onmouseout="this.style.background='rgba(99, 102, 241, 0.2)'">
+                                💾 Save
+                            </button>
                         </div>
                     </div>
                     ${decision.budgetWarning ? `
@@ -3077,6 +3092,90 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                 container.innerHTML = '';
             }
             container.insertBefore(reasoningCard, container.firstChild);
+        }
+
+        // Save decision reasoning as a text file
+        function saveDecisionReasoning(button) {
+            try {
+                // Find the card element (button's parent's parent's parent)
+                const card = button.closest('div[style*="border-left: 4px solid"]');
+                
+                if (!card) {
+                    console.error('Could not find decision card');
+                    return;
+                }
+                
+                // Extract text content and format it nicely
+                const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+                const time = new Date().toLocaleTimeString();
+                
+                // Get header text
+                const headerText = card.querySelector('div[style*="font-size: 20px"]')?.textContent || 'APEX Analysis';
+                
+                // Build the text content
+                let content = `═══════════════════════════════════════════════════════════════\n`;
+                content += `  ${headerText}\n`;
+                content += `  ${timestamp} at ${time}\n`;
+                content += `═══════════════════════════════════════════════════════════════\n\n`;
+                
+                // Extract all sections
+                const sections = card.querySelectorAll('div[style*="padding: 14px"], div[style*="padding: 16px"]');
+                
+                sections.forEach((section, index) => {
+                    // Check if it's a stock pick, thoughts, or research section
+                    const sectionTitle = section.querySelector('div[style*="text-transform: uppercase"]')?.textContent;
+                    
+                    if (sectionTitle) {
+                        content += `\n${sectionTitle}\n`;
+                        content += `${'─'.repeat(60)}\n`;
+                    }
+                    
+                    // Get the main text content, cleaning up HTML
+                    const textContent = section.innerText || section.textContent;
+                    if (textContent && !textContent.includes('💭') && !textContent.includes('📰')) {
+                        content += textContent + '\n';
+                    } else if (textContent) {
+                        // For thoughts/research sections, extract just the content
+                        const lines = textContent.split('\n');
+                        content += lines.slice(1).join('\n') + '\n';
+                    }
+                });
+                
+                content += `\n═══════════════════════════════════════════════════════════════\n`;
+                content += `Saved from APEX Trading Agent\n`;
+                content += `═══════════════════════════════════════════════════════════════\n`;
+                
+                // Create and download the file
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `APEX_Analysis_${timestamp}_${time.replace(/:/g, '-')}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Visual feedback
+                const originalText = button.innerHTML;
+                button.innerHTML = '✅ Saved!';
+                button.style.background = 'rgba(34, 197, 94, 0.2)';
+                button.style.borderColor = '#22c55e';
+                button.style.color = '#4ade80';
+                
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.style.background = 'rgba(99, 102, 241, 0.2)';
+                    button.style.borderColor = '#6366f1';
+                    button.style.color = '#818cf8';
+                }, 2000);
+                
+                addActivity('📄 Decision reasoning saved to file', 'success');
+                
+            } catch (error) {
+                console.error('Error saving decision:', error);
+                addActivity('⚠️ Failed to save decision reasoning', 'error');
+            }
         }
 
         // Calculate and update performance analytics
