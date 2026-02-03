@@ -2043,35 +2043,35 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                 const jsonString = jsonText.substring(startIndex, endIndex + 1);
                 console.log('Extracted JSON:', jsonString);
                 
-                const response = JSON.parse(jsonString);
+                const decision = JSON.parse(jsonString);
                 
                 // Handle new multi-stock format
-                if (response.decisions && Array.isArray(response.decisions)) {
+                if (decision.decisions && Array.isArray(decision.decisions)) {
                         // SAFETY: Ensure whole shares only for all decisions
-                        response.decisions.forEach(decision => {
-                            if (decision.shares) {
-                                decision.shares = Math.floor(decision.shares);
-                                if (decision.shares < 1) decision.shares = 1;
+                        decision.decisions.forEach(d => {
+                            if (d.shares) {
+                                d.shares = Math.floor(d.shares);
+                                if (d.shares < 1) d.shares = 1;
                             }
                         });
                         
-                        thinkingDetail.textContent = `AI analyzed ${response.decisions.length} opportunity(ies)...`;
+                        thinkingDetail.textContent = `AI analyzed ${decision.decisions.length} opportunity(ies)...`;
                         
                         // Execute all trades
-                        await executeMultipleTrades(response, marketData);
+                        await executeMultipleTrades(decision, marketData);
                         
                         setTimeout(() => {
                             thinking.classList.remove('active');
                         }, 3000);
                     }
                     // Fallback for old single-stock format
-                    else if (response.action) {
-                        if (response.shares) {
-                            response.shares = Math.floor(response.shares);
-                            if (response.shares < 1) response.shares = 1;
+                    else if (decision.action) {
+                        if (decision.shares) {
+                            decision.shares = Math.floor(decision.shares);
+                            if (decision.shares < 1) decision.shares = 1;
                         }
-                        thinkingDetail.textContent = `AI Decision: ${response.action}...`;
-                        await executeTrade(response, marketData);
+                        thinkingDetail.textContent = `AI Decision: ${decision.action}...`;
+                        await executeTrade(decision, marketData);
                         setTimeout(() => {
                             thinking.classList.remove('active');
                         }, 3000);
