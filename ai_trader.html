@@ -1129,6 +1129,21 @@
                 return;
             }
 
+            // If tokenClient isn't initialized yet, initialize Google Drive first
+            if (!tokenClient) {
+                console.log('Initializing Google Drive...');
+                initGoogleDrive();
+                // Give it a moment to initialize, then retry
+                setTimeout(() => {
+                    if (tokenClient) {
+                        tokenClient.requestAccessToken();
+                    } else {
+                        alert('⚠️ Google Drive initialization failed. Please refresh the page and try again.');
+                    }
+                }, 1000);
+                return;
+            }
+
             // If configured but not authorized yet, trigger authorization
             if (!gdriveAuthorized && tokenClient) {
                 tokenClient.requestAccessToken();
@@ -1554,14 +1569,7 @@
             const statusEl = document.getElementById('apiUsageStatus');
             if (statusEl) {
                 statusEl.textContent = `API Calls: ${apiCallsToday} used today | Unlimited remaining ✅`;
-                
-                if (remaining === 0) {
-                    statusEl.style.color = '#f87171';
-                } else if (remaining < 5) {
-                    statusEl.style.color = '#fbbf24';
-                } else {
-                    statusEl.style.color = '#34d399';
-                }
+                statusEl.style.color = '#34d399'; // Always green for unlimited
             }
         }
 
