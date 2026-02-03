@@ -2195,6 +2195,12 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                 addActivity(`❌ No trades executed - all ${failCount} trades failed`, 'error');
             }
             
+            // CRITICAL: Save portfolio after trades
+            if (successCount > 0) {
+                savePortfolio();  // Saves to localStorage AND Google Drive
+                console.log('Portfolio saved after executing', successCount, 'trade(s)');
+            }
+            
             await updateUI();
         }
 
@@ -2514,11 +2520,16 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
 
         // Save portfolio to localStorage
         function savePortfolio() {
+            console.log('savePortfolio called. Holdings:', Object.keys(portfolio.holdings).length, 'Cash:', portfolio.cash);
             localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
+            console.log('Portfolio saved to localStorage');
             
             // Also save to Google Drive if authorized
             if (gdriveAuthorized) {
+                console.log('Google Drive authorized - saving to cloud...');
                 savePortfolioToDrive();
+            } else {
+                console.warn('Google Drive not authorized - portfolio NOT saved to cloud');
             }
         }
 
@@ -2727,15 +2738,27 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
         }
 
         async function savePortfolioToDrive() {
+            console.log('=== savePortfolioToDrive called ===');
+            console.log('gdriveAuthorized:', gdriveAuthorized);
+            console.log('accessToken:', accessToken ? 'Present' : 'Missing');
+            
             if (!gdriveAuthorized || !accessToken) {
-                console.log('Not authorized to save to Drive');
+                console.warn('❌ Not authorized to save to Drive');
                 return;
             }
 
             try {
                 updateCloudSyncStatus('⏳ Saving...', 'Uploading to Drive');
                 
+                console.log('Portfolio to save:', {
+                    cash: portfolio.cash,
+                    holdings: portfolio.holdings,
+                    transactions: portfolio.transactions.length
+                });
+                
                 const portfolioData = JSON.stringify(portfolio, null, 2);
+                console.log('Portfolio JSON size:', portfolioData.length, 'bytes');
+                
                 const metadata = {
                     name: GDRIVE_CONFIG.PORTFOLIO_FILENAME,
                     mimeType: 'application/json'
@@ -2750,6 +2773,8 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                     : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
 
                 const method = portfolioFileId ? 'PATCH' : 'POST';
+                console.log('Uploading to Google Drive:', method, url);
+                console.log('File ID:', portfolioFileId || 'Creating new file');
 
                 const response = await fetch(url, {
                     method: method,
@@ -2757,16 +2782,23 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                     body: form
                 });
 
+                console.log('Upload response status:', response.status);
+
                 if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Upload failed response:', errorText);
                     throw new Error(`Upload failed: ${response.status}`);
                 }
                 
                 const result = await response.json();
+                console.log('Upload result:', result);
                 
                 if (result.id) {
                     portfolioFileId = result.id;
                     updateCloudSyncStatus('✓ Synced', new Date().toLocaleTimeString());
-                    console.log('Portfolio saved to Google Drive');
+                    console.log('✅ Portfolio saved to Google Drive successfully!');
+                    console.log('File ID:', portfolioFileId);
+                    addActivity(`💾 Portfolio saved to Google Drive`, 'success');
                 } else {
                     throw new Error('No file ID returned');
                 }
