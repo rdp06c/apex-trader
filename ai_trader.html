@@ -1768,7 +1768,7 @@ MARKET ANALYSIS TO CONSIDER:
 - Portfolio concentration (it's OK to be concentrated in winners)
 
 Current Portfolio:
-- Cash: $${portfolio.cash.toFixed(2)}
+- Cash Available: $${portfolio.cash.toFixed(2)} ← THIS IS YOUR BUYING POWER
 - Holdings: ${JSON.stringify(portfolio.holdings, null, 2)}
 - Total Portfolio Value: $${totalValue.toFixed(2)}
 - Strategy: AGGRESSIVE - Maximize returns
@@ -1776,10 +1776,19 @@ Current Portfolio:
 Current Market Data (REAL PRICES):
 ${JSON.stringify(marketData, null, 2)}
 
+CRITICAL CASH MANAGEMENT:
+⚠️ YOU ONLY HAVE $${portfolio.cash.toFixed(2)} TO SPEND - DO NOT EXCEED THIS!
+- Calculate EXACT cost for each trade: price × shares
+- Total cost of ALL your trades MUST be ≤ $${portfolio.cash.toFixed(2)}
+- If you want to buy multiple stocks, divide your cash between them
+- Example: If cash is $1000 and you want 3 stocks, allocate ~$300-400 each MAX
+- NEVER propose trades that exceed available cash!
+
 DECISION RULES:
 1. BUY: When you see strong momentum or value - buy meaningful position sizes (not just 1-2 shares)
 2. SELL: Only sell if you need cash for better opportunity OR if momentum is clearly broken
 3. HOLD: If no clear opportunities, be patient
+4. CALCULATE COSTS: Before deciding shares, calculate: price × shares ≤ available cash
 
 Respond in this EXACT JSON format only, no other text:
 {
@@ -1797,17 +1806,22 @@ Respond in this EXACT JSON format only, no other text:
 }
 
 CONVICTION-BASED ALLOCATION:
-- Conviction 9-10 (very strong): Pick 3-5 stocks, allocate 60-80% of available cash
-- Conviction 7-8 (strong): Pick 2-3 stocks, allocate 40-60% of cash
-- Conviction 5-6 (moderate): Pick 1-2 stocks, allocate 20-40% of cash
+⚠️ REMEMBER: Total cost of ALL trades must fit within available cash!
+- Conviction 9-10 (very strong): Pick 3-5 stocks, allocate 60-80% of available cash TOTAL
+- Conviction 7-8 (strong): Pick 2-3 stocks, allocate 40-60% of cash TOTAL
+- Conviction 5-6 (moderate): Pick 1-2 stocks, allocate 20-40% of cash TOTAL
 - Conviction <5 (weak): HOLD, keep cash for better opportunities
 
 CRITICAL RULES:
 - Shares MUST be whole numbers (1, 2, 5, 10, etc.) - NO fractional shares
-- Pick 1-5 stocks based on how many strong opportunities you find
+- CALCULATE before deciding: (price × shares) for EACH stock
+- SUM of all trade costs MUST be ≤ available cash
+- If you want MU at $90 × 10 shares = $900, and NVDA at $145 × 5 shares = $725, total is $1625
+  → If you only have $1000 cash, you CANNOT do both trades - reduce shares or pick fewer stocks!
+- Pick 1-5 stocks based on how many strong opportunities you find AND what you can afford
 - Allocate MORE money to HIGHER conviction plays
 - If market is choppy or no clear setups, it's OK to HOLD with 0 picks
-- Focus on your highest conviction plays - don't force trades
+- Focus on your highest conviction plays - don't force trades beyond your budget
 
 Remember: You're managing money to MAXIMIZE returns AND teaching your user. Quality over quantity. Explain your conviction levels and allocation strategy.`
                         }]
@@ -1913,21 +1927,29 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
             
             // Execute each trade
             let successCount = 0;
+            let failCount = 0;
             for (const decision of decisions) {
                 try {
-                    await executeSingleTrade(decision, marketData, overallReasoning);
-                    successCount++;
+                    const success = await executeSingleTrade(decision, marketData, overallReasoning);
+                    if (success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
                 } catch (error) {
                     console.error(`Failed to execute trade for ${decision.symbol}:`, error);
                     addActivity(`⚠️ Failed to execute ${decision.action} for ${decision.symbol}: ${error.message}`, 'error');
+                    failCount++;
                 }
             }
             
             // Summary message
             if (successCount === decisions.length) {
                 addActivity(`✅ APEX executed ${successCount} trade(s) successfully!`, 'success');
+            } else if (successCount > 0) {
+                addActivity(`⚠️ APEX executed ${successCount}/${decisions.length} trades (${failCount} failed due to insufficient funds)`, 'warning');
             } else {
-                addActivity(`⚠️ APEX executed ${successCount}/${decisions.length} trades`, 'warning');
+                addActivity(`❌ No trades executed - all ${failCount} trades failed (insufficient funds)`, 'error');
             }
             
             await updateUI();
@@ -1936,7 +1958,7 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
         // Execute a single trade (helper function for multi-trade support)
         async function executeSingleTrade(decision, marketData, overallContext = '') {
             if (decision.action === 'HOLD') {
-                return; // Skip HOLD decisions in multi-trade
+                return true; // Skip HOLD decisions in multi-trade
             }
 
             const symbol = decision.symbol;
@@ -1968,8 +1990,10 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                     
                     const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : '👍';
                     addActivity(`${convictionEmoji} APEX BOUGHT ${shares} shares of ${symbol} at $${price.toFixed(2)} (Conviction: ${conviction}/10) – "${decision.reasoning}"`, 'buy');
+                    return true; // Success
                 } else {
-                    addActivity(`APEX wanted to buy ${symbol} but needs more capital`, 'error');
+                    addActivity(`❌ APEX wanted to buy ${shares} ${symbol} ($${cost.toFixed(2)}) but only has $${portfolio.cash.toFixed(2)} available`, 'error');
+                    return false; // Failed - insufficient funds
                 }
             } else if (decision.action === 'SELL') {
                 if (portfolio.holdings[symbol] >= shares) {
@@ -2018,10 +2042,14 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                     });
                     
                     addActivity(`APEX SOLD ${shares} shares of ${symbol} at $${price.toFixed(2)} – "${decision.reasoning}"`, 'sell');
+                    return true; // Success
                 } else {
-                    addActivity(`APEX wanted to sell ${symbol} but doesn't own enough shares`, 'error');
+                    addActivity(`❌ APEX wanted to sell ${shares} ${symbol} but only owns ${portfolio.holdings[symbol] || 0} shares`, 'error');
+                    return false; // Failed - insufficient shares
                 }
             }
+            
+            return false; // Unknown action type
         }
 
         // Execute trade
