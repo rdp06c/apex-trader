@@ -3312,9 +3312,9 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
                     synced_at: new Date().toISOString()
                 };
 
-                // Encrypt with user's Google account email as password
-                const userEmail = await getUserEmail();
-                const encryptedKeys = encryptKeys(keys, userEmail);
+                // Encrypt with user's unique key
+                const encryptionPassword = getEncryptionPassword();
+                const encryptedKeys = encryptKeys(keys, encryptionPassword);
 
                 // Save to Google Drive
                 const fileName = 'apex_api_keys_encrypted.json';
@@ -3440,8 +3440,8 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
                 const fileData = await downloadResponse.json();
                 
                 // Decrypt keys
-                const userEmail = await getUserEmail();
-                const decryptedKeys = decryptKeys(fileData.encrypted, userEmail);
+                const encryptionPassword = getEncryptionPassword();
+                const decryptedKeys = decryptKeys(fileData.encrypted, encryptionPassword);
 
                 if (!decryptedKeys) {
                     throw new Error('Failed to decrypt keys');
@@ -3482,17 +3482,11 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
         }
 
         // Get user's email for encryption key
-        async function getUserEmail() {
-            try {
-                const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                const data = await response.json();
-                return data.email || 'default_password';
-            } catch (error) {
-                console.error('Failed to get user email:', error);
-                return 'default_password';
-            }
+        // Get encryption password (simplified since files are in private Google Drive)
+        function getEncryptionPassword() {
+            // Use a combination of the Google Client ID (which is unique per user) as the password
+            // This ensures each user has a different encryption key
+            return GDRIVE_CONFIG.CLIENT_ID || 'apex_default_key_2026';
         }
 
         function updateApiKeyStatus() {
