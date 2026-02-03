@@ -2645,9 +2645,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const change = totalValue - portfolio.initialBalance;
             const changePercent = (change / portfolio.initialBalance) * 100;
 
+            // Calculate actual cost basis (total invested) from transactions
+            let totalInvested = 0;
+            portfolio.transactions.forEach(transaction => {
+                if (transaction.type === 'BUY') {
+                    totalInvested += transaction.cost;
+                } else if (transaction.type === 'SELL') {
+                    // Subtract proceeds from sales (reduces invested capital)
+                    totalInvested -= (transaction.shares * transaction.price);
+                }
+            });
+
             document.getElementById('portfolioValue').textContent = '$' + totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('cashValue').textContent = '$' + portfolio.cash.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            document.getElementById('investedValue').textContent = '$' + (totalValue - portfolio.cash).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('investedValue').textContent = '$' + totalInvested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('positionsCount').textContent = Object.keys(portfolio.holdings).length;
 
             const changeEl = document.getElementById('portfolioChange');
