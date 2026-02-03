@@ -1381,8 +1381,7 @@
         
         // Price cache to store real data and prevent mock data usage
         let priceCache = {};
-        let apiCallCount = 0;
-        let apiCallsToday = 0;
+        let apiCallsToday = 0;  // Consolidated - removed duplicate apiCallCount
         let lastResetDate = new Date().toDateString();
         const MAX_API_CALLS_PER_DAY = 25;
         
@@ -1395,10 +1394,10 @@
             // Reset API call count if it's a new day
             if (cacheDate !== today) {
                 localStorage.setItem('priceCacheDate', today);
-                localStorage.setItem('apiCallCount', '0');
-                apiCallCount = 0;
+                localStorage.setItem('apiCallsToday', '0');
+                apiCallsToday = 0;
             } else {
-                apiCallCount = parseInt(localStorage.getItem('apiCallCount') || '0');
+                apiCallsToday = parseInt(localStorage.getItem('apiCallsToday') || '0');
             }
             
             // Load cached prices (don't reset these daily)
@@ -1436,17 +1435,17 @@
 
         // Increment and save API call count
         function incrementApiCallCount() {
-            apiCallCount++;
-            localStorage.setItem('apiCallCount', apiCallCount.toString());
+            apiCallsToday++;
+            localStorage.setItem('apiCallsToday', apiCallsToday.toString());
             updateApiStatus();
         }
 
         // Update API status display
         function updateApiStatus() {
-            const remaining = MAX_API_CALLS_PER_DAY - apiCallCount;
+            const remaining = MAX_API_CALLS_PER_DAY - apiCallsToday;
             const statusEl = document.getElementById('apiKeyStatus');
-            if (statusEl && ALPHA_VANTAGE_API_KEY !== 'demo') {
-                statusEl.textContent = `✓ API key active - ${remaining} calls remaining today`;
+            if (statusEl && POLYGON_API_KEY) {
+                statusEl.textContent = `✓ Polygon API active - ${remaining} calls remaining today`;
                 if (remaining < 5) {
                     statusEl.style.color = '#f87171';
                 } else if (remaining < 10) {
@@ -1615,10 +1614,8 @@
             }
             if (today !== lastResetDate) {
                 apiCallsToday = 0;
-                apiCallCount = 0;
                 lastResetDate = today;
                 localStorage.setItem('apiCallsToday', '0');
-                localStorage.setItem('apiCallCount', '0');
                 localStorage.setItem('lastResetDate', today);
             }
         }
@@ -1638,7 +1635,6 @@
             
             if (savedCalls) {
                 apiCallsToday = parseInt(savedCalls);
-                apiCallCount = parseInt(savedCalls); // Keep both in sync
             }
             
             if (savedCache) {
@@ -2627,23 +2623,41 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             savePortfolio();
         }
 
-        // Calculate total portfolio value
+        // Calculate total portfolio value and return price data
         async function calculatePortfolioValue() {
             let total = portfolio.cash;
+            const priceData = {}; // Store prices for reuse
             
             for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
-                const priceData = await getStockPrice(symbol);
-                total += priceData.price * shares;
+                try {
+                    const price = await getStockPrice(symbol);
+                    priceData[symbol] = price;
+                    total += price.price * shares;
+                } catch (error) {
+                    console.warn(`Failed to get price for ${symbol}:`, error);
+                    // Use last known price from transactions as fallback
+                    const lastBuy = portfolio.transactions.filter(t => t.symbol === symbol).pop();
+                    if (lastBuy) {
+                        priceData[symbol] = {
+                            price: lastBuy.price,
+                            change: 0,
+                            changePercent: 0,
+                            isReal: false
+                        };
+                        total += lastBuy.price * shares;
+                    }
+                }
             }
             
-            return total;
+            return { total, priceData };
         }
 
         // Update UI
         async function updateUI() {
-            const totalValue = await calculatePortfolioValue();
-            const change = totalValue - portfolio.initialBalance;
-            const changePercent = (change / portfolio.initialBalance) * 100;
+            try {
+                const { total: totalValue, priceData } = await calculatePortfolioValue();
+                const change = totalValue - portfolio.initialBalance;
+                const changePercent = (change / portfolio.initialBalance) * 100;
 
             // Calculate actual cost basis (total invested) from transactions
             let totalInvested = 0;
@@ -2672,9 +2686,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             } else {
                 let html = '';
                 for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
-                    const priceData = await getStockPrice(symbol);
-                    const currentValue = priceData.price * shares;
-                    const changeClass = priceData.change >= 0 ? 'positive' : 'negative';
+                    // Use priceData passed from calculatePortfolioValue - no API call!
+                    const stockPrice = priceData[symbol] || { price: 0, change: 0, changePercent: 0 };
+                    const currentValue = stockPrice.price * shares;
+                    const changeClass = stockPrice.change >= 0 ? 'positive' : 'negative';
                     
                     // Find purchase info from transactions
                     const buyTransactions = portfolio.transactions.filter(t => t.type === 'BUY' && t.symbol === symbol);
@@ -2689,7 +2704,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     }
                     
                     const gainLoss = currentValue - (avgPurchasePrice * shares);
-                    const gainLossPercent = avgPurchasePrice > 0 ? ((priceData.price - avgPurchasePrice) / avgPurchasePrice) * 100 : 0;
+                    const gainLossPercent = avgPurchasePrice > 0 ? ((stockPrice.price - avgPurchasePrice) / avgPurchasePrice) * 100 : 0;
                     const gainLossClass = gainLoss >= 0 ? 'positive' : 'negative';
                     
                     // Get stock name from mapping
@@ -2713,7 +2728,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     <span style="color: #cbd5e1; font-weight: 500;">Avg Cost:</span> <span style="color: #e2e8f0; font-weight: 600;">$${avgPurchasePrice.toFixed(2)}</span>
                                 </div>
                                 <div>
-                                    <span style="color: #cbd5e1; font-weight: 500;">Current:</span> <span style="color: #e2e8f0; font-weight: 600;">$${priceData.price.toFixed(2)}</span> <span class="stat-change ${changeClass}" style="font-size: 13px;">${priceData.changePercent >= 0 ? '+' : ''}${priceData.changePercent.toFixed(2)}%</span>
+                                    <span style="color: #cbd5e1; font-weight: 500;">Current:</span> <span style="color: #e2e8f0; font-weight: 600;">$${stockPrice.price.toFixed(2)}</span> <span class="stat-change ${changeClass}" style="font-size: 13px;">${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}%</span>
                                 </div>
                                 <div>
                                     <span style="color: #cbd5e1; font-weight: 500;">Purchased:</span> <span style="color: #e2e8f0; font-weight: 600;">${earliestDate ? earliestDate.toLocaleDateString() : 'N/A'}</span>
@@ -2734,6 +2749,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             await updatePerformanceChart();
             updatePerformanceAnalytics();
             updateSectorAllocation();
+            
+            } catch (error) {
+                console.error('Error updating UI:', error);
+                addActivity('⚠️ Error updating display - some data may be stale. Try refreshing the page.', 'error');
+                // Still show what we can
+                document.getElementById('portfolioValue').textContent = 'Error';
+                document.getElementById('cashValue').textContent = '$' + portfolio.cash.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
         }
 
         // Add activity
@@ -3483,15 +3506,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
             
             const apiKey = inputElement.value.trim();
-            console.log('API Key value:', apiKey);
+            console.log('Polygon API Key value:', apiKey);
             
-            if (apiKey && apiKey !== 'demo') {
-                ALPHA_VANTAGE_API_KEY = apiKey;
-                localStorage.setItem('alphaVantageApiKey', apiKey);
+            if (apiKey) {
+                POLYGON_API_KEY = apiKey;
+                localStorage.setItem('polygonApiKey', apiKey);
                 
                 const statusElement = document.getElementById('apiKeyStatus');
                 if (statusElement) {
-                    statusElement.textContent = '✓ API key saved! You can now get real stock prices.';
+                    statusElement.textContent = '✓ Polygon API key saved! Real-time stock prices enabled.';
                     statusElement.style.color = '#34d399';
                 }
                 
@@ -3522,11 +3545,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         function loadApiKey() {
-            const saved = localStorage.getItem('alphaVantageApiKey');
-            if (saved && saved !== 'demo') {
-                ALPHA_VANTAGE_API_KEY = saved;
+            const saved = localStorage.getItem('polygonApiKey');
+            if (saved) {
+                POLYGON_API_KEY = saved;
                 document.getElementById('apiKeyInput').value = saved;
-                document.getElementById('apiKeyStatus').textContent = '✓ API key loaded from storage';
+                document.getElementById('apiKeyStatus').textContent = '✓ Polygon API key loaded';
                 document.getElementById('apiKeyStatus').style.color = '#34d399';
             }
         }
