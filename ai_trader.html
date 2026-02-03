@@ -2237,8 +2237,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     }
                 }
                 
-                const jsonString = jsonText.substring(startIndex, endIndex + 1);
-                console.log('Extracted JSON:', jsonString);
+                let jsonString = jsonText.substring(startIndex, endIndex + 1);
+                
+                // CRITICAL: Remove citation tags that break JSON parsing
+                // Web search results include <cite> tags that must be stripped
+                jsonString = jsonString.replace(/<cite[^>]*>/g, '');
+                jsonString = jsonString.replace(/<\/cite>/g, '');
+                
+                console.log('Extracted JSON:', jsonString.substring(0, 500) + '...');
                 
                 const decision = JSON.parse(jsonString);
                 
