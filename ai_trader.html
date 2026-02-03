@@ -1884,7 +1884,7 @@
                 thinkingDetail.textContent = 'AI is making trading decisions...';
 
                 // Calculate portfolio value (await since it's async)
-                const totalValue = await calculatePortfolioValue();
+                const { total: totalValue } = await calculatePortfolioValue();
 
                 // Call Claude API for trading decision via Cloudflare Worker proxy
                 const response = await fetch(ANTHROPIC_API_URL, {
@@ -3807,7 +3807,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             
             try {
                 // Get portfolio context
-                const totalValue = await calculatePortfolioValue();
+                const { total: totalValue } = await calculatePortfolioValue();
                 const recentTransactions = portfolio.transactions.slice(-5);
                 
                 // Call Claude API via Cloudflare Worker proxy
