@@ -1989,6 +1989,18 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                 const data = await response.json();
                 console.log('AI Analysis response:', data);
                 
+                // Check for API errors (rate limits, etc.)
+                if (data.type === 'error' || data.error) {
+                    const errorMessage = data.error?.message || data.message || 'API error occurred';
+                    console.error('API error:', errorMessage);
+                    
+                    if (errorMessage.includes('rate_limit') || response.status === 429) {
+                        throw new Error('Rate limit exceeded! Wait 60 seconds before running analysis again. 🕐');
+                    } else {
+                        throw new Error(`API error: ${errorMessage}`);
+                    }
+                }
+                
                 // Handle response - could be text or tool use (web search)
                 aiResponse = '';  // Reset (already declared at function scope)
                 
@@ -3539,6 +3551,21 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
 
                 const data = await response.json();
                 console.log('Chat response data:', data);
+                
+                // Check for API errors (rate limits, etc.)
+                if (data.type === 'error' || data.error) {
+                    const errorMessage = data.error?.message || data.message || 'API error occurred';
+                    console.error('API error in chat:', errorMessage);
+                    
+                    removeTypingIndicator();
+                    
+                    if (errorMessage.includes('rate_limit') || response.status === 429) {
+                        addChatMessage("Whoa there, speed racer! 🏎️ We're hitting the API a bit too hard. My Cloudflare Worker's tapping out. Take a breather for 60 seconds and we'll be back to printing money. ⏱️💰", 'agent');
+                    } else {
+                        addChatMessage(`Yo, hit a snag: ${errorMessage}. Try again in a sec? 🔧`, 'agent');
+                    }
+                    return;
+                }
                 
                 // Handle response - could be text or tool use (web search)
                 let agentResponse = '';
