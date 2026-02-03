@@ -2467,26 +2467,26 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                     const stockName = symbol;
                     
                     html += `
-                        <div class="holding-item" style="flex-direction: column; align-items: stretch; padding: 15px;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <div class="holding-item" style="flex-direction: column; align-items: stretch; padding: 18px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                                 <div>
-                                    <div class="holding-symbol" style="font-size: 18px; font-weight: 700;">${symbol}</div>
-                                    <div class="holding-shares" style="font-size: 12px; color: #94a3b8;">${shares} shares</div>
+                                    <div class="holding-symbol" style="font-size: 24px; font-weight: 700; color: #e2e8f0;">${symbol}</div>
+                                    <div class="holding-shares" style="font-size: 15px; color: #94a3b8; margin-top: 4px;">${shares} shares</div>
                                 </div>
                                 <div style="text-align: right;">
-                                    <div class="holding-price" style="font-size: 16px; font-weight: 600;">$${currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                                    <div class="stat-change ${gainLossClass}" style="font-size: 12px;">${gainLoss >= 0 ? '+' : ''}$${Math.abs(gainLoss).toFixed(2)} (${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}%)</div>
+                                    <div class="holding-price" style="font-size: 22px; font-weight: 600; color: #e2e8f0;">$${currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                    <div class="stat-change ${gainLossClass}" style="font-size: 15px; margin-top: 4px;">${gainLoss >= 0 ? '+' : ''}$${Math.abs(gainLoss).toFixed(2)} (${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}%)</div>
                                 </div>
                             </div>
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748b; padding-top: 8px; border-top: 1px solid rgba(100, 116, 139, 0.2);">
+                            <div style="display: flex; justify-content: space-between; font-size: 14px; color: #94a3b8; padding-top: 10px; border-top: 1px solid rgba(100, 116, 139, 0.3);">
                                 <div>
-                                    <span style="color: #94a3b8;">Avg Cost:</span> $${avgPurchasePrice.toFixed(2)}
+                                    <span style="color: #cbd5e1; font-weight: 500;">Avg Cost:</span> <span style="color: #e2e8f0; font-weight: 600;">$${avgPurchasePrice.toFixed(2)}</span>
                                 </div>
                                 <div>
-                                    <span style="color: #94a3b8;">Current:</span> $${priceData.price.toFixed(2)} <span class="stat-change ${changeClass}" style="font-size: 10px;">${priceData.changePercent >= 0 ? '+' : ''}${priceData.changePercent.toFixed(2)}%</span>
+                                    <span style="color: #cbd5e1; font-weight: 500;">Current:</span> <span style="color: #e2e8f0; font-weight: 600;">$${priceData.price.toFixed(2)}</span> <span class="stat-change ${changeClass}" style="font-size: 13px;">${priceData.changePercent >= 0 ? '+' : ''}${priceData.changePercent.toFixed(2)}%</span>
                                 </div>
                                 <div>
-                                    <span style="color: #94a3b8;">Purchased:</span> ${earliestDate ? earliestDate.toLocaleDateString() : 'N/A'}
+                                    <span style="color: #cbd5e1; font-weight: 500;">Purchased:</span> <span style="color: #e2e8f0; font-weight: 600;">${earliestDate ? earliestDate.toLocaleDateString() : 'N/A'}</span>
                                 </div>
                             </div>
                         </div>
@@ -2683,23 +2683,29 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
 
                     const cloudPortfolio = await fileResponse.json();
                     
-                    // Merge with local portfolio (cloud takes precedence)
-                    portfolio = { ...portfolio, ...cloudPortfolio };
+                    // Replace local portfolio with cloud version (cloud is source of truth)
+                    portfolio = cloudPortfolio;
                     
-                    updateUI();
+                    // Save to localStorage so it persists
+                    localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
+                    
+                    // Update all UI components
+                    await updateUI();
                     updatePerformanceAnalytics();
-                    updateSectorAllocation();
+                    await updateSectorAllocation();
                     
                     updateCloudSyncStatus('✓ Synced', 'Portfolio loaded from Drive');
-                    console.log('Portfolio loaded from Google Drive');
+                    addActivity(`💾 Portfolio restored from Google Drive - $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions`, 'success');
+                    console.log('Portfolio loaded from Google Drive:', portfolio);
                 } else {
-                    // No file exists, create one
+                    // No file exists, create one with current portfolio
                     console.log('No portfolio file found, will create on first save');
                     await savePortfolioToDrive();
                 }
             } catch (error) {
                 console.error('Error loading from Drive:', error);
                 updateCloudSyncStatus('⚠️ Load failed', 'Using local data');
+                addActivity(`⚠️ Could not load from Google Drive: ${error.message}`, 'error');
             }
         }
 
@@ -2901,16 +2907,16 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                     const convictionEmoji = d.conviction >= 9 ? '🔥' : d.conviction >= 7 ? '💪' : '👍';
                     const price = marketData[d.symbol] ? `$${marketData[d.symbol].price.toFixed(2)}` : '';
                     stocksList += `
-                        <div style="margin: 8px 0; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="font-weight: 600; color: ${convictionColor};">
+                        <div style="margin: 12px 0; padding: 14px; background: rgba(0,0,0,0.4); border-radius: 6px; border-left: 3px solid ${convictionColor};">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 700; font-size: 18px; color: ${convictionColor};">
                                     ${d.action === 'BUY' ? '📈' : '📉'} ${d.shares} ${d.symbol} @ ${price}
                                 </span>
-                                <span style="font-size: 12px; color: ${convictionColor};">
-                                    ${convictionEmoji} Conviction: ${d.conviction}/10
+                                <span style="font-size: 15px; color: ${convictionColor}; font-weight: 600;">
+                                    ${convictionEmoji} ${d.conviction}/10
                                 </span>
                             </div>
-                            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px; font-style: italic;">
+                            <div style="font-size: 15px; color: #cbd5e1; margin-top: 6px; line-height: 1.5;">
                                 ${d.reasoning}
                             </div>
                         </div>
@@ -2918,30 +2924,41 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                 });
                 
                 reasoningCard.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-                        <div style="font-size: 16px; font-weight: 700; color: #6366f1;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
+                        <div style="font-size: 20px; font-weight: 700; color: #6366f1;">
                             🎯 APEX's Analysis (${decision.decisions.length} pick${decision.decisions.length > 1 ? 's' : ''})
                         </div>
-                        <div style="font-size: 11px; color: #64748b;">
+                        <div style="font-size: 14px; color: #94a3b8;">
                             ${timestamp.toLocaleTimeString()}
                         </div>
                     </div>
                     ${decision.budgetWarning ? `
-                        <div style="background: rgba(251, 191, 36, 0.1); border-left: 3px solid #fbbf24; padding: 8px 12px; margin-bottom: 12px; border-radius: 4px; font-size: 12px; color: #fbbf24;">
+                        <div style="background: rgba(251, 191, 36, 0.15); border-left: 4px solid #fbbf24; padding: 12px 16px; margin-bottom: 16px; border-radius: 6px; font-size: 15px; color: #fbbf24; font-weight: 500;">
                             ${decision.budgetWarning}
                         </div>
                     ` : ''}
                     ${stocksList}
                     ${decision.reasoning ? `
-                        <div style="margin-top: 12px; padding: 12px; background: rgba(99, 102, 241, 0.05); border-radius: 6px;">
-                            <div style="font-size: 11px; font-weight: 600; color: #818cf8; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
+                        <div style="margin-top: 16px; padding: 16px; background: rgba(99, 102, 241, 0.08); border-radius: 8px;">
+                            <div style="font-size: 14px; font-weight: 700; color: #818cf8; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">
                                 💭 APEX's Thoughts
                             </div>
-                            <div style="color: #cbd5e1; font-size: 13px; line-height: 1.7; font-style: italic;">
+                            <div style="color: #e2e8f0; font-size: 16px; line-height: 1.8;">
                                 ${decision.reasoning}
                             </div>
                         </div>
                     ` : ''}
+                    ${decision.research_summary ? `
+                        <div style="margin-top: 16px; padding: 16px; background: rgba(34, 197, 94, 0.08); border-radius: 8px;">
+                            <div style="font-size: 14px; font-weight: 700; color: #4ade80; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">
+                                📰 Research Summary
+                            </div>
+                            <div style="font-size: 15px; color: #cbd5e1; line-height: 1.7;">
+                                ${decision.research_summary}
+                            </div>
+                        </div>
+                    ` : ''}
+                `;
                     ${decision.research_summary ? `
                         <div style="margin-top: 12px; padding: 12px; background: rgba(34, 197, 94, 0.05); border-radius: 6px;">
                             <div style="font-size: 11px; font-weight: 600; color: #4ade80; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
