@@ -2322,6 +2322,29 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const overallReasoning = response.overall_reasoning || '';
             const researchSummary = response.research_summary || '';
             
+            // Check if APEX is just reaffirming existing positions
+            const buyDecisions = decisions.filter(d => d.action === 'BUY');
+            const existingSymbols = Object.keys(portfolio.holdings);
+            const newBuys = buyDecisions.filter(d => !existingSymbols.includes(d.symbol));
+            const reaffirmations = buyDecisions.filter(d => existingSymbols.includes(d.symbol));
+            
+            // If ALL buy decisions are for stocks we already own, this is a HOLD signal
+            if (buyDecisions.length > 0 && newBuys.length === 0) {
+                addActivity(`💎 APEX reviewed the market and confirms: Your current positions are still the best plays! Holding ${existingSymbols.join(', ')}.`, 'success');
+                
+                // Still show the reasoning panel so user can see the analysis
+                addDecisionReasoning({
+                    action: 'HOLD',
+                    reasoning: `I analyzed the market and your current positions (${existingSymbols.join(', ')}) are still the best opportunities. No changes needed!\n\n` + overallReasoning,
+                    research_summary: researchSummary,
+                    decisions: decisions,
+                    budgetWarning: ''
+                }, marketData);
+                
+                await updateUI();
+                return; // Don't execute duplicate trades
+            }
+            
             // VALIDATE BUDGET BEFORE SHOWING DECISIONS
             // Calculate total cost of all BUY decisions
             let totalCost = 0;
@@ -3434,12 +3457,31 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 ? performanceHistory[performanceHistory.length - 1].value 
                 : (portfolio.initialBalance || 0);
             
-            // Total Return
-            const initialBalance = portfolio.initialBalance || 0;
-            const totalReturn = initialBalance > 0 
-                ? ((totalValue - initialBalance) / initialBalance) * 100 
+            // Calculate TRUE Total Return based on gains, not deposits
+            // Total Return = (Current Value - Total Invested) / Total Invested
+            // This way, adding cash doesn't inflate returns
+            
+            // Calculate total invested (cost basis from transactions)
+            let totalInvested = 0;
+            portfolio.transactions.forEach(transaction => {
+                if (transaction.type === 'BUY') {
+                    totalInvested += transaction.cost;
+                } else if (transaction.type === 'SELL') {
+                    totalInvested -= (transaction.shares * transaction.price);
+                }
+            });
+            
+            // Current holdings value (from latest performance snapshot)
+            const currentHoldingsValue = totalValue - portfolio.cash;
+            
+            // Actual gains/losses = Current Holdings Value - Total Invested
+            const actualGains = currentHoldingsValue - totalInvested;
+            
+            // Return % = Gains / Total Invested (not initial balance!)
+            const totalReturn = totalInvested > 0 
+                ? (actualGains / totalInvested) * 100 
                 : 0;
-            const returnDollar = totalValue - initialBalance;
+            const returnDollar = actualGains;
             
             document.getElementById('totalReturn').textContent = totalReturn.toFixed(2) + '%';
             document.getElementById('totalReturn').className = 'index-price';
