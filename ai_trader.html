@@ -1665,6 +1665,49 @@
             }
         }
 
+        // Fetch technical indicators from Polygon (SMA, RSI, MACD)
+        async function fetchTechnicalIndicators(symbol) {
+            try {
+                // Fetch 50-day and 200-day SMAs
+                const smaPromises = [
+                    fetch(`https://api.polygon.io/v1/indicators/sma/${symbol}?timespan=day&adjusted=true&window=50&series_type=close&order=desc&limit=1&apiKey=${POLYGON_API_KEY}`),
+                    fetch(`https://api.polygon.io/v1/indicators/sma/${symbol}?timespan=day&adjusted=true&window=200&series_type=close&order=desc&limit=1&apiKey=${POLYGON_API_KEY}`),
+                    fetch(`https://api.polygon.io/v1/indicators/rsi/${symbol}?timespan=day&adjusted=true&window=14&series_type=close&order=desc&limit=1&apiKey=${POLYGON_API_KEY}`),
+                    fetch(`https://api.polygon.io/v1/indicators/macd/${symbol}?timespan=day&adjusted=true&short_window=12&long_window=26&signal_window=9&series_type=close&order=desc&limit=1&apiKey=${POLYGON_API_KEY}`)
+                ];
+                
+                const responses = await Promise.all(smaPromises);
+                const [sma50Data, sma200Data, rsiData, macdData] = await Promise.all(responses.map(r => r.json()));
+                
+                const indicators = {};
+                
+                // Extract SMA 50
+                if (sma50Data.results && sma50Data.results.values && sma50Data.results.values.length > 0) {
+                    indicators.sma_50 = parseFloat(sma50Data.results.values[0].value.toFixed(2));
+                }
+                
+                // Extract SMA 200
+                if (sma200Data.results && sma200Data.results.values && sma200Data.results.values.length > 0) {
+                    indicators.sma_200 = parseFloat(sma200Data.results.values[0].value.toFixed(2));
+                }
+                
+                // Extract RSI
+                if (rsiData.results && rsiData.results.values && rsiData.results.values.length > 0) {
+                    indicators.rsi = parseFloat(rsiData.results.values[0].value.toFixed(1));
+                }
+                
+                // Extract MACD
+                if (macdData.results && macdData.results.values && macdData.results.values.length > 0) {
+                    indicators.macd = parseFloat(macdData.results.values[0].value.toFixed(2));
+                }
+                
+                return indicators;
+            } catch (error) {
+                console.warn(`Technical indicators unavailable for ${symbol}:`, error.message);
+                return null;
+            }
+        }
+
         // Get live stock price with caching (15-minute cache to avoid stale prices)
         async function getStockPrice(symbol) {
             checkAndResetApiCounter();
@@ -1716,6 +1759,20 @@
                         isReal: true,
                         note: '15min delayed'
                     };
+                    
+                    // OPTION 2: Fetch technical indicators (MA, RSI, MACD)
+                    try {
+                        const indicators = await fetchTechnicalIndicators(symbol);
+                        if (indicators) {
+                            priceData.sma_50 = indicators.sma_50;
+                            priceData.sma_200 = indicators.sma_200;
+                            priceData.rsi = indicators.rsi;
+                            priceData.macd = indicators.macd;
+                        }
+                    } catch (error) {
+                        console.warn(`Could not fetch indicators for ${symbol}:`, error.message);
+                        // Continue without indicators - not critical
+                    }
                     
                     // Cache the data
                     priceCache[cacheKey] = priceData;
@@ -1847,25 +1904,34 @@
                 // Smart screener picks stocks dynamically
                 const symbols = await screenStocks();
                 console.log('Analyzing stocks:', symbols);
-                thinkingDetail.textContent = 'Analyzing ' + symbols.join(', ') + '...';
+                thinkingDetail.textContent = 'Fetching stock data...';
                 
                 const marketData = {};
                 let fetchErrors = [];
                 
-                for (let i = 0; i < symbols.length; i++) {
-                    const symbol = symbols[i];
+                // OPTION 1: Parallel API calls (no delays) - you have unlimited API calls!
+                const fetchPromises = symbols.map(async (symbol) => {
                     try {
-                        marketData[symbol] = await getStockPrice(symbol);
-                        
-                        // Small delay to prevent overwhelming the API (Polygon has no rate limits, just being polite)
-                        if (i < symbols.length - 1) {
-                            thinkingDetail.textContent = `Fetched ${symbol}. (${i + 1}/${symbols.length})`;
-                            await new Promise(resolve => setTimeout(resolve, 100)); // 0.1 second
-                        }
+                        const data = await getStockPrice(symbol);
+                        return { symbol, data, success: true };
                     } catch (error) {
-                        fetchErrors.push({ symbol, error: error.message });
+                        return { symbol, error: error.message, success: false };
                     }
-                }
+                });
+                
+                // Execute all fetches in parallel - MUCH faster!
+                const results = await Promise.all(fetchPromises);
+                
+                // Process results
+                results.forEach(result => {
+                    if (result.success) {
+                        marketData[result.symbol] = result.data;
+                    } else {
+                        fetchErrors.push({ symbol: result.symbol, error: result.error });
+                    }
+                });
+                
+                thinkingDetail.textContent = `Fetched ${Object.keys(marketData).length}/${symbols.length} stocks`;
                 
                 // Check if we got any data at all
                 if (Object.keys(marketData).length === 0) {
@@ -2076,8 +2142,23 @@ Current Portfolio:
 - Total Portfolio Value: $${totalValue.toFixed(2)}
 - Strategy: AGGRESSIVE - Maximize returns through research
 
-Current Market Data (REAL PRICES from 300 stocks):
+Current Market Data (REAL PRICES + TECHNICAL INDICATORS from 300 stocks):
 ${JSON.stringify(marketData, null, 2)}
+
+📊 TECHNICAL INDICATOR GUIDE (when available in market data):
+- sma_50: 50-day Simple Moving Average - trend indicator
+  → Price > SMA_50 = Bullish, Price < SMA_50 = Bearish
+- sma_200: 200-day Simple Moving Average - long-term trend
+  → Price > SMA_200 = Long-term uptrend, Price < SMA_200 = Long-term downtrend
+- rsi: Relative Strength Index (0-100)
+  → RSI > 70 = Overbought (consider selling)
+  → RSI 40-60 = Neutral
+  → RSI < 30 = Oversold (buying opportunity)
+- macd: Moving Average Convergence Divergence
+  → MACD > 0 = Bullish momentum, MACD < 0 = Bearish momentum
+
+USE THESE INDICATORS IN YOUR TECHNICAL ANALYSIS!
+Example: "PLTR at $156.87 is 8.1% above SMA_50 ($145.03), RSI at 64 (strong but not overbought), MACD positive at 2.15 - confirms bullish setup"
 
 CRITICAL CASH MANAGEMENT:
 ⚠️ YOU ONLY HAVE $${portfolio.cash.toFixed(2)} TO SPEND - DO NOT EXCEED THIS!
@@ -2431,9 +2512,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
             }
             
-            // Summary message
+            // Summary message - show buy/sell breakdown
+            const buyCount = validatedDecisions.filter(d => d.action === 'BUY' && d.symbol).length;
+            const sellCount = validatedDecisions.filter(d => d.action === 'SELL').length;
+            
             if (successCount === validatedDecisions.length) {
-                addActivity(`✅ APEX executed ${successCount} trade(s) successfully!`, 'success');
+                let message = '✅ APEX ';
+                const actions = [];
+                if (buyCount > 0) actions.push(`BOUGHT ${buyCount}`);
+                if (sellCount > 0) actions.push(`SOLD ${sellCount}`);
+                message += actions.join(' and ') + '!';
+                addActivity(message, 'success');
             } else if (successCount > 0) {
                 addActivity(`⚠️ APEX executed ${successCount}/${validatedDecisions.length} trades (${failCount} failed)`, 'warning');
             } else {
