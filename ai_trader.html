@@ -2007,12 +2007,46 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                 console.log('AI response text:', aiResponse);
                 
                 // Parse AI decision (now supports multiple stocks)
-                const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    const response = JSON.parse(jsonMatch[0]);
-                    
-                    // Handle new multi-stock format
-                    if (response.decisions && Array.isArray(response.decisions)) {
+                // First, try to extract from markdown code blocks if present
+                let jsonText = aiResponse;
+                
+                // Remove markdown code blocks if present
+                if (aiResponse.includes('```json')) {
+                    const jsonMatch = aiResponse.match(/```json\s*([\s\S]*?)\s*```/);
+                    if (jsonMatch) {
+                        jsonText = jsonMatch[1];
+                    }
+                } else if (aiResponse.includes('```')) {
+                    const jsonMatch = aiResponse.match(/```\s*([\s\S]*?)\s*```/);
+                    if (jsonMatch) {
+                        jsonText = jsonMatch[1];
+                    }
+                }
+                
+                // Find the JSON object by counting braces
+                const startIndex = jsonText.indexOf('{');
+                if (startIndex === -1) {
+                    throw new Error('No JSON object found in response');
+                }
+                
+                let braceCount = 0;
+                let endIndex = startIndex;
+                for (let i = startIndex; i < jsonText.length; i++) {
+                    if (jsonText[i] === '{') braceCount++;
+                    if (jsonText[i] === '}') braceCount--;
+                    if (braceCount === 0) {
+                        endIndex = i;
+                        break;
+                    }
+                }
+                
+                const jsonString = jsonText.substring(startIndex, endIndex + 1);
+                console.log('Extracted JSON:', jsonString);
+                
+                const response = JSON.parse(jsonString);
+                
+                // Handle new multi-stock format
+                if (response.decisions && Array.isArray(response.decisions)) {
                         // SAFETY: Ensure whole shares only for all decisions
                         response.decisions.forEach(decision => {
                             if (decision.shares) {
@@ -2043,15 +2077,12 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                         }, 3000);
                     }
                     else {
-                        throw new Error('Invalid decision format');
+                        throw new Error('Invalid decision format - missing decisions array or action');
                     }
-                } else {
-                    console.error('Could not find JSON in response:', aiResponse);
-                    throw new Error('Could not parse AI response as JSON. Check console for full response.');
-                }
 
             } catch (error) {
                 console.error('AI Analysis error:', error);
+                console.error('Full AI response:', aiResponse);
                 thinkingDetail.textContent = 'Error: ' + error.message;
                 addActivity('🚫 AI Analysis failed: ' + error.message, 'error');
                 
