@@ -922,21 +922,7 @@
         <div class="main-grid">
             <div class="chart-card">
                 <h2 class="chart-title">Portfolio Performance</h2>
-                <div style="margin-bottom: 15px;">
-                    <label style="font-size: 12px; color: #94a3b8; margin-bottom: 5px; display: block;">Compare with:</label>
-                    <select id="compareIndex" onchange="updatePerformanceChart()" style="width: auto; padding: 8px; font-size: 12px;">
-                        <option value="none">Portfolio Only</option>
-                        <option value="^GSPC">S&P 500</option>
-                        <option value="^IXIC">NASDAQ</option>
-                        <option value="^DJI">Dow Jones</option>
-                    </select>
-                </div>
                 <canvas id="performanceChart"></canvas>
-                <div id="outperformanceMetric" style="margin-top: 15px; padding: 15px; background: rgba(99, 102, 241, 0.1); border-radius: 8px; display: none;">
-                    <div style="font-size: 12px; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">APEX vs Benchmark</div>
-                    <div style="font-size: 28px; font-weight: 700;" id="outperformanceText">--</div>
-                    <div style="font-size: 11px; color: #94a3b8; margin-top: 5px;" id="outperformanceDetail">--</div>
-                </div>
             </div>
             <div class="chart-card">
                 <h2 class="chart-title">Sector Allocation</h2>
@@ -1164,6 +1150,73 @@
         let sectorChart = null;
 
         // Stock sector mapping
+        // Stock full names mapping
+        const stockNames = {
+            // Tech - AI/Software
+            'NVDA': 'NVIDIA', 'AMD': 'Advanced Micro Devices', 'GOOGL': 'Alphabet (Google)', 'GOOG': 'Alphabet (Google)',
+            'META': 'Meta Platforms', 'PLTR': 'Palantir', 'SNOW': 'Snowflake', 'MSFT': 'Microsoft',
+            'ORCL': 'Oracle', 'CRM': 'Salesforce', 'ADBE': 'Adobe', 'NOW': 'ServiceNow',
+            'AI': 'C3.ai', 'BBAI': 'BigBear.ai', 'SOUN': 'SoundHound AI', 'PATH': 'UiPath',
+            'S': 'SentinelOne', 'HUBS': 'HubSpot', 'ZM': 'Zoom', 'DOCU': 'DocuSign',
+            'TEAM': 'Atlassian', 'WDAY': 'Workday', 'VEEV': 'Veeva', 'ESTC': 'Elastic',
+            'DDOG': 'Datadog', 'NET': 'Cloudflare', 'MDB': 'MongoDB', 'CRWD': 'CrowdStrike',
+            'PANW': 'Palo Alto Networks', 'ZS': 'Zscaler', 'OKTA': 'Okta', 'CFLT': 'Confluent',
+            
+            // Tech - Hardware/Semiconductors
+            'AAPL': 'Apple', 'QCOM': 'Qualcomm', 'INTC': 'Intel', 'MU': 'Micron Technology',
+            'ARM': 'Arm Holdings', 'AVGO': 'Broadcom', 'TXN': 'Texas Instruments', 'ADI': 'Analog Devices',
+            'NXPI': 'NXP Semiconductors', 'KLAC': 'KLA Corporation', 'ASML': 'ASML Holding', 'TSM': 'Taiwan Semiconductor',
+            'SNPS': 'Synopsys', 'CDNS': 'Cadence Design', 'ON': 'ON Semiconductor', 'MPWR': 'Monolithic Power',
+            'SWKS': 'Skyworks Solutions', 'QRVO': 'Qorvo', 'DELL': 'Dell Technologies', 'HPQ': 'HP Inc.',
+            'AMAT': 'Applied Materials', 'LRCX': 'Lam Research', 'MRVL': 'Marvell Technology', 'SMCI': 'Super Micro Computer',
+            
+            // EV/Automotive
+            'TSLA': 'Tesla', 'RIVN': 'Rivian', 'LCID': 'Lucid Group', 'NIO': 'NIO Inc.',
+            'XPEV': 'XPeng', 'LI': 'Li Auto', 'F': 'Ford', 'GM': 'General Motors',
+            'STLA': 'Stellantis', 'TM': 'Toyota', 'HMC': 'Honda', 'RACE': 'Ferrari',
+            
+            // Finance
+            'JPM': 'JPMorgan Chase', 'BAC': 'Bank of America', 'V': 'Visa', 'MA': 'Mastercard',
+            'COIN': 'Coinbase', 'SOFI': 'SoFi', 'PYPL': 'PayPal', 'SQ': 'Block (Square)',
+            'WFC': 'Wells Fargo', 'GS': 'Goldman Sachs', 'MS': 'Morgan Stanley', 'C': 'Citigroup',
+            'BLK': 'BlackRock', 'SCHW': 'Charles Schwab', 'AFRM': 'Affirm', 'UPST': 'Upstart',
+            'NU': 'Nu Holdings', 'MELI': 'MercadoLibre', 'HOOD': 'Robinhood',
+            
+            // Growth
+            'DKNG': 'DraftKings', 'RBLX': 'Roblox', 'U': 'Unity Software', 'PINS': 'Pinterest',
+            'SNAP': 'Snap Inc.', 'SPOT': 'Spotify', 'ROKU': 'Roku', 'ABNB': 'Airbnb',
+            'LYFT': 'Lyft', 'DASH': 'DoorDash', 'UBER': 'Uber', 'SHOP': 'Shopify',
+            
+            // Healthcare
+            'JNJ': 'Johnson & Johnson', 'UNH': 'UnitedHealth', 'LLY': 'Eli Lilly', 'PFE': 'Pfizer',
+            'MRNA': 'Moderna', 'ABBV': 'AbbVie', 'VRTX': 'Vertex Pharma', 'REGN': 'Regeneron',
+            'BMY': 'Bristol Myers Squibb', 'GILD': 'Gilead Sciences', 'AMGN': 'Amgen', 'CVS': 'CVS Health',
+            'ISRG': 'Intuitive Surgical', 'TMO': 'Thermo Fisher', 'DHR': 'Danaher', 'ABT': 'Abbott Labs',
+            
+            // Consumer
+            'AMZN': 'Amazon', 'WMT': 'Walmart', 'COST': 'Costco', 'TGT': 'Target',
+            'HD': 'Home Depot', 'LOW': "Lowe's", 'SBUX': 'Starbucks', 'MCD': "McDonald's",
+            'NKE': 'Nike', 'LULU': 'Lululemon', 'DIS': 'Disney', 'NFLX': 'Netflix',
+            'KO': 'Coca-Cola', 'PEP': 'PepsiCo',
+            
+            // Energy
+            'XOM': 'ExxonMobil', 'CVX': 'Chevron', 'COP': 'ConocoPhillips', 'SLB': 'Schlumberger',
+            'NEE': 'NextEra Energy', 'ENPH': 'Enphase', 'FSLR': 'First Solar', 'PLUG': 'Plug Power',
+            
+            // Industrials
+            'BA': 'Boeing', 'CAT': 'Caterpillar', 'DE': 'Deere & Co.', 'GE': 'General Electric',
+            'HON': 'Honeywell', 'UPS': 'United Parcel Service', 'FDX': 'FedEx',
+            
+            // Real Estate
+            'AMT': 'American Tower', 'PLD': 'Prologis', 'EQIX': 'Equinix', 'O': 'Realty Income',
+            
+            // Materials
+            'NEM': 'Newmont', 'FCX': 'Freeport-McMoRan', 'NUE': 'Nucor', 'DOW': 'Dow Inc.',
+            
+            // Defense
+            'LMT': 'Lockheed Martin', 'RTX': 'RTX Corporation', 'NOC': 'Northrop Grumman', 'GD': 'General Dynamics'
+        };
+
         const stockSectors = {
             // Tech - AI/Software
             'NVDA': 'Technology', 'AMD': 'Technology', 'GOOGL': 'Technology', 'GOOG': 'Technology',
@@ -1519,111 +1572,11 @@
         async function updatePerformanceChart() {
             if (!performanceChart || portfolio.performanceHistory.length === 0) return;
             
-            const compareSymbol = document.getElementById('compareIndex').value;
-            
             // Update portfolio data
             performanceChart.data.labels = portfolio.performanceHistory.map(h => 
                 new Date(h.timestamp).toLocaleTimeString()
             );
             performanceChart.data.datasets[0].data = portfolio.performanceHistory.map(h => h.value);
-            
-            // Add or remove comparison dataset
-            if (compareSymbol !== 'none') {
-                // Show outperformance metric
-                document.getElementById('outperformanceMetric').style.display = 'block';
-                
-                // If comparison dataset doesn't exist, create it
-                if (performanceChart.data.datasets.length === 1) {
-                    performanceChart.data.datasets.push({
-                        label: '',
-                        data: [],
-                        borderColor: '#34d399',
-                        backgroundColor: 'rgba(52, 211, 153, 0.1)',
-                        borderWidth: 2,
-                        tension: 0.4,
-                        fill: false,
-                        borderDash: [5, 5]
-                    });
-                }
-                
-                // Try to get real index data via ETF
-                const indexData = await getIndexPrice(compareSymbol, 0);
-                
-                // Check if we got real data
-                if (indexData.error || !indexData.isReal) {
-                    // Show error message
-                    const outperformanceText = document.getElementById('outperformanceText');
-                    outperformanceText.textContent = '--';
-                    outperformanceText.style.color = '#94a3b8';
-                    
-                    // Hide comparison line
-                    performanceChart.data.datasets[1].data = [];
-                    performanceChart.data.datasets[1].label = 'Comparison unavailable';
-                    
-                    console.warn(`Unable to fetch ${compareSymbol} data for comparison`);
-                } else {
-                    // We have real data! Calculate comparison
-                    // Store initial ETF price for this comparison session
-                    if (!window.comparisonBasePrice || window.lastCompareSymbol !== compareSymbol) {
-                        window.comparisonBasePrice = indexData.price;
-                        window.lastCompareSymbol = compareSymbol;
-                    }
-                    
-                    // Calculate what portfolio would be worth if it tracked the ETF
-                    const etfReturn = ((indexData.price - window.comparisonBasePrice) / window.comparisonBasePrice);
-                    const hypotheticalValue = portfolio.initialBalance * (1 + etfReturn);
-                    
-                    // Fill comparison data matching portfolio history length
-                    const comparisonData = portfolio.performanceHistory.map((_, index) => {
-                        const progress = index / Math.max(portfolio.performanceHistory.length - 1, 1);
-                        return portfolio.initialBalance + (hypotheticalValue - portfolio.initialBalance) * progress;
-                    });
-                    
-                    const indexName = {
-                        '^GSPC': 'S&P 500',
-                        '^IXIC': 'NASDAQ',
-                        '^DJI': 'Dow Jones'
-                    }[compareSymbol] || compareSymbol;
-                    
-                    performanceChart.data.datasets[1].data = comparisonData;
-                    performanceChart.data.datasets[1].label = `${indexName} (via ${indexData.etfSymbol})`;
-                    
-                    // Calculate outperformance
-                    const performanceHistory = portfolio.performanceHistory || [];
-                    if (performanceHistory.length > 0) {
-                        const currentPortfolioValue = performanceHistory[performanceHistory.length - 1].value;
-                        const currentIndexValue = comparisonData[comparisonData.length - 1];
-                        
-                        const initialBalance = portfolio.initialBalance || 0;
-                        const portfolioReturn = initialBalance > 0 ? ((currentPortfolioValue - initialBalance) / initialBalance) * 100 : 0;
-                        const indexReturn = initialBalance > 0 ? ((currentIndexValue - initialBalance) / initialBalance) * 100 : 0;
-                        const outperformance = portfolioReturn - indexReturn;
-                        
-                        const outperformanceText = document.getElementById('outperformanceText');
-                        outperformanceText.textContent = (outperformance >= 0 ? '+' : '') + outperformance.toFixed(2) + '%';
-                        outperformanceText.style.color = outperformance >= 0 ? '#34d399' : '#f87171';
-                    } else {
-                        const outperformanceText = document.getElementById('outperformanceText');
-                        outperformanceText.textContent = '--';
-                        outperformanceText.style.color = '#94a3b8';
-                    }
-                }
-                
-                const outperformanceDetail = document.getElementById('outperformanceDetail');
-                if (outperformance >= 0) {
-                    outperformanceDetail.textContent = `APEX is outperforming ${indexName} by ${Math.abs(outperformance).toFixed(2)}%`;
-                } else {
-                    outperformanceDetail.textContent = `APEX is underperforming ${indexName} by ${Math.abs(outperformance).toFixed(2)}%`;
-                }
-            } else {
-                // Hide outperformance metric
-                document.getElementById('outperformanceMetric').style.display = 'none';
-                
-                // Remove comparison dataset if it exists
-                if (performanceChart.data.datasets.length > 1) {
-                    performanceChart.data.datasets.pop();
-                }
-            }
             
             performanceChart.update();
         }
@@ -2463,14 +2416,15 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
                     const gainLossPercent = avgPurchasePrice > 0 ? ((priceData.price - avgPurchasePrice) / avgPurchasePrice) * 100 : 0;
                     const gainLossClass = gainLoss >= 0 ? 'positive' : 'negative';
                     
-                    // Get stock name (simplified - just use symbol for now, could add a name mapping later)
-                    const stockName = symbol;
+                    // Get stock name from mapping
+                    const stockName = stockNames[symbol] || symbol;
                     
                     html += `
                         <div class="holding-item" style="flex-direction: column; align-items: stretch; padding: 18px;">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                                 <div>
                                     <div class="holding-symbol" style="font-size: 24px; font-weight: 700; color: #e2e8f0;">${symbol}</div>
+                                    <div style="font-size: 14px; color: #94a3b8; margin-top: 2px;">${stockName}</div>
                                     <div class="holding-shares" style="font-size: 15px; color: #94a3b8; margin-top: 4px;">${shares} shares</div>
                                 </div>
                                 <div style="text-align: right;">
@@ -2539,9 +2493,18 @@ Remember: You're managing money to MAXIMIZE returns AND teaching your user. Qual
         function loadPortfolio() {
             const saved = localStorage.getItem('aiTradingPortfolio');
             if (saved) {
-                portfolio = JSON.parse(saved);
-                updateUI();
-                addActivity('Portfolio loaded from previous session', 'init');
+                try {
+                    portfolio = JSON.parse(saved);
+                    console.log('Portfolio loaded from localStorage:', portfolio);
+                    console.log(`Cash: $${portfolio.cash}, Holdings: ${Object.keys(portfolio.holdings).length}, Transactions: ${portfolio.transactions.length}`);
+                    updateUI();
+                    addActivity(`Portfolio loaded from localStorage - $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions`, 'init');
+                } catch (error) {
+                    console.error('Error parsing localStorage portfolio:', error);
+                    addActivity('⚠️ Error loading saved portfolio', 'error');
+                }
+            } else {
+                console.log('No portfolio found in localStorage');
             }
         }
 
