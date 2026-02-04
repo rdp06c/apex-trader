@@ -901,6 +901,21 @@
             </div>
         </div>
 
+        <!-- Learning Insights Section -->
+        <div class="market-overview">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <h2 style="margin: 0;">📚 Learning Insights</h2>
+                <div style="font-size: 12px; color: #64748b; background: rgba(99, 102, 241, 0.1); padding: 4px 10px; border-radius: 12px;">
+                    AI is learning from your trades
+                </div>
+            </div>
+            <div id="learningInsights" style="font-size: 13px; color: #cbd5e1; line-height: 1.6;">
+                <div style="text-align: center; color: #64748b; padding: 20px;">
+                    No trades yet - Learning will begin after your first completed trade
+                </div>
+            </div>
+        </div>
+
         <!-- Chat with APEX - Moved higher for easier access -->
         <div class="chat-section">
             <h2 class="chart-title">💬 Chat with APEX</h2>
@@ -1804,6 +1819,314 @@
             }
         }
 
+        // LEARNING SYSTEM: Analyze past performance to improve future decisions
+        function analyzePerformanceHistory() {
+            const closedTrades = portfolio.closedTrades || [];
+            const transactions = portfolio.transactions || [];
+            
+            if (closedTrades.length === 0) {
+                return {
+                    hasData: false,
+                    message: "No closed trades yet - learning will begin after first completed trade."
+                };
+            }
+            
+            // 1. OVERALL PERFORMANCE METRICS
+            const wins = closedTrades.filter(t => t.profitLoss > 0);
+            const losses = closedTrades.filter(t => t.profitLoss < 0);
+            const totalTrades = closedTrades.length;
+            const winRate = (wins.length / totalTrades) * 100;
+            
+            const avgWinReturn = wins.length > 0 
+                ? wins.reduce((sum, t) => sum + t.returnPercent, 0) / wins.length 
+                : 0;
+            const avgLossReturn = losses.length > 0 
+                ? losses.reduce((sum, t) => sum + t.returnPercent, 0) / losses.length 
+                : 0;
+            
+            const avgWinHoldTime = wins.length > 0
+                ? wins.reduce((sum, t) => sum + t.holdTime, 0) / wins.length / (1000 * 60 * 60 * 24)
+                : 0;
+            const avgLossHoldTime = losses.length > 0
+                ? losses.reduce((sum, t) => sum + t.holdTime, 0) / losses.length / (1000 * 60 * 60 * 24)
+                : 0;
+            
+            // 2. STOCK-SPECIFIC PERFORMANCE WITH CONTEXT
+            const stockPerformance = {};
+            closedTrades.forEach(trade => {
+                if (!stockPerformance[trade.symbol]) {
+                    stockPerformance[trade.symbol] = {
+                        wins: 0,
+                        losses: 0,
+                        totalReturn: 0,
+                        trades: [],
+                        entryPrices: [],
+                        exitPrices: []
+                    };
+                }
+                
+                const perf = stockPerformance[trade.symbol];
+                if (trade.profitLoss > 0) {
+                    perf.wins++;
+                } else {
+                    perf.losses++;
+                }
+                perf.totalReturn += trade.returnPercent;
+                perf.trades.push(trade);
+                perf.entryPrices.push(trade.buyPrice);
+                perf.exitPrices.push(trade.sellPrice);
+            });
+            
+            // Calculate patterns for each stock
+            Object.keys(stockPerformance).forEach(symbol => {
+                const perf = stockPerformance[symbol];
+                perf.avgReturn = perf.totalReturn / perf.trades.length;
+                perf.winRate = (perf.wins / perf.trades.length) * 100;
+                perf.avgEntryPrice = perf.entryPrices.reduce((a, b) => a + b, 0) / perf.entryPrices.length;
+                perf.avgExitPrice = perf.exitPrices.reduce((a, b) => a + b, 0) / perf.exitPrices.length;
+                
+                // Identify patterns
+                perf.patterns = [];
+                if (perf.trades.length >= 2) {
+                    // Check if consistently bought high
+                    const priceRange = Math.max(...perf.entryPrices) - Math.min(...perf.entryPrices);
+                    const avgToMax = (Math.max(...perf.entryPrices) - perf.avgEntryPrice) / Math.max(...perf.entryPrices) * 100;
+                    if (avgToMax < 10 && perf.losses > perf.wins) {
+                        perf.patterns.push("Entered near highs - wait for better entry points");
+                    }
+                    
+                    // Check hold time pattern
+                    const avgHoldTime = perf.trades.reduce((sum, t) => sum + t.holdTime, 0) / perf.trades.length / (1000 * 60 * 60 * 24);
+                    if (avgHoldTime < 3 && perf.losses > perf.wins) {
+                        perf.patterns.push("Sold too quickly - consider holding longer");
+                    }
+                }
+            });
+            
+            // 3. SECTOR PERFORMANCE WITH CONTEXT
+            const sectorPerformance = {};
+            closedTrades.forEach(trade => {
+                const sector = stockSectors[trade.symbol] || 'Unknown';
+                if (!sectorPerformance[sector]) {
+                    sectorPerformance[sector] = {
+                        wins: 0,
+                        losses: 0,
+                        totalReturn: 0,
+                        count: 0,
+                        trades: []
+                    };
+                }
+                
+                const perf = sectorPerformance[sector];
+                if (trade.profitLoss > 0) {
+                    perf.wins++;
+                } else {
+                    perf.losses++;
+                }
+                perf.totalReturn += trade.returnPercent;
+                perf.count++;
+                perf.trades.push(trade);
+            });
+            
+            // Calculate sector insights
+            Object.keys(sectorPerformance).forEach(sector => {
+                const perf = sectorPerformance[sector];
+                perf.avgReturn = perf.totalReturn / perf.count;
+                perf.winRate = (perf.wins / perf.count) * 100;
+                
+                // Identify sector patterns
+                perf.insight = "";
+                if (perf.winRate >= 70) {
+                    perf.insight = "Strong sector for you - continue focusing here";
+                } else if (perf.winRate >= 50) {
+                    perf.insight = "Decent sector - be selective";
+                } else if (perf.count >= 3) {
+                    perf.insight = "Underperforming sector - analyze what's not working";
+                }
+            });
+            
+            // 4. BEHAVIORAL PATTERNS
+            const behaviorPatterns = [];
+            
+            // Hold time pattern
+            if (wins.length >= 3 && losses.length >= 3) {
+                const holdTimeDiff = avgWinHoldTime - avgLossHoldTime;
+                if (holdTimeDiff > 3) {
+                    behaviorPatterns.push({
+                        pattern: "Winners held much longer than losers",
+                        insight: `Winners: ${avgWinHoldTime.toFixed(1)} days vs Losers: ${avgLossHoldTime.toFixed(1)} days - Patience is profitable for you`,
+                        action: "Give your trades more time to work before selling"
+                    });
+                } else if (holdTimeDiff < -3) {
+                    behaviorPatterns.push({
+                        pattern: "Losers held longer than winners",
+                        insight: `Losers: ${avgLossHoldTime.toFixed(1)} days vs Winners: ${avgWinHoldTime.toFixed(1)} days - You hold onto losses too long`,
+                        action: "Cut losses faster, let winners run"
+                    });
+                }
+            }
+            
+            // Win size vs loss size
+            const avgWinSize = Math.abs(avgWinReturn);
+            const avgLossSize = Math.abs(avgLossReturn);
+            if (wins.length >= 2 && losses.length >= 2) {
+                const winLossRatio = avgWinSize / avgLossSize;
+                if (winLossRatio < 1.2) {
+                    behaviorPatterns.push({
+                        pattern: "Small winners, big losers",
+                        insight: `Avg win: +${avgWinSize.toFixed(1)}% vs Avg loss: ${avgLossReturn.toFixed(1)}% - Cutting winners too early`,
+                        action: "Let winners run further, cut losses tighter"
+                    });
+                } else if (winLossRatio > 2) {
+                    behaviorPatterns.push({
+                        pattern: "Big winners, small losses",
+                        insight: `Avg win: +${avgWinSize.toFixed(1)}% vs Avg loss: ${avgLossReturn.toFixed(1)}% - Good risk management`,
+                        action: "Your risk/reward approach is working - maintain it"
+                    });
+                }
+            }
+            
+            // 5. RECENT PERFORMANCE TREND
+            const recentTrades = closedTrades.slice(-10);
+            const recentWins = recentTrades.filter(t => t.profitLoss > 0).length;
+            const recentWinRate = recentTrades.length > 0 ? (recentWins / recentTrades.length) * 100 : 0;
+            
+            const trendAnalysis = {
+                improving: recentWinRate > winRate + 10,
+                declining: recentWinRate < winRate - 10,
+                stable: Math.abs(recentWinRate - winRate) <= 10
+            };
+            
+            return {
+                hasData: true,
+                overall: {
+                    totalTrades,
+                    wins: wins.length,
+                    losses: losses.length,
+                    winRate,
+                    avgWinReturn,
+                    avgLossReturn,
+                    avgWinHoldTime,
+                    avgLossHoldTime
+                },
+                stockPerformance,
+                sectorPerformance,
+                behaviorPatterns,
+                recent: {
+                    trades: recentTrades.length,
+                    wins: recentWins,
+                    winRate: recentWinRate,
+                    trend: trendAnalysis
+                }
+            };
+        }
+
+        // Format performance insights for Claude's prompt - CONTEXTUAL, NOT RIGID
+        function formatPerformanceInsights() {
+            const analysis = analyzePerformanceHistory();
+            
+            if (!analysis.hasData) {
+                return `\n📊 LEARNING STATUS: ${analysis.message}\n`;
+            }
+            
+            const { overall, stockPerformance, sectorPerformance, behaviorPatterns, recent } = analysis;
+            
+            let insights = `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 HISTORICAL CONTEXT - Learn from these insights, don't follow blindly
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 YOUR PERFORMANCE SUMMARY:
+• Total Trades: ${overall.totalTrades}
+• Record: ${overall.wins}W - ${overall.losses}L (${overall.winRate.toFixed(1)}% win rate)
+• Average Winner: +${overall.avgWinReturn.toFixed(2)}% over ${overall.avgWinHoldTime.toFixed(1)} days
+• Average Loser: ${overall.avgLossReturn.toFixed(2)}% over ${overall.avgLossHoldTime.toFixed(1)} days
+
+📈 RECENT TREND (Last ${recent.trades} trades):
+• Record: ${recent.wins}W - ${recent.trades - recent.wins}L (${recent.winRate.toFixed(1)}% win rate)
+`;
+            
+            if (recent.trend.improving) {
+                insights += `• 🔥 IMPROVING! Recent win rate (${recent.winRate.toFixed(1)}%) > overall (${overall.winRate.toFixed(1)}%)\n`;
+                insights += `• Keep doing what you're doing - your strategy is working better\n`;
+            } else if (recent.trend.declining) {
+                insights += `• ⚠️ DECLINING! Recent win rate (${recent.winRate.toFixed(1)}%) < overall (${overall.winRate.toFixed(1)}%)\n`;
+                insights += `• Review recent decisions - something has changed\n`;
+            }
+            insights += '\n';
+
+            // Stock-specific context (not avoid/favor lists!)
+            const stocksWithMultipleTrades = Object.entries(stockPerformance)
+                .filter(([_, perf]) => perf.trades.length >= 2)
+                .sort((a, b) => b[1].trades.length - a[1].trades.length)
+                .slice(0, 5);
+            
+            if (stocksWithMultipleTrades.length > 0) {
+                insights += `📊 STOCK PERFORMANCE CONTEXT (Use this to inform decisions, not as rules):\n\n`;
+                stocksWithMultipleTrades.forEach(([symbol, perf]) => {
+                    insights += `${symbol}: ${perf.wins}-${perf.losses} record (${perf.avgReturn.toFixed(1)}% avg return)\n`;
+                    insights += `  • Entry prices: $${Math.min(...perf.entryPrices).toFixed(2)} - $${Math.max(...perf.entryPrices).toFixed(2)} (avg: $${perf.avgEntryPrice.toFixed(2)})\n`;
+                    insights += `  • Exit prices: $${Math.min(...perf.exitPrices).toFixed(2)} - $${Math.max(...perf.exitPrices).toFixed(2)} (avg: $${perf.avgExitPrice.toFixed(2)})\n`;
+                    
+                    if (perf.patterns.length > 0) {
+                        perf.patterns.forEach(pattern => {
+                            insights += `  • Pattern: ${pattern}\n`;
+                        });
+                    }
+                    
+                    // Context, not commands
+                    if (perf.losses > perf.wins) {
+                        insights += `  → Context: This stock hasn't worked well for you, but consider WHY (timing? conditions?)\n`;
+                        insights += `  → If conditions are different now (better price, better setup), it might work this time\n`;
+                    } else if (perf.wins > perf.losses) {
+                        insights += `  → Context: This stock has worked well for you in the past\n`;
+                        insights += `  → If setup is similar to previous wins, it could work again\n`;
+                    }
+                    insights += '\n';
+                });
+            }
+            
+            // Sector insights
+            const sortedSectors = Object.entries(sectorPerformance)
+                .filter(([_, perf]) => perf.count >= 2)
+                .sort((a, b) => b[1].avgReturn - a[1].avgReturn);
+            
+            if (sortedSectors.length > 0) {
+                insights += `🎯 SECTOR PERFORMANCE INSIGHTS:\n\n`;
+                sortedSectors.forEach(([sector, perf]) => {
+                    const icon = perf.avgReturn > 5 ? '✅' : perf.avgReturn > 0 ? '➖' : '⚠️';
+                    insights += `${icon} ${sector}: ${perf.wins}-${perf.losses} (${perf.winRate.toFixed(0)}% win rate, ${perf.avgReturn >= 0 ? '+' : ''}${perf.avgReturn.toFixed(1)}% avg)\n`;
+                    if (perf.insight) {
+                        insights += `   ${perf.insight}\n`;
+                    }
+                });
+                insights += '\n';
+            }
+            
+            // Behavioral patterns - the most important insights!
+            if (behaviorPatterns.length > 0) {
+                insights += `🔍 YOUR TRADING BEHAVIOR PATTERNS:\n\n`;
+                behaviorPatterns.forEach(bp => {
+                    insights += `Pattern: ${bp.pattern}\n`;
+                    insights += `  • ${bp.insight}\n`;
+                    insights += `  • Action: ${bp.action}\n\n`;
+                });
+            }
+            
+            insights += `💡 HOW TO USE THIS DATA:
+• This is CONTEXT, not commandments - markets change, conditions evolve
+• If a stock failed before due to poor entry timing, a better entry now might work
+• If you tend to sell winners too early, consciously hold longer this time
+• If a sector is underperforming, analyze WHY before avoiding it entirely
+• Learn from patterns in your BEHAVIOR (hold times, entry timing) more than from specific stocks
+• Your goal: Understand what makes YOUR trades succeed or fail, then apply those lessons
+
+REMEMBER: Past performance helps inform decisions, but always evaluate current conditions!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+            
+            return insights;
+        }
+
         // Smart Stock Screener - Samples across ALL sectors every time
         async function screenStocks() {
             // With unlimited API calls, we can sample from all sectors to find the best opportunities
@@ -2234,6 +2557,7 @@ Example: "AMD +3% on solid guidance, revenue +35%, memory sector strong, but som
    - Are there sector-wide catalysts?
    - How are peers performing?
 
+${formatPerformanceInsights()}
 Current Portfolio:
 - Cash Available: $${portfolio.cash.toFixed(2)} ← THIS IS YOUR BUYING POWER
 - Holdings: ${JSON.stringify(portfolio.holdings, null, 2)}
@@ -3729,6 +4053,139 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Total Trades
             const transactions = portfolio.transactions || [];
             document.getElementById('totalTrades').textContent = transactions.length;
+            
+            // Update Learning Insights Display
+            updateLearningInsightsDisplay();
+        }
+        
+        // Update Learning Insights Display
+        function updateLearningInsightsDisplay() {
+            const analysis = analyzePerformanceHistory();
+            const container = document.getElementById('learningInsights');
+            
+            if (!analysis.hasData) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: #64748b; padding: 20px;">
+                        ${analysis.message}
+                    </div>
+                `;
+                return;
+            }
+            
+            const { overall, sectorPerformance, stockPerformance, behaviorPatterns, recent } = analysis;
+            
+            let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
+            
+            // Overall Performance
+            html += `
+                <div style="background: rgba(15, 15, 35, 0.4); border-radius: 8px; padding: 15px;">
+                    <div style="font-weight: 600; margin-bottom: 10px; color: #f1f5f9;">📊 Overall Performance</div>
+                    <div style="color: #cbd5e1;">
+                        <div>Record: ${overall.wins}W - ${overall.losses}L (${overall.winRate.toFixed(1)}%)</div>
+                        <div>Avg Winner: <span style="color: #34d399;">+${overall.avgWinReturn.toFixed(1)}%</span> (${overall.avgWinHoldTime.toFixed(1)} days)</div>
+                        <div>Avg Loser: <span style="color: #f87171;">${overall.avgLossReturn.toFixed(1)}%</span> (${overall.avgLossHoldTime.toFixed(1)} days)</div>
+                    </div>
+                </div>
+            `;
+            
+            // Recent Trend
+            const trendIcon = recent.trend.improving ? '🔥' : 
+                             recent.trend.declining ? '⚠️' : '➖';
+            const trendText = recent.trend.improving ? 'IMPROVING!' : 
+                             recent.trend.declining ? 'DECLINING' : 'STEADY';
+            const trendColor = recent.trend.improving ? '#34d399' : 
+                              recent.trend.declining ? '#f87171' : '#94a3b8';
+            
+            html += `
+                <div style="background: rgba(15, 15, 35, 0.4); border-radius: 8px; padding: 15px;">
+                    <div style="font-weight: 600; margin-bottom: 10px; color: #f1f5f9;">📈 Recent Trend</div>
+                    <div style="color: #cbd5e1;">
+                        <div>Last ${recent.trades} trades: ${recent.wins}W - ${recent.trades - recent.wins}L</div>
+                        <div>Win Rate: ${recent.winRate.toFixed(1)}%</div>
+                        <div style="color: ${trendColor}; font-weight: 600; margin-top: 5px;">${trendIcon} ${trendText}</div>
+                    </div>
+                </div>
+            `;
+            
+            html += '</div>'; // Close grid
+            
+            // Behavioral Patterns - Most important!
+            if (behaviorPatterns.length > 0) {
+                html += `
+                    <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 15px; margin-top: 15px;">
+                        <div style="font-weight: 600; margin-bottom: 10px; color: #818cf8;">🔍 Your Trading Behavior</div>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                `;
+                behaviorPatterns.forEach(bp => {
+                    html += `
+                        <div style="background: rgba(15, 15, 35, 0.6); padding: 10px; border-radius: 6px;">
+                            <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${bp.pattern}</div>
+                            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">${bp.insight}</div>
+                            <div style="font-size: 12px; color: #818cf8;">→ ${bp.action}</div>
+                        </div>
+                    `;
+                });
+                html += '</div></div>';
+            }
+            
+            // Stock Context (not avoid/favor lists!)
+            const stocksWithContext = Object.entries(stockPerformance)
+                .filter(([_, perf]) => perf.trades.length >= 2)
+                .sort((a, b) => b[1].trades.length - a[1].trades.length)
+                .slice(0, 6);
+            
+            if (stocksWithContext.length > 0) {
+                html += `
+                    <div style="background: rgba(15, 15, 35, 0.2); border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 8px; padding: 15px; margin-top: 15px;">
+                        <div style="font-weight: 600; margin-bottom: 10px; color: #cbd5e1;">📊 Stock Performance Context</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                `;
+                stocksWithContext.forEach(([symbol, perf]) => {
+                    const color = perf.avgReturn > 5 ? '#34d399' : perf.avgReturn > 0 ? '#94a3b8' : '#f87171';
+                    const interpretation = perf.losses > perf.wins ? 
+                        'Review entry timing' : 
+                        perf.wins > perf.losses ? 'Working well' : 'Mixed results';
+                    
+                    html += `
+                        <div style="background: rgba(15, 15, 35, 0.6); padding: 8px 12px; border-radius: 6px; font-size: 12px;">
+                            <div style="font-weight: 600; margin-bottom: 2px;">${symbol}</div>
+                            <div style="color: #94a3b8;">${perf.wins}-${perf.losses} (${perf.winRate.toFixed(0)}%)</div>
+                            <div style="color: ${color}; font-weight: 600;">${perf.avgReturn >= 0 ? '+' : ''}${perf.avgReturn.toFixed(1)}%</div>
+                            <div style="color: #64748b; font-size: 11px; margin-top: 2px;">${interpretation}</div>
+                        </div>
+                    `;
+                });
+                html += '</div></div>';
+            }
+            
+            // Sector Insights
+            const sortedSectors = Object.entries(sectorPerformance)
+                .filter(([_, perf]) => perf.count >= 2)
+                .sort((a, b) => b[1].avgReturn - a[1].avgReturn)
+                .slice(0, 6);
+            
+            if (sortedSectors.length > 0) {
+                html += `
+                    <div style="background: rgba(15, 15, 35, 0.2); border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 8px; padding: 15px; margin-top: 15px;">
+                        <div style="font-weight: 600; margin-bottom: 10px; color: #cbd5e1;">🎯 Sector Performance</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                `;
+                sortedSectors.forEach(([sector, perf]) => {
+                    const icon = perf.avgReturn > 5 ? '✅' : perf.avgReturn > 0 ? '➖' : '⚠️';
+                    const color = perf.avgReturn > 5 ? '#34d399' : perf.avgReturn > 0 ? '#94a3b8' : '#f87171';
+                    html += `
+                        <div style="background: rgba(15, 15, 35, 0.6); padding: 8px 12px; border-radius: 6px; font-size: 12px;">
+                            <div style="font-weight: 600;">${icon} ${sector}</div>
+                            <div style="color: #94a3b8;">${perf.wins}-${perf.losses} (${perf.winRate.toFixed(0)}%)</div>
+                            <div style="color: ${color}; font-weight: 600;">${perf.avgReturn >= 0 ? '+' : ''}${perf.avgReturn.toFixed(1)}%</div>
+                            ${perf.insight ? `<div style="color: #64748b; font-size: 11px; margin-top: 2px;">${perf.insight}</div>` : ''}
+                        </div>
+                    `;
+                });
+                html += '</div></div>';
+            }
+            
+            container.innerHTML = html;
         }
 
         // API Key Management
