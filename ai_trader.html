@@ -1740,6 +1740,11 @@
 
         // Get live stock price with caching (15-minute cache to avoid stale prices)
         async function getStockPrice(symbol) {
+            // Check if API key is set
+            if (!POLYGON_API_KEY) {
+                throw new Error('API_KEY_MISSING: Polygon API key not configured');
+            }
+            
             checkAndResetApiCounter();
             
             // Check if we have fresh cached data (within 15 minutes)
@@ -3150,20 +3155,39 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
                 try {
                     const price = await getStockPrice(symbol);
-                    priceData[symbol] = price;
-                    total += price.price * shares;
+                    if (price && price.price > 0) {
+                        priceData[symbol] = price;
+                        total += price.price * shares;
+                    } else {
+                        throw new Error('Invalid price data');
+                    }
                 } catch (error) {
-                    console.warn(`Failed to get price for ${symbol}:`, error);
+                    console.warn(`Failed to get price for ${symbol}:`, error.message);
                     // Use last known price from transactions as fallback
-                    const lastBuy = portfolio.transactions.filter(t => t.symbol === symbol).pop();
-                    if (lastBuy) {
+                    const lastTransaction = portfolio.transactions
+                        .filter(t => t.symbol === symbol && t.price > 0)
+                        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+                    
+                    if (lastTransaction) {
+                        console.log(`Using fallback price for ${symbol}: $${lastTransaction.price}`);
                         priceData[symbol] = {
-                            price: lastBuy.price,
+                            price: lastTransaction.price,
                             change: 0,
                             changePercent: 0,
-                            isReal: false
+                            isReal: false,
+                            note: 'Using last known price'
                         };
-                        total += lastBuy.price * shares;
+                        total += lastTransaction.price * shares;
+                    } else {
+                        // Absolute fallback - use 0 but log it
+                        console.error(`No price data available for ${symbol} - using $0`);
+                        priceData[symbol] = {
+                            price: 0,
+                            change: 0,
+                            changePercent: 0,
+                            isReal: false,
+                            note: 'Price unavailable'
+                        };
                     }
                 }
             }
@@ -3174,7 +3198,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         // Update UI
         async function updateUI() {
             try {
+                console.log('=== updateUI called ===');
+                console.log('Holdings:', portfolio.holdings);
+                
                 const { total: totalValue, priceData } = await calculatePortfolioValue();
+                
+                console.log('Price data received:', priceData);
+                console.log('Total portfolio value:', totalValue);
+                
                 const change = totalValue - portfolio.initialBalance;
                 const changePercent = (change / portfolio.initialBalance) * 100;
 
@@ -3267,7 +3298,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             await updatePerformanceChart();
             updatePerformanceAnalytics();
-            updateSectorAllocation();
+            updateSectorAllocation(priceData); // Pass priceData to avoid re-fetching
             
             } catch (error) {
                 console.error('Error updating UI:', error);
@@ -3608,7 +3639,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // Update sector allocation chart
-        async function updateSectorAllocation() {
+        async function updateSectorAllocation(priceData = null) {
             if (!sectorChart) {
                 return;
             }
@@ -3620,8 +3651,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // If we have holdings, calculate their sector allocation
             if (Object.keys(portfolio.holdings).length > 0) {
                 for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
-                    const priceData = await getStockPrice(symbol);
-                    const value = priceData.price * shares;
+                    // Reuse priceData if provided, otherwise fetch
+                    let stockPrice;
+                    if (priceData && priceData[symbol]) {
+                        stockPrice = priceData[symbol];
+                    } else {
+                        try {
+                            stockPrice = await getStockPrice(symbol);
+                        } catch (error) {
+                            console.warn(`Failed to get price for ${symbol} in sector allocation`);
+                            stockPrice = { price: 0, change: 0, changePercent: 0 };
+                        }
+                    }
+                    
+                    const value = stockPrice.price * shares;
                     const sector = stockSectors[symbol] || 'Other';
                     
                     sectorValues[sector] = (sectorValues[sector] || 0) + value;
