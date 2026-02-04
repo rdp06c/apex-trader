@@ -1253,8 +1253,9 @@
             'GOEV': 'Automotive', 'FSR': 'Automotive', 'RIDE': 'Automotive', 'ARVL': 'Automotive',
             'LEV': 'Automotive', 'BLNK': 'Automotive', 'CHPT': 'Automotive', 'EVGO': 'Automotive',
             'VLTA': 'Automotive', 'WOLF': 'Automotive', 'TPIC': 'Automotive', 'QS': 'Automotive',
-            'ALB': 'Materials', 'SQM': 'Materials', 'LAC': 'Materials', 'AA': 'Materials',
-            'OROCF': 'Materials', 'MP': 'Materials', 'CMR': 'Materials',
+            'PTRA': 'Automotive', 'WKHS': 'Automotive', 'NKLA': 'Automotive', 'HYLN': 'Automotive',
+            'GEV': 'Automotive', 'JZXN': 'Automotive', 'VRM': 'Automotive', 'SFT': 'Automotive',
+            'CVNA': 'Automotive', 'KMX': 'Automotive',
             
             // Finance
             'JPM': 'Financial', 'BAC': 'Financial', 'V': 'Financial', 'MA': 'Financial',
@@ -1320,6 +1321,9 @@
             'DHI': 'Industrials', 'LEN': 'Industrials', 'NVR': 'Industrials', 'PHM': 'Industrials',
             'TOL': 'Industrials', 'BLD': 'Industrials', 'BLDR': 'Industrials', 'JBHT': 'Industrials',
             'KNX': 'Industrials', 'ODFL': 'Industrials', 'XPO': 'Industrials',
+            'IR': 'Industrials', 'WM': 'Industrials', 'RSG': 'Industrials', 
+            'PCAR': 'Industrials', 'PWR': 'Industrials', 'JCI': 'Industrials',
+            'AOS': 'Industrials', 'ROP': 'Industrials',
             
             // Real Estate
             'AMT': 'Real Estate', 'PLD': 'Real Estate', 'CCI': 'Real Estate', 'EQIX': 'Real Estate',
@@ -1342,6 +1346,8 @@
             'DOW': 'Materials', 'LYB': 'Materials', 'EMN': 'Materials', 'CE': 'Materials',
             'APD': 'Materials', 'LIN': 'Materials', 'ECL': 'Materials', 
             'SHW': 'Materials', 'PPG': 'Materials', 'RPM': 'Materials', 'AXTA': 'Materials',
+            'ALB': 'Materials', 'SQM': 'Materials', 'LAC': 'Materials', 'AA': 'Materials',
+            'MP': 'Materials', 'DD': 'Materials', 'OROCF': 'Materials',
             'FUL': 'Materials', 'NEU': 'Materials', 'KWR': 'Materials',
             
             // Defense
@@ -1350,7 +1356,7 @@
             'AXON': 'Defense', 'KTOS': 'Defense', 'AVAV': 'Defense', 'AIR': 'Defense',
             'SAIC': 'Defense', 'LDOS': 'Defense', 'CACI': 'Defense', 'BAH': 'Defense',
             'BWXT': 'Defense', 'WWD': 'Defense', 'MOG.A': 'Defense', 'TDG': 'Defense',
-            'HEI': 'Defense', 'ROCK': 'Defense', 'PXD': 'Energy', 'CW': 'Defense',
+            'HEI': 'Defense', 'ROCK': 'Defense', 'EQT': 'Energy', 'CW': 'Defense',
             'AIN': 'Defense', 'GMS': 'Defense', 'MLI': 'Defense', 'B': 'Defense',
             'RUSHA': 'Defense', 'AMSWA': 'Defense', 'PLXS': 'Defense', 'NPAB': 'Defense',
             'VECO': 'Defense', 'POWI': 'Defense', 'VICR': 'Defense', 'MYRG': 'Defense',
@@ -1809,9 +1815,9 @@
                                'SLAB', 'CRUS', 'SYNA', 'MCHP', 'SMCI', 'WDC', 'STX', 'PSTG', 'NTAP', 'CHKP'],
                 
                 evAuto: ['TSLA', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'F', 'GM', 'STLA', 'TM',
-                         'HMC', 'RACE', 'VWAGY', 'PSNY', 'NSANY', 'MCHP', 'MBGYY', 'POAHY', 'FUJHY', 'ALB',
-                         'SQM', 'LAC', 'AA', 'INTU', 'PXD', 'OROCF', 'MP', 'CMR', 'TPIC', 'QS',
-                         'GOEV', 'FSR', 'RIDE', 'ARVL', 'LEV', 'BLNK', 'CHPT', 'EVGO', 'VLTA', 'WOLF'],
+                         'HMC', 'RACE', 'VWAGY', 'PSNY', 'NSANY', 'FSR', 'MBGYY', 'POAHY', 'FUJHY', 'GOEV',
+                         'RIDE', 'ARVL', 'LEV', 'BLNK', 'CHPT', 'EVGO', 'VLTA', 'WOLF', 'TPIC', 'QS',
+                         'PTRA', 'WKHS', 'NKLA', 'HYLN', 'GEV', 'JZXN', 'VRM', 'SFT', 'CVNA', 'KMX'],
                 
                 finance: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'V', 'MA',
                           'PYPL', 'GPN', 'COIN', 'SOFI', 'AFRM', 'UPST', 'LC', 'NU', 'MELI', 'HOOD',
@@ -1840,10 +1846,10 @@
                 
                 // NEW SECTORS ADDED:
                 
-                industrials: ['BA', 'LMT', 'RTX', 'NOC', 'GD', 'HII', 'TXT', 'LHX', 'HWM', 'AXON',
-                              'CAT', 'DE', 'CMI', 'EMR', 'ETN', 'PH', 'ROK', 'AME', 'DOV', 'ITW',
+                industrials: ['CAT', 'DE', 'CMI', 'EMR', 'ETN', 'PH', 'ROK', 'AME', 'DOV', 'ITW',
                               'GE', 'HON', 'MMM', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'BLD', 'BLDR',
-                              'UNP', 'NSC', 'CSX', 'UPS', 'FDX', 'CHRW', 'JBHT', 'KNX', 'ODFL', 'XPO'],
+                              'UNP', 'NSC', 'CSX', 'UPS', 'FDX', 'CHRW', 'JBHT', 'KNX', 'ODFL', 'XPO',
+                              'CARR', 'VLTO', 'IR', 'WM', 'RSG', 'PCAR', 'PWR', 'JCI', 'AOS', 'ROP'],
                 
                 realEstate: ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'WELL', 'O', 'VICI', 'SPG',
                              'AVB', 'EQR', 'MAA', 'UDR', 'CPT', 'ESS', 'AIV', 'ELS', 'SUI', 'NXRT',
@@ -1853,11 +1859,11 @@
                 materials: ['NEM', 'FCX', 'GOLD', 'AU', 'AEM', 'WPM', 'FNV', 'RGLD', 'KGC', 'HL',
                             'NUE', 'STLD', 'RS', 'CLF', 'AA', 'MT', 'TX', 'CMC', 'ZEUS', 'ATI',
                             'DOW', 'LYB', 'EMN', 'CE', 'APD', 'LIN', 'ECL', 'ALB', 'SQM', 'LAC',
-                            'MP', 'MCHP', 'INTU', 'SHW', 'PPG', 'RPM', 'AXTA', 'FUL', 'NEU', 'KWR'],
+                            'MP', 'DD', 'PPG', 'SHW', 'RPM', 'AXTA', 'FUL', 'NEU', 'KWR', 'OROCF'],
                 
                 defense: ['LMT', 'RTX', 'NOC', 'GD', 'BA', 'LHX', 'HII', 'TXT', 'HWM', 'AXON',
                           'KTOS', 'AVAV', 'AIR', 'SAIC', 'LDOS', 'CACI', 'BAH', 'BWXT', 'WWD', 'MOG.A',
-                          'TDG', 'HEI', 'ROCK', 'PXD', 'CW', 'AIN', 'GMS', 'MLI', 'B', 'RUSHA',
+                          'TDG', 'HEI', 'ROCK', 'PLTR', 'CW', 'AIN', 'GMS', 'MLI', 'B', 'RUSHA',
                           'AMSWA', 'PLXS', 'NPAB', 'VECO', 'POWI', 'VICR', 'MYRG', 'DY', 'APOG', 'HSII']
             };
             
