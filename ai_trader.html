@@ -1774,15 +1774,31 @@
                 const response = await fetch(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
                 const data = await response.json();
                 
+                console.log(`[${symbol}] Polygon API response:`, data);
+                
                 // Polygon snapshot returns: { ticker: {...}, status: "OK" }
                 if (data && data.status === 'OK' && data.ticker) {
                     const ticker = data.ticker;
                     const day = ticker.day; // Today's data
                     const prevDay = ticker.prevDay; // Previous day for comparison
                     
+                    console.log(`[${symbol}] day data:`, day);
+                    console.log(`[${symbol}] prevDay data:`, prevDay);
+                    
+                    if (!day || !prevDay) {
+                        console.error(`[${symbol}] Missing day or prevDay data`);
+                        throw new Error('Missing price data in response');
+                    }
+                    
                     // Calculate change from previous close to current price
                     const currentPrice = day.c || day.l; // Use close if available, otherwise last price
                     const prevClose = prevDay.c;
+                    
+                    if (!currentPrice || !prevClose) {
+                        console.error(`[${symbol}] Missing price values - currentPrice: ${currentPrice}, prevClose: ${prevClose}`);
+                        throw new Error('Missing price values');
+                    }
+                    
                     const change = currentPrice - prevClose;
                     const changePercent = (change / prevClose) * 100;
                     
