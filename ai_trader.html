@@ -1760,20 +1760,6 @@
                         note: '15min delayed'
                     };
                     
-                    // OPTION 2: Fetch technical indicators (MA, RSI, MACD)
-                    try {
-                        const indicators = await fetchTechnicalIndicators(symbol);
-                        if (indicators) {
-                            priceData.sma_50 = indicators.sma_50;
-                            priceData.sma_200 = indicators.sma_200;
-                            priceData.rsi = indicators.rsi;
-                            priceData.macd = indicators.macd;
-                        }
-                    } catch (error) {
-                        console.warn(`Could not fetch indicators for ${symbol}:`, error.message);
-                        // Continue without indicators - not critical
-                    }
-                    
                     // Cache the data
                     priceCache[cacheKey] = priceData;
                     apiCallsToday++;
@@ -2142,23 +2128,8 @@ Current Portfolio:
 - Total Portfolio Value: $${totalValue.toFixed(2)}
 - Strategy: AGGRESSIVE - Maximize returns through research
 
-Current Market Data (REAL PRICES + TECHNICAL INDICATORS from 300 stocks):
+Current Market Data (REAL PRICES from 300 stocks):
 ${JSON.stringify(marketData, null, 2)}
-
-📊 TECHNICAL INDICATOR GUIDE (when available in market data):
-- sma_50: 50-day Simple Moving Average - trend indicator
-  → Price > SMA_50 = Bullish, Price < SMA_50 = Bearish
-- sma_200: 200-day Simple Moving Average - long-term trend
-  → Price > SMA_200 = Long-term uptrend, Price < SMA_200 = Long-term downtrend
-- rsi: Relative Strength Index (0-100)
-  → RSI > 70 = Overbought (consider selling)
-  → RSI 40-60 = Neutral
-  → RSI < 30 = Oversold (buying opportunity)
-- macd: Moving Average Convergence Divergence
-  → MACD > 0 = Bullish momentum, MACD < 0 = Bearish momentum
-
-USE THESE INDICATORS IN YOUR TECHNICAL ANALYSIS!
-Example: "PLTR at $156.87 is 8.1% above SMA_50 ($145.03), RSI at 64 (strong but not overbought), MACD positive at 2.15 - confirms bullish setup"
 
 CRITICAL CASH MANAGEMENT:
 ⚠️ YOU ONLY HAVE $${portfolio.cash.toFixed(2)} TO SPEND - DO NOT EXCEED THIS!
@@ -3202,34 +3173,37 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         // Update sector allocation chart
         async function updateSectorAllocation() {
-            if (!sectorChart || Object.keys(portfolio.holdings).length === 0) {
-                // Show empty state
-                if (sectorChart) {
-                    sectorChart.data.labels = [];
-                    sectorChart.data.datasets[0].data = [];
-                    sectorChart.update();
-                }
-                document.getElementById('sectorLegend').innerHTML = '<div style="text-align: center; color: #718096; padding: 20px;">No holdings yet</div>';
+            if (!sectorChart) {
                 return;
             }
 
             // Calculate sector allocation by value
             const sectorValues = {};
-            let totalValue = 0;
+            let totalHoldingsValue = 0;
 
-            for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
-                const priceData = await getStockPrice(symbol);
-                const value = priceData.price * shares;
-                const sector = stockSectors[symbol] || 'Other';
-                
-                sectorValues[sector] = (sectorValues[sector] || 0) + value;
-                totalValue += value;
+            // If we have holdings, calculate their sector allocation
+            if (Object.keys(portfolio.holdings).length > 0) {
+                for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
+                    const priceData = await getStockPrice(symbol);
+                    const value = priceData.price * shares;
+                    const sector = stockSectors[symbol] || 'Other';
+                    
+                    sectorValues[sector] = (sectorValues[sector] || 0) + value;
+                    totalHoldingsValue += value;
+                }
             }
 
-            // Convert to percentages
+            // Add cash as a category
+            const cashValue = portfolio.cash;
+            sectorValues['Cash'] = cashValue;
+            
+            // Total portfolio value = holdings + cash
+            const totalPortfolioValue = totalHoldingsValue + cashValue;
+
+            // Convert to percentages (based on total portfolio)
             const sectorPercentages = {};
             for (const [sector, value] of Object.entries(sectorValues)) {
-                sectorPercentages[sector] = (value / totalValue) * 100;
+                sectorPercentages[sector] = (value / totalPortfolioValue) * 100;
             }
 
             // Update chart
@@ -3240,14 +3214,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             sectorChart.data.datasets[0].data = percentages;
             sectorChart.update();
 
-            // Update legend
+            // Update legend with values
             const legendHtml = sectors.map((sector, index) => {
                 const percentage = sectorPercentages[sector];
-                const color = sectorChart.data.datasets[0].backgroundColor[index];
+                const value = sectorValues[sector];
+                const color = sectorChart.data.datasets[0].backgroundColor[index % sectorChart.data.datasets[0].backgroundColor.length];
                 return `
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div style="width: 12px; height: 12px; background: ${color}; border-radius: 2px;"></div>
-                        <div style="color: #e2e8f0;">${sector}: <strong>${percentage.toFixed(1)}%</strong></div>
+                        <div style="color: #e2e8f0;">${sector}: <strong>${percentage.toFixed(1)}%</strong> ($${value.toFixed(2)})</div>
                     </div>
                 `;
             }).join('');
@@ -3596,15 +3571,35 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const bestTrade = closedTrades.reduce((best, trade) => 
                     trade.profitLoss > best.profitLoss ? trade : best
                 );
-                document.getElementById('bestTrade').textContent = bestTrade.symbol;
-                document.getElementById('bestTradeGain').textContent = '+' + bestTrade.returnPercent.toFixed(2) + '%';
+                
+                // Only show best trade if it's actually positive
+                if (bestTrade.profitLoss > 0) {
+                    document.getElementById('bestTrade').textContent = bestTrade.symbol;
+                    document.getElementById('bestTradeGain').textContent = '+' + bestTrade.returnPercent.toFixed(2) + '%';
+                } else {
+                    document.getElementById('bestTrade').textContent = 'N/A';
+                    document.getElementById('bestTradeGain').textContent = '--';
+                }
                 
                 // Worst Trade
                 const worstTrade = closedTrades.reduce((worst, trade) => 
                     trade.profitLoss < worst.profitLoss ? trade : worst
                 );
-                document.getElementById('worstTrade').textContent = worstTrade.symbol;
-                document.getElementById('worstTradeLoss').textContent = worstTrade.returnPercent.toFixed(2) + '%';
+                
+                // Only show worst trade if it's actually negative
+                if (worstTrade.profitLoss < 0) {
+                    document.getElementById('worstTrade').textContent = worstTrade.symbol;
+                    document.getElementById('worstTradeLoss').textContent = worstTrade.returnPercent.toFixed(2) + '%';
+                } else {
+                    document.getElementById('worstTrade').textContent = 'N/A';
+                    document.getElementById('worstTradeLoss').textContent = '--';
+                }
+            } else {
+                // No closed trades
+                document.getElementById('bestTrade').textContent = 'N/A';
+                document.getElementById('bestTradeGain').textContent = '--';
+                document.getElementById('worstTrade').textContent = 'N/A';
+                document.getElementById('worstTradeLoss').textContent = '--';
             }
             
             // Average Hold Time
