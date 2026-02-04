@@ -1293,7 +1293,7 @@
             'HD': 'Consumer', 'LOW': 'Consumer', 'SBUX': 'Consumer', 'MCD': 'Consumer',
             'CMG': 'Consumer', 'YUM': 'Consumer', 'NKE': 'Consumer', 'LULU': 'Consumer',
             'ETSY': 'Consumer', 'W': 'Consumer', 'CHWY': 'Consumer',
-            'DIS': 'Consumer', 'NFLX': 'Consumer', 'PARA': 'Consumer', 'CARR': 'Industrials', 'WBD': 'Consumer',
+            'DIS': 'Consumer', 'NFLX': 'Consumer', 'ROKU': 'Consumer', 'CARR': 'Industrials', 'WBD': 'Consumer',
             'FOXA': 'Consumer', 'CMCSA': 'Consumer', 'T': 'Consumer', 'VZ': 'Consumer', 'TMUS': 'Consumer',
             'KO': 'Consumer', 'PEP': 'Consumer', 'PM': 'Consumer', 'MO': 'Consumer',
             'BUD': 'Consumer', 'TAP': 'Consumer', 'STZ': 'Consumer', 'MNST': 'Consumer',
@@ -1804,13 +1804,13 @@
             // This gives APEX a comprehensive view of the entire market
             
             const stockLists = {
-                techAI: ['NVDA', 'AMD', 'AVGO', 'GOOGL', 'MSFT', 'META', 'ORCL', 'CRM', 'ADBE', 'NOW', 
+                techAI: ['NVDA', 'AVGO', 'GOOGL', 'MSFT', 'META', 'ORCL', 'CRM', 'ADBE', 'NOW', 'INTU',
                          'PLTR', 'SNOW', 'AI', 'BBAI', 'SOUN', 'PATH', 'S', 'HUBS', 'ZM', 'DOCU',
                          'TEAM', 'WDAY', 'VEEV', 'ESTC', 'DDOG', 'NET', 'MDB', 'CRWD', 'PANW', 'ZS',
                          'OKTA', 'CFLT', 'GTLB', 'FROG', 'BILL', 'DOCN', 'ZI', 'MNDY', 'PCOR', 'APP'],
                 
                 techHardware: ['AAPL', 'QCOM', 'INTC', 'MU', 'ARM', 'DELL', 'HPQ', 'AMAT', 'LRCX', 'MRVL',
-                               'AVGO', 'TXN', 'ADI', 'NXPI', 'KLAC', 'ASML', 'TSM', 'SNPS', 'CDNS', 'ON',
+                               'AMD', 'TXN', 'ADI', 'NXPI', 'KLAC', 'ASML', 'TSM', 'SNPS', 'CDNS', 'ON',
                                'MPWR', 'SWKS', 'QRVO', 'ENTG', 'FORM', 'MKSI', 'COHR', 'IPGP', 'LITE', 'AMBA',
                                'SLAB', 'CRUS', 'SYNA', 'MCHP', 'SMCI', 'WDC', 'STX', 'PSTG', 'NTAP', 'CHKP'],
                 
@@ -1820,14 +1820,14 @@
                          'PTRA', 'HYLN', 'GEV', 'JZXN', 'VRM', 'SFT', 'CVNA', 'KMX', 'AN', 'LAD'],
                 
                 finance: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'V', 'MA',
-                          'PYPL', 'GPN', 'COIN', 'SOFI', 'AFRM', 'UPST', 'LC', 'NU', 'MELI', 'HOOD',
-                          'AXP', 'FIS', 'COF', 'ALLY', 'USB', 'PNC', 'TFC', 'RF', 'KEY', 'FITB',
-                          'CFG', 'HBAN', 'MTB', 'STT', 'BK', 'NTRS', 'STATE', 'CMA', 'ZION', 'FHN'],
+                          'PYPL', 'GPN', 'AXP', 'FIS', 'COF', 'ALLY', 'USB', 'PNC', 'TFC', 'RF',
+                          'KEY', 'FITB', 'MTB', 'CFG', 'HBAN', 'STT', 'BK', 'NTRS', 'STATE', 'CMA',
+                          'ZION', 'FHN', 'WRB', 'CB', 'TRV', 'ALL', 'PGR', 'AIG', 'MET', 'PRU'],
                 
-                growth: ['PLTR', 'SNOW', 'DKNG', 'RBLX', 'COIN', 'NET', 'DDOG', 'MDB', 'CRWD', 'PANW',
-                         'ZS', 'OKTA', 'CFLT', 'S', 'GTLB', 'FROG', 'PATH', 'AI', 'BILL', 'DOCN',
-                         'U', 'PINS', 'SNAP', 'SPOT', 'ROKU', 'ABNB', 'LYFT', 'DASH', 'UBER', 'CPNG',
-                         'SHOP', 'MELI', 'SE', 'BABA', 'JD', 'PDD', 'BKNG', 'EXPE', 'TCOM', 'TRIP'],
+                growth: ['DKNG', 'RBLX', 'U', 'PINS', 'SNAP', 'SPOT', 'ABNB', 'LYFT', 'DASH', 'UBER',
+                         'CPNG', 'BKNG', 'EXPE', 'TCOM', 'TRIP', 'PTON', 'LULU', 'ETSY', 'W', 'CHWY',
+                         'RDFN', 'OPEN', 'COMP', 'RKT', 'CWAN', 'DUOL', 'BROS', 'CAVA', 'HOOD', 'AFRM',
+                         'UPST', 'LC', 'NU', 'SOFI', 'NFLX', 'ROKU', 'WBD', 'FOXA', 'CMCSA', 'T'],
                 
                 healthcare: ['JNJ', 'UNH', 'LLY', 'ABBV', 'PFE', 'MRNA', 'VRTX', 'REGN', 'BMY', 'GILD',
                              'AMGN', 'CVS', 'CI', 'HUM', 'ISRG', 'TMO', 'DHR', 'ABT', 'SYK', 'BSX',
@@ -1835,9 +1835,9 @@
                              'BIIB', 'ALNY', 'INCY', 'NBIX', 'UTHR', 'JAZZ', 'SRPT', 'BMRN', 'IONS', 'RGEN'],
                 
                 consumer: ['AMZN', 'WMT', 'COST', 'TGT', 'HD', 'LOW', 'SBUX', 'MCD', 'CMG', 'YUM',
-                           'NKE', 'LULU', 'SHOP', 'ETSY', 'W', 'CHWY', 'BABA', 'JD', 'PDD', 'SE',
-                           'DIS', 'NFLX', 'PARA', 'WBD', 'FOXA', 'CMCSA', 'T', 'VZ', 'TMUS', 'GOOG',
-                           'KO', 'PEP', 'PM', 'MO', 'BUD', 'TAP', 'STZ', 'MNST', 'CELH', 'KDP'],
+                           'NKE', 'RH', 'DECK', 'CROX', 'SKX', 'FL', 'LEVI', 'UAA', 'DIS', 'GOOG',
+                           'KO', 'PEP', 'PM', 'MO', 'BUD', 'TAP', 'STZ', 'MNST', 'CELH', 'KDP',
+                           'ORLY', 'AZO', 'AAP', 'GPC', 'TSCO', 'DG', 'DLTR', 'ROST', 'TJX', 'BBY'],
                 
                 energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'OXY', 'MPC', 'PSX', 'VLO', 'TRGP',
                          'DVN', 'FANG', 'WMB', 'APA', 'HAL', 'BKR', 'NOV', 'FTI', 'NEE', 'DUK',
@@ -1863,7 +1863,7 @@
                 
                 defense: ['LMT', 'RTX', 'NOC', 'GD', 'BA', 'LHX', 'HII', 'TXT', 'HWM', 'AXON',
                           'KTOS', 'AVAV', 'AIR', 'SAIC', 'LDOS', 'CACI', 'BAH', 'BWXT', 'WWD', 'MOG.A',
-                          'TDG', 'HEI', 'ROCK', 'PLTR', 'CW', 'AIN', 'GMS', 'MLI', 'B', 'RUSHA',
+                          'TDG', 'HEI', 'ROCK', 'IMOS', 'CW', 'AIN', 'GMS', 'MLI', 'B', 'RUSHA',
                           'AMSWA', 'PLXS', 'NPAB', 'VECO', 'POWI', 'VICR', 'MYRG', 'DY', 'APOG', 'HSII']
             };
             
@@ -1883,7 +1883,11 @@
             console.log(`📈 Breakdown: ${stocksPerSector} stocks per sector`);
             console.log(`⚡ Full market coverage enabled`);
             
-            return selectedStocks;
+            // Remove duplicates (some stocks appear in multiple sectors)
+            const uniqueStocks = [...new Set(selectedStocks)];
+            console.log(`✨ Unique stocks after deduplication: ${uniqueStocks.length}`);
+            
+            return uniqueStocks;
         }
 
         // AI Analysis using Claude API
