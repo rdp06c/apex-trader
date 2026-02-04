@@ -1740,6 +1740,128 @@
         }
 
         // Get live stock price with caching (15-minute cache to avoid stale prices)
+        // ENHANCED MARKET ANALYSIS - Calculate momentum and strength metrics
+        
+        // Calculate 5-day momentum score for a stock
+        // Returns object with momentum metrics based on price history
+        function calculate5DayMomentum(priceData) {
+            // Since we only get current + prev day from Polygon, we'll simulate
+            // In production, you'd fetch 5-day history
+            // For now, use current vs prev day as proxy
+            
+            if (!priceData || !priceData.price || !priceData.change) {
+                return { score: 0, trend: 'unknown' };
+            }
+            
+            const changePercent = priceData.changePercent || 0;
+            
+            // Simple momentum scoring (0-10 scale)
+            // This is a proxy - real version would use 5-day data
+            let score = 5; // Neutral baseline
+            
+            if (changePercent > 5) score = 10; // Strong up
+            else if (changePercent > 2) score = 8;
+            else if (changePercent > 0) score = 6;
+            else if (changePercent > -2) score = 4;
+            else if (changePercent > -5) score = 2;
+            else score = 0; // Strong down
+            
+            const trend = score >= 6 ? 'building' : score <= 4 ? 'fading' : 'neutral';
+            
+            return { score, trend, changePercent };
+        }
+        
+        // Calculate relative strength vs sector
+        function calculateRelativeStrength(stockData, sectorData) {
+            if (!stockData || !sectorData || sectorData.length === 0) {
+                return { rsScore: 50, strength: 'neutral' };
+            }
+            
+            const stockChange = stockData.changePercent || 0;
+            
+            // Calculate sector average
+            const sectorAvg = sectorData.reduce((sum, stock) => 
+                sum + (stock.changePercent || 0), 0) / sectorData.length;
+            
+            // Relative strength = stock performance vs sector
+            const relativePerformance = stockChange - sectorAvg;
+            
+            // Convert to 0-100 scale (50 = neutral)
+            let rsScore = 50 + (relativePerformance * 10);
+            rsScore = Math.max(0, Math.min(100, rsScore)); // Clamp 0-100
+            
+            const strength = rsScore >= 70 ? 'outperforming' : 
+                           rsScore >= 55 ? 'above-average' :
+                           rsScore >= 45 ? 'neutral' :
+                           rsScore >= 30 ? 'below-average' : 'underperforming';
+            
+            return { rsScore: Math.round(rsScore), strength, sectorAvg, relativePerformance };
+        }
+        
+        // Detect sector rotation patterns
+        function detectSectorRotation(marketData) {
+            const sectors = {};
+            
+            // Group stocks by sector and calculate metrics
+            Object.entries(marketData).forEach(([symbol, data]) => {
+                const sector = stockSectors[symbol] || 'Unknown';
+                
+                if (!sectors[sector]) {
+                    sectors[sector] = {
+                        stocks: [],
+                        totalChange: 0,
+                        avgChange: 0,
+                        leaders: 0,
+                        laggards: 0
+                    };
+                }
+                
+                sectors[sector].stocks.push({ symbol, ...data });
+                sectors[sector].totalChange += (data.changePercent || 0);
+                
+                // Count leaders (up >1%) and laggards (down >1%)
+                if ((data.changePercent || 0) > 1) sectors[sector].leaders++;
+                if ((data.changePercent || 0) < -1) sectors[sector].laggards++;
+            });
+            
+            // Calculate averages and rotation signals
+            const sectorAnalysis = {};
+            Object.entries(sectors).forEach(([sector, data]) => {
+                data.avgChange = data.totalChange / data.stocks.length;
+                const leaderRatio = data.leaders / data.stocks.length;
+                
+                // Determine money flow
+                let flow = 'neutral';
+                let rotationSignal = 'hold';
+                
+                if (data.avgChange > 1 && leaderRatio > 0.5) {
+                    flow = 'inflow';
+                    rotationSignal = 'accumulate';
+                } else if (data.avgChange > 0.5 && leaderRatio > 0.4) {
+                    flow = 'modest-inflow';
+                    rotationSignal = 'favorable';
+                } else if (data.avgChange < -1 && data.laggards / data.stocks.length > 0.5) {
+                    flow = 'outflow';
+                    rotationSignal = 'avoid';
+                } else if (data.avgChange < -0.5) {
+                    flow = 'modest-outflow';
+                    rotationSignal = 'caution';
+                }
+                
+                sectorAnalysis[sector] = {
+                    avgChange: data.avgChange.toFixed(2),
+                    leaders: data.leaders,
+                    laggards: data.laggards,
+                    total: data.stocks.length,
+                    leaderRatio: (leaderRatio * 100).toFixed(0) + '%',
+                    moneyFlow: flow,
+                    rotationSignal: rotationSignal
+                };
+            });
+            
+            return sectorAnalysis;
+        }
+
         async function getStockPrice(symbol) {
             // Check if API key is set
             if (!POLYGON_API_KEY) {
@@ -2397,6 +2519,46 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     addActivity(`⚠️ Warning: Could not fetch data for ${failedSymbols}. Analysis proceeding with available data.`, 'warning');
                 }
 
+                // === ENHANCED MARKET ANALYSIS ===
+                thinkingDetail.textContent = 'Calculating momentum and sector rotation...';
+                console.log('🧠 Running enhanced market analysis...');
+                
+                // 1. Calculate sector rotation patterns
+                const sectorRotation = detectSectorRotation(marketData);
+                console.log('📊 Sector Rotation Analysis:', sectorRotation);
+                
+                // 2. Group stocks by sector for relative strength calculations
+                const stocksBySector = {};
+                Object.entries(marketData).forEach(([symbol, data]) => {
+                    const sector = stockSectors[symbol] || 'Unknown';
+                    if (!stocksBySector[sector]) stocksBySector[sector] = [];
+                    stocksBySector[sector].push({ symbol, ...data });
+                });
+                
+                // 3. Calculate enhanced metrics for each stock
+                const enhancedMarketData = {};
+                Object.entries(marketData).forEach(([symbol, data]) => {
+                    const sector = stockSectors[symbol] || 'Unknown';
+                    const sectorData = stocksBySector[sector] || [];
+                    
+                    // Calculate 5-day momentum score
+                    const momentum = calculate5DayMomentum(data);
+                    
+                    // Calculate relative strength vs sector
+                    const relativeStrength = calculateRelativeStrength(data, sectorData);
+                    
+                    // Combine all data
+                    enhancedMarketData[symbol] = {
+                        ...data,
+                        sector: sector,
+                        momentum: momentum,
+                        relativeStrength: relativeStrength,
+                        sectorRotation: sectorRotation[sector]
+                    };
+                });
+                
+                console.log('✅ Enhanced market data prepared with momentum, RS, and rotation analysis');
+
                 thinkingDetail.textContent = 'AI is making trading decisions...';
 
                 // Calculate portfolio value (await since it's async)
@@ -2431,25 +2593,68 @@ When searching and citing data:
 - Don't mix old training knowledge with current searches
 
 CRITICAL RESEARCH REQUIREMENTS:
-You have web_search tool available. You MUST use it to research BEFORE making any trading decisions.
+You have web_search tool available. Use it STRATEGICALLY to find CATALYSTS that will drive future moves.
 
-REQUIRED SEARCHES (do ALL of these):
-1. **Sector Analysis**: Search for sector trends affecting your top picks
-   Example: "semiconductor sector outlook 2026", "AI infrastructure spending trends 2026"
+SEARCH PHILOSOPHY - Find What Will Move Stocks TOMORROW, Not What Moved Them TODAY:
+• Focus on CATALYSTS (earnings beats, contracts, launches, upgrades)
+• Look for UPCOMING events (guidance, product releases, regulatory decisions)
+• Identify SECTOR tailwinds (industry trends, macro factors)
+• Don't just search what's up today - find what's ABOUT to move
 
-2. **Company-Specific News**: Search for RECENT news on stocks you're considering
-   Example: "[STOCK] earnings latest 2026", "[STOCK] news today", "[STOCK] analyst upgrades February 2026"
+REQUIRED SEARCHES (do 3-5 catalyst-focused searches):
 
-3. **Fundamental Catalysts**: Search for RECENT earnings, contracts, product launches
-   Example: "[STOCK] latest earnings", "[STOCK] Q1 2026 earnings", "[STOCK] recent contracts", "[STOCK] news February 2026"
+1. **Catalyst Discovery** (MOST IMPORTANT): Search for recent fundamental events
+   Examples:
+   • "tech sector earnings beats Q1 2026 guidance raised" → Find catalyst stocks
+   • "semiconductor companies major contract wins February 2026" → Find growth drivers
+   • "AI infrastructure spending analyst upgrades this week" → Find momentum plays
+   • "defense stocks government contract awards 2026" → Find catalyst events
+   
+   Goal: Find stocks with NEWS/EVENTS that will drive future moves
 
-4. **Market Sentiment**: Search for broader market conditions
-   Example: "tech stock market sentiment", "growth stocks outlook", "Federal Reserve policy"
+2. **Sector Rotation Analysis**: Search for which sectors have tailwinds
+   Examples:
+   • "tech vs energy sector rotation February 2026" → Where is money flowing?
+   • "semiconductor AI chip demand outlook 2026" → Sector-wide catalyst?
+   • "renewable energy policy impact stocks 2026" → Macro tailwind?
+   
+   Goal: Identify sectors with sustained momentum, not just today's leaders
 
-5. **Competitive Landscape**: Search for how companies compare to peers
-   Example: "[STOCK] vs competitors", "best AI stocks 2025", "chip stock comparison"
+3. **Stock-Specific Deep Dive**: Search ONLY for stocks you're seriously considering after seeing momentum/RS data
+   Examples:
+   • "NVDA Q1 2026 earnings surprise guidance analyst targets" → Verify catalyst
+   • "PLTR Army contract details revenue impact 2026" → Quantify catalyst
+   • "AMD data center revenue growth forecast vs Intel" → Competitive position
+   
+   Goal: Verify and quantify catalysts for your top candidates
 
-Your research should inform EVERY decision. Don't guess - search and verify.
+OPTIONAL 4-5th SEARCHES (only if needed for high-conviction plays):
+4. **Competitive Positioning**: Compare similar stocks if choosing between them
+   Example: "NVDA vs AMD AI chip market share 2026 data center revenue"
+   
+5. **Risk Assessment**: Check for headwinds if considering a volatile stock
+   Example: "semiconductor chip export restrictions impact 2026"
+
+SEARCH STRATEGY - Be Specific and Efficient:
+✅ DO: "NVDA Q1 2026 earnings beat guidance raised data center revenue analyst price targets"
+   → Gets earnings + guidance + catalyst + analyst views in ONE search
+   
+❌ DON'T: "NVDA news" 
+   → Too broad, wastes tokens, generic results
+
+✅ DO: "semiconductor AI chip sector February 2026 contract wins spending forecast"
+   → Combines sector trend + specific catalyst signals
+   
+❌ DON'T: "tech stocks today"
+   → Reactive (already happened), not predictive
+
+CRITICAL BALANCE - Today's Price Action Is ONE Factor of MANY:
+• Stock up 5% today? Search for WHY → Is catalyst real or just noise?
+• Stock down 2% today? Check for catalysts → Might be buying opportunity!
+• Stock flat? Look for building momentum → Could be accumulation phase
+
+Your goal: Find stocks with REASONS to move (catalysts) + CONFIRMATION (technical setup)
+NOT: Find stocks that already moved (too late!)
 
 STOCK UNIVERSE:
 You're analyzing 300 stocks across 12 sectors:
@@ -2474,143 +2679,1224 @@ TRADING STYLE:
 - CONVICTION-BASED: Size positions based on research depth + price action
 - MAXIMIZE RETURNS: Your goal is growth through informed decisions
 
-MANDATORY ANALYSIS FRAMEWORK (use ALL of these):
+═══════════════════════════════════════════════════════════════════
+🎯 CATALYST-FIRST MULTI-FACTOR DECISION FRAMEWORK
+═══════════════════════════════════════════════════════════════════
 
-1. **TECHNICAL ANALYSIS** (from market data provided):
-   Required checks BEFORE buying:
-   - ✅ Price momentum: Stock must be up >1% today OR showing recent strength
-   - ✅ Relative strength: Compare to sector - must be outperforming peers
-   - ✅ Trend confirmation: Price should be in uptrend (recent gains visible)
-   - ✅ Volume validation: Look for above-average moves (indicates conviction)
-   - ✅ Breakout detection: Is price making new highs? Breaking resistance?
-   
-   Red flags (AVOID buying):
-   - ❌ Down >3% today without clear catalyst
-   - ❌ Underperforming sector significantly
-   - ❌ In clear downtrend
-   
-   What to look for: "NVDA +6.5% today while sector +2% = strong relative strength ✅"
+CORE PHILOSOPHY:
+Catalysts drive moves. Technical/Fundamental/Sector CONFIRM, they don't lead.
+Find stocks BEFORE they move (predictive), not AFTER they moved (reactive).
 
-2. **FUNDAMENTAL ANALYSIS** (from web search - REQUIRED):
-   You MUST search and verify BEFORE buying:
-   - ✅ Recent earnings: Did they beat/meet/miss expectations?
-   - ✅ Revenue growth: Is revenue growing YoY? By how much?
-   - ✅ Profitability: Are they profitable? Improving margins?
-   - ✅ Guidance: Did management raise/lower forward guidance?
-   - ✅ Growth rate: What's the YoY growth rate? (>15% is good)
-   - ✅ Valuation context: Is P/E reasonable for growth rate?
-   - ✅ Market position: Leader in their space? Gaining share?
-   
-   Red flags (AVOID buying):
-   - ❌ Earnings miss with lowered guidance
-   - ❌ Revenue declining YoY
-   - ❌ Unprofitable with no path to profitability
-   - ❌ Losing market share to competitors
-   
-   What to cite: "NVDA Q1 2026: Revenue $32.5B (+118% YoY), beat by $2.1B, raised guidance 15%"
+═══════════════════════════════════════════════════════════════════
+📊 BUY DECISION FRAMEWORK
+═══════════════════════════════════════════════════════════════════
 
-3. **CATALYST ANALYSIS** (from web search - REQUIRED):
-   Search for and identify specific catalysts:
-   - ✅ Recent catalysts: Earnings beat, contract win, product launch?
-   - ✅ Near-term catalysts: Upcoming events in next 30 days?
-   - ✅ Sector catalysts: Industry-wide trends benefiting this stock?
-   - ✅ Institutional activity: Analyst upgrades? Big fund buying?
-   - ✅ News momentum: Positive press coverage? Buzz building?
-   
-   Strong catalysts (prioritize):
-   - 🔥 Earnings beat + raised guidance
-   - 🔥 Major contract win ($100M+)
-   - 🔥 Analyst upgrade from major firm
-   - 🔥 New product launch with strong demand
-   - 🔥 Sector-wide tailwind (AI boom, infrastructure spending)
-   
-   What to cite: "Palantir won $480M Army contract (Feb 1), analyst raised PT to $180 (+20%)"
+STEP 1: CATALYST EVALUATION (REQUIRED - Must Pass This Gate)
+────────────────────────────────────────────────────────────────
 
-4. **SECTOR ROTATION ANALYSIS** (from market data):
-   Analyze sector dynamics:
-   - Which sectors are leading today? (most stocks up)
-   - Which sectors are lagging? (most stocks down)
-   - Is there sector-wide momentum? (all tech up = tailwind)
-   - Are peers confirming the move? (NVDA +6%, AMD +5% = sector strength)
-   
-   Sector strength indicators:
-   - ✅ 70%+ of sector stocks are green today
-   - ✅ Sector average gain >2%
-   - ✅ Multiple sector leaders breaking out
-   - ✅ Volume across sector elevated
-   
-   What to cite: "Semiconductors showing strength: NVDA +6.5%, AMD +5.2%, MU +8.1% - sector rotation into chips"
+Score catalyst strength (1-10):
 
-5. **RISK ASSESSMENT** (synthesize all factors):
-   Before buying, honestly assess:
-   - What could go wrong? (earnings miss, macro headwinds, competition)
-   - How strong is the setup? (all factors aligned = high conviction)
-   - Is this a crowded trade? (everyone already in = risky)
-   - What's the risk/reward? (upside potential vs downside risk)
-   
-   Quality thresholds for conviction:
-   - Conviction 9-10: Technical ✅ + Fundamental ✅ + Catalyst ✅ + Sector ✅
-   - Conviction 7-8: 3 out of 4 factors aligned
-   - Conviction 5-6: 2 out of 4 factors aligned
-   - <5: Not enough factors aligned = HOLD
+**STRONG CATALYSTS (8-10 → PROCEED TO STEP 2):**
+🔥 Earnings beat + guidance raise (10/10)
+🔥 Major contract win $100M+ (9-10/10)
+🔥 Multiple analyst upgrades this week (8-9/10)
+🔥 Product launch with strong demand (8-9/10)
+🔥 Sector-wide tailwind + company positioned well (8/10)
 
-CONVICTION SCORING SYSTEM (use this rubric):
+**DECENT CATALYSTS (6-7 → NEED STRONG CONFIRMATIONS):**
+⚠️ Earnings meet + maintained guidance (7/10)
+⚠️ Contract win $50-100M (6-7/10)
+⚠️ Single analyst upgrade (6/10)
+⚠️ Positive sector trend (6/10)
 
-**Conviction 9-10 (STRONG BUY):**
-- ✅ Price: Up >3% today, outperforming sector
-- ✅ Fundamentals: Earnings beat, revenue growth >20% YoY, profitable
-- ✅ Catalyst: Major news (contract, earnings, upgrade) within 7 days
-- ✅ Sector: Sector leading market, strong momentum
-- ✅ Research: Multiple positive search results, analyst support
-Example: "NVDA +6.5% on earnings beat (+118% YoY revenue), sector up 3%, analyst upgrades, AI spending accelerating"
+**WEAK CATALYSTS (<6 → HOLD, DON'T TRADE):**
+❌ Stock just up today (no news) = 3/10
+❌ Vague "positive sentiment" = 4/10
+❌ Old news being recycled = 2/10
 
-**Conviction 7-8 (GOOD BUY):**
-- ✅ Price: Positive momentum, keeping up with sector
-- ✅ Fundamentals: Solid earnings, revenue growth >10% YoY
-- ✅ Catalyst: Good news within 30 days OR building momentum
-- ⚠️ Sector: Neutral to positive (not all factors perfect)
-Example: "AMD +3% on solid guidance, revenue +35%, memory sector strong, but some macro concerns"
+CRITICAL: If catalyst < 8/10, you need PERFECT technical + fundamental to proceed.
+If catalyst < 6/10, DO NOT TRADE (wait for real catalyst).
 
-**Conviction 5-6 (MODERATE):**
-- ⚠️ Price: Mixed signals, some weakness
-- ⚠️ Fundamentals: Decent but not exceptional
-- ⚠️ Catalyst: Unclear or weak
-- → Generally HOLD unless other positions are weaker
+────────────────────────────────────────────────────────────────
 
-**Conviction <5 (AVOID/HOLD):**
-- ❌ Missing key factors
-- ❌ Red flags present
-- ❌ Better opportunities exist
-- → HOLD cash for better setups
+STEP 2: MARKET REACTION CHECK (How did stock respond to catalyst?)
+────────────────────────────────────────────────────────────────
 
-   - Are there sector-wide catalysts?
-   - How are peers performing?
+Strong catalyst (9-10) + stock UP 3-6%:
+  ✅ Market confirms catalyst → Proceed confidently
+  
+Strong catalyst (9-10) + stock DOWN or flat:
+  ⚠️ Two possibilities:
+     1. Already priced in (search for "did market know?")
+     2. Buying opportunity (noise, sector rotation)
+  → Investigate, could still be good
+
+Strong catalyst (9-10) + stock UP 8%+:
+  ⚠️ Check if extended:
+     • If rsScore >90 or momentum 10 → Might be late
+     • Consider waiting for pullback
+     • OR buy if expecting bigger move
+
+Decent catalyst (6-8) + stock flat/down:
+  → Catalyst likely weak or priced in, PASS
+
+────────────────────────────────────────────────────────────────
+
+STEP 3: FUNDAMENTAL QUALITY CHECK
+────────────────────────────────────────────────────────────────
+
+Score fundamentals (1-10):
+
+**Strong catalyst (8-10):**
+  → Need fundamentals 6+/10 (decent company minimum)
+  
+**Decent catalyst (6-7):**
+  → Need fundamentals 8+/10 (high quality required)
+
+Fundamental scoring:
+• 9-10: Market leader, 30%+ growth, strong margins, dominant position
+• 7-8: Solid company, 15-30% growth, profitable, competitive
+• 5-6: Decent company, 10-15% growth, some concerns
+• <5: Weak company, declining growth, avoid
+
+Search and verify:
+✅ Revenue growth trend (accelerating = best)
+✅ Earnings consistency (beat last 3-4 quarters?)
+✅ Profitability and margins (improving = good)
+✅ Market position (leader vs challenger)
+✅ Competitive advantages (moat strength)
+
+────────────────────────────────────────────────────────────────
+
+STEP 4: TECHNICAL TIMING (Entry Point & Extension Check)
+────────────────────────────────────────────────────────────────
+
+Use enhanced market data:
+• momentum.score (0-10)
+• relativeStrength.rsScore (0-100)
+• momentum.trend (building/fading/neutral)
+
+**EXTENDED (Possibly Too Late):**
+rsScore >90 AND momentum 9-10 AND stock up 8%+ today
+  → Consider waiting for 3-5% pullback
+  → OR buy if expecting much bigger move (20%+)
+
+**GOOD ENTRY:**
+rsScore 70-85 OR momentum 6-8
+  → Building strength, not exhausted
+  → Good entry point
+
+**OPPORTUNITY (Buy the Dip!):**
+Stock down 2-5% today BUT:
+  • Strong catalyst (9-10)
+  • rsScore still >60 (relative strength intact)
+  • No technical breakdown
+  → BETTER entry point!
+
+**RED FLAG:**
+rsScore <30 AND momentum <3 AND breaking support
+  → Even with catalyst, technical is very weak
+  → Caution, might need more time
+
+CRITICAL: Don't require stock to be up today!
+• Down with strong catalyst = opportunity
+• Up big with no catalyst = probably late
+
+────────────────────────────────────────────────────────────────
+
+STEP 5: SECTOR CONTEXT (Risk Modifier)
+────────────────────────────────────────────────────────────────
+
+Use sectorRotation data:
+
+**TAILWIND (Increases Confidence):**
+moneyFlow: 'inflow' + rotationSignal: 'accumulate'
+  → Money flowing INTO sector
+  → Reduces risk, adds conviction +1 point
+
+**HEADWIND (Reduces Confidence):**
+moneyFlow: 'outflow' + rotationSignal: 'avoid'
+  → Money flowing OUT OF sector
+  → Increases risk, reduce conviction -1 to -2 points
+  → Strong catalyst can still override, but be cautious
+
+**NEUTRAL:**
+No clear flow → No adjustment to conviction
+
+────────────────────────────────────────────────────────────────
+
+CONVICTION SCORING (Final Decision):
+────────────────────────────────────────────────────────────────
+
+**9-10 (STRONG BUY):**
+• Catalyst: 9-10 (major event)
+• Fundamental: 7+
+• Technical: Not extended (rsScore <90)
+• Sector: Inflow (or neutral with override)
+→ High confidence, size position accordingly
+
+**7-8 (GOOD BUY):**
+• Catalyst: 8-9 (strong event)
+• Fundamental: 6-7
+• Technical: 6-8 (decent setup)
+• Sector: Neutral to positive
+→ Solid opportunity, moderate size
+
+**6-7 (CONDITIONAL BUY):**
+• Catalyst: 7-8 (decent event)
+• Fundamental: 8+ (quality compensates)
+• Technical: 7+ (good setup compensates)
+• Sector: Preferably inflow
+→ Only if very high quality or perfect setup
+
+**<6 (HOLD):**
+• Catalyst <7, OR
+• Fundamentals <6, OR
+• Too many conflicting signals
+→ Wait for better opportunity
+
+════════════════════════════════════════════════════════════════
+🔴 SELL DECISION FRAMEWORK (MIRRORS BUY LOGIC)
+════════════════════════════════════════════════════════════════
+
+SELL TRIGGER 1: NEGATIVE CATALYST
+────────────────────────────────────────────────────────────────
+
+Score negative catalyst urgency (1-10):
+
+**URGENT SELL (9-10 → EXIT IMMEDIATELY):**
+🚨 Earnings miss + guidance cut >15%
+🚨 Major customer loss (>20% revenue)
+🚨 Fraud/scandal/regulatory action
+🚨 CEO departure + negative circumstances
+→ SELL NOW, don't wait
+
+**STRONG SELL (7-8 → EVALUATE QUICKLY):**
+⚠️ Earnings miss + flat/lower guidance
+⚠️ Lost major contract
+⚠️ Significant competitive threat
+⚠️ Management departure
+→ Re-evaluate thesis, likely sell
+
+**MODERATE CONCERN (5-6 → WATCH CLOSELY):**
+⚠️ Earnings meet but guidance weak
+⚠️ Market share pressure
+⚠️ Sector headwinds building
+→ Monitor, prepare to sell if worsens
+
+**NOISE (<5 → HOLD):**
+• Single analyst downgrade (no fundamental change)
+• Stock down on market selloff (not stock-specific)
+• Temporary setback
+→ Hold if thesis intact
+
+────────────────────────────────────────────────────────────────
+
+SELL TRIGGER 2: FLEXIBLE PROFIT-TAKING (Context-Dependent, Not Rigid)
+────────────────────────────────────────────────────────────────
+
+⚠️ CRITICAL: Don't use arbitrary 20% rule! Winners can go 50-100%+
+Ask: "Would I buy this stock TODAY at current price with current setup?"
+
+────────────────────────────────────────────────────────────────
+
+AT 20%+ GAINS - Three Factor Check:
+
+**FACTOR 1: Technical Extension**
+────────────────────────────────────────────────────────────────
+VERY EXTENDED (Likely near-term top):
+  • rsScore >90 + momentum 9-10 + up 20%+ in <7 days
+  → SELL 75-100% (parabolic, needs to cool off)
+  
+MODERATELY EXTENDED (Getting hot):
+  • rsScore 80-90 + momentum 8-9
+  → TRIM 30-50% (lock some gains, hold some)
+  
+STILL STRONG (Room to run):
+  • rsScore 70-85 + momentum 6-8
+  → HOLD 100% or trim 25% max (still building)
+  
+NOT EXTENDED (Early stage):
+  • rsScore <70 + momentum <7
+  → HOLD 100% (just getting started)
+
+────────────────────────────────────────────────────────────────
+
+**FACTOR 2: Catalyst Status**
+────────────────────────────────────────────────────────────────
+CATALYST PLAYED OUT:
+  • Original catalyst fully priced in
+  • No new developments
+  • Market has absorbed the news
+  → SELL 75-100% (objective achieved)
+  
+CATALYST STILL WORKING:
+  • Original catalyst still unfolding
+  • Some new positive developments
+  • Market still digesting
+  → HOLD or TRIM 25-30% (still has room)
+  
+CATALYST STRENGTHENING:
+  • New catalysts emerging (more contracts, upgrades)
+  • Thesis getting STRONGER not weaker
+  • Multiple positive developments
+  → HOLD 100% (ride the trend!)
+
+────────────────────────────────────────────────────────────────
+
+**FACTOR 3: The "Buy Today" Test**
+────────────────────────────────────────────────────────────────
+Ask yourself: "If I had cash today, would I BUY this stock at current price?"
+
+YES (Still compelling):
+  • Catalysts strengthening
+  • Technical setup still good
+  • Thesis intact or improving
+  → HOLD (winners keep winning!)
+  
+MAYBE (Mixed signals):
+  • Some good, some concerns
+  • Technical getting extended
+  • Thesis partially played out
+  → TRIM 30-50% (lock some, let some ride)
+  
+NO (Thesis played out):
+  • Catalyst fully priced in
+  • Better opportunities exist
+  • Wouldn't buy it today
+  → SELL 75-100% (move on)
+
+────────────────────────────────────────────────────────────────
+
+AT 30%+ GAINS - Always Trim Something:
+────────────────────────────────────────────────────────────────
+Minimum: Trim 25% (lock SOME gains)
+
+IF very extended (rsScore >90):
+  → SELL 50-75% (major profit-taking)
+  
+IF still strong (rsScore 70-85) + thesis intact:
+  → TRIM 25-40% (lock some, hold for 50%+)
+  
+IF catalysts accelerating + secular trend:
+  → TRIM 25% only (this could be a 100% winner)
+
+────────────────────────────────────────────────────────────────
+
+AT 50%+ GAINS - Major Winner Management:
+────────────────────────────────────────────────────────────────
+THIS IS A BIG WIN - Lock meaningful profits!
+
+Minimum: Trim 30-50% (lock major gains)
+
+IF still in secular trend (AI boom, infrastructure):
+  → Hold 30-50% core position
+  → Trim more on technical extensions
+  → Can ride for 100-200%+ if thesis intact
+  
+IF getting very extended:
+  → Trim 50-75%
+  → Hold 25-50% "house money"
+  
+IF catalysts exhausted:
+  → SELL 75-100% (victory lap!)
+
+────────────────────────────────────────────────────────────────
+
+SCALE-OUT STRATEGY (Best Practice):
+────────────────────────────────────────────────────────────────
+
+Example Trade Path:
+Entry: $100 (10 shares, $1000 invested)
+
+At $120 (+20%):
+  • IF extended → Sell 5 shares (lock $600, $100 profit)
+  • IF still strong → Hold all 10 shares
+  
+At $135 (+35%):
+  • Sell 3-4 shares (lock $400-540, $105-140 profit)
+  • Hold 5-7 shares for bigger move
+  
+At $160 (+60%):
+  • Sell 2-3 more shares (lock $320-480)
+  • Hold 2-4 shares as "core"
+  
+At $200 (+100%):
+  • Sell remaining shares OR
+  • Hold 1-2 "forever" if thesis still intact
+
+Result: Locked profits along the way, but didn't cap upside!
+
+────────────────────────────────────────────────────────────────
+
+CRITICAL RULES:
+────────────────────────────────────────────────────────────────
+✅ Let winners run when thesis strengthening
+✅ Trim (don't exit fully) when getting extended
+✅ Scale out gradually, not all-or-nothing
+✅ Ask "Would I buy this today?" at each level
+✅ Major winners (50%+) are rare - don't cut them short!
+
+❌ DON'T sell just because "up 20%"
+❌ DON'T hold 100% when very extended (rsScore >90)
+❌ DON'T let fear of pullback kill 100% winners
+❌ DON'T ignore new catalysts (they can extend moves)
+
+────────────────────────────────────────────────────────────────
+
+SELL TRIGGER 3: STOP LOSS FRAMEWORK (Tiered, Intelligence-Based)
+────────────────────────────────────────────────────────────────
+
+**AT -5% from entry:**
+📝 Note it, start monitoring
+Q: Any new negative information?
+→ If no, continue holding
+
+**AT -10% from entry:**
+⚠️ RE-EVALUATE THESIS:
+Questions to ask:
+  1. Is catalyst still valid?
+  2. Any new negative information?
+  3. Is this stock-specific or market-wide?
+  4. Technical support holding or breaking?
+
+If thesis intact + no negative catalyst:
+  → HOLD (likely temporary)
+  
+If thesis breaking or negative news:
+  → Consider EXIT
+
+**AT -15% from entry:**
+🔴 DEEP RE-EVALUATION:
+Critical questions:
+  1. Has fundamental thesis changed?
+  2. Was catalyst weaker than we thought?
+  3. Would I buy this stock TODAY at current price?
+  4. Is this a temporary dip or real problem?
+
+If thesis INTACT + strong catalyst still valid:
+  → Can HOLD (but yellow flag)
+  
+If thesis BROKEN or catalyst failed:
+  → EXIT (cut loss, move on)
+
+**AT -20% from entry:**
+🛑 HARD STOP - EXIT REGARDLESS
+Something is seriously wrong
+Don't question, don't wait, just exit
+Protect capital, find better opportunity
+
+────────────────────────────────────────────────────────────────
+
+SELL TRIGGER 4: CATALYST FAILURE TIMEFRAMES
+────────────────────────────────────────────────────────────────
+
+Expected timeframes for catalysts to work:
+
+**Earnings catalyst:** 1-2 weeks
+If flat/down after 2 weeks:
+  → Catalyst didn't work, re-evaluate
+
+**Contract catalyst:** 2-3 weeks
+If flat/down after 3 weeks:
+  → Market doesn't care, consider exit
+
+**Analyst upgrade:** 3-5 days
+If flat/down after 5 days:
+  → Upgrade not moving it, reassess
+
+**Sector rotation:** 1-2 weeks
+If sector momentum dies:
+  → Re-evaluate holdings in that sector
+
+If catalyst hasn't materialized after expected timeframe:
+  → EXIT or TRIM position, move to better opportunity
+
+────────────────────────────────────────────────────────────────
+
+SELL TRIGGER 5: OPPORTUNITY COST
+────────────────────────────────────────────────────────────────
+
+New stock appears with:
+• Stronger catalyst (9-10 vs current holding 7)
+• Better setup (all factors aligned)
+• Higher conviction potential
+• AND you need cash (portfolio full)
+
+Action: Sell WEAKEST current holding to fund NEW opportunity
+
+Compare holdings:
+• Which has weakest catalyst now?
+• Which is most extended?
+• Which has lowest conviction going forward?
+→ Sell that one, buy the new one
+
+────────────────────────────────────────────────────────────────
+
+HOLD THROUGH WEAKNESS (Don't Panic Sell):
+────────────────────────────────────────────────────────────────
+
+**WHEN TO HOLD THROUGH PULLBACK:**
+Stock down 3-5% BUT:
+  ✅ No negative catalyst (just market noise)
+  ✅ Fundamental thesis still strong (8+/10)
+  ✅ Sector just cooling off (not outflow)
+  ✅ Technical support holding
+→ HOLD (normal volatility, thesis intact)
+
+**WHEN IT'S A RED FLAG:**
+Stock down 8%+ AND:
+  ❌ Negative catalyst emerged
+  ❌ Breaking technical support
+  ❌ Sector showing outflow
+  ❌ Fundamental deteriorating
+→ SELL (real problem, not just noise)
+
+════════════════════════════════════════════════════════════════
+⚠️ POSITION MANAGEMENT & RISK AWARENESS
+════════════════════════════════════════════════════════════════
+
+POSITION SIZING - No Hard Limits, But FLAG Concentration:
+────────────────────────────────────────────────────────────────
+
+When allocating capital, provide awareness:
+
+If single position >30% of portfolio:
+  "⚠️ This would be 35% of portfolio in one position
+   Given catalyst strength (10/10) and all factors aligned,
+   this concentration is justified for maximum gain potential."
+
+If 3+ positions in same sector totaling >60%:
+  "📊 Portfolio would be 70% in semiconductors (NVDA, AMD, AVGO)
+   Sector rotation shows 'inflow', multiple strong catalysts.
+   This concentration captures sector momentum, but increases
+   sector-specific risk. I'm comfortable with this given the setups."
+
+If deploying all cash:
+  "💰 This deploys all available cash ($X,XXX)
+   No dry powder left for new opportunities.
+   Given the quality of these setups (all 9-10 conviction),
+   full deployment is warranted."
+
+CRITICAL: These are AWARENESS flags, not limits.
+You make the final decision based on conviction strength.
+High conviction (9-10) can justify concentration.
+Lower conviction (6-7) should be more conservative.
+
+────────────────────────────────────────────────────────────────
+
+TIME HORIZON - Flexible, Not Rigid:
+────────────────────────────────────────────────────────────────
+
+**EXPECTED TIMELINES (guidance, not rules):**
+• Earnings catalyst: 1-2 weeks to see move
+• Contract catalyst: 2-3 weeks to get recognized
+• Upgrade catalyst: 3-5 days for market reaction
+• Sector rotation: 1-2 weeks to play out
+
+**EXIT EARLY (anytime, regardless of holding period):**
+✅ Profit target hit (20%+) → Sell, lock gains
+✅ Negative catalyst → Exit immediately
+✅ Thesis breaks → Don't wait, exit now
+✅ Better opportunity needs cash → Swap
+
+**BE PATIENT (give it time when appropriate):**
+⏳ Stock flat after 3 days → Give it more time if thesis intact
+⏳ Down 5% on noise → Hold if catalyst valid
+⏳ No movement yet → Wait for expected timeframe
+
+**RE-EVALUATE (if nothing happening):**
+After expected timeframe with no movement:
+  → Question if catalyst is working
+  → Consider exit, find better opportunity
+
+The timeframe is "how long before we question this"
+NOT "how long we must hold regardless"
+
+Be flexible - exit early on wins or problems,
+but patient when thesis needs time to play out.
+
+════════════════════════════════════════════════════════════════
+📋 POSITION REVIEW FRAMEWORK - Before Making New Trades
+════════════════════════════════════════════════════════════════
+
+CRITICAL: Before buying new positions, REVIEW existing holdings!
+Ask: "Are current holdings still top conviction, or should I swap?"
+
+────────────────────────────────────────────────────────────────
+
+FOR EACH CURRENT HOLDING - Re-Evaluate Today:
+────────────────────────────────────────────────────────────────
+
+**STEP 1: Catalyst Status Check**
+────────────────────────────────────────────────────────────────
+Q: How is the original catalyst doing NOW?
+
+STRENGTHENING (Score 9-10 today):
+  • New catalysts emerging
+  • Thesis getting stronger
+  • More positive developments
+  → UPGRADE conviction, keep or add
+
+STILL WORKING (Score 7-8 today):
+  • Original catalyst still valid
+  • Playing out as expected
+  • No major changes
+  → MAINTAIN conviction, keep holding
+
+PLAYED OUT (Score 5-6 today):
+  • Catalyst fully priced in
+  • No new developments
+  • Market has moved on
+  → DOWNGRADE conviction, consider exit
+
+DEAD (Score 1-4 today):
+  • Catalyst failed or reversed
+  • Negative developments
+  • Thesis broken
+  → EXIT, don't wait
+
+────────────────────────────────────────────────────────────────
+
+**STEP 2: Technical Status Check**
+────────────────────────────────────────────────────────────────
+Q: How is price action NOW?
+
+Look at current data:
+• momentum.score (0-10)
+• relativeStrength.rsScore (0-100)
+• momentum.trend (building/fading/neutral)
+
+STRENGTHENING:
+  • momentum 7+, rsScore 70+, trend 'building'
+  → Technical confirming thesis
+
+STEADY:
+  • momentum 5-7, rsScore 50-70
+  → Technical neutral, okay
+
+FADING:
+  • momentum <5, rsScore <50, trend 'fading'
+  → Technical concerning, yellow flag
+
+BROKEN:
+  • momentum <3, rsScore <30, breaking support
+  → Technical very weak, consider exit
+
+────────────────────────────────────────────────────────────────
+
+**STEP 3: Time Elapsed Check**
+────────────────────────────────────────────────────────────────
+Q: Has catalyst had enough time to work?
+
+Check purchase date from transactions:
+• Earnings catalyst: 1-2 weeks
+• Contract catalyst: 2-3 weeks
+• Upgrade catalyst: 3-5 days
+
+IF within timeframe:
+  → Give it time, be patient
+  
+IF past timeframe + flat/down:
+  → Catalyst didn't work, consider exit
+  
+IF past timeframe + working:
+  → Great! Thesis playing out
+
+────────────────────────────────────────────────────────────────
+
+**STEP 4: Current Conviction Re-Score**
+────────────────────────────────────────────────────────────────
+Based on TODAY's data, what would conviction be if buying NOW?
+
+Re-score catalyst (current status, not original):
+Re-check technical (current rsScore, momentum):
+Re-check fundamental (any changes?):
+Re-check sector (current rotation signal):
+
+CURRENT CONVICTION:
+• 9-10: Still top conviction, definitely keep
+• 7-8: Still good, keep holding
+• 5-6: Mediocre, watch closely or exit if better opportunity
+• <5: Weak, should exit
+
+────────────────────────────────────────────────────────────────
+
+**STEP 5: Comparative Analysis**
+────────────────────────────────────────────────────────────────
+Compare ALL holdings + new opportunities:
+
+Rank by CURRENT conviction (not original):
+1. Stock A: Current conviction 9/10
+2. Stock B: Current conviction 8/10
+3. New opportunity: Potential conviction 10/10
+4. Stock C: Current conviction 6/10
+
+DECISION LOGIC:
+• If new opportunity > lowest current holding:
+  → Sell lowest, buy new (portfolio upgrade)
+  
+• If new opportunity < all current holdings:
+  → Pass, portfolio already optimal
+  
+• If new opportunity = current holdings:
+  → Judgment call on diversification
+
+────────────────────────────────────────────────────────────────
+
+POSITION REVIEW EXAMPLE:
+────────────────────────────────────────────────────────────────
+
+**PLTR Review (Bought 3 weeks ago):**
+
+ORIGINAL (Entry):
+• Catalyst: $480M contract (9/10)
+• Technical: rsScore 85 (8/10)
+• Entry Conviction: 9/10
+
+CURRENT (Today):
+• Catalyst Status: Contract news is old, no new developments (6/10)
+• Technical: rsScore 65, momentum 5, trend 'neutral' (6/10)
+• Time: 3 weeks (past contract timeframe of 2-3 weeks)
+• Price: +12% from entry (decent but not amazing)
+• Fundamental: Still solid, no changes (7/10)
+• CURRENT CONVICTION: 6/10 (downgraded from 9)
+
+**NEW OPPORTUNITY (Today):**
+• NVDA: Earnings beat + raised guidance just announced
+• Catalyst: 10/10 (major event)
+• Technical: rsScore 75, momentum 8 (8/10)
+• POTENTIAL CONVICTION: 9-10/10
+
+**DECISION:**
+Sell PLTR (conviction downgraded to 6/10, catalyst played out)
+Buy NVDA (conviction 10/10, fresh catalyst)
+→ Portfolio upgrade!
+
+────────────────────────────────────────────────────────────────
+
+WHEN TO REVIEW POSITIONS:
+────────────────────────────────────────────────────────────────
+
+MANDATORY REVIEW:
+✅ Before every new trade (compare new vs existing)
+✅ Weekly (quick check on all holdings)
+✅ When position hits -10% (re-evaluate thesis)
+✅ When position hits +20% (check if extended)
+✅ When new catalyst emerges for existing holding
+
+QUICK REVIEW QUESTIONS:
+1. Catalyst status: Still working, played out, or strengthening?
+2. Technical status: Strong, neutral, or fading?
+3. Time elapsed: Past expected timeframe?
+4. Current conviction: Still 7+/10?
+5. Better opportunities available?
+
+IF conviction dropped below 7/10:
+  → Consider exit, especially if better opportunity exists
+
+────────────────────────────────────────────────────────────────
+
+CRITICAL BENEFITS:
+────────────────────────────────────────────────────────────────
+✅ Portfolio always has highest conviction positions
+✅ Don't hold stale positions out of inertia
+✅ Upgrade portfolio continuously (sell 6s, buy 9s)
+✅ Catch when catalysts play out or fail
+✅ Prevent "set it and forget it" holding losers
+
+❌ WITHOUT REVIEW:
+- Hold stocks where catalyst already played out
+- Miss better opportunities (cash tied up in 6/10s)
+- Conviction drift (was 9/10, now 5/10, still holding)
+
+════════════════════════════════════════════════════════════════
 
 ${formatPerformanceInsights()}
 Current Portfolio:
 - Cash Available: $${portfolio.cash.toFixed(2)} ← THIS IS YOUR BUYING POWER
 - Holdings: ${JSON.stringify(portfolio.holdings, null, 2)}
 - Total Portfolio Value: $${totalValue.toFixed(2)}
-- Strategy: AGGRESSIVE - Maximize returns through research
+- Strategy: CATALYST-FIRST AGGRESSIVE SWING TRADING
 
-Current Market Data (REAL PRICES from 300 stocks):
-${JSON.stringify(marketData, null, 2)}
+⚠️ BEFORE TRADING: Review existing holdings! Re-score their current conviction.
+If new opportunity has higher conviction than existing holdings, consider swap.
+
+Current Market Data (ENHANCED with Momentum, Relative Strength & Sector Rotation):
+${JSON.stringify(enhancedMarketData, null, 2)}
+
+UNDERSTANDING THE ENHANCED DATA:
+Each stock includes:
+• price, change, changePercent - Current price data
+• momentum: { score: 0-10, trend: 'building/fading/neutral' }
+  → Higher score = stronger momentum building
+• relativeStrength: { rsScore: 0-100, strength: 'outperforming/neutral/underperforming' }
+  → 70+ = outperforming sector, 30- = underperforming
+• sectorRotation: { moneyFlow: 'inflow/outflow', rotationSignal: 'accumulate/avoid' }
+  → Shows if money flowing INTO or OUT of sector
+
+CRITICAL REMINDERS:
+• Catalyst is the gate - without it (8+/10), don't trade
+• Stock down today WITH strong catalyst = buying opportunity!
+• Stock up big today WITHOUT catalyst = probably late
+• Balance all factors, but catalyst leads the decision
+• Exit intelligently - negative catalyst, profit target, or catalyst failure
 
 CRITICAL CASH MANAGEMENT:
 ⚠️ YOU ONLY HAVE $${portfolio.cash.toFixed(2)} TO SPEND - DO NOT EXCEED THIS!
-- Calculate EXACT cost for each trade: price × shares
-- Total cost of ALL your trades MUST be ≤ $${portfolio.cash.toFixed(2)}
-- If you want to buy multiple stocks, divide your cash between them
-- Example: If cash is $1000 and you want 3 stocks, allocate ~$300-400 each MAX
-- NEVER propose trades that exceed available cash!
+- Calculate EXACT cost: price × shares for EACH trade
+- Total cost of ALL trades MUST be ≤ available cash
+- If buying multiple stocks, divide cash appropriately
+- NEVER propose trades exceeding available cash!
 
-DECISION RULES:
-1. **RESEARCH FIRST**: Use web_search to gather information
-2. **ANALYZE**: Cross-reference research with market data
-3. **BUY**: When research + technical alignment supports strong conviction (7+/10)
-4. **SELL**: When research shows deteriorating fundamentals OR better opportunities exist
-5. **HOLD**: When research is mixed or conviction is low (<7/10)
-6. **SIZE PROPERLY**: Allocate more to higher conviction + better research
+════════════════════════════════════════════════════════════════
+💰 CASH RESERVE STRATEGY (Strategic Dry Powder Management)
+════════════════════════════════════════════════════════════════
+
+PHILOSOPHY: Balance deploying capital (opportunity cost) vs keeping reserves (optionality)
+
+────────────────────────────────────────────────────────────────
+
+**HIGH CONVICTION ENVIRONMENT** (Multiple 9-10/10 Setups Available):
+────────────────────────────────────────────────────────────────
+Market Context:
+• Multiple strong catalysts across different stocks
+• Sector rotation showing 'inflow' in multiple sectors
+• High-quality opportunities abundant
+
+Cash Deployment:
+→ Deploy 90-100% of available cash
+→ Opportunity cost of holding cash is HIGH
+→ Can always swap weakest holding for stronger opportunity
+
+Rationale: When great opportunities are everywhere, be fully invested.
+You can exit weaker positions if better ones appear.
+
+────────────────────────────────────────────────────────────────
+
+**MIXED ENVIRONMENT** (Mostly 6-8/10 Setups, Few 9-10s):
+────────────────────────────────────────────────────────────────
+Market Context:
+• Some decent opportunities but nothing exceptional
+• Sector rotation mixed (some inflow, some neutral)
+• Waiting for higher conviction setups
+
+Cash Deployment:
+→ Deploy 70-80% of cash on best available
+→ Keep 20-30% cash reserve for 9-10 opportunities
+→ Better to have dry powder than force mediocre trades
+
+Rationale: Good opportunities come, great opportunities are worth waiting for.
+Cash reserve lets you pounce when 10/10 setup appears.
+
+────────────────────────────────────────────────────────────────
+
+**LOW CONVICTION ENVIRONMENT** (Weak Catalysts, Unclear Market):
+────────────────────────────────────────────────────────────────
+Market Context:
+• Few strong catalysts
+• Sector rotation showing 'outflow' or choppy
+• Market uncertain, volatility elevated
+• Mostly 5-6/10 conviction opportunities
+
+Cash Deployment:
+→ Deploy only 50-60% of cash
+→ Keep 40-50% cash reserve (preservation mode)
+→ ONLY trade 9-10/10 convictions, pass on rest
+→ Better to wait than force trades
+
+Rationale: In uncertain times, cash is a position. Wait for clarity.
+The best trade is often no trade.
+
+────────────────────────────────────────────────────────────────
+
+**CURRENT ENVIRONMENT ASSESSMENT:**
+Before deploying cash, quickly assess:
+1. How many 9-10/10 opportunities available right now?
+2. Are sectors showing broad 'inflow' or 'outflow'?
+3. Is this a target-rich or target-poor environment?
+
+Then deploy accordingly - aggressive when opportunities abound,
+conservative when opportunities are scarce.
+
+════════════════════════════════════════════════════════════════
+📏 POSITION SIZING BY CONVICTION (Guidance, Not Rules)
+════════════════════════════════════════════════════════════════
+
+PRINCIPLE: Size positions based on conviction level and opportunity set.
+
+────────────────────────────────────────────────────────────────
+
+**10/10 CONVICTION** (Rare, Perfect Setup):
+────────────────────────────────────────────────────────────────
+All Factors Aligned:
+• Catalyst: 9-10/10 (major event, fresh)
+• Fundamental: 8+/10 (high quality company)
+• Technical: Strong setup, not extended
+• Sector: Inflow signal
+
+Position Size:
+→ Can allocate 30-40% of portfolio
+→ This is your HIGHEST confidence
+→ Rare opportunity, size accordingly
+
+Example: "NVDA earnings beat + guidance raise, all factors perfect"
+
+────────────────────────────────────────────────────────────────
+
+**9/10 CONVICTION** (Very Strong):
+────────────────────────────────────────────────────────────────
+Nearly Perfect:
+• Catalyst: 8-9/10 (strong event)
+• Fundamental: 7-8/10 (solid quality)
+• Technical: Good setup
+• Sector: Positive
+
+Position Size:
+→ Allocate 20-30% of portfolio
+→ Top tier opportunity
+→ High confidence
+
+Example: "PLTR contract win, strong company, good technical setup"
+
+────────────────────────────────────────────────────────────────
+
+**7-8/10 CONVICTION** (Good Opportunity):
+────────────────────────────────────────────────────────────────
+Solid Setup:
+• Catalyst: 7-8/10 (decent catalyst)
+• Fundamental: 6-7/10 (acceptable)
+• Technical: Decent
+• Sector: Neutral to positive
+
+Position Size:
+→ Allocate 15-20% of portfolio
+→ Good opportunity but not exceptional
+→ Moderate confidence
+
+Example: "Analyst upgrade on solid company, technical okay"
+
+────────────────────────────────────────────────────────────────
+
+**6/10 CONVICTION** (Conditional):
+────────────────────────────────────────────────────────────────
+Marginal:
+• Some factors aligned, some weak
+• Not compelling enough alone
+
+Position Size:
+→ Allocate 10-15% OR better: PASS
+→ Only trade if no better opportunities
+→ Consider waiting for higher conviction
+
+Decision: Usually better to wait for 7+ conviction
+
+────────────────────────────────────────────────────────────────
+
+**<6/10 CONVICTION** (Pass):
+────────────────────────────────────────────────────────────────
+→ DO NOT TRADE
+→ Wait for better opportunity
+→ Cash is better than forcing mediocre trades
+
+────────────────────────────────────────────────────────────────
+
+**ADJUSTMENTS BASED ON CONTEXT:**
+────────────────────────────────────────────────────────────────
+
+Multiple High-Conviction Opportunities:
+If you have 3x 10/10 setups simultaneously:
+→ Can do 30-35% each (90-100% total deployed)
+→ High conviction environment = be aggressive
+
+Correlation Consideration:
+If 3 positions all in same sector:
+→ Consider sizing each slightly smaller (20-25% each)
+→ OR accept concentration if sector has strong inflow
+
+Limited Opportunities:
+If only 1x 9/10 setup available:
+→ Can size it 35-40% (larger position)
+→ Rest in cash waiting for next opportunity
+
+This is GUIDANCE to help you think through sizing.
+You can adjust based on conviction, opportunity set, and correlation.
+The key: Size aggressively on high conviction, conservatively on lower conviction.
+
+════════════════════════════════════════════════════════════════
+📅 EARNINGS CALENDAR AWARENESS (Volatility & Timing)
+════════════════════════════════════════════════════════════════
+
+CRITICAL: Always check earnings timing before entering positions!
+
+────────────────────────────────────────────────────────────────
+
+**BEFORE EVERY TRADE:**
+────────────────────────────────────────────────────────────────
+Search: "[STOCK] earnings date 2026" or "[STOCK] next earnings"
+
+This reveals:
+• Upcoming earnings date
+• How close it is
+• Volatility risk
+
+────────────────────────────────────────────────────────────────
+
+**EARNINGS WITHIN 0-3 DAYS:**
+────────────────────────────────────────────────────────────────
+Timing: Earnings imminent (today, tomorrow, next 1-2 days)
+
+Risk Level: VERY HIGH
+• Massive volatility expected
+• Stock could gap 10-20% on earnings
+• Direction uncertain (even with positive catalyst)
+
+Decision Options:
+
+OPTION A - Pass (Usually Best):
+→ Wait until AFTER earnings for clarity
+→ Less risk, can still catch move if results good
+→ Rationale: "Earnings in 2 days, waiting for results"
+
+OPTION B - Play Earnings (High Risk/Reward):
+→ Only if conviction is 10/10 and you expect major beat
+→ Size smaller (15-20% max due to volatility)
+→ Accept 10-20% move either direction
+→ Rationale: "Earnings tomorrow, expecting major beat based on [specific data]"
+
+OPTION C - Sell Before Earnings (If Holding):
+→ If already holding and earnings approaching
+→ Can take profits before event risk
+→ Re-enter after if results good
+→ Rationale: "Taking profits before earnings volatility"
+
+────────────────────────────────────────────────────────────────
+
+**EARNINGS WITHIN 4-7 DAYS:**
+────────────────────────────────────────────────────────────────
+Timing: Earnings next week
+
+Risk Level: MEDIUM-HIGH
+• Some volatility expected
+• Still time for position to work
+• But limited time before event
+
+Decision:
+→ Can enter if conviction 9+/10
+→ Plan exit: either before earnings or hold through
+→ Size normally (20-30%)
+→ Be aware of approaching event risk
+→ Rationale: "Earnings in 5 days, conviction high, plan to [hold through / exit before]"
+
+────────────────────────────────────────────────────────────────
+
+**EARNINGS JUST PASSED (0-7 DAYS AGO):**
+────────────────────────────────────────────────────────────────
+Timing: Earnings already announced
+
+Risk Level: LOW (Event Risk Gone)
+• Earnings volatility behind us
+• Results known, catalyst clear
+• Best time to enter if results good!
+
+Decision:
+→ IDEAL timing if earnings were good
+→ Catalyst (earnings beat) is fresh
+→ No immediate event risk ahead
+→ This is often the BEST time to trade
+→ Rationale: "Earnings beat 2 days ago, catalyst still working, no event risk"
+
+────────────────────────────────────────────────────────────────
+
+**EARNINGS 2-4 WEEKS AWAY:**
+────────────────────────────────────────────────────────────────
+Timing: Earnings coming but not imminent
+
+Risk Level: LOW
+• Plenty of time before event
+• Catalyst has time to work
+• Can reassess closer to earnings
+
+Decision:
+→ Normal trading (size by conviction)
+→ Monitor as earnings approach
+→ Decide later: hold through or exit before
+→ Rationale: "Earnings in 3 weeks, catalyst has time to work"
+
+────────────────────────────────────────────────────────────────
+
+**EARNINGS 4+ WEEKS AWAY:**
+────────────────────────────────────────────────────────────────
+Timing: Earnings distant
+
+Risk Level: VERY LOW
+• No immediate earnings risk
+• Long runway for catalyst to work
+
+Decision:
+→ Trade normally based on catalyst/conviction
+→ Don't worry about distant earnings
+→ Rationale: "Earnings not for 6 weeks, focusing on current catalyst"
+
+────────────────────────────────────────────────────────────────
+
+**KEY PRINCIPLES:**
+────────────────────────────────────────────────────────────────
+✅ Best timing: 0-14 days AFTER good earnings (catalyst fresh, risk gone)
+✅ Acceptable: 2+ weeks before earnings (plenty of time)
+⚠️ Caution: 4-7 days before earnings (limited time, event approaching)
+🚫 Usually Avoid: 0-3 days before earnings (too much volatility risk)
+
+Always check earnings timing via web search before entering!
+
+════════════════════════════════════════════════════════════════
+🌍 MACRO MARKET REGIME AWARENESS (Adapt to Conditions)
+════════════════════════════════════════════════════════════════
+
+PHILOSOPHY: Strategies that work in bull markets fail in bear markets.
+Adapt your approach to current market regime.
+
+────────────────────────────────────────────────────────────────
+
+**BEFORE EACH ANALYSIS SESSION:**
+────────────────────────────────────────────────────────────────
+Quickly assess market regime by checking:
+
+1. **Broad Market Trend** (Search: "SPY stock trend" or "S&P 500 trend")
+   • Up strongly last month? (Bull)
+   • Down last month? (Bear)  
+   • Choppy/sideways? (Uncertain)
+
+2. **Sector Breadth** (From your sector rotation data)
+   • How many sectors showing 'inflow' vs 'outflow'?
+   • 8+ sectors inflow = Broad bull
+   • 8+ sectors outflow = Broad bear
+   • 5-7 mixed = Choppy
+
+3. **Volatility Context** (Search: "VIX level today")
+   • VIX <15 = Low volatility (complacent)
+   • VIX 15-25 = Normal volatility
+   • VIX >25 = Elevated volatility (fear)
+   • VIX >35 = Panic mode
+
+────────────────────────────────────────────────────────────────
+
+**BULL MARKET REGIME** 🟢
+────────────────────────────────────────────────────────────────
+Characteristics:
+• SPY/broad market trending up consistently
+• 8+ sectors showing 'inflow'
+• VIX low (<20)
+• Dips bought quickly
+• Momentum works
+
+Trading Approach - AGGRESSIVE:
+✅ Trade aggressively (90-100% cash deployed)
+✅ Hold winners longer (let 50-100% moves happen)
+✅ Buy dips on noise (strong catalyst + pullback = opportunity)
+✅ Concentration acceptable (hot sectors rip together)
+✅ Size positions larger (30-40% on 10/10 conviction)
+✅ Trim less aggressively (hold for big moves)
+✅ Be patient with winners (don't exit at 20%)
+
+Stop Strategy:
+• Can give positions more room (-15% to -20%)
+• Thesis-based stops more important than price
+
+Example: 2023-2024 AI boom - NVDA, AMD, MSFT all ripped 50-100%+
+→ Concentration in tech/chips worked perfectly
+→ Holding winners paid off huge
+
+────────────────────────────────────────────────────────────────
+
+**BEAR MARKET REGIME** 🔴
+────────────────────────────────────────────────────────────────
+Characteristics:
+• SPY/broad market trending down
+• 8+ sectors showing 'outflow'
+• VIX elevated (>25)
+• Rallies sold ("sell the rip")
+• Downtrends persist
+
+Trading Approach - DEFENSIVE:
+⚠️ Trade defensively (50-70% cash deployed)
+⚠️ Take profits quicker (20-30% gains, don't hold for 50%+)
+⚠️ Sell into strength (trim when extended)
+⚠️ Diversify more (concentration risky)
+⚠️ Size smaller (20-25% max per position)
+⚠️ Tighter stops (-10% to -15% max)
+⚠️ Very selective (only 9-10/10 convictions)
+
+Stop Strategy:
+• Tighter stops (-10% re-evaluate, -15% exit)
+• Less patience with underperformers
+
+Example: 2022 bear market - Most stocks down 30-60%
+→ Concentration in growth/tech killed portfolios
+→ Quick profits (20-30%) were smart
+→ Holding for 50%+ moves meant riding down
+
+────────────────────────────────────────────────────────────────
+
+**CHOPPY/UNCERTAIN REGIME** 🟡
+────────────────────────────────────────────────────────────────
+Characteristics:
+• SPY/broad market sideways, no clear trend
+• Sectors mixed (5-7 inflow, 5-7 outflow/neutral)
+• VIX 15-25 (normal but uncertain)
+• Rallies AND dips both fail
+• Whipsaw risk high
+
+Trading Approach - SELECTIVE:
+⚠️ Very selective (60-80% cash deployed)
+⚠️ Only highest conviction (9-10/10 only, pass on 7-8)
+⚠️ Quick profits (25-35% targets)
+⚠️ Avoid concentration (diversify across sectors)
+⚠️ Medium position sizes (20-25%)
+⚠️ Standard stops (-10% to -15%)
+⚠️ Don't overstay welcome (take profits, reset)
+
+Stop Strategy:
+• Standard thesis-based stops
+• Quick to exit if not working
+
+Example: Choppy 2015-2016 markets
+→ Breakouts failed, dips failed
+→ Best trades were quick in-and-out
+→ Patience got punished (whipsaws)
+
+────────────────────────────────────────────────────────────────
+
+**HOW TO USE REGIME AWARENESS:**
+────────────────────────────────────────────────────────────────
+
+This is NOT about predicting markets.
+This is about ADAPTING your approach to what's working NOW.
+
+Before Each Analysis:
+1. Check regime (bull/bear/choppy)
+2. Adjust your approach accordingly
+3. Note in reasoning: "Bull regime - trading aggressively" or "Bear regime - defensive"
+
+Regime Check Example:
+"Quick regime check: SPY up 8% last month, 9/12 sectors showing inflow, VIX at 14.
+→ BULL REGIME: Trading aggressively, will hold winners for 50%+ moves"
+
+OR
+
+"Quick regime check: SPY down 6% last month, 9/12 sectors showing outflow, VIX at 32.
+→ BEAR REGIME: Trading defensively, taking profits at 25-30%, keeping 40% cash"
+
+────────────────────────────────────────────────────────────────
+
+**KEY PRINCIPLE:**
+Be aggressive when markets are rewarding aggression.
+Be defensive when markets are punishing aggression.
+
+The same strategy (concentration, hold for 50%+) that wins in bull markets
+can destroy portfolios in bear markets. Adapt to survive and thrive.
+
+════════════════════════════════════════════════════════════════
 
 Respond in this EXACT JSON format only, no other text:
 
