@@ -1063,6 +1063,7 @@
                 <button onclick="addWeeklyFunding()" class="secondary">Add Weekly Funding</button>
                 <button onclick="runAIAnalysis()">🤖 Run AI Analysis</button>
                 <button onclick="testDataFetch()" class="secondary" style="background: #4a5568;">🧪 Dry Run (Test Only)</button>
+                <button onclick="refreshPrices()" class="secondary" style="background: #2563eb;">🔄 Refresh Prices</button>
                 <button onclick="resetAccount()" class="danger">Reset Account</button>
 
                 <div class="ai-thinking" id="aiThinking">
@@ -1747,13 +1748,13 @@
             
             checkAndResetApiCounter();
             
-            // Check if we have fresh cached data (within 15 minutes)
+            // Check if we have fresh cached data (within 1 minute)
             const now = Date.now();
             const cacheKey = symbol;
             
             if (priceCache[cacheKey]) {
                 const cacheAge = now - new Date(priceCache[cacheKey].timestamp).getTime();
-                const maxCacheAge = 15 * 60 * 1000; // 15 minutes in milliseconds
+                const maxCacheAge = 1 * 60 * 1000; // 1 minute in milliseconds (frequent updates with unlimited API)
                 
                 if (cacheAge < maxCacheAge) {
                     console.log(`Using cached data for ${symbol} (${Math.floor(cacheAge / 60000)} min old)`);
@@ -3383,6 +3384,21 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             } else {
                 console.log('No portfolio found in localStorage');
             }
+        }
+
+        // Refresh prices manually
+        async function refreshPrices() {
+            console.log('🔄 Manual price refresh requested');
+            addActivity('🔄 Refreshing all prices...', 'general');
+            
+            // Clear entire price cache to force fresh fetches
+            Object.keys(priceCache).forEach(key => delete priceCache[key]);
+            console.log('Price cache cleared');
+            
+            // Update UI which will fetch fresh prices
+            await updateUI();
+            
+            addActivity('✅ Prices refreshed!', 'success');
         }
 
         // Reset account
