@@ -1047,6 +1047,7 @@
                 <button onclick="initializeAccount()">Initialize Account</button>
                 <button onclick="addWeeklyFunding()" class="secondary">Add Weekly Funding</button>
                 <button onclick="runAIAnalysis()">🤖 Run AI Analysis</button>
+                <button onclick="testDataFetch()" class="secondary" style="background: #4a5568;">🧪 Dry Run (Test Only)</button>
                 <button onclick="resetAccount()" class="danger">Reset Account</button>
 
                 <div class="ai-thinking" id="aiThinking">
@@ -1878,6 +1879,99 @@
         }
 
         // AI Analysis using Claude API
+        // DRY RUN: Test data fetching without calling Claude API
+        async function testDataFetch() {
+            const thinking = document.getElementById('aiThinking');
+            const thinkingDetail = document.getElementById('thinkingDetail');
+            thinking.classList.add('active');
+            thinkingDetail.textContent = '🧪 DRY RUN: Testing data fetch...';
+            
+            console.log('=== DRY RUN TEST STARTED ===');
+            const startTime = performance.now();
+            
+            try {
+                // Smart screener picks stocks dynamically
+                thinkingDetail.textContent = '🧪 Running stock screener...';
+                const symbols = await screenStocks();
+                console.log(`✅ Screener selected ${symbols.length} stocks:`, symbols);
+                
+                thinkingDetail.textContent = `🧪 Fetching ${symbols.length} stock prices...`;
+                
+                const marketData = {};
+                let fetchErrors = [];
+                
+                // Parallel API calls
+                const fetchPromises = symbols.map(async (symbol) => {
+                    try {
+                        const data = await getStockPrice(symbol);
+                        return { symbol, data, success: true };
+                    } catch (error) {
+                        return { symbol, error: error.message, success: false };
+                    }
+                });
+                
+                // Execute all fetches in parallel
+                const results = await Promise.all(fetchPromises);
+                
+                // Process results
+                results.forEach(result => {
+                    if (result.success) {
+                        marketData[result.symbol] = result.data;
+                    } else {
+                        fetchErrors.push({ symbol: result.symbol, error: result.error });
+                    }
+                });
+                
+                const endTime = performance.now();
+                const duration = ((endTime - startTime) / 1000).toFixed(2);
+                
+                // Success report
+                console.log(`✅ Successfully fetched ${Object.keys(marketData).length}/${symbols.length} stocks in ${duration}s`);
+                
+                if (fetchErrors.length > 0) {
+                    console.warn(`⚠️ Failed to fetch ${fetchErrors.length} stocks:`, fetchErrors.map(e => e.symbol));
+                }
+                
+                // Show sample data
+                const sampleSymbols = Object.keys(marketData).slice(0, 5);
+                console.log('📊 Sample price data:');
+                sampleSymbols.forEach(symbol => {
+                    const data = marketData[symbol];
+                    console.log(`  ${symbol}: $${data.price.toFixed(2)} (${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%)`);
+                });
+                
+                // Calculate cost if this were a real run
+                const estimatedTokens = 18000; // Approximate
+                const costPer1MTokens = 3.00; // Claude Sonnet 4 input cost
+                const estimatedCost = (estimatedTokens / 1000000) * costPer1MTokens;
+                
+                console.log('\n💰 If this were a real run:');
+                console.log(`  - Input tokens: ~${estimatedTokens.toLocaleString()}`);
+                console.log(`  - Estimated cost: ~$${estimatedCost.toFixed(4)}`);
+                console.log(`  - You saved: $${estimatedCost.toFixed(4)} by using Dry Run! 🎉`);
+                
+                console.log('\n=== DRY RUN TEST COMPLETE ===');
+                
+                // Show success message
+                thinking.classList.remove('active');
+                addActivity(`✅ DRY RUN: Fetched ${Object.keys(marketData).length}/${symbols.length} stocks in ${duration}s. Check console for details!`, 'success');
+                
+                // Show alert with summary
+                alert(`🧪 DRY RUN COMPLETE!\n\n` +
+                      `✅ Fetched: ${Object.keys(marketData).length}/${symbols.length} stocks\n` +
+                      `⏱️ Time: ${duration}s\n` +
+                      `❌ Failures: ${fetchErrors.length}\n\n` +
+                      `💰 Saved ~$${estimatedCost.toFixed(4)} by not calling Claude!\n\n` +
+                      `Check console (F12) for detailed results.`);
+                
+            } catch (error) {
+                console.error('❌ DRY RUN FAILED:', error);
+                thinking.classList.remove('active');
+                addActivity('❌ DRY RUN ERROR: ' + error.message, 'error');
+                alert('Dry run failed. Check console for details.');
+            }
+        }
+
         async function runAIAnalysis() {
             const thinking = document.getElementById('aiThinking');
             const thinkingDetail = document.getElementById('thinkingDetail');
