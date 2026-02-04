@@ -1791,8 +1791,15 @@
                     }
                     
                     // Calculate change from previous close to current price
-                    const currentPrice = day.c || day.l; // Use close if available, otherwise last price
+                    // If day.c is 0 (market closed), use prevDay.c as current price
+                    let currentPrice = day.c || day.l; // Use close if available, otherwise last price
                     const prevClose = prevDay.c;
+                    
+                    // If currentPrice is still 0 or null, use prevClose (market closed/weekend)
+                    if (!currentPrice || currentPrice === 0) {
+                        console.log(`[${symbol}] Market closed, using previous close: ${prevClose}`);
+                        currentPrice = prevClose;
+                    }
                     
                     if (!currentPrice || !prevClose) {
                         console.error(`[${symbol}] Missing price values - currentPrice: ${currentPrice}, prevClose: ${prevClose}`);
@@ -1808,7 +1815,7 @@
                         changePercent: parseFloat(changePercent),
                         timestamp: new Date().toISOString(),
                         isReal: true,
-                        note: '15min delayed'
+                        note: currentPrice === prevClose ? 'Market closed' : '15min delayed'
                     };
                     
                     // Cache the data
