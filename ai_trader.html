@@ -1602,10 +1602,34 @@
         async function updatePerformanceChart() {
             if (!performanceChart || portfolio.performanceHistory.length === 0) return;
             
-            // Update portfolio data
-            performanceChart.data.labels = portfolio.performanceHistory.map(h => 
-                new Date(h.timestamp).toLocaleTimeString()
-            );
+            // Update portfolio data with better date/time formatting
+            performanceChart.data.labels = portfolio.performanceHistory.map(h => {
+                const date = new Date(h.timestamp);
+                const today = new Date();
+                const yesterday = new Date(today);
+                yesterday.setDate(yesterday.getDate() - 1);
+                
+                // Format date part
+                let dateStr;
+                if (date.toDateString() === today.toDateString()) {
+                    dateStr = 'Today';
+                } else if (date.toDateString() === yesterday.toDateString()) {
+                    dateStr = 'Yesterday';
+                } else {
+                    // Show month/day for other dates
+                    dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                }
+                
+                // Format time part (without seconds)
+                const timeStr = date.toLocaleTimeString('en-US', { 
+                    hour: 'numeric', 
+                    minute: '2-digit',
+                    hour12: true 
+                });
+                
+                return `${dateStr} ${timeStr}`;
+            });
+            
             performanceChart.data.datasets[0].data = portfolio.performanceHistory.map(h => h.value);
             
             performanceChart.update();
@@ -5438,9 +5462,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             } catch (error) {
                 console.error('Error with folder:', error);
                 return null;
-            }
-        }
-                addActivity('⚠️ Failed to save decision reasoning', 'error');
             }
         }
 
