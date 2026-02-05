@@ -836,7 +836,6 @@
             <div class="stat-card">
                 <div class="stat-label">Total Portfolio Value</div>
                 <div class="stat-value" id="portfolioValue">$0.00</div>
-                <div class="stat-change" id="portfolioChange">+$0.00 (0.00%)</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Cash Available</div>
@@ -4519,19 +4518,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 console.log('Price data received:', priceData);
                 console.log('Total portfolio value:', totalValue);
                 
-                // CRITICAL FIX: Calculate actual trading performance
-                // Don't count deposits as performance!
-                const totalDeposited = portfolio.totalDeposits || portfolio.initialBalance;
-                const change = totalValue - totalDeposited;
-                const changePercent = (change / totalDeposited) * 100;
-                
-                console.log('Performance calculation:', {
-                    totalValue,
-                    totalDeposited,
-                    change,
-                    changePercent
-                });
-
             // Calculate actual cost basis (total invested) from transactions
             let totalInvested = 0;
             portfolio.transactions.forEach(transaction => {
@@ -4547,10 +4533,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('cashValue').textContent = '$' + portfolio.cash.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('investedValue').textContent = '$' + totalInvested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('positionsCount').textContent = Object.keys(portfolio.holdings).length;
-
-            const changeEl = document.getElementById('portfolioChange');
-            changeEl.textContent = `${change >= 0 ? '+' : ''}$${change.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${changePercent.toFixed(2)}%)`;
-            changeEl.className = 'stat-change ' + (change >= 0 ? 'positive' : 'negative');
 
             // Update holdings
             const holdingsList = document.getElementById('holdingsList');
