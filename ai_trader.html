@@ -3969,9 +3969,77 @@ CRITICAL BENEFITS:
 ${formatPerformanceInsights()}
 Current Portfolio:
 - Cash Available: $${portfolio.cash.toFixed(2)} ← THIS IS YOUR BUYING POWER
-- Holdings: ${JSON.stringify(portfolio.holdings, null, 2)}
+- Holdings: ${(() => {
+    // Build enriched holdings with avg cost, P&L, and hold duration
+    const enrichedHoldings = {};
+    Object.entries(portfolio.holdings).forEach(([symbol, shares]) => {
+        // Calculate average cost from buy transactions
+        const buys = (portfolio.transactions || []).filter(t => t.type === 'BUY' && t.symbol === symbol);
+        const sells = (portfolio.transactions || []).filter(t => t.type === 'SELL' && t.symbol === symbol);
+        
+        // Weighted average cost across all buys
+        let totalSharesBought = 0;
+        let totalCost = 0;
+        buys.forEach(t => {
+            totalSharesBought += t.shares;
+            totalCost += (t.price * t.shares);
+        });
+        // Subtract sold shares from the oldest buys (FIFO approximation for avg cost)
+        const avgCost = totalSharesBought > 0 ? (totalCost / totalSharesBought) : 0;
+        
+        // Current price and P&L
+        const currentPrice = filteredMarketData[symbol]?.price || enhancedMarketData[symbol]?.price || 0;
+        const unrealizedPL = currentPrice > 0 ? ((currentPrice - avgCost) / avgCost * 100) : 0;
+        
+        // Hold duration (from first buy that's still part of current position)
+        const firstBuy = buys.length > 0 ? buys[0] : null;
+        const lastBuy = buys.length > 0 ? buys[buys.length - 1] : null;
+        const holdDays = firstBuy ? Math.floor((Date.now() - new Date(firstBuy.timestamp).getTime()) / 86400000) : 0;
+        const holdHours = firstBuy ? Math.floor((Date.now() - new Date(firstBuy.timestamp).getTime()) / 3600000) : 0;
+        const holdDisplay = holdDays >= 1 ? holdDays + ' days' : holdHours + ' hours';
+        
+        // Last transaction info
+        const lastTx = [...buys, ...sells].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+        
+        enrichedHoldings[symbol] = {
+            shares: shares,
+            avgCostPerShare: '$' + avgCost.toFixed(2),
+            currentPrice: '$' + currentPrice.toFixed(2),
+            unrealizedPL: unrealizedPL.toFixed(1) + '%',
+            totalCostBasis: '$' + (avgCost * shares).toFixed(2),
+            currentValue: '$' + (currentPrice * shares).toFixed(2),
+            holdDuration: holdDisplay,
+            firstPurchase: firstBuy ? firstBuy.timestamp.split('T')[0] : 'unknown',
+            lastTransaction: lastTx ? lastTx.type + ' ' + lastTx.shares + ' shares @ $' + lastTx.price.toFixed(2) + ' on ' + lastTx.timestamp.split('T')[0] : 'unknown',
+            purchaseCount: buys.length,
+            WARNING: holdHours < 24 ? '⚠️ RECENTLY PURCHASED (< 24hrs ago) - Do NOT sell unless a genuinely NEGATIVE catalyst has emerged. Normal price fluctuations and catalyst being priced in are NOT valid sell reasons within 24 hours.' : null
+        };
+        
+        // Remove null WARNING field
+        if (!enrichedHoldings[symbol].WARNING) {
+            delete enrichedHoldings[symbol].WARNING;
+        }
+    });
+    return JSON.stringify(enrichedHoldings, null, 2);
+})()}
 - Total Portfolio Value: $${totalValue.toFixed(2)}
 - Strategy: CATALYST-FIRST AGGRESSIVE SWING TRADING
+
+RECENT TRANSACTIONS (last 10):
+${(() => {
+    const recentTx = (portfolio.transactions || []).slice(-10).reverse();
+    if (recentTx.length === 0) return 'No transactions yet.';
+    return recentTx.map(t => {
+        const date = new Date(t.timestamp).toLocaleString();
+        return '- ' + t.type + ' ' + t.shares + ' ' + t.symbol + ' @ $' + t.price.toFixed(2) + ' on ' + date + (t.conviction ? ' (conviction: ' + t.conviction + '/10)' : '');
+    }).join('\\n');
+})()}
+
+⚠️ CRITICAL SELL DISCIPLINE:
+- Check each holding's avgCostPerShare and unrealizedPL BEFORE recommending sells
+- Holdings purchased less than 24 hours ago should almost NEVER be sold (marked with WARNING)
+- When selling, reference the ACTUAL average cost, not just the most recent purchase price
+- If you bought in multiple lots, acknowledge the full cost basis
 
 ⚠️ BEFORE TRADING: Review existing holdings! Re-score their current conviction.
 If new opportunity has higher conviction than existing holdings, consider swap.
@@ -4688,23 +4756,73 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 try {
                     decision = JSON.parse(jsonString);
                 } catch (firstParseError) {
-                    // Retry with more aggressive cleanup
                     console.warn('First JSON parse failed, attempting aggressive cleanup...', firstParseError.message);
                     
-                    // Escape any unescaped quotes inside string values (common Claude issue)
-                    // Replace double-escaped newlines that might have been created
+                    // Fix double-escaped sequences that our newline replacement may have created
                     let cleaned = jsonString
-                        .replace(/\\\\n/g, '\\n')   // \\n → \n
-                        .replace(/\\\\t/g, '\\t')    // \\t → \t  
-                        .replace(/\\\\"/g, '\\"');   // \\" stays \"
+                        .replace(/\\\\n/g, '\\n')
+                        .replace(/\\\\t/g, '\\t')
+                        .replace(/\\\\"/g, '\\"');
                     
                     try {
                         decision = JSON.parse(cleaned);
                         console.log('✅ Aggressive cleanup succeeded');
                     } catch (secondParseError) {
-                        console.error('Failed to parse JSON even after cleanup.');
-                        console.error('First 1000 chars of cleaned JSON:', cleaned.substring(0, 1000));
-                        throw new Error('Failed to parse AI response as JSON. The AI may have returned malformed data. Try running the analysis again.');
+                        console.warn('Second parse failed, attempting regex extraction...', secondParseError.message);
+                        
+                        // FALLBACK: Extract fields manually using regex
+                        // This handles the common case where Claude breaks JSON structure
+                        // (e.g., mixing escaped/unescaped quotes in overall_reasoning)
+                        try {
+                            // Extract the decisions array - this is the critical part
+                            const decisionsMatch = aiResponse.match(/"decisions"\s*:\s*(\[[\s\S]*?\])\s*(?:,\s*"overall_reasoning"|,\s*"research_summary"|\s*\})/);
+                            
+                            if (!decisionsMatch) {
+                                throw new Error('Could not extract decisions array from response');
+                            }
+                            
+                            // Clean and parse just the decisions array
+                            let decisionsStr = decisionsMatch[1]
+                                .replace(/\r\n/g, '\\n')
+                                .replace(/\r/g, '\\n')
+                                .replace(/\n/g, '\\n')
+                                .replace(/\t/g, '\\t');
+                            
+                            const decisions = JSON.parse(decisionsStr);
+                            
+                            // Extract overall_reasoning as raw text (best effort)
+                            let overallReasoning = '';
+                            const reasoningMatch = aiResponse.match(/"overall_reasoning"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"research_summary"|"\s*\})/);
+                            if (reasoningMatch) {
+                                overallReasoning = reasoningMatch[1]
+                                    .replace(/\\n/g, '\n')
+                                    .replace(/\\"/g, '"');
+                            }
+                            
+                            // Extract research_summary as raw text (best effort)
+                            let researchSummary = '';
+                            const researchMatch = aiResponse.match(/"research_summary"\s*:\s*"([\s\S]*?)"\s*\}?\s*$/);
+                            if (researchMatch) {
+                                researchSummary = researchMatch[1]
+                                    .replace(/\\n/g, '\n')
+                                    .replace(/\\"/g, '"');
+                            }
+                            
+                            decision = {
+                                decisions: decisions,
+                                overall_reasoning: overallReasoning,
+                                research_summary: researchSummary
+                            };
+                            
+                            console.log('✅ Regex extraction succeeded - recovered', decisions.length, 'decisions');
+                            addActivity('⚠️ AI response had formatting issues but was recovered successfully.', 'warning');
+                            
+                        } catch (regexError) {
+                            console.error('All parse attempts failed.');
+                            console.error('Regex extraction error:', regexError.message);
+                            console.error('Raw AI response (first 2000 chars):', aiResponse.substring(0, 2000));
+                            throw new Error('Failed to parse AI response. The AI returned malformed data. Try running the analysis again.');
+                        }
                     }
                 }
                 
@@ -6892,7 +7010,17 @@ Examples of your vibe:
 Current Portfolio Status:
 - Total Value: $${totalValue.toFixed(2)}
 - Cash: $${portfolio.cash.toFixed(2)}
-- Holdings: ${JSON.stringify(portfolio.holdings)}
+- Holdings: ${(() => {
+    const summary = {};
+    Object.entries(portfolio.holdings).forEach(([sym, shares]) => {
+        const buys = (portfolio.transactions || []).filter(t => t.type === 'BUY' && t.symbol === sym);
+        let totalCost = 0, totalShares = 0;
+        buys.forEach(t => { totalShares += t.shares; totalCost += t.price * t.shares; });
+        const avgCost = totalShares > 0 ? totalCost / totalShares : 0;
+        summary[sym] = { shares, avgCost: '$' + avgCost.toFixed(2) };
+    });
+    return JSON.stringify(summary);
+})()}
 - Recent Transactions: ${JSON.stringify(recentTransactions)}
 
 User Question: ${message}
