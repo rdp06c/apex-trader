@@ -1705,31 +1705,113 @@
                 return `${dateStr} ${timeStr}`;
             });
             
-            // Dataset 1: Raw portfolio value (includes deposits)
+            // Dataset 1: Raw portfolio value
             const rawValues = portfolio.performanceHistory.map(h => h.value);
             performanceChart.data.datasets[0].data = rawValues;
             
-            // Dataset 2: Trading P&L line (portfolio value minus cumulative deposits)
-            // This shows true trading performance without deposit inflation
-            let cumulativeDeposits = portfolio.initialBalance || 0;
-            const adjustedValues = portfolio.performanceHistory.map((h, i) => {
+            // Dataset 2: Trading P&L line (strips out deposit inflation)
+            // Strategy: We know totalDeposits and initialBalance. 
+            // We need to figure out cumulative deposits at each history point.
+            // 
+            // For NEW data: history entries have a `deposit` field when funding was added.
+            // For LEGACY data: no deposit flags exist, so we detect deposits as 
+            // sudden value jumps that aren't explained by market movement.
+            //
+            // Simple reliable approach: build deposit timeline from ALL sources
+            
+            const initialBal = portfolio.initialBalance || 0;
+            const totalDeps = portfolio.totalDeposits || initialBal;
+            
+            // First, collect all known deposit events with timestamps
+            const depositEvents = [];
+            
+            // Check performance history for flagged deposits
+            portfolio.performanceHistory.forEach(h => {
                 if (h.deposit) {
-                    cumulativeDeposits += h.deposit;
+                    depositEvents.push({ timestamp: new Date(h.timestamp).getTime(), amount: h.deposit });
                 }
-                // Show the gain/loss relative to initial balance
-                // Formula: initialBalance + (currentValue - cumulativeDeposits)
-                const tradingPL = (h.value || 0) - cumulativeDeposits;
-                return (portfolio.initialBalance || 0) + tradingPL;
             });
+            
+            // If we have NO flagged deposits but totalDeposits > initialBalance,
+            // we have legacy data. Detect deposits as value jumps > reasonable daily gain
+            if (depositEvents.length === 0 && totalDeps > initialBal) {
+                const extraDeposits = totalDeps - initialBal;
+                
+                // Look for big jumps in the history that are likely deposits
+                for (let i = 1; i < portfolio.performanceHistory.length; i++) {
+                    const prev = portfolio.performanceHistory[i - 1].value;
+                    const curr = portfolio.performanceHistory[i].value;
+                    if (prev && curr) {
+                        const jump = curr - prev;
+                        const jumpPct = jump / prev * 100;
+                        // A jump > 15% in one interval is likely a deposit, not trading
+                        if (jump > 50 && jumpPct > 15) {
+                            depositEvents.push({ 
+                                timestamp: new Date(portfolio.performanceHistory[i].timestamp).getTime(), 
+                                amount: jump,
+                                detected: true 
+                            });
+                        }
+                    }
+                }
+                
+                // If detection didn't find enough, spread remaining evenly
+                const detectedTotal = depositEvents.reduce((s, d) => s + d.amount, 0);
+                if (detectedTotal < extraDeposits * 0.5 && portfolio.performanceHistory.length > 2) {
+                    // Can't reliably detect — just use linear interpolation
+                    depositEvents.length = 0; // clear unreliable detections
+                }
+            }
+            
+            // Build cumulative deposits at each history point
+            const sortedDeposits = depositEvents.sort((a, b) => a.timestamp - b.timestamp);
+            
+            const adjustedValues = portfolio.performanceHistory.map((h, i) => {
+                const histTime = new Date(h.timestamp).getTime();
+                
+                // Sum all deposits that happened at or before this history point
+                let cumDeposits = initialBal;
+                sortedDeposits.forEach(d => {
+                    if (d.timestamp <= histTime) {
+                        cumDeposits += d.amount;
+                    }
+                });
+                
+                // Trading P&L = current value - cumulative deposits
+                // Display as: initialBalance + tradingPL
+                const tradingPL = (h.value || 0) - cumDeposits;
+                return initialBal + tradingPL;
+            });
+            
+            // If we couldn't detect individual deposits, use total deposits for ALL points
+            // This gives a flat offset — not perfect but honest
+            if (sortedDeposits.length === 0 && totalDeps > initialBal) {
+                const extraDeps = totalDeps - initialBal;
+                for (let i = 0; i < adjustedValues.length; i++) {
+                    // For the early points (before deposits), don't subtract
+                    // For later points, subtract the extra deposits
+                    // Since we don't know when exactly, use a conservative approach:
+                    // The LAST value should be accurate (subtract all extra deposits)
+                    // Earlier values are approximated
+                    adjustedValues[i] = rawValues[i] - extraDeps;
+                    // Don't let it go below 0
+                    if (adjustedValues[i] < 0) adjustedValues[i] = rawValues[i];
+                }
+            }
+            
             performanceChart.data.datasets[1].data = adjustedValues;
             
-            // Dataset 3: Deposit markers (yellow triangles at deposit points)
-            const depositMarkers = portfolio.performanceHistory.map(h => 
-                h.deposit ? h.value : null
-            );
-            const depositPointRadii = portfolio.performanceHistory.map(h => 
-                h.deposit ? 8 : 0
-            );
+            // Dataset 3: Deposit markers (yellow triangles)
+            const depositMarkers = portfolio.performanceHistory.map((h, i) => {
+                // Check for flagged deposits
+                if (h.deposit) return h.value;
+                // Check for detected deposits
+                const histTime = new Date(h.timestamp).getTime();
+                const detected = sortedDeposits.find(d => d.detected && Math.abs(d.timestamp - histTime) < 60000);
+                if (detected) return h.value;
+                return null;
+            });
+            const depositPointRadii = depositMarkers.map(v => v !== null ? 8 : 0);
             performanceChart.data.datasets[2].data = depositMarkers;
             performanceChart.data.datasets[2].pointRadius = depositPointRadii;
             
