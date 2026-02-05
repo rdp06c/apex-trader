@@ -1538,15 +1538,40 @@
                 type: 'line',
                 data: {
                     labels: [],
-                    datasets: [{
-                        label: 'Portfolio Value',
-                        data: [],
-                        borderColor: '#6366f1',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        fill: true
-                    }]
+                    datasets: [
+                        {
+                            label: 'Portfolio Value',
+                            data: [],
+                            borderColor: '#6366f1',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'Trading P&L (excl. deposits)',
+                            data: [],
+                            borderColor: '#34d399',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            borderDash: [6, 3],
+                            tension: 0.4,
+                            fill: false,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Deposits',
+                            data: [],
+                            borderColor: 'transparent',
+                            backgroundColor: '#fbbf24',
+                            pointRadius: [],
+                            pointStyle: 'triangle',
+                            pointBackgroundColor: '#fbbf24',
+                            pointBorderColor: '#fbbf24',
+                            showLine: false,
+                            order: 0
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
@@ -1570,7 +1595,16 @@
                             titleColor: '#f1f5f9',
                             bodyColor: '#e2e8f0',
                             borderColor: 'rgba(99, 102, 241, 0.5)',
-                            borderWidth: 1
+                            borderWidth: 1,
+                            callbacks: {
+                                afterBody: function(tooltipItems) {
+                                    const idx = tooltipItems[0]?.dataIndex;
+                                    if (idx !== undefined && portfolio.performanceHistory[idx]?.deposit) {
+                                        return '💰 Deposit: +$' + portfolio.performanceHistory[idx].deposit.toLocaleString();
+                                    }
+                                    return '';
+                                }
+                            }
                         }
                     },
                     scales: {
@@ -1646,25 +1680,22 @@
         async function updatePerformanceChart() {
             if (!performanceChart || portfolio.performanceHistory.length === 0) return;
             
-            // Update portfolio data with better date/time formatting
+            // Update labels with date/time formatting
             performanceChart.data.labels = portfolio.performanceHistory.map(h => {
                 const date = new Date(h.timestamp);
                 const today = new Date();
                 const yesterday = new Date(today);
                 yesterday.setDate(yesterday.getDate() - 1);
                 
-                // Format date part
                 let dateStr;
                 if (date.toDateString() === today.toDateString()) {
                     dateStr = 'Today';
                 } else if (date.toDateString() === yesterday.toDateString()) {
                     dateStr = 'Yesterday';
                 } else {
-                    // Show month/day for other dates
                     dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 }
                 
-                // Format time part (without seconds)
                 const timeStr = date.toLocaleTimeString('en-US', { 
                     hour: 'numeric', 
                     minute: '2-digit',
@@ -1674,7 +1705,33 @@
                 return `${dateStr} ${timeStr}`;
             });
             
-            performanceChart.data.datasets[0].data = portfolio.performanceHistory.map(h => h.value);
+            // Dataset 1: Raw portfolio value (includes deposits)
+            const rawValues = portfolio.performanceHistory.map(h => h.value);
+            performanceChart.data.datasets[0].data = rawValues;
+            
+            // Dataset 2: Trading P&L line (portfolio value minus cumulative deposits)
+            // This shows true trading performance without deposit inflation
+            let cumulativeDeposits = portfolio.initialBalance || 0;
+            const adjustedValues = portfolio.performanceHistory.map((h, i) => {
+                if (h.deposit) {
+                    cumulativeDeposits += h.deposit;
+                }
+                // Show the gain/loss relative to initial balance
+                // Formula: initialBalance + (currentValue - cumulativeDeposits)
+                const tradingPL = (h.value || 0) - cumulativeDeposits;
+                return (portfolio.initialBalance || 0) + tradingPL;
+            });
+            performanceChart.data.datasets[1].data = adjustedValues;
+            
+            // Dataset 3: Deposit markers (yellow triangles at deposit points)
+            const depositMarkers = portfolio.performanceHistory.map(h => 
+                h.deposit ? h.value : null
+            );
+            const depositPointRadii = portfolio.performanceHistory.map(h => 
+                h.deposit ? 8 : 0
+            );
+            performanceChart.data.datasets[2].data = depositMarkers;
+            performanceChart.data.datasets[2].pointRadius = depositPointRadii;
             
             performanceChart.update();
         }
@@ -1702,6 +1759,14 @@
             const funding = parseFloat(document.getElementById('weeklyFunding').value);
             portfolio.cash += funding;
             portfolio.totalDeposits += funding; // Track this deposit
+            
+            // Record the deposit in performance history so the chart can annotate it
+            portfolio.performanceHistory.push({
+                timestamp: new Date().toISOString(),
+                value: null, // Will be filled by next updateUI
+                deposit: funding
+            });
+            
             addActivity('Weekly funding added: $' + funding.toLocaleString(), 'funding');
             updateUI();
             savePortfolio();
@@ -2869,6 +2934,151 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 addActivity('❌ DRY RUN ERROR: ' + error.message, 'error');
                 alert('Dry run failed. Check console for details.');
             }
+        }
+
+        // Robust JSON extraction for Claude responses that have broken escaping
+        // Uses string-aware bracket counting to extract the decisions array reliably
+        function extractDecisionFromRawResponse(rawResponse) {
+            // Step 1: Find the decisions array using string-aware bracket counting
+            const decisionsKeyIndex = rawResponse.indexOf('"decisions"');
+            if (decisionsKeyIndex === -1) throw new Error('No "decisions" key found in response');
+            
+            const arrayStart = rawResponse.indexOf('[', decisionsKeyIndex);
+            if (arrayStart === -1) throw new Error('No decisions array found');
+            
+            // Count brackets, respecting strings
+            let bracketCount = 0;
+            let inStr = false;
+            let escNext = false;
+            let arrayEnd = -1;
+            
+            for (let i = arrayStart; i < rawResponse.length; i++) {
+                const ch = rawResponse[i];
+                if (escNext) { escNext = false; continue; }
+                if (ch === '\\') { escNext = true; continue; }
+                if (ch === '"') { inStr = !inStr; continue; }
+                if (!inStr) {
+                    if (ch === '[') bracketCount++;
+                    if (ch === ']') bracketCount--;
+                    if (bracketCount === 0) { arrayEnd = i; break; }
+                }
+            }
+            
+            if (arrayEnd === -1) throw new Error('Could not find end of decisions array');
+            
+            // Extract the decisions array string
+            let decisionsStr = rawResponse.substring(arrayStart, arrayEnd + 1);
+            
+            // Fix trailing commas
+            decisionsStr = decisionsStr.replace(/,(\s*[}\]])/g, '$1');
+            
+            // Parse the decisions array - try direct first (structural newlines are fine)
+            let decisions;
+            try {
+                decisions = JSON.parse(decisionsStr);
+            } catch (e) {
+                // If direct parse fails, fix newlines inside string values only
+                // Walk through and replace newlines that are inside quotes
+                let fixed = '';
+                let inString = false;
+                let escape = false;
+                for (let i = 0; i < decisionsStr.length; i++) {
+                    const ch = decisionsStr[i];
+                    if (escape) { fixed += ch; escape = false; continue; }
+                    if (ch === '\\') { fixed += ch; escape = true; continue; }
+                    if (ch === '"') { inString = !inString; fixed += ch; continue; }
+                    if (inString && ch === '\n') { fixed += '\\n'; continue; }
+                    if (inString && ch === '\r') { continue; } // skip CR
+                    if (inString && ch === '\t') { fixed += '\\t'; continue; }
+                    fixed += ch;
+                }
+                
+                try {
+                    decisions = JSON.parse(fixed);
+                } catch (e2) {
+                    // Last resort: strip all control chars inside strings
+                    fixed = fixed.replace(/[\x00-\x1F\x7F]/g, ' ');
+                    decisions = JSON.parse(fixed);
+                }
+            }
+            
+            if (!Array.isArray(decisions) || decisions.length === 0) {
+                throw new Error('Decisions array is empty or invalid');
+            }
+            
+            // Step 2: Extract overall_reasoning as raw text (best effort, non-critical)
+            let overallReasoning = '';
+            try {
+                const orKey = '"overall_reasoning"';
+                const reasoningKeyIdx = rawResponse.indexOf(orKey, arrayEnd);
+                if (reasoningKeyIdx !== -1) {
+                    // Find the colon, then the opening quote
+                    const colonIdx = rawResponse.indexOf(':', reasoningKeyIdx + orKey.length);
+                    if (colonIdx !== -1) {
+                        const openQuote = rawResponse.indexOf('"', colonIdx + 1);
+                        if (openQuote !== -1) {
+                            // Scan for closing quote (handling escapes)
+                            let esc = false;
+                            let closeQuote = -1;
+                            for (let i = openQuote + 1; i < rawResponse.length; i++) {
+                                if (esc) { esc = false; continue; }
+                                if (rawResponse[i] === '\\') { esc = true; continue; }
+                                if (rawResponse[i] === '"') { closeQuote = i; break; }
+                            }
+                            if (closeQuote !== -1) {
+                                overallReasoning = rawResponse.substring(openQuote + 1, closeQuote)
+                                    .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t');
+                            } else {
+                                // No proper closing quote - grab everything until we see research_summary or end
+                                const remainder = rawResponse.substring(openQuote + 1);
+                                const cutoff = remainder.search(/"research_summary"|$/);
+                                overallReasoning = remainder.substring(0, cutoff)
+                                    .replace(/\\n/g, '\n').replace(/\\"/g, '"')
+                                    .replace(/[",\s]*$/, ''); // trim trailing junk
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not extract overall_reasoning (non-critical):', e.message);
+            }
+            
+            // Step 3: Extract research_summary similarly (best effort)
+            let researchSummary = '';
+            try {
+                const rsKey = '"research_summary"';
+                const rsKeyIdx = rawResponse.indexOf(rsKey, arrayEnd);
+                if (rsKeyIdx !== -1) {
+                    const colonIdx = rawResponse.indexOf(':', rsKeyIdx + rsKey.length);
+                    if (colonIdx !== -1) {
+                        const openQuote = rawResponse.indexOf('"', colonIdx + 1);
+                        if (openQuote !== -1) {
+                            // Find closing quote or just grab until end
+                            let esc = false;
+                            let closeQuote = -1;
+                            for (let i = openQuote + 1; i < rawResponse.length; i++) {
+                                if (esc) { esc = false; continue; }
+                                if (rawResponse[i] === '\\') { esc = true; continue; }
+                                if (rawResponse[i] === '"') { closeQuote = i; break; }
+                            }
+                            if (closeQuote !== -1) {
+                                researchSummary = rawResponse.substring(openQuote + 1, closeQuote)
+                                    .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t');
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not extract research_summary (non-critical):', e.message);
+            }
+            
+            console.log(`📋 Extracted ${decisions.length} decisions, reasoning: ${overallReasoning.length} chars, research: ${researchSummary.length} chars`);
+            
+            return {
+                decisions: decisions,
+                overall_reasoning: overallReasoning,
+                research_summary: researchSummary
+            };
         }
 
         async function runAIAnalysis() {
@@ -4041,6 +4251,13 @@ ${(() => {
 - When selling, reference the ACTUAL average cost, not just the most recent purchase price
 - If you bought in multiple lots, acknowledge the full cost basis
 
+⚠️ ANTI-WHIPSAW RULES:
+- Review RECENT TRANSACTIONS above. Do NOT contradict decisions you made in the last 24 hours.
+- If you just recommended BUY on a stock, do NOT recommend SELL on the next run unless a genuinely NEW NEGATIVE catalyst has emerged (not just "catalyst priced in" — that takes days/weeks, not hours).
+- If you just recommended HOLD, maintain that HOLD unless material new information appeared.
+- "The stock went up too fast" is NOT a sell reason within 24 hours of buying. That's the catalyst WORKING.
+- Consistency builds trust. Flip-flopping destroys portfolios through transaction costs and missed moves.
+
 ⚠️ BEFORE TRADING: Review existing holdings! Re-score their current conviction.
 If new opportunity has higher conviction than existing holdings, consider swap.
 
@@ -4753,76 +4970,27 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 console.log('Extracted JSON (first 500 chars):', jsonString.substring(0, 500) + '...');
                 
                 let decision;
+                
+                // Strategy 1: Direct JSON.parse (works when Claude outputs clean JSON)
                 try {
                     decision = JSON.parse(jsonString);
-                } catch (firstParseError) {
-                    console.warn('First JSON parse failed, attempting aggressive cleanup...', firstParseError.message);
+                    console.log('✅ Direct JSON parse succeeded');
+                } catch (parseError) {
+                    console.warn('Direct JSON parse failed:', parseError.message);
+                    console.warn('Falling back to structural extraction from raw response...');
                     
-                    // Fix double-escaped sequences that our newline replacement may have created
-                    let cleaned = jsonString
-                        .replace(/\\\\n/g, '\\n')
-                        .replace(/\\\\t/g, '\\t')
-                        .replace(/\\\\"/g, '\\"');
-                    
+                    // Strategy 2: Structural extraction from the raw AI response
+                    // This handles Claude's most common failure: broken escaping in 
+                    // overall_reasoning/research_summary while decisions array is valid
                     try {
-                        decision = JSON.parse(cleaned);
-                        console.log('✅ Aggressive cleanup succeeded');
-                    } catch (secondParseError) {
-                        console.warn('Second parse failed, attempting regex extraction...', secondParseError.message);
-                        
-                        // FALLBACK: Extract fields manually using regex
-                        // This handles the common case where Claude breaks JSON structure
-                        // (e.g., mixing escaped/unescaped quotes in overall_reasoning)
-                        try {
-                            // Extract the decisions array - this is the critical part
-                            const decisionsMatch = aiResponse.match(/"decisions"\s*:\s*(\[[\s\S]*?\])\s*(?:,\s*"overall_reasoning"|,\s*"research_summary"|\s*\})/);
-                            
-                            if (!decisionsMatch) {
-                                throw new Error('Could not extract decisions array from response');
-                            }
-                            
-                            // Clean and parse just the decisions array
-                            let decisionsStr = decisionsMatch[1]
-                                .replace(/\r\n/g, '\\n')
-                                .replace(/\r/g, '\\n')
-                                .replace(/\n/g, '\\n')
-                                .replace(/\t/g, '\\t');
-                            
-                            const decisions = JSON.parse(decisionsStr);
-                            
-                            // Extract overall_reasoning as raw text (best effort)
-                            let overallReasoning = '';
-                            const reasoningMatch = aiResponse.match(/"overall_reasoning"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"research_summary"|"\s*\})/);
-                            if (reasoningMatch) {
-                                overallReasoning = reasoningMatch[1]
-                                    .replace(/\\n/g, '\n')
-                                    .replace(/\\"/g, '"');
-                            }
-                            
-                            // Extract research_summary as raw text (best effort)
-                            let researchSummary = '';
-                            const researchMatch = aiResponse.match(/"research_summary"\s*:\s*"([\s\S]*?)"\s*\}?\s*$/);
-                            if (researchMatch) {
-                                researchSummary = researchMatch[1]
-                                    .replace(/\\n/g, '\n')
-                                    .replace(/\\"/g, '"');
-                            }
-                            
-                            decision = {
-                                decisions: decisions,
-                                overall_reasoning: overallReasoning,
-                                research_summary: researchSummary
-                            };
-                            
-                            console.log('✅ Regex extraction succeeded - recovered', decisions.length, 'decisions');
-                            addActivity('⚠️ AI response had formatting issues but was recovered successfully.', 'warning');
-                            
-                        } catch (regexError) {
-                            console.error('All parse attempts failed.');
-                            console.error('Regex extraction error:', regexError.message);
-                            console.error('Raw AI response (first 2000 chars):', aiResponse.substring(0, 2000));
-                            throw new Error('Failed to parse AI response. The AI returned malformed data. Try running the analysis again.');
-                        }
+                        decision = extractDecisionFromRawResponse(aiResponse);
+                        console.log('✅ Structural extraction succeeded');
+                        addActivity('⚠️ AI response had formatting issues but was recovered successfully.', 'warning');
+                    } catch (extractError) {
+                        console.error('All parse strategies failed.');
+                        console.error('Extract error:', extractError.message);
+                        console.error('Raw response (first 2000 chars):', aiResponse.substring(0, 2000));
+                        throw new Error('Failed to parse AI response. Try running the analysis again.');
                     }
                 }
                 
@@ -5336,10 +5504,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 console.log('Price data received:', priceData);
                 console.log('Total portfolio value:', totalValue);
                 
-            // Calculate DAILY PERFORMANCE from current holdings using API data
+            // Calculate DAILY PERFORMANCE from current holdings AND today's realized trades
             let dailyGain = 0;
             let totalHoldingsValue = 0;
             
+            // Part 1: Unrealized daily P&L from current holdings (using today's price change)
             for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
                 if (priceData[symbol]) {
                     const stockPrice = priceData[symbol].price;
@@ -5352,6 +5521,44 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     totalHoldingsValue += currentValue;
                 }
             }
+            
+            // Part 2: Realized daily P&L from stocks SOLD today
+            // Without this, selling a loser makes the daily performance look artificially good
+            const today = new Date().toISOString().split('T')[0];
+            const todaysSells = (portfolio.transactions || []).filter(t => 
+                t.type === 'SELL' && t.timestamp && t.timestamp.startsWith(today)
+            );
+            
+            todaysSells.forEach(sell => {
+                // Find the corresponding buy(s) to calculate what we lost/gained today
+                // The sell happened today, so the daily impact is:
+                // (sell price - today's opening price) × shares sold
+                // We can approximate today's opening price from the sell price and the stock's daily change
+                if (priceData[sell.symbol]) {
+                    const stockChangePercent = priceData[sell.symbol].changePercent || 0;
+                    const openingPrice = sell.price / (1 + (stockChangePercent / 100));
+                    const dailyImpact = (sell.price - openingPrice) * sell.shares;
+                    dailyGain += dailyImpact;
+                    totalHoldingsValue += sell.price * sell.shares; // Include in the base for % calc
+                } else {
+                    // No current price data — use buy history to estimate realized P&L
+                    const buys = (portfolio.transactions || []).filter(t => 
+                        t.type === 'BUY' && t.symbol === sell.symbol
+                    );
+                    if (buys.length > 0) {
+                        const avgBuyPrice = buys.reduce((s, b) => s + b.price * b.shares, 0) / buys.reduce((s, b) => s + b.shares, 0);
+                        // If no price data, assume the daily P&L is sell price vs avg cost
+                        // This isn't perfect but better than ignoring the loss entirely
+                        const realizedPL = (sell.price - avgBuyPrice) * sell.shares;
+                        dailyGain += realizedPL;
+                        totalHoldingsValue += sell.price * sell.shares;
+                    }
+                }
+            });
+            
+            // Also account for stocks bought and still held today (their buy cost reduces today's P&L 
+            // if the price moved since purchase — but this is already captured by Part 1 since 
+            // changePercent is the full day's move from open, not from our buy point)
             
             const dailyGainPercent = totalHoldingsValue > 0 ? (dailyGain / (totalHoldingsValue - dailyGain)) * 100 : 0;
             
@@ -5603,7 +5810,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 updateUI();
                 if (performanceChart) {
                     performanceChart.data.labels = [];
-                    performanceChart.data.datasets[0].data = [];
+                    performanceChart.data.datasets.forEach(ds => { ds.data = []; });
                     performanceChart.update();
                 }
             }
