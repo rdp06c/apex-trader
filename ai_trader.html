@@ -5823,6 +5823,44 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     portfolio = JSON.parse(saved);
                     console.log('Portfolio loaded from localStorage:', portfolio);
                     console.log(`Cash: $${portfolio.cash}, Holdings: ${Object.keys(portfolio.holdings).length}, Transactions: ${portfolio.transactions.length}`);
+                    
+                    // MIGRATION: Reconstruct totalDeposits if missing or zero
+                    // For portfolios created before totalDeposits tracking was added
+                    if (!portfolio.totalDeposits && portfolio.initialBalance) {
+                        // Start with initial balance
+                        let reconstructed = portfolio.initialBalance;
+                        
+                        // Count all BUY transaction costs and SELL proceeds to figure out
+                        // how much cash was injected beyond what trading could produce.
+                        // totalDeposits = cash + value_of_holdings + realized_losses - realized_gains
+                        // Simpler: look at all cash that entered the system
+                        // Cash enters via: initial balance + weekly funding
+                        // Cash exits via: it doesn't leave (buys convert to holdings, sells convert back)
+                        // So: totalDeposits = current_cash + total_spent_on_buys - total_received_from_sells
+                        
+                        let totalBuyCost = 0;
+                        let totalSellProceeds = 0;
+                        (portfolio.transactions || []).forEach(t => {
+                            if (t.type === 'BUY') totalBuyCost += (t.cost || t.price * t.shares);
+                            if (t.type === 'SELL') totalSellProceeds += (t.proceeds || t.price * t.shares);
+                        });
+                        
+                        // totalDeposits = cash_now + totalBuyCost - totalSellProceeds
+                        // Because: deposits = cash + money_spent_buying - money_received_selling
+                        reconstructed = portfolio.cash + totalBuyCost - totalSellProceeds;
+                        
+                        // Sanity check: should be >= initialBalance
+                        if (reconstructed < portfolio.initialBalance) {
+                            reconstructed = portfolio.initialBalance;
+                        }
+                        
+                        portfolio.totalDeposits = Math.round(reconstructed * 100) / 100;
+                        console.log(`📊 MIGRATION: Reconstructed totalDeposits = $${portfolio.totalDeposits} (initial: $${portfolio.initialBalance}, buys: $${totalBuyCost.toFixed(2)}, sells: $${totalSellProceeds.toFixed(2)}, cash: $${portfolio.cash.toFixed(2)})`);
+                        
+                        // Save the migrated portfolio
+                        savePortfolio();
+                    }
+                    
                     updateUI();
                     addActivity(`Portfolio loaded from localStorage - $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions`, 'init');
                 } catch (error) {
