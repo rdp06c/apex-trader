@@ -1186,6 +1186,7 @@
         let portfolioFileId = null;
         let accessToken = null;
         let tokenClient = null;
+        let preventAutoSave = false; // Prevent auto-save to Drive during recovery
 
         // Chart instances
         let performanceChart = null;
@@ -1692,10 +1693,11 @@
         function clearLocalStorage() {
             if (confirm('⚠️ This will clear ALL local data including your portfolio!\n\nMake sure you have a backup in Google Drive first.\n\nContinue?')) {
                 localStorage.clear();
+                preventAutoSave = true; // Prevent auto-save during recovery
                 const status = document.getElementById('recoveryStatus');
-                status.textContent = '✅ Local storage cleared! Now click "Force Download from Drive"';
+                status.textContent = '✅ Local storage cleared! Recovery mode active. Now sign in and click "Force Download"';
                 status.style.color = '#34d399';
-                addActivity('🗑️ Local storage cleared - ready to restore from Drive', 'warning');
+                addActivity('🗑️ Local storage cleared - recovery mode active', 'warning');
             }
         }
         
@@ -1712,9 +1714,11 @@
                 status.textContent = '⏳ Downloading from Google Drive...';
                 status.style.color = '#3b82f6';
                 
+                preventAutoSave = true; // Make sure auto-save is still disabled
                 await loadPortfolioFromDrive();
+                preventAutoSave = false; // Re-enable auto-save after successful restore
                 
-                status.textContent = '✅ Portfolio restored from Google Drive!';
+                status.textContent = '✅ Portfolio restored! Auto-save re-enabled.';
                 status.style.color = '#34d399';
                 
                 // Refresh the page after 2 seconds to ensure everything loads
@@ -1723,6 +1727,7 @@
                 }, 2000);
                 
             } catch (error) {
+                preventAutoSave = false; // Re-enable even on error
                 status.textContent = '❌ Download failed: ' + error.message;
                 status.style.color = '#ef4444';
                 console.error('Force download error:', error);
@@ -5111,10 +5116,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
             console.log('Portfolio saved to localStorage');
             
-            // Also save to Google Drive if authorized
-            if (gdriveAuthorized) {
+            // Also save to Google Drive if authorized (and not in recovery mode)
+            if (gdriveAuthorized && !preventAutoSave) {
                 console.log('Google Drive authorized - saving to cloud...');
                 savePortfolioToDrive();
+            } else if (preventAutoSave) {
+                console.log('Auto-save to Drive prevented (recovery mode)');
             } else {
                 console.warn('Google Drive not authorized - portfolio NOT saved to cloud');
             }
