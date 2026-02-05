@@ -4550,6 +4550,33 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 console.log('Price data received:', priceData);
                 console.log('Total portfolio value:', totalValue);
                 
+            // Calculate DAILY PERFORMANCE from current holdings using API data
+            let dailyGain = 0;
+            let totalHoldingsValue = 0;
+            
+            for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
+                if (priceData[symbol]) {
+                    const stockPrice = priceData[symbol].price;
+                    const stockChangePercent = priceData[symbol].changePercent; // Today's % change from API
+                    const currentValue = stockPrice * shares;
+                    const openingValue = currentValue / (1 + (stockChangePercent / 100)); // Back-calculate opening value
+                    const stockDailyGain = currentValue - openingValue;
+                    
+                    dailyGain += stockDailyGain;
+                    totalHoldingsValue += currentValue;
+                }
+            }
+            
+            const dailyGainPercent = totalHoldingsValue > 0 ? (dailyGain / (totalHoldingsValue - dailyGain)) * 100 : 0;
+            
+            document.getElementById('dailyPerformance').textContent = dailyGainPercent.toFixed(2) + '%';
+            document.getElementById('dailyPerformance').className = 'index-price';
+            document.getElementById('dailyPerformance').style.color = dailyGainPercent >= 0 ? '#34d399' : '#f87171';
+            
+            document.getElementById('dailyPerformanceDollar').textContent = 
+                (dailyGain >= 0 ? '+' : '') + '$' + dailyGain.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('dailyPerformanceDollar').className = 'index-change ' + (dailyGain >= 0 ? 'positive' : 'negative');
+                
             // Calculate actual cost basis (total invested) from transactions
             let totalInvested = 0;
             portfolio.transactions.forEach(transaction => {
@@ -5514,37 +5541,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('totalReturnDollar').textContent = 
                 (returnDollar >= 0 ? '+' : '') + '$' + returnDollar.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('totalReturnDollar').className = 'index-change ' + (returnDollar >= 0 ? 'positive' : 'negative');
-            
-            // DAILY PERFORMANCE - Calculate today's performance
-            const today = new Date().toDateString();
-            let dailyGain = 0;
-            let dailyGainPercent = 0;
-            
-            // Get opening value (earliest snapshot today or last snapshot yesterday)
-            const todaySnapshots = performanceHistory.filter(h => 
-                new Date(h.timestamp).toDateString() === today
-            );
-            
-            if (todaySnapshots.length > 0) {
-                // We have snapshots from today
-                const openingValue = todaySnapshots[0].value;
-                const currentValue = todaySnapshots[todaySnapshots.length - 1].value;
-                dailyGain = currentValue - openingValue;
-                dailyGainPercent = openingValue > 0 ? (dailyGain / openingValue) * 100 : 0;
-            } else if (performanceHistory.length > 0) {
-                // No snapshots today, compare to last snapshot from previous day
-                const lastSnapshot = performanceHistory[performanceHistory.length - 1];
-                dailyGain = totalValue - lastSnapshot.value;
-                dailyGainPercent = lastSnapshot.value > 0 ? (dailyGain / lastSnapshot.value) * 100 : 0;
-            }
-            
-            document.getElementById('dailyPerformance').textContent = dailyGainPercent.toFixed(2) + '%';
-            document.getElementById('dailyPerformance').className = 'index-price';
-            document.getElementById('dailyPerformance').style.color = dailyGainPercent >= 0 ? '#34d399' : '#f87171';
-            
-            document.getElementById('dailyPerformanceDollar').textContent = 
-                (dailyGain >= 0 ? '+' : '') + '$' + dailyGain.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            document.getElementById('dailyPerformanceDollar').className = 'index-change ' + (dailyGain >= 0 ? 'positive' : 'negative');
             
             // Win Rate (based on closed trades)
             const closedTrades = portfolio.closedTrades || [];
