@@ -1068,6 +1068,23 @@
                 </div>
                 <button onclick="initializeAccount()">Initialize Account</button>
                 <button onclick="addWeeklyFunding()" class="secondary">Add Weekly Funding</button>
+                
+                <!-- Force Download from Google Drive -->
+                <div style="margin-top: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px;">
+                    <div style="font-size: 14px; color: #cbd5e1; margin-bottom: 10px; font-weight: 600;">
+                        🔄 Portfolio Recovery
+                    </div>
+                    <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">
+                        If you need to restore your portfolio from Google Drive, first clear local storage, then click download.
+                    </div>
+                    <button onclick="clearLocalStorage()" style="padding: 8px 16px; font-size: 13px; background: #ef4444; color: white; font-weight: 600; margin-right: 10px;">
+                        🗑️ Clear Local Storage
+                    </button>
+                    <button onclick="forceDownloadPortfolio()" style="padding: 8px 16px; font-size: 13px; background: #3b82f6; color: white; font-weight: 600;">
+                        📥 Force Download from Drive
+                    </button>
+                    <div id="recoveryStatus" style="font-size: 11px; margin-top: 8px; color: #64748b;"></div>
+                </div>
                 <button onclick="runAIAnalysis()">🤖 Run AI Analysis</button>
                 <button onclick="testDataFetch()" class="secondary" style="background: #4a5568;">🧪 Dry Run (Test Only)</button>
                 <button onclick="refreshPrices()" class="secondary" style="background: #2563eb;">🔄 Refresh Prices</button>
@@ -1669,6 +1686,47 @@
             addActivity('Weekly funding added: $' + funding.toLocaleString(), 'funding');
             updateUI();
             savePortfolio();
+        }
+        
+        // Portfolio Recovery Functions
+        function clearLocalStorage() {
+            if (confirm('⚠️ This will clear ALL local data including your portfolio!\n\nMake sure you have a backup in Google Drive first.\n\nContinue?')) {
+                localStorage.clear();
+                const status = document.getElementById('recoveryStatus');
+                status.textContent = '✅ Local storage cleared! Now click "Force Download from Drive"';
+                status.style.color = '#34d399';
+                addActivity('🗑️ Local storage cleared - ready to restore from Drive', 'warning');
+            }
+        }
+        
+        async function forceDownloadPortfolio() {
+            const status = document.getElementById('recoveryStatus');
+            
+            if (!accessToken) {
+                status.textContent = '❌ Not connected to Google Drive. Click cloud icon to sign in first.';
+                status.style.color = '#ef4444';
+                return;
+            }
+            
+            try {
+                status.textContent = '⏳ Downloading from Google Drive...';
+                status.style.color = '#3b82f6';
+                
+                await loadPortfolioFromDrive();
+                
+                status.textContent = '✅ Portfolio restored from Google Drive!';
+                status.style.color = '#34d399';
+                
+                // Refresh the page after 2 seconds to ensure everything loads
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+                
+            } catch (error) {
+                status.textContent = '❌ Download failed: ' + error.message;
+                status.style.color = '#ef4444';
+                console.error('Force download error:', error);
+            }
         }
 
         // Reset API call counter daily
