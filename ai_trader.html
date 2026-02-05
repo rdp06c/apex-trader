@@ -1604,6 +1604,10 @@
                                     }
                                     return '';
                                 }
+                            },
+                            filter: function(tooltipItem) {
+                                // Hide the "Deposits" marker dataset from tooltip lines
+                                return tooltipItem.datasetIndex !== 2;
                             }
                         }
                     },
