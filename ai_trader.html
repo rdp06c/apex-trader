@@ -4888,20 +4888,56 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const buyTransactions = portfolio.transactions.filter(t => t.type === 'BUY' && t.symbol === symbol);
                     let avgPurchasePrice = 0;
                     let earliestDate = null;
+                    let conviction = null;
+                    let reasoning = '';
+                    let daysHeld = 0;
                     
                     if (buyTransactions.length > 0) {
                         const totalCost = buyTransactions.reduce((sum, t) => sum + t.cost, 0);
                         const totalShares = buyTransactions.reduce((sum, t) => sum + t.shares, 0);
                         avgPurchasePrice = totalCost / totalShares;
                         earliestDate = new Date(buyTransactions[0].timestamp);
+                        
+                        // Get conviction and reasoning from first buy
+                        conviction = buyTransactions[0].conviction || null;
+                        reasoning = buyTransactions[0].reasoning || '';
+                        
+                        // Calculate days held
+                        daysHeld = Math.floor((new Date() - earliestDate) / (1000 * 60 * 60 * 24));
                     }
                     
                     const gainLoss = currentValue - (avgPurchasePrice * shares);
                     const gainLossPercent = avgPurchasePrice > 0 ? ((stockPrice.price - avgPurchasePrice) / avgPurchasePrice) * 100 : 0;
                     const gainLossClass = gainLoss >= 0 ? 'positive' : 'negative';
                     
+                    // Calculate position size as % of total portfolio
+                    const positionSizePercent = totalValue > 0 ? (currentValue / totalValue) * 100 : 0;
+                    
+                    // Determine expected timeframe based on catalyst keywords
+                    let expectedDays = { min: 7, max: 14, label: '1-2 weeks' }; // Default
+                    const reasoningLower = reasoning.toLowerCase();
+                    if (reasoningLower.includes('earnings') || reasoningLower.includes('guidance')) {
+                        expectedDays = { min: 7, max: 14, label: '1-2 weeks' };
+                    } else if (reasoningLower.includes('contract') || reasoningLower.includes('deal')) {
+                        expectedDays = { min: 14, max: 21, label: '2-3 weeks' };
+                    } else if (reasoningLower.includes('upgrade') || reasoningLower.includes('analyst')) {
+                        expectedDays = { min: 3, max: 5, label: '3-5 days' };
+                    } else if (reasoningLower.includes('sector') || reasoningLower.includes('rotation')) {
+                        expectedDays = { min: 7, max: 14, label: '1-2 weeks' };
+                    }
+                    
+                    // Check if past expected timeframe
+                    const isPastTimeframe = daysHeld > expectedDays.max;
+                    const daysRemaining = expectedDays.max - daysHeld;
+                    
+                    // Shorten reasoning for display (first 60 chars)
+                    const shortReasoning = reasoning.length > 60 ? reasoning.substring(0, 60) + '...' : reasoning;
+                    
                     // Get stock name from mapping
                     const stockName = stockNames[symbol] || symbol;
+                    
+                    // Conviction emoji
+                    const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : conviction >= 5 ? '👍' : '';
                     
                     html += `
                         <div class="holding-item" style="flex-direction: column; align-items: stretch; padding: 18px;">
@@ -4909,11 +4945,34 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 <div>
                                     <div class="holding-symbol" style="font-size: 24px; font-weight: 700; color: #e2e8f0;">${symbol}</div>
                                     <div style="font-size: 14px; color: #94a3b8; margin-top: 2px;">${stockName}</div>
-                                    <div class="holding-shares" style="font-size: 15px; color: #94a3b8; margin-top: 4px;">${shares} shares</div>
+                                    <div class="holding-shares" style="font-size: 15px; color: #94a3b8; margin-top: 4px;">
+                                        ${shares} shares · ${conviction ? convictionEmoji + ' ' + conviction + '/10 conviction' : 'No conviction data'}
+                                    </div>
                                 </div>
                                 <div style="text-align: right;">
                                     <div class="holding-price" style="font-size: 22px; font-weight: 600; color: #e2e8f0;">$${currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                                     <div class="stat-change ${gainLossClass}" style="font-size: 15px; margin-top: 4px;">${gainLoss >= 0 ? '+' : ''}$${Math.abs(gainLoss).toFixed(2)} (${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}%)</div>
+                                    <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
+                                        ${positionSizePercent.toFixed(1)}% of portfolio
+                                        ${positionSizePercent > 30 ? '<span style="color: #fbbf24;">⚠️ Large</span>' : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            ${reasoning ? `
+                            <div style="margin: 12px 0; padding: 10px; background: rgba(99, 102, 241, 0.1); border-left: 3px solid #6366f1; border-radius: 4px;">
+                                <div style="font-size: 13px; color: #cbd5e1; line-height: 1.5;">
+                                    💡 <strong>Catalyst:</strong> ${shortReasoning}
+                                </div>
+                            </div>
+                            ` : ''}
+                            <div style="margin: 10px 0; padding: 10px; background: rgba(15, 15, 35, 0.5); border-radius: 4px;">
+                                <div style="font-size: 13px; color: #cbd5e1; line-height: 1.6;">
+                                    ⏰ <strong>Held ${daysHeld} day${daysHeld !== 1 ? 's' : ''}</strong> | Expected: ${expectedDays.label}
+                                    ${isPastTimeframe ? 
+                                        '<div style="color: #fbbf24; margin-top: 6px; font-weight: 600;">⚠️ REVIEW: Past expected timeframe - re-evaluate thesis!</div>' 
+                                        : daysRemaining > 0 ? 
+                                        `<span style="color: #94a3b8;">(${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining)</span>` 
+                                        : ''}
                                 </div>
                             </div>
                             <div style="display: flex; justify-content: space-between; font-size: 14px; color: #94a3b8; padding-top: 10px; border-top: 1px solid rgba(100, 116, 139, 0.3);">
