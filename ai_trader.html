@@ -1069,41 +1069,38 @@
                 <button onclick="initializeAccount()">Initialize Account</button>
                 <button onclick="addWeeklyFunding()" class="secondary">Add Weekly Funding</button>
                 
-                <!-- Force Download from Google Drive -->
+                <!-- Portfolio Backup & Recovery -->
                 <div style="margin-top: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px;">
                     <div style="font-size: 14px; color: #cbd5e1; margin-bottom: 10px; font-weight: 600;">
-                        🔄 Portfolio Recovery
+                        💾 Portfolio Backup & Recovery
                     </div>
-                    <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">
-                        <strong>Option 1:</strong> Right-click your Apex_Portfolio.json in Google Drive → Share → Copy link<br>
-                        Paste the link below to restore from that specific file.
-                    </div>
-                    <div style="margin-bottom: 10px;">
-                        <input type="text" id="driveFileUrl" placeholder="Paste Google Drive link here (e.g., https://drive.google.com/file/d/1ABC.../view)" style="width: 100%; padding: 8px; font-size: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 4px; color: #e2e8f0;">
-                    </div>
-                    <button onclick="clearLocalStorage()" style="padding: 8px 16px; font-size: 13px; background: #ef4444; color: white; font-weight: 600; margin-right: 10px;">
-                        🗑️ Clear Local Storage
-                    </button>
-                    <button onclick="downloadByFileId()" style="padding: 8px 16px; font-size: 13px; background: #10b981; color: white; font-weight: 600; margin-right: 10px;">
-                        📥 Download by Link
-                    </button>
-                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(100, 116, 139, 0.3);">
-                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">
-                            <strong>Option 2:</strong> Auto-search Google Drive for Apex_Portfolio.json
+                    
+                    <!-- Save to Drive -->
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">
+                            Save your current portfolio to Google Drive as a backup.
                         </div>
-                        <button onclick="forceDownloadPortfolio()" style="padding: 8px 16px; font-size: 13px; background: #3b82f6; color: white; font-weight: 600;">
-                            📥 Auto-Search & Download
+                        <button onclick="manualSaveToDrive()" style="padding: 8px 16px; font-size: 13px; background: #10b981; color: white; font-weight: 600;">
+                            ☁️ Save Portfolio to Google Drive
                         </button>
                     </div>
-                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(100, 116, 139, 0.3);">
-                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">
-                            <strong>Option 3:</strong> Upload a local backup file from your computer
+                    
+                    <div style="border-top: 1px solid rgba(100, 116, 139, 0.3); margin: 12px 0;"></div>
+                    
+                    <!-- Restore from local file -->
+                    <div>
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">
+                            Restore from a previously saved Apex_Portfolio.json file on your computer.
                         </div>
                         <input type="file" id="localPortfolioFile" accept=".json" style="display: none;" onchange="restoreFromLocalFile(this)">
-                        <button onclick="document.getElementById('localPortfolioFile').click()" style="padding: 8px 16px; font-size: 13px; background: #8b5cf6; color: white; font-weight: 600;">
-                            📂 Upload Local JSON File
+                        <button onclick="document.getElementById('localPortfolioFile').click()" style="padding: 8px 16px; font-size: 13px; background: #8b5cf6; color: white; font-weight: 600; margin-right: 10px;">
+                            📂 Restore from Local File
+                        </button>
+                        <button onclick="clearLocalStorage()" style="padding: 8px 16px; font-size: 13px; background: #ef4444; color: white; font-weight: 600;">
+                            🗑️ Clear Local Storage
                         </button>
                     </div>
+                    
                     <div id="recoveryStatus" style="font-size: 11px; margin-top: 8px; color: #64748b;"></div>
                 </div>
                 <button onclick="runAIAnalysis()">🤖 Run AI Analysis</button>
@@ -1141,7 +1138,7 @@
         let GDRIVE_CONFIG = {
             CLIENT_ID: '',
             API_KEY: '',
-            SCOPES: 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file',
+            SCOPES: 'https://www.googleapis.com/auth/drive.file',
             PORTFOLIO_FILENAME: 'Apex_Portfolio.json'
         };
 
@@ -1198,7 +1195,7 @@
                 tokenClient.requestAccessToken();
             } else if (gdriveAuthorized) {
                 // Already authorized, maybe sync portfolio
-                savePortfolioToGoogleDrive();
+                savePortfolioToDrive();
             }
         }
 
@@ -1716,139 +1713,13 @@
                 localStorage.clear();
                 preventAutoSave = true; // Prevent auto-save during recovery
                 const status = document.getElementById('recoveryStatus');
-                status.textContent = '✅ Local storage cleared! Recovery mode active. Now sign in and click "Force Download"';
+                status.textContent = '✅ Local storage cleared! Now use "Restore from Local File" to load your backup.';
                 status.style.color = '#34d399';
                 addActivity('🗑️ Local storage cleared - recovery mode active', 'warning');
             }
         }
         
-        async function forceDownloadPortfolio() {
-            const status = document.getElementById('recoveryStatus');
-            
-            if (!accessToken) {
-                status.textContent = '❌ Not connected to Google Drive. Click cloud icon to sign in first.';
-                status.style.color = '#ef4444';
-                return;
-            }
-            
-            try {
-                status.textContent = '⏳ Downloading from Google Drive...';
-                status.style.color = '#3b82f6';
-                
-                preventAutoSave = true; // Make sure auto-save is still disabled
-                await loadPortfolioFromDrive();
-                preventAutoSave = false; // Re-enable auto-save after successful restore
-                
-                status.textContent = '✅ Portfolio restored! Auto-save re-enabled.';
-                status.style.color = '#34d399';
-                
-                // Refresh the page after 2 seconds to ensure everything loads
-                setTimeout(() => {
-                    location.reload();
-                }, 2000);
-                
-            } catch (error) {
-                preventAutoSave = false; // Re-enable even on error
-                status.textContent = '❌ Download failed: ' + error.message;
-                status.style.color = '#ef4444';
-                console.error('Force download error:', error);
-            }
-        }
-        
-        // Option 1: Download by Google Drive share link
-        async function downloadByFileId() {
-            const status = document.getElementById('recoveryStatus');
-            const urlInput = document.getElementById('driveFileUrl');
-            const url = urlInput.value.trim();
-            
-            if (!url) {
-                status.textContent = '❌ Please paste a Google Drive link first.';
-                status.style.color = '#ef4444';
-                return;
-            }
-            
-            if (!accessToken) {
-                status.textContent = '❌ Not connected to Google Drive. Click cloud icon to sign in first.';
-                status.style.color = '#ef4444';
-                return;
-            }
-            
-            // Extract file ID from various Google Drive URL formats
-            let fileId = null;
-            const patterns = [
-                /\/file\/d\/([a-zA-Z0-9_-]+)/,        // /file/d/FILE_ID/
-                /id=([a-zA-Z0-9_-]+)/,                 // ?id=FILE_ID
-                /\/d\/([a-zA-Z0-9_-]+)/,               // /d/FILE_ID/
-                /^([a-zA-Z0-9_-]{20,})$/                // raw file ID
-            ];
-            
-            for (const pattern of patterns) {
-                const match = url.match(pattern);
-                if (match) {
-                    fileId = match[1];
-                    break;
-                }
-            }
-            
-            if (!fileId) {
-                status.textContent = '❌ Could not extract file ID from that link. Make sure it\'s a valid Google Drive link.';
-                status.style.color = '#ef4444';
-                return;
-            }
-            
-            try {
-                status.textContent = `⏳ Downloading file ${fileId.substring(0, 10)}...`;
-                status.style.color = '#3b82f6';
-                
-                preventAutoSave = true;
-                
-                const fileUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-                const fileResponse = await fetch(fileUrl, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                if (!fileResponse.ok) {
-                    if (fileResponse.status === 404) {
-                        throw new Error('File not found. Make sure sharing permissions allow access.');
-                    }
-                    throw new Error(`Download failed: ${fileResponse.status} ${fileResponse.statusText}`);
-                }
-                
-                const cloudPortfolio = await fileResponse.json();
-                
-                // Validate it looks like a portfolio
-                if (typeof cloudPortfolio.cash === 'undefined' || typeof cloudPortfolio.holdings === 'undefined') {
-                    throw new Error('File does not appear to be a valid APEX portfolio (missing cash or holdings).');
-                }
-                
-                console.log('Downloaded portfolio via link:', cloudPortfolio);
-                console.log('Cash:', cloudPortfolio.cash, 'Holdings:', Object.keys(cloudPortfolio.holdings).length);
-                
-                // Replace local portfolio
-                portfolio = cloudPortfolio;
-                localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
-                
-                await updateUI();
-                updatePerformanceAnalytics();
-                await updateSectorAllocation();
-                
-                preventAutoSave = false;
-                
-                status.textContent = `✅ Portfolio restored from Drive link! $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions. Reloading...`;
-                status.style.color = '#34d399';
-                addActivity(`💾 Portfolio restored from Google Drive link - $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions`, 'success');
-                
-                setTimeout(() => { location.reload(); }, 2000);
-                
-            } catch (error) {
-                preventAutoSave = false;
-                status.textContent = '❌ Download by link failed: ' + error.message;
-                status.style.color = '#ef4444';
-                console.error('Download by file ID error:', error);
-            }
-        }
-        
-        // Option 3: Restore from a local JSON file
+        // Restore from a local JSON file
         function restoreFromLocalFile(input) {
             const status = document.getElementById('recoveryStatus');
             const file = input.files[0];
@@ -1861,26 +1732,31 @@
                 return;
             }
             
+            if (!confirm(`⚠️ This will replace your current portfolio with the data from "${file.name}".\n\nCurrent portfolio will be overwritten.\n\nContinue?`)) {
+                input.value = '';
+                return;
+            }
+            
             status.textContent = `⏳ Reading ${file.name}...`;
             status.style.color = '#3b82f6';
             
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    const cloudPortfolio = JSON.parse(e.target.result);
+                    const restoredPortfolio = JSON.parse(e.target.result);
                     
                     // Validate it looks like a portfolio
-                    if (typeof cloudPortfolio.cash === 'undefined' || typeof cloudPortfolio.holdings === 'undefined') {
+                    if (typeof restoredPortfolio.cash === 'undefined' || typeof restoredPortfolio.holdings === 'undefined') {
                         throw new Error('File does not appear to be a valid APEX portfolio (missing cash or holdings).');
                     }
                     
-                    console.log('Loaded portfolio from local file:', cloudPortfolio);
-                    console.log('Cash:', cloudPortfolio.cash, 'Holdings:', Object.keys(cloudPortfolio.holdings).length);
+                    console.log('Loaded portfolio from local file:', restoredPortfolio);
+                    console.log('Cash:', restoredPortfolio.cash, 'Holdings:', Object.keys(restoredPortfolio.holdings).length);
                     
                     preventAutoSave = true;
                     
                     // Replace local portfolio
-                    portfolio = cloudPortfolio;
+                    portfolio = restoredPortfolio;
                     localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
                     
                     updateUI();
@@ -1889,9 +1765,10 @@
                     
                     preventAutoSave = false;
                     
-                    status.textContent = `✅ Portfolio restored from ${file.name}! $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions. Reloading...`;
+                    const holdingsCount = Object.keys(portfolio.holdings).length;
+                    status.textContent = `✅ Portfolio restored from ${file.name}! $${portfolio.cash.toFixed(2)} cash, ${holdingsCount} positions. Reloading...`;
                     status.style.color = '#34d399';
-                    addActivity(`💾 Portfolio restored from local file "${file.name}" - $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions`, 'success');
+                    addActivity(`💾 Portfolio restored from local file "${file.name}" - $${portfolio.cash.toFixed(2)} cash, ${holdingsCount} positions`, 'success');
                     
                     setTimeout(() => { location.reload(); }, 2000);
                     
@@ -1913,67 +1790,29 @@
             input.value = '';
         }
         
-        async function listDriveFiles() {
-            const listDiv = document.getElementById('driveFileList');
+        // Manual save to Google Drive with user feedback
+        async function manualSaveToDrive() {
             const status = document.getElementById('recoveryStatus');
             
-            if (!accessToken) {
-                status.textContent = '❌ Not connected to Google Drive. Click cloud icon to sign in first.';
+            if (!gdriveAuthorized || !accessToken) {
+                status.textContent = '❌ Not connected to Google Drive. Click the ☁️ cloud icon to sign in first.';
                 status.style.color = '#ef4444';
                 return;
             }
             
             try {
-                listDiv.innerHTML = '⏳ Loading files from Drive...';
+                status.textContent = '⏳ Saving portfolio to Google Drive...';
+                status.style.color = '#3b82f6';
                 
-                // List all files (not just Apex_Portfolio.json)
-                const listUrl = `https://www.googleapis.com/drive/v3/files?fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc`;
+                await savePortfolioToDrive();
                 
-                const response = await fetch(listUrl, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to list files: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                if (!data.files || data.files.length === 0) {
-                    listDiv.innerHTML = '📁 No files found in Google Drive';
-                    return;
-                }
-                
-                // Display files
-                let html = '<div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; margin-top: 10px;">';
-                html += '<div style="font-weight: 600; margin-bottom: 8px; color: #e2e8f0;">📁 Files in your Google Drive:</div>';
-                
-                data.files.forEach(file => {
-                    const isPortfolio = file.name === 'Apex_Portfolio.json';
-                    const color = isPortfolio ? '#34d399' : '#94a3b8';
-                    const icon = isPortfolio ? '✅' : '📄';
-                    const size = file.size ? `(${(file.size / 1024).toFixed(1)} KB)` : '';
-                    const date = new Date(file.modifiedTime).toLocaleString();
-                    
-                    html += `<div style="margin: 4px 0; color: ${color};">${icon} ${file.name} ${size} - ${date}</div>`;
-                });
-                
-                html += '</div>';
-                listDiv.innerHTML = html;
-                
-                // Check if Apex_Portfolio.json exists
-                const portfolioFile = data.files.find(f => f.name === 'Apex_Portfolio.json');
-                if (portfolioFile) {
-                    status.textContent = `✅ Found Apex_Portfolio.json in Drive (${(portfolioFile.size / 1024).toFixed(1)} KB)`;
-                    status.style.color = '#34d399';
-                } else {
-                    status.textContent = '⚠️ Apex_Portfolio.json NOT found in Drive - check filename exactly!';
-                    status.style.color = '#fbbf24';
-                }
-                
+                const holdingsCount = Object.keys(portfolio.holdings).length;
+                status.textContent = `✅ Portfolio saved to Google Drive! $${portfolio.cash.toFixed(2)} cash, ${holdingsCount} positions. (${new Date().toLocaleTimeString()})`;
+                status.style.color = '#34d399';
             } catch (error) {
-                listDiv.innerHTML = '❌ Failed to list files: ' + error.message;
-                console.error('List files error:', error);
+                status.textContent = '❌ Save failed: ' + error.message;
+                status.style.color = '#ef4444';
+                console.error('Manual save to Drive error:', error);
             }
         }
 
@@ -5630,7 +5469,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 updateCloudSyncStatus('⚠️ Load failed', 'Using local data');
                 addActivity(`⚠️ Could not load from Google Drive: ${error.message}`, 'error');
                 
-                // Re-throw so forceDownloadPortfolio can catch it
+                // Re-throw so caller can handle the error
                 throw error;
             }
         }
