@@ -1075,19 +1075,27 @@
                         🔄 Portfolio Recovery
                     </div>
                     <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">
-                        If you need to restore your portfolio from Google Drive, first clear local storage, then click download.
+                        <strong>Option 1:</strong> Right-click your Apex_Portfolio.json in Google Drive → Share → Copy link<br>
+                        Paste the link below to restore from that specific file.
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <input type="text" id="driveFileUrl" placeholder="Paste Google Drive link here (e.g., https://drive.google.com/file/d/1ABC.../view)" style="width: 100%; padding: 8px; font-size: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 4px; color: #e2e8f0;">
                     </div>
                     <button onclick="clearLocalStorage()" style="padding: 8px 16px; font-size: 13px; background: #ef4444; color: white; font-weight: 600; margin-right: 10px;">
                         🗑️ Clear Local Storage
                     </button>
-                    <button onclick="forceDownloadPortfolio()" style="padding: 8px 16px; font-size: 13px; background: #3b82f6; color: white; font-weight: 600; margin-right: 10px;">
-                        📥 Force Download from Drive
+                    <button onclick="downloadByFileId()" style="padding: 8px 16px; font-size: 13px; background: #10b981; color: white; font-weight: 600; margin-right: 10px;">
+                        📥 Download by Link
                     </button>
-                    <button onclick="listDriveFiles()" style="padding: 8px 16px; font-size: 13px; background: #8b5cf6; color: white; font-weight: 600;">
-                        🔍 List Files in Drive
-                    </button>
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(100, 116, 139, 0.3);">
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">
+                            <strong>Option 2:</strong> Auto-search (only works for files APEX created)
+                        </div>
+                        <button onclick="forceDownloadPortfolio()" style="padding: 8px 16px; font-size: 13px; background: #3b82f6; color: white; font-weight: 600;">
+                            📥 Auto-Search & Download
+                        </button>
+                    </div>
                     <div id="recoveryStatus" style="font-size: 11px; margin-top: 8px; color: #64748b;"></div>
-                    <div id="driveFileList" style="font-size: 11px; margin-top: 8px; color: #94a3b8; max-height: 200px; overflow-y: auto;"></div>
                 </div>
                 <button onclick="runAIAnalysis()">🤖 Run AI Analysis</button>
                 <button onclick="testDataFetch()" class="secondary" style="background: #4a5568;">🧪 Dry Run (Test Only)</button>
@@ -1125,7 +1133,7 @@
             CLIENT_ID: '',
             API_KEY: '',
             SCOPES: 'https://www.googleapis.com/auth/drive.file',
-            PORTFOLIO_FILENAME: 'apex_portfolio.json'
+            PORTFOLIO_FILENAME: 'Apex_Portfolio.json'
         };
 
         // Initialize GDRIVE_CONFIG with stored keys
