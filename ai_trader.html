@@ -2787,27 +2787,39 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 const marketData = {};
                 let fetchErrors = [];
                 
-                // Parallel API calls
-                const fetchPromises = symbols.map(async (symbol) => {
-                    try {
-                        const data = await getStockPrice(symbol);
-                        return { symbol, data, success: true };
-                    } catch (error) {
-                        return { symbol, error: error.message, success: false };
-                    }
-                });
+                // Batched API calls (same as real analysis)
+                const BATCH_SIZE_DR = 50;
+                const BATCH_DELAY_DR = 1200;
                 
-                // Execute all fetches in parallel
-                const results = await Promise.all(fetchPromises);
-                
-                // Process results
-                results.forEach(result => {
-                    if (result.success) {
-                        marketData[result.symbol] = result.data;
-                    } else {
-                        fetchErrors.push({ symbol: result.symbol, error: result.error });
+                for (let i = 0; i < symbols.length; i += BATCH_SIZE_DR) {
+                    const batch = symbols.slice(i, i + BATCH_SIZE_DR);
+                    const batchNum = Math.floor(i / BATCH_SIZE_DR) + 1;
+                    const totalBatches = Math.ceil(symbols.length / BATCH_SIZE_DR);
+                    thinkingDetail.textContent = `🧪 Fetching batch ${batchNum}/${totalBatches} (${Object.keys(marketData).length} stocks so far)...`;
+                    
+                    const batchPromises = batch.map(async (symbol) => {
+                        try {
+                            const data = await getStockPrice(symbol);
+                            return { symbol, data, success: true };
+                        } catch (error) {
+                            return { symbol, error: error.message, success: false };
+                        }
+                    });
+                    
+                    const batchResults = await Promise.all(batchPromises);
+                    
+                    batchResults.forEach(result => {
+                        if (result.success) {
+                            marketData[result.symbol] = result.data;
+                        } else {
+                            fetchErrors.push({ symbol: result.symbol, error: result.error });
+                        }
+                    });
+                    
+                    if (i + BATCH_SIZE_DR < symbols.length) {
+                        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_DR));
                     }
-                });
+                }
                 
                 const endTime = performance.now();
                 const duration = ((endTime - startTime) / 1000).toFixed(2);
@@ -2876,27 +2888,41 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 const marketData = {};
                 let fetchErrors = [];
                 
-                // OPTION 1: Parallel API calls (no delays) - you have unlimited API calls!
-                const fetchPromises = symbols.map(async (symbol) => {
-                    try {
-                        const data = await getStockPrice(symbol);
-                        return { symbol, data, success: true };
-                    } catch (error) {
-                        return { symbol, error: error.message, success: false };
-                    }
-                });
+                // Fetch in batches to avoid Polygon rate limits
+                // Stocks Starter plan: unlimited calls but rate-limited per second
+                const BATCH_SIZE = 50;
+                const BATCH_DELAY_MS = 1200; // 1.2 seconds between batches
                 
-                // Execute all fetches in parallel - MUCH faster!
-                const results = await Promise.all(fetchPromises);
-                
-                // Process results
-                results.forEach(result => {
-                    if (result.success) {
-                        marketData[result.symbol] = result.data;
-                    } else {
-                        fetchErrors.push({ symbol: result.symbol, error: result.error });
+                for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+                    const batch = symbols.slice(i, i + BATCH_SIZE);
+                    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+                    const totalBatches = Math.ceil(symbols.length / BATCH_SIZE);
+                    thinkingDetail.textContent = `Fetching batch ${batchNum}/${totalBatches} (${Object.keys(marketData).length} stocks so far)...`;
+                    
+                    const batchPromises = batch.map(async (symbol) => {
+                        try {
+                            const data = await getStockPrice(symbol);
+                            return { symbol, data, success: true };
+                        } catch (error) {
+                            return { symbol, error: error.message, success: false };
+                        }
+                    });
+                    
+                    const batchResults = await Promise.all(batchPromises);
+                    
+                    batchResults.forEach(result => {
+                        if (result.success) {
+                            marketData[result.symbol] = result.data;
+                        } else {
+                            fetchErrors.push({ symbol: result.symbol, error: result.error });
+                        }
+                    });
+                    
+                    // Delay between batches (skip delay after last batch)
+                    if (i + BATCH_SIZE < symbols.length) {
+                        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
                     }
-                });
+                }
                 
                 thinkingDetail.textContent = `Fetched ${Object.keys(marketData).length}/${symbols.length} stocks`;
                 
@@ -2906,6 +2932,31 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     addActivity('🚫 Unable to fetch market data: ' + fetchErrors[0].error, 'error');
                     alert('Unable to fetch market data. Please check your connection and try again.');
                     return;
+                }
+                
+                // MINIMUM DATA GATE - Don't waste money on incomplete analysis
+                const successRate = Object.keys(marketData).length / symbols.length;
+                const failedCount = fetchErrors.length;
+                
+                if (successRate < 0.70) {
+                    // Less than 70% success - too many gaps, abort
+                    const proceed = confirm(
+                        `⚠️ INCOMPLETE DATA WARNING\n\n` +
+                        `Only fetched ${Object.keys(marketData).length}/${symbols.length} stocks (${(successRate * 100).toFixed(0)}%).\n` +
+                        `${failedCount} stocks failed - likely Polygon rate limiting.\n\n` +
+                        `Running AI analysis with this much missing data will:\n` +
+                        `• Cost tokens for a partial analysis\n` +
+                        `• Miss opportunities in failed sectors\n` +
+                        `• Produce less reliable recommendations\n\n` +
+                        `Recommendation: Wait 60 seconds and try again.\n\n` +
+                        `Continue anyway?`
+                    );
+                    
+                    if (!proceed) {
+                        thinking.classList.remove('active');
+                        addActivity(`⚠️ AI Analysis cancelled - only ${(successRate * 100).toFixed(0)}% of stocks fetched successfully`, 'warning');
+                        return;
+                    }
                 }
                 
                 // CHECK PRICE FRESHNESS - Don't waste $3 on stale data!
@@ -4426,6 +4477,7 @@ CRITICAL JSON RULES:
       "conviction": 1-10 (scored using the conviction rubric above),
       "reasoning": "MULTI-FACTOR ANALYSIS citing ALL factors:
       
+      FOR BUY DECISIONS:
       Technical: [Price action today, relative strength vs sector, trend direction]
       Example: 'Up 6.5% vs sector +2%, breaking resistance at $145, strong volume'
       
@@ -4439,19 +4491,37 @@ CRITICAL JSON RULES:
       Example: 'Semiconductors leading with NVDA +6.5%, AMD +5%, MU +8% - sector rotation into AI chips'
       
       Conviction Justification: [Why this specific conviction score]
-      Example: 'Conviction 9/10: All 4 factors aligned - technical breakout, earnings beat, major catalyst, sector strength'"
+      Example: 'Conviction 9/10: All 4 factors aligned - technical breakout, earnings beat, major catalyst, sector strength'
+      
+      FOR SELL DECISIONS - BE VERY SPECIFIC ABOUT THE 'WHY':
+      Entry Recap: [When bought, at what price, what the original catalyst/thesis was]
+      Example: 'Bought at $125 on Jan 15 after earnings beat catalyst'
+      
+      What Changed: [The specific trigger - catalyst played out, negative news, thesis broken, technical breakdown, stop loss, or better opportunity]
+      Example: 'Original catalyst (Q4 earnings beat) fully priced in after 3 weeks. No new catalysts emerged. Stock up 22% from entry - gains at risk of fading.'
+      
+      Current Status: [Current price vs entry, P&L, how long held, current momentum/RS scores]
+      Example: 'Currently $152 (+22% from $125 entry). Held 21 days. Momentum fading to 4/10, RS dropped to 45.'
+      
+      Risk of Holding: [What happens if you DON'T sell - quantify the downside]
+      Example: 'Without new catalyst, likely to drift back toward $140 support. Holding risks giving back 50% of gains.'
+      
+      Better Use of Capital: [Where the freed cash goes - specific opportunity or dry powder]
+      Example: 'Freeing $4,560 to deploy into AVGO which has a fresh catalyst (10/10) vs this played-out setup (5/10).'"
     }
   ],
   "overall_reasoning": "Your confident explanation WITH teaching element. Start with 'Alright, let me break down my multi-factor analysis...' Then explain:
   
-  (1) TECHNICAL SETUP: What the price action is telling you across all stocks
-  (2) FUNDAMENTAL BACKDROP: What earnings/revenue data you found
-  (3) CATALYSTS IDENTIFIED: Specific news events driving momentum  
-  (4) SECTOR DYNAMICS: Which sectors are moving and why
-  (5) CONVICTION RATIONALE: Why these specific picks with these conviction levels
-  (6) TEACHING MOMENT: What this teaches about multi-factor investing
+  (1) PORTFOLIO REVIEW: Quick status of existing holdings - which are still strong, which have weakened
+  (2) SELLS FIRST (if any): For each sell, clearly explain: what the original thesis was, what changed, and why NOW is the time to exit. Be specific: 'I bought PLTR 3 weeks ago at $X on the Army contract catalyst. That catalyst is now fully priced in, momentum has faded to 4/10, and I see a better use of this capital in AVGO.'
+  (3) TECHNICAL SETUP: What the price action is telling you across buy candidates
+  (4) FUNDAMENTAL BACKDROP: What earnings/revenue data you found
+  (5) CATALYSTS IDENTIFIED: Specific news events driving momentum  
+  (6) SECTOR DYNAMICS: Which sectors are moving and why
+  (7) CONVICTION RATIONALE: Why these specific picks with these conviction levels
+  (8) TEACHING MOMENT: What this teaches about multi-factor investing
   
-  Be specific with numbers, dates, percentages. Example: 'Technical: NVDA +6.5% breaking $145 resistance. Fundamental: Q1 2026 revenue $32.5B (+118% YoY), crushed estimates. Catalyst: Multiple analyst upgrades this week. Sector: Chips outperforming with 8/10 leaders green. This is a textbook setup where all factors align - here's what it teaches...'",
+  CRITICAL FOR SELLS: Don't just say 'selling PLTR'. Walk through the full story - entry → thesis → what changed → why selling → where the capital goes next. The user should understand the complete lifecycle of the trade.",
   
   "research_summary": "Detailed summary organized by factor:
   
