@@ -4321,6 +4321,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 // 4. Fix any unescaped newlines in strings
                 jsonString = jsonString.replace(/"\s*\n\s*"/g, '" "');
                 
+                // 5. Fix single quotes around property names (should be double quotes)
+                jsonString = jsonString.replace(/'([^']+)':/g, '"$1":');
+                
+                // 6. Fix single quotes around string values (should be double quotes)
+                // This is tricky - only replace single quotes that are clearly string delimiters
+                jsonString = jsonString.replace(/:\s*'([^']*)'/g, ': "$1"');
+                
+                // 7. Remove any control characters that break JSON
+                jsonString = jsonString.replace(/[\x00-\x1F\x7F]/g, '');
+                
                 console.log('Extracted JSON:', jsonString.substring(0, 500) + '...');
                 
                 const decision = JSON.parse(jsonString);
@@ -4363,6 +4373,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             } catch (error) {
                 console.error('AI Analysis error:', error);
                 console.error('Full AI response:', aiResponse);
+                
+                // If JSON parse error, log the cleaned JSON for debugging
+                if (error instanceof SyntaxError && error.message.includes('JSON')) {
+                    console.error('Failed to parse JSON. First 1000 chars of cleaned JSON:');
+                    console.error(jsonString ? jsonString.substring(0, 1000) : 'jsonString not available');
+                }
+                
                 thinkingDetail.textContent = 'Error: ' + error.message;
                 addActivity('🚫 AI Analysis failed: ' + error.message, 'error');
                 
