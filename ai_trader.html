@@ -1599,8 +1599,8 @@
                             callbacks: {
                                 afterBody: function(tooltipItems) {
                                     const idx = tooltipItems[0]?.dataIndex;
-                                    if (idx !== undefined && portfolio.performanceHistory[idx]?.deposit) {
-                                        return '💰 Deposit: +$' + portfolio.performanceHistory[idx].deposit.toLocaleString();
+                                    if (idx !== undefined && performanceChart._depositAmounts && performanceChart._depositAmounts[idx]) {
+                                        return '💰 Deposit: +$' + performanceChart._depositAmounts[idx].toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                                     }
                                     return '';
                                 }
@@ -1780,6 +1780,13 @@
             performanceChart.data.datasets[1].data = adjustedValues;
             
             // Dataset 3: Deposit markers (yellow triangles)
+            // Also store deposit amounts for tooltip display
+            const depositAmounts = {};
+            depositTimeline.forEach(d => {
+                depositAmounts[d.index] = d.amount;
+            });
+            performanceChart._depositAmounts = depositAmounts;
+            
             const depositMarkers = rawValues.map((val, i) => {
                 return depositTimeline.find(d => d.index === i) ? val : null;
             });
