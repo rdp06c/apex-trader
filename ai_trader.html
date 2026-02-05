@@ -5224,8 +5224,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         accessToken = response.access_token;
                         gdriveAuthorized = true;
                         console.log('Google Drive authorized successfully');
-                        updateCloudSyncStatus('✓ Connected', 'Syncing with Google Drive');
-                        loadPortfolioFromDrive();
+                        updateCloudSyncStatus('✓ Connected', 'Use Force Download to restore portfolio');
+                        // Don't auto-load - user will use Force Download button to control when to load
+                        // loadPortfolioFromDrive();
                     },
                 });
                 
