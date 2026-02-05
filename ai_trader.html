@@ -2206,6 +2206,139 @@
             };
         }
 
+        // PHASE 1 LEARNING: Analyze conviction accuracy
+        function analyzeConvictionAccuracy() {
+            const closedTrades = portfolio.closedTrades || [];
+            const tradesWithConviction = closedTrades.filter(t => t.entryConviction);
+            
+            if (tradesWithConviction.length < 5) {
+                return { hasData: false, message: "Need 5+ trades to analyze conviction accuracy" };
+            }
+            
+            // Group by conviction level
+            const convictionGroups = {
+                '9-10': tradesWithConviction.filter(t => t.entryConviction >= 9),
+                '7-8': tradesWithConviction.filter(t => t.entryConviction >= 7 && t.entryConviction < 9),
+                '5-6': tradesWithConviction.filter(t => t.entryConviction >= 5 && t.entryConviction < 7)
+            };
+            
+            const analysis = {};
+            Object.keys(convictionGroups).forEach(level => {
+                const trades = convictionGroups[level];
+                if (trades.length > 0) {
+                    const wins = trades.filter(t => t.profitLoss > 0).length;
+                    const winRate = (wins / trades.length) * 100;
+                    const avgReturn = trades.reduce((sum, t) => sum + t.returnPercent, 0) / trades.length;
+                    
+                    analysis[level] = {
+                        count: trades.length,
+                        winRate: winRate,
+                        avgReturn: avgReturn,
+                        calibration: winRate >= parseInt(level.split('-')[0]) * 10 ? 'well-calibrated' : 'overconfident'
+                    };
+                }
+            });
+            
+            return { hasData: true, analysis };
+        }
+        
+        // PHASE 1 LEARNING: Analyze technical indicator accuracy
+        function analyzeTechnicalAccuracy() {
+            const closedTrades = portfolio.closedTrades || [];
+            const tradesWithTechnicals = closedTrades.filter(t => t.entryTechnicals && Object.keys(t.entryTechnicals).length > 0);
+            
+            if (tradesWithTechnicals.length < 5) {
+                return { hasData: false };
+            }
+            
+            // Analyze momentum score
+            const momentumHigh = tradesWithTechnicals.filter(t => t.entryTechnicals.momentumScore >= 7);
+            const momentumLow = tradesWithTechnicals.filter(t => t.entryTechnicals.momentumScore < 7 && t.entryTechnicals.momentumScore != null);
+            
+            // Analyze rsScore
+            const rsHigh = tradesWithTechnicals.filter(t => t.entryTechnicals.rsScore >= 70);
+            const rsLow = tradesWithTechnicals.filter(t => t.entryTechnicals.rsScore < 70 && t.entryTechnicals.rsScore != null);
+            
+            // Analyze sector rotation
+            const sectorInflow = tradesWithTechnicals.filter(t => t.entryTechnicals.sectorRotation === 'accumulate' || t.entryTechnicals.sectorRotation === 'favorable');
+            const sectorOutflow = tradesWithTechnicals.filter(t => t.entryTechnicals.sectorRotation === 'avoid' || t.entryTechnicals.sectorRotation === 'caution');
+            
+            const calcStats = (trades) => {
+                if (trades.length === 0) return null;
+                const wins = trades.filter(t => t.profitLoss > 0).length;
+                return {
+                    count: trades.length,
+                    winRate: (wins / trades.length) * 100,
+                    avgReturn: trades.reduce((sum, t) => sum + t.returnPercent, 0) / trades.length
+                };
+            };
+            
+            return {
+                hasData: true,
+                momentum: {
+                    high: calcStats(momentumHigh),
+                    low: calcStats(momentumLow)
+                },
+                relativeStrength: {
+                    high: calcStats(rsHigh),
+                    low: calcStats(rsLow)
+                },
+                sectorRotation: {
+                    inflow: calcStats(sectorInflow),
+                    outflow: calcStats(sectorOutflow)
+                }
+            };
+        }
+        
+        // PHASE 1 LEARNING: Analyze exit timing
+        function analyzeExitTiming() {
+            const closedTrades = portfolio.closedTrades || [];
+            
+            if (closedTrades.length < 3) {
+                return { hasData: false };
+            }
+            
+            // Group by exit reason
+            const byReason = {
+                profit_target: closedTrades.filter(t => t.exitReason === 'profit_target'),
+                stop_loss: closedTrades.filter(t => t.exitReason === 'stop_loss'),
+                catalyst_failure: closedTrades.filter(t => t.exitReason === 'catalyst_failure'),
+                opportunity_cost: closedTrades.filter(t => t.exitReason === 'opportunity_cost'),
+                manual: closedTrades.filter(t => t.exitReason === 'manual')
+            };
+            
+            const analysis = {};
+            Object.keys(byReason).forEach(reason => {
+                const trades = byReason[reason];
+                if (trades.length > 0) {
+                    const avgReturn = trades.reduce((sum, t) => sum + t.returnPercent, 0) / trades.length;
+                    const wins = trades.filter(t => t.profitLoss > 0).length;
+                    
+                    analysis[reason] = {
+                        count: trades.length,
+                        avgReturn: avgReturn,
+                        winRate: (wins / trades.length) * 100
+                    };
+                }
+            });
+            
+            // Analyze if selling winners too early
+            const winners = closedTrades.filter(t => t.profitLoss > 0);
+            const avgWinnerReturn = winners.length > 0 
+                ? winners.reduce((sum, t) => sum + t.returnPercent, 0) / winners.length 
+                : 0;
+            
+            return {
+                hasData: true,
+                byReason: analysis,
+                avgWinnerReturn: avgWinnerReturn,
+                profitTargetCount: byReason.profit_target.length,
+                insight: avgWinnerReturn < 15 && byReason.profit_target.length > 2 
+                    ? "Consider holding winners longer - average win is only " + avgWinnerReturn.toFixed(1) + "%"
+                    : null
+            };
+        }
+
         // Format performance insights for Claude's prompt - CONTEXTUAL, NOT RIGID
         function formatPerformanceInsights() {
             const analysis = analyzePerformanceHistory();
@@ -2295,6 +2428,92 @@
                     insights += `  • ${bp.insight}\n`;
                     insights += `  • Action: ${bp.action}\n\n`;
                 });
+            }
+            
+            // PHASE 1 LEARNING: Add conviction, technical, and exit timing insights
+            const convictionAnalysis = analyzeConvictionAccuracy();
+            const technicalAnalysis = analyzeTechnicalAccuracy();
+            const exitAnalysis = analyzeExitTiming();
+            
+            // Conviction Accuracy
+            if (convictionAnalysis.hasData) {
+                insights += `🎯 CONVICTION ACCURACY (Phase 1 Learning):\n\n`;
+                Object.keys(convictionAnalysis.analysis).forEach(level => {
+                    const data = convictionAnalysis.analysis[level];
+                    insights += `${level}/10 Convictions (${data.count} trades):\n`;
+                    insights += `  • Win Rate: ${data.winRate.toFixed(1)}% | Avg Return: ${data.avgReturn >= 0 ? '+' : ''}${data.avgReturn.toFixed(1)}%\n`;
+                    insights += `  • Calibration: ${data.calibration}\n`;
+                    if (data.calibration === 'overconfident') {
+                        insights += `  → Your ${level} convictions are underperforming - be more selective or size smaller\n`;
+                    } else {
+                        insights += `  → Your ${level} convictions are well-calibrated - trust this confidence level\n`;
+                    }
+                    insights += '\n';
+                });
+            }
+            
+            // Technical Indicator Accuracy
+            if (technicalAnalysis.hasData) {
+                insights += `📊 TECHNICAL INDICATOR ACCURACY (Phase 1 Learning):\n\n`;
+                
+                if (technicalAnalysis.momentum.high && technicalAnalysis.momentum.low) {
+                    insights += `Momentum Score:\n`;
+                    insights += `  • High (7+): ${technicalAnalysis.momentum.high.winRate.toFixed(1)}% win rate, ${technicalAnalysis.momentum.high.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.momentum.high.avgReturn.toFixed(1)}% avg (${technicalAnalysis.momentum.high.count} trades)\n`;
+                    insights += `  • Low (<7): ${technicalAnalysis.momentum.low.winRate.toFixed(1)}% win rate, ${technicalAnalysis.momentum.low.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.momentum.low.avgReturn.toFixed(1)}% avg (${technicalAnalysis.momentum.low.count} trades)\n`;
+                    const diff = technicalAnalysis.momentum.high.winRate - technicalAnalysis.momentum.low.winRate;
+                    if (diff > 10) {
+                        insights += `  → High momentum IS predictive (+${diff.toFixed(0)}% win rate) - weight it heavily!\n`;
+                    } else {
+                        insights += `  → Momentum score has minimal impact - don't overweight it\n`;
+                    }
+                    insights += '\n';
+                }
+                
+                if (technicalAnalysis.relativeStrength.high && technicalAnalysis.relativeStrength.low) {
+                    insights += `Relative Strength (rsScore):\n`;
+                    insights += `  • High (70+): ${technicalAnalysis.relativeStrength.high.winRate.toFixed(1)}% win rate (${technicalAnalysis.relativeStrength.high.count} trades)\n`;
+                    insights += `  • Low (<70): ${technicalAnalysis.relativeStrength.low.winRate.toFixed(1)}% win rate (${technicalAnalysis.relativeStrength.low.count} trades)\n`;
+                    const diff = technicalAnalysis.relativeStrength.high.winRate - technicalAnalysis.relativeStrength.low.winRate;
+                    if (diff > 10) {
+                        insights += `  → High rsScore IS predictive - confirms strong setups\n`;
+                    }
+                    insights += '\n';
+                }
+                
+                if (technicalAnalysis.sectorRotation.inflow && technicalAnalysis.sectorRotation.outflow) {
+                    insights += `Sector Rotation:\n`;
+                    insights += `  • Inflow: ${technicalAnalysis.sectorRotation.inflow.winRate.toFixed(1)}% win rate (${technicalAnalysis.sectorRotation.inflow.count} trades)\n`;
+                    insights += `  • Outflow: ${technicalAnalysis.sectorRotation.outflow.winRate.toFixed(1)}% win rate (${technicalAnalysis.sectorRotation.outflow.count} trades)\n`;
+                    const diff = technicalAnalysis.sectorRotation.inflow.winRate - technicalAnalysis.sectorRotation.outflow.winRate;
+                    if (diff > 10) {
+                        insights += `  → Sector rotation IS predictive - avoid 'outflow' sectors\n`;
+                    }
+                    insights += '\n';
+                }
+            }
+            
+            // Exit Timing Analysis
+            if (exitAnalysis.hasData) {
+                insights += `⏰ EXIT TIMING ANALYSIS (Phase 1 Learning):\n\n`;
+                
+                if (exitAnalysis.insight) {
+                    insights += `⚠️ ${exitAnalysis.insight}\n\n`;
+                }
+                
+                insights += `Exit Reasons:\n`;
+                Object.keys(exitAnalysis.byReason).forEach(reason => {
+                    const data = exitAnalysis.byReason[reason];
+                    const reasonLabel = reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    insights += `  • ${reasonLabel}: ${data.count} exits, ${data.avgReturn >= 0 ? '+' : ''}${data.avgReturn.toFixed(1)}% avg\n`;
+                });
+                
+                if (exitAnalysis.profitTargetCount >= 3 && exitAnalysis.avgWinnerReturn < 20) {
+                    insights += `\n  → You're taking profits quickly (avg winner: ${exitAnalysis.avgWinnerReturn.toFixed(1)}%)\n`;
+                    insights += `  → Consider: Let winners run longer when catalyst is still strong\n`;
+                } else if (exitAnalysis.avgWinnerReturn > 30) {
+                    insights += `\n  → Great! You're holding winners (avg: ${exitAnalysis.avgWinnerReturn.toFixed(1)}%)\n`;
+                }
+                insights += '\n';
             }
             
             insights += `💡 HOW TO USE THIS DATA:
@@ -4318,13 +4537,34 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     portfolio.cash -= cost;
                     portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
                     
+                    // Calculate position size for learning
+                    const totalPortfolioValue = portfolio.cash + cost + Object.entries(portfolio.holdings)
+                        .filter(([s]) => s !== symbol)
+                        .reduce((sum, [s, sh]) => sum + (marketData[s]?.price || 0) * sh, 0);
+                    const positionSizePercent = (cost / totalPortfolioValue) * 100;
+                    
                     portfolio.transactions.push({
                         type: 'BUY',
                         symbol: symbol,
                         shares: shares,
                         price: price,
                         timestamp: new Date().toISOString(),
-                        cost: cost
+                        cost: cost,
+                        
+                        // PHASE 1 LEARNING DATA:
+                        conviction: conviction,
+                        reasoning: decision.reasoning,
+                        
+                        // Technical indicators at entry
+                        entryTechnicals: {
+                            momentumScore: marketData[symbol].momentum?.score || null,
+                            rsScore: marketData[symbol].relativeStrength?.rsScore || null,
+                            sectorRotation: marketData[symbol].sectorRotation?.rotationSignal || null
+                        },
+                        
+                        // Position context
+                        positionSizePercent: positionSizePercent,
+                        portfolioValueAtEntry: totalPortfolioValue
                     });
                     
                     const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : '👍';
@@ -4356,7 +4596,25 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         const profitLoss = (price - avgBuyPrice) * shares;
                         const returnPercent = ((price - avgBuyPrice) / avgBuyPrice) * 100;
                         
-                        // Track as closed trade
+                        // Get the original buy transaction data for learning
+                        const originalBuyTx = buyTransactions[0];
+                        
+                        // Determine exit reason
+                        let exitReason = 'manual';
+                        if (decision.reasoning) {
+                            const reasonLower = decision.reasoning.toLowerCase();
+                            if (reasonLower.includes('profit') || reasonLower.includes('gain') || reasonLower.includes('target')) {
+                                exitReason = 'profit_target';
+                            } else if (reasonLower.includes('stop') || reasonLower.includes('loss') || returnPercent < -10) {
+                                exitReason = 'stop_loss';
+                            } else if (reasonLower.includes('catalyst') || reasonLower.includes('thesis') || reasonLower.includes('fail')) {
+                                exitReason = 'catalyst_failure';
+                            } else if (reasonLower.includes('opportunity') || reasonLower.includes('better') || reasonLower.includes('swap')) {
+                                exitReason = 'opportunity_cost';
+                            }
+                        }
+                        
+                        // Track as closed trade with PHASE 1 learning data
                         portfolio.closedTrades = portfolio.closedTrades || [];
                         portfolio.closedTrades.push({
                             symbol: symbol,
@@ -4367,7 +4625,28 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             returnPercent: returnPercent,
                             buyDate: buyTransactions[0].timestamp,
                             sellDate: new Date().toISOString(),
-                            holdTime: new Date() - new Date(buyTransactions[0].timestamp)
+                            holdTime: new Date() - new Date(buyTransactions[0].timestamp),
+                            
+                            // PHASE 1 LEARNING DATA:
+                            // 1. Conviction Accuracy
+                            entryConviction: originalBuyTx.conviction || null,
+                            
+                            // 2. Technical Indicators at Entry
+                            entryTechnicals: originalBuyTx.entryTechnicals || {},
+                            
+                            // 3. Exit Context
+                            exitReason: exitReason,
+                            exitReasoning: decision.reasoning || '',
+                            
+                            // Position context
+                            positionSizePercent: originalBuyTx.positionSizePercent || null,
+                            
+                            // Placeholder for post-exit tracking (will be filled later)
+                            tracking: {
+                                priceAfter1Week: null,
+                                priceAfter1Month: null,
+                                tracked: false
+                            }
                         });
                     }
                     
