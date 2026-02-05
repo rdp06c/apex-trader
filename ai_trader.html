@@ -1080,10 +1080,14 @@
                     <button onclick="clearLocalStorage()" style="padding: 8px 16px; font-size: 13px; background: #ef4444; color: white; font-weight: 600; margin-right: 10px;">
                         🗑️ Clear Local Storage
                     </button>
-                    <button onclick="forceDownloadPortfolio()" style="padding: 8px 16px; font-size: 13px; background: #3b82f6; color: white; font-weight: 600;">
+                    <button onclick="forceDownloadPortfolio()" style="padding: 8px 16px; font-size: 13px; background: #3b82f6; color: white; font-weight: 600; margin-right: 10px;">
                         📥 Force Download from Drive
                     </button>
+                    <button onclick="listDriveFiles()" style="padding: 8px 16px; font-size: 13px; background: #8b5cf6; color: white; font-weight: 600;">
+                        🔍 List Files in Drive
+                    </button>
                     <div id="recoveryStatus" style="font-size: 11px; margin-top: 8px; color: #64748b;"></div>
+                    <div id="driveFileList" style="font-size: 11px; margin-top: 8px; color: #94a3b8; max-height: 200px; overflow-y: auto;"></div>
                 </div>
                 <button onclick="runAIAnalysis()">🤖 Run AI Analysis</button>
                 <button onclick="testDataFetch()" class="secondary" style="background: #4a5568;">🧪 Dry Run (Test Only)</button>
@@ -1731,6 +1735,70 @@
                 status.textContent = '❌ Download failed: ' + error.message;
                 status.style.color = '#ef4444';
                 console.error('Force download error:', error);
+            }
+        }
+        
+        async function listDriveFiles() {
+            const listDiv = document.getElementById('driveFileList');
+            const status = document.getElementById('recoveryStatus');
+            
+            if (!accessToken) {
+                status.textContent = '❌ Not connected to Google Drive. Click cloud icon to sign in first.';
+                status.style.color = '#ef4444';
+                return;
+            }
+            
+            try {
+                listDiv.innerHTML = '⏳ Loading files from Drive...';
+                
+                // List all files (not just Apex_Portfolio.json)
+                const listUrl = `https://www.googleapis.com/drive/v3/files?fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc`;
+                
+                const response = await fetch(listUrl, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to list files: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.files || data.files.length === 0) {
+                    listDiv.innerHTML = '📁 No files found in Google Drive';
+                    return;
+                }
+                
+                // Display files
+                let html = '<div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; margin-top: 10px;">';
+                html += '<div style="font-weight: 600; margin-bottom: 8px; color: #e2e8f0;">📁 Files in your Google Drive:</div>';
+                
+                data.files.forEach(file => {
+                    const isPortfolio = file.name === 'Apex_Portfolio.json';
+                    const color = isPortfolio ? '#34d399' : '#94a3b8';
+                    const icon = isPortfolio ? '✅' : '📄';
+                    const size = file.size ? `(${(file.size / 1024).toFixed(1)} KB)` : '';
+                    const date = new Date(file.modifiedTime).toLocaleString();
+                    
+                    html += `<div style="margin: 4px 0; color: ${color};">${icon} ${file.name} ${size} - ${date}</div>`;
+                });
+                
+                html += '</div>';
+                listDiv.innerHTML = html;
+                
+                // Check if Apex_Portfolio.json exists
+                const portfolioFile = data.files.find(f => f.name === 'Apex_Portfolio.json');
+                if (portfolioFile) {
+                    status.textContent = `✅ Found Apex_Portfolio.json in Drive (${(portfolioFile.size / 1024).toFixed(1)} KB)`;
+                    status.style.color = '#34d399';
+                } else {
+                    status.textContent = '⚠️ Apex_Portfolio.json NOT found in Drive - check filename exactly!';
+                    status.style.color = '#fbbf24';
+                }
+                
+            } catch (error) {
+                listDiv.innerHTML = '❌ Failed to list files: ' + error.message;
+                console.error('List files error:', error);
             }
         }
 
@@ -2827,6 +2895,41 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     addActivity('🚫 Unable to fetch market data: ' + fetchErrors[0].error, 'error');
                     alert('Unable to fetch market data. Please check your connection and try again.');
                     return;
+                }
+                
+                // CHECK PRICE FRESHNESS - Don't waste $3 on stale data!
+                const now = Date.now();
+                let oldestData = 0;
+                let oldestSymbol = '';
+                Object.entries(marketData).forEach(([symbol, data]) => {
+                    const age = now - new Date(data.timestamp).getTime();
+                    if (age > oldestData) {
+                        oldestData = age;
+                        oldestSymbol = symbol;
+                    }
+                });
+                
+                const minutesOld = Math.floor(oldestData / 60000);
+                console.log(`Oldest price data: ${oldestSymbol} is ${minutesOld} minutes old`);
+                
+                // Warn if data is >30 minutes old (market might be closed or data stale)
+                if (minutesOld > 30) {
+                    const proceed = confirm(
+                        `⚠️ STALE DATA WARNING\n\n` +
+                        `Price data is ${minutesOld} minutes old.\n\n` +
+                        `This costs ~$3 per analysis. Running with stale data wastes money.\n\n` +
+                        `Reasons:\n` +
+                        `• Market is closed (after 4PM ET)\n` +
+                        `• Weekend trading data\n` +
+                        `• Data provider delay\n\n` +
+                        `Continue anyway?`
+                    );
+                    
+                    if (!proceed) {
+                        thinking.classList.remove('active');
+                        addActivity('⚠️ AI Analysis cancelled - price data too old', 'warning');
+                        return;
+                    }
                 }
                 
                 // Warn if partial data
@@ -5333,10 +5436,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     addActivity(`💾 Portfolio restored from Google Drive - $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions`, 'success');
                     console.log('=== Portfolio load complete ===');
                 } else {
-                    // No file exists, create one with current portfolio
-                    console.log('No portfolio file found in Google Drive');
-                    console.log('Current portfolio state:', portfolio);
-                    await savePortfolioToDrive();
+                    // No file exists - DON'T auto-create during recovery
+                    console.error('❌ No portfolio file found in Google Drive');
+                    console.error('Searched for:', GDRIVE_CONFIG.PORTFOLIO_FILENAME);
+                    console.error('Search returned:', searchData);
+                    
+                    updateCloudSyncStatus('❌ File not found', 'Check Drive for exact filename');
+                    
+                    throw new Error(
+                        `File "${GDRIVE_CONFIG.PORTFOLIO_FILENAME}" not found in Google Drive. ` +
+                        `Make sure the backup file is named EXACTLY: Apex_Portfolio.json (case-sensitive)`
+                    );
                 }
             } catch (error) {
                 console.error('=== Error loading from Drive ===');
@@ -5344,6 +5454,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 console.error('Error stack:', error.stack);
                 updateCloudSyncStatus('⚠️ Load failed', 'Using local data');
                 addActivity(`⚠️ Could not load from Google Drive: ${error.message}`, 'error');
+                
+                // Re-throw so forceDownloadPortfolio can catch it
+                throw error;
             }
         }
 
