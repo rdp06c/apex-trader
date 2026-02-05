@@ -1069,32 +1069,38 @@
                 <button onclick="initializeAccount()">Initialize Account</button>
                 <button onclick="addWeeklyFunding()" class="secondary">Add Weekly Funding</button>
                 
-                <!-- Force Download from Google Drive -->
+                <!-- Portfolio Backup & Recovery -->
                 <div style="margin-top: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px;">
                     <div style="font-size: 14px; color: #cbd5e1; margin-bottom: 10px; font-weight: 600;">
-                        🔄 Portfolio Recovery
+                        💾 Portfolio Backup & Recovery
                     </div>
-                    <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">
-                        <strong>Option 1:</strong> Right-click your Apex_Portfolio.json in Google Drive → Share → Copy link<br>
-                        Paste the link below to restore from that specific file.
-                    </div>
-                    <div style="margin-bottom: 10px;">
-                        <input type="text" id="driveFileUrl" placeholder="Paste Google Drive link here (e.g., https://drive.google.com/file/d/1ABC.../view)" style="width: 100%; padding: 8px; font-size: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 4px; color: #e2e8f0;">
-                    </div>
-                    <button onclick="clearLocalStorage()" style="padding: 8px 16px; font-size: 13px; background: #ef4444; color: white; font-weight: 600; margin-right: 10px;">
-                        🗑️ Clear Local Storage
-                    </button>
-                    <button onclick="downloadByFileId()" style="padding: 8px 16px; font-size: 13px; background: #10b981; color: white; font-weight: 600; margin-right: 10px;">
-                        📥 Download by Link
-                    </button>
-                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(100, 116, 139, 0.3);">
-                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">
-                            <strong>Option 2:</strong> Auto-search (only works for files APEX created)
+                    
+                    <!-- Save to Drive -->
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">
+                            Save your current portfolio to Google Drive as a backup.
                         </div>
-                        <button onclick="forceDownloadPortfolio()" style="padding: 8px 16px; font-size: 13px; background: #3b82f6; color: white; font-weight: 600;">
-                            📥 Auto-Search & Download
+                        <button onclick="manualSaveToDrive()" style="padding: 8px 16px; font-size: 13px; background: #10b981; color: white; font-weight: 600;">
+                            ☁️ Save Portfolio to Google Drive
                         </button>
                     </div>
+                    
+                    <div style="border-top: 1px solid rgba(100, 116, 139, 0.3); margin: 12px 0;"></div>
+                    
+                    <!-- Restore from local file -->
+                    <div>
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">
+                            Restore from a previously saved Apex_Portfolio.json file on your computer.
+                        </div>
+                        <input type="file" id="localPortfolioFile" accept=".json" style="display: none;" onchange="restoreFromLocalFile(this)">
+                        <button onclick="document.getElementById('localPortfolioFile').click()" style="padding: 8px 16px; font-size: 13px; background: #8b5cf6; color: white; font-weight: 600; margin-right: 10px;">
+                            📂 Restore from Local File
+                        </button>
+                        <button onclick="clearLocalStorage()" style="padding: 8px 16px; font-size: 13px; background: #ef4444; color: white; font-weight: 600;">
+                            🗑️ Clear Local Storage
+                        </button>
+                    </div>
+                    
                     <div id="recoveryStatus" style="font-size: 11px; margin-top: 8px; color: #64748b;"></div>
                 </div>
                 <button onclick="runAIAnalysis()">🤖 Run AI Analysis</button>
@@ -1189,7 +1195,7 @@
                 tokenClient.requestAccessToken();
             } else if (gdriveAuthorized) {
                 // Already authorized, maybe sync portfolio
-                savePortfolioToGoogleDrive();
+                savePortfolioToDrive();
             }
         }
 
@@ -1701,112 +1707,109 @@
             savePortfolio();
         }
         
-        // Portfolio Recovery Functions
+        // Portfolio Backup & Recovery Functions
         function clearLocalStorage() {
             if (confirm('⚠️ This will clear ALL local data including your portfolio!\n\nMake sure you have a backup in Google Drive first.\n\nContinue?')) {
                 localStorage.clear();
-                preventAutoSave = true; // Prevent auto-save during recovery
+                preventAutoSave = true;
                 const status = document.getElementById('recoveryStatus');
-                status.textContent = '✅ Local storage cleared! Recovery mode active. Now sign in and click "Force Download"';
+                status.textContent = '✅ Local storage cleared! Now use "Restore from Local File" to load your backup.';
                 status.style.color = '#34d399';
                 addActivity('🗑️ Local storage cleared - recovery mode active', 'warning');
             }
         }
         
-        async function forceDownloadPortfolio() {
+        // Restore from a local JSON file
+        function restoreFromLocalFile(input) {
             const status = document.getElementById('recoveryStatus');
+            const file = input.files[0];
             
-            if (!accessToken) {
-                status.textContent = '❌ Not connected to Google Drive. Click cloud icon to sign in first.';
+            if (!file) return;
+            
+            if (!file.name.endsWith('.json')) {
+                status.textContent = '❌ Please select a .json file.';
                 status.style.color = '#ef4444';
                 return;
             }
             
-            try {
-                status.textContent = '⏳ Downloading from Google Drive...';
-                status.style.color = '#3b82f6';
-                
-                preventAutoSave = true; // Make sure auto-save is still disabled
-                await loadPortfolioFromDrive();
-                preventAutoSave = false; // Re-enable auto-save after successful restore
-                
-                status.textContent = '✅ Portfolio restored! Auto-save re-enabled.';
-                status.style.color = '#34d399';
-                
-                // Refresh the page after 2 seconds to ensure everything loads
-                setTimeout(() => {
-                    location.reload();
-                }, 2000);
-                
-            } catch (error) {
-                preventAutoSave = false; // Re-enable even on error
-                status.textContent = '❌ Download failed: ' + error.message;
-                status.style.color = '#ef4444';
-                console.error('Force download error:', error);
+            if (!confirm(`⚠️ This will replace your current portfolio with the data from "${file.name}".\n\nCurrent portfolio will be overwritten.\n\nContinue?`)) {
+                input.value = '';
+                return;
             }
+            
+            status.textContent = `⏳ Reading ${file.name}...`;
+            status.style.color = '#3b82f6';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const restoredPortfolio = JSON.parse(e.target.result);
+                    
+                    if (typeof restoredPortfolio.cash === 'undefined' || typeof restoredPortfolio.holdings === 'undefined') {
+                        throw new Error('File does not appear to be a valid APEX portfolio (missing cash or holdings).');
+                    }
+                    
+                    console.log('Loaded portfolio from local file:', restoredPortfolio);
+                    console.log('Cash:', restoredPortfolio.cash, 'Holdings:', Object.keys(restoredPortfolio.holdings).length);
+                    
+                    preventAutoSave = true;
+                    
+                    portfolio = restoredPortfolio;
+                    localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
+                    
+                    updateUI();
+                    updatePerformanceAnalytics();
+                    updateSectorAllocation();
+                    
+                    preventAutoSave = false;
+                    
+                    const holdingsCount = Object.keys(portfolio.holdings).length;
+                    status.textContent = `✅ Portfolio restored from ${file.name}! $${portfolio.cash.toFixed(2)} cash, ${holdingsCount} positions. Reloading...`;
+                    status.style.color = '#34d399';
+                    addActivity(`💾 Portfolio restored from local file "${file.name}" - $${portfolio.cash.toFixed(2)} cash, ${holdingsCount} positions`, 'success');
+                    
+                    setTimeout(() => { location.reload(); }, 2000);
+                    
+                } catch (error) {
+                    preventAutoSave = false;
+                    status.textContent = '❌ Failed to restore: ' + error.message;
+                    status.style.color = '#ef4444';
+                    console.error('Local file restore error:', error);
+                }
+            };
+            
+            reader.onerror = function() {
+                status.textContent = '❌ Failed to read file.';
+                status.style.color = '#ef4444';
+            };
+            
+            reader.readAsText(file);
+            input.value = '';
         }
         
-        async function listDriveFiles() {
-            const listDiv = document.getElementById('driveFileList');
+        // Manual save to Google Drive with user feedback
+        async function manualSaveToDrive() {
             const status = document.getElementById('recoveryStatus');
             
-            if (!accessToken) {
-                status.textContent = '❌ Not connected to Google Drive. Click cloud icon to sign in first.';
+            if (!gdriveAuthorized || !accessToken) {
+                status.textContent = '❌ Not connected to Google Drive. Click the ☁️ cloud icon to sign in first.';
                 status.style.color = '#ef4444';
                 return;
             }
             
             try {
-                listDiv.innerHTML = '⏳ Loading files from Drive...';
+                status.textContent = '⏳ Saving portfolio to Google Drive...';
+                status.style.color = '#3b82f6';
                 
-                // List all files (not just Apex_Portfolio.json)
-                const listUrl = `https://www.googleapis.com/drive/v3/files?fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc`;
+                await savePortfolioToDrive();
                 
-                const response = await fetch(listUrl, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to list files: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                if (!data.files || data.files.length === 0) {
-                    listDiv.innerHTML = '📁 No files found in Google Drive';
-                    return;
-                }
-                
-                // Display files
-                let html = '<div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; margin-top: 10px;">';
-                html += '<div style="font-weight: 600; margin-bottom: 8px; color: #e2e8f0;">📁 Files in your Google Drive:</div>';
-                
-                data.files.forEach(file => {
-                    const isPortfolio = file.name === 'Apex_Portfolio.json';
-                    const color = isPortfolio ? '#34d399' : '#94a3b8';
-                    const icon = isPortfolio ? '✅' : '📄';
-                    const size = file.size ? `(${(file.size / 1024).toFixed(1)} KB)` : '';
-                    const date = new Date(file.modifiedTime).toLocaleString();
-                    
-                    html += `<div style="margin: 4px 0; color: ${color};">${icon} ${file.name} ${size} - ${date}</div>`;
-                });
-                
-                html += '</div>';
-                listDiv.innerHTML = html;
-                
-                // Check if Apex_Portfolio.json exists
-                const portfolioFile = data.files.find(f => f.name === 'Apex_Portfolio.json');
-                if (portfolioFile) {
-                    status.textContent = `✅ Found Apex_Portfolio.json in Drive (${(portfolioFile.size / 1024).toFixed(1)} KB)`;
-                    status.style.color = '#34d399';
-                } else {
-                    status.textContent = '⚠️ Apex_Portfolio.json NOT found in Drive - check filename exactly!';
-                    status.style.color = '#fbbf24';
-                }
-                
+                const holdingsCount = Object.keys(portfolio.holdings).length;
+                status.textContent = `✅ Portfolio saved to Google Drive! $${portfolio.cash.toFixed(2)} cash, ${holdingsCount} positions. (${new Date().toLocaleTimeString()})`;
+                status.style.color = '#34d399';
             } catch (error) {
-                listDiv.innerHTML = '❌ Failed to list files: ' + error.message;
-                console.error('List files error:', error);
+                status.textContent = '❌ Save failed: ' + error.message;
+                status.style.color = '#ef4444';
+                console.error('Manual save to Drive error:', error);
             }
         }
 
@@ -2991,18 +2994,15 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 
                 // 1. Score every stock with a composite ranking
                 const scoredStocks = Object.entries(enhancedMarketData).map(([symbol, data]) => {
-                    // Composite score: momentum (0-10) + normalized RS (0-10) + sector flow bonus
                     const momentumScore = data.momentum?.score || 0;
-                    const rsNormalized = ((data.relativeStrength?.rsScore || 50) / 100) * 10; // 0-10 scale
+                    const rsNormalized = ((data.relativeStrength?.rsScore || 50) / 100) * 10;
                     
-                    // Sector flow bonus
                     let sectorBonus = 0;
                     const flow = data.sectorRotation?.moneyFlow;
                     if (flow === 'inflow') sectorBonus = 2;
                     else if (flow === 'modest-inflow') sectorBonus = 1;
                     else if (flow === 'outflow') sectorBonus = -1;
                     
-                    // Big movers bonus (absolute change > 3% gets attention either direction)
                     const bigMoverBonus = Math.abs(data.changePercent || 0) > 3 ? 1.5 : 0;
                     
                     const compositeScore = momentumScore + rsNormalized + sectorBonus + bigMoverBonus;
@@ -3017,7 +3017,6 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 const TOP_N = 25;
                 const WILD_CARDS = 5;
                 
-                // Top 25 by score
                 const topCandidates = new Set(scoredStocks.slice(0, TOP_N).map(s => s.symbol));
                 
                 // Always include current holdings (critical for sell decisions)
@@ -3027,20 +3026,18 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     }
                 });
                 
-                // Add wild cards: pick from sectors underrepresented in top 25
+                // Add wild cards from underrepresented sectors
                 const sectorCounts = {};
                 topCandidates.forEach(symbol => {
                     const sector = enhancedMarketData[symbol]?.sector || 'Unknown';
                     sectorCounts[sector] = (sectorCounts[sector] || 0) + 1;
                 });
                 
-                // Find sectors with 0 representation and add their top stock
                 const allSectors = [...new Set(Object.values(enhancedMarketData).map(d => d.sector))];
                 let wildCardsAdded = 0;
                 for (const sector of allSectors) {
                     if (wildCardsAdded >= WILD_CARDS) break;
                     if (!sectorCounts[sector]) {
-                        // Find the top stock from this missing sector
                         const topFromSector = scoredStocks.find(s => 
                             s.data.sector === sector && !topCandidates.has(s.symbol)
                         );
@@ -3051,13 +3048,13 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     }
                 }
                 
-                // 4. Build filtered enhanced data (only candidates)
+                // 4. Build filtered data (only candidates go to Claude)
                 const filteredMarketData = {};
                 topCandidates.forEach(symbol => {
                     filteredMarketData[symbol] = enhancedMarketData[symbol];
                 });
                 
-                // 5. Build a compact sector summary from ALL 300 stocks (so Claude has full market context)
+                // 5. Build compact sector summary from ALL stocks (full market context)
                 const sectorSummary = {};
                 Object.entries(sectorRotation).forEach(([sector, data]) => {
                     const sectorStocks = scoredStocks.filter(s => s.data.sector === sector);
@@ -5549,7 +5546,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 updateCloudSyncStatus('⚠️ Load failed', 'Using local data');
                 addActivity(`⚠️ Could not load from Google Drive: ${error.message}`, 'error');
                 
-                // Re-throw so forceDownloadPortfolio can catch it
+                // Re-throw so caller can handle the error
                 throw error;
             }
         }
