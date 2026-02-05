@@ -1079,6 +1079,7 @@
         let portfolio = {
             cash: 0,
             initialBalance: 0,
+            totalDeposits: 0, // Track all cash deposits (initial + weekly funding)
             holdings: {},
             transactions: [],
             performanceHistory: [],
@@ -1616,6 +1617,7 @@
             const balance = parseFloat(document.getElementById('initialBalance').value);
             portfolio.cash = balance;
             portfolio.initialBalance = balance;
+            portfolio.totalDeposits = balance; // Track initial deposit
             portfolio.holdings = {};
             portfolio.transactions = [];
             portfolio.performanceHistory = [{
@@ -1632,6 +1634,7 @@
         function addWeeklyFunding() {
             const funding = parseFloat(document.getElementById('weeklyFunding').value);
             portfolio.cash += funding;
+            portfolio.totalDeposits += funding; // Track this deposit
             addActivity('Weekly funding added: $' + funding.toLocaleString(), 'funding');
             updateUI();
             savePortfolio();
@@ -4516,8 +4519,18 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 console.log('Price data received:', priceData);
                 console.log('Total portfolio value:', totalValue);
                 
-                const change = totalValue - portfolio.initialBalance;
-                const changePercent = (change / portfolio.initialBalance) * 100;
+                // CRITICAL FIX: Calculate actual trading performance
+                // Don't count deposits as performance!
+                const totalDeposited = portfolio.totalDeposits || portfolio.initialBalance;
+                const change = totalValue - totalDeposited;
+                const changePercent = (change / totalDeposited) * 100;
+                
+                console.log('Performance calculation:', {
+                    totalValue,
+                    totalDeposited,
+                    change,
+                    changePercent
+                });
 
             // Calculate actual cost basis (total invested) from transactions
             let totalInvested = 0;
