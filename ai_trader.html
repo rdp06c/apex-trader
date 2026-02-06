@@ -2059,7 +2059,7 @@
             try {
                 const today = new Date();
                 const from = new Date(today);
-                from.setDate(from.getDate() - 10);
+                from.setDate(from.getDate() - 30); // 30 calendar days ≈ 20 trading days (for structure detection)
                 const fromStr = from.toISOString().split('T')[0];
                 const toStr = today.toISOString().split('T')[0];
                 const response = await fetch(
@@ -2072,7 +2072,7 @@
                 }
                 return null;
             } catch (error) {
-                console.warn(`5-day history unavailable for ${symbol}:`, error.message);
+                console.warn(`Price history unavailable for ${symbol}:`, error.message);
                 return null;
             }
         }
@@ -2089,10 +2089,10 @@
             console.log(`✅ Fetched 5-day history for ${Object.keys(multiDayCache).length}/${symbols.length} stocks`);
         }
         
-        // Calculate REAL 5-day momentum score
+        // Calculate REAL 5-day momentum score (uses last 5 bars from 20-day cache)
         function calculate5DayMomentum(priceData, symbol) {
-            const bars = multiDayCache[symbol];
-            if (!bars || bars.length < 2) {
+            const allBars = multiDayCache[symbol];
+            if (!allBars || allBars.length < 2) {
                 if (!priceData || !priceData.price) return { score: 0, trend: 'unknown', basis: 'no-data' };
                 const cp = priceData.changePercent || 0;
                 let score = 5;
@@ -2100,6 +2100,8 @@
                 else if (cp > -2) score = 4; else if (cp > -5) score = 2; else score = 0;
                 return { score, trend: score >= 6 ? 'building' : score <= 4 ? 'fading' : 'neutral', changePercent: cp, basis: '1-day-fallback' };
             }
+            // Use last 5 bars for momentum (not full 20-day window)
+            const bars = allBars.slice(-5);
             const latest = bars[bars.length - 1], oldest = bars[0], mid = bars[Math.floor(bars.length / 2)];
             const totalReturn = ((latest.c - oldest.c) / oldest.c) * 100;
             const firstHalfReturn = ((mid.c - oldest.c) / oldest.c) * 100;
@@ -2133,13 +2135,17 @@
             const stockBars = multiDayCache[symbol];
             let stockReturn = stockData.changePercent || 0, usedMultiDay = false;
             if (stockBars && stockBars.length >= 2) {
-                stockReturn = ((stockBars[stockBars.length - 1].c - stockBars[0].c) / stockBars[0].c) * 100;
+                const recent5 = stockBars.slice(-5);
+                stockReturn = ((recent5[recent5.length - 1].c - recent5[0].c) / recent5[0].c) * 100;
                 usedMultiDay = true;
             }
             let sectorTotal = 0, sectorCount = 0;
             sectorData.forEach(stock => {
                 const sBars = multiDayCache[stock.symbol];
-                if (sBars && sBars.length >= 2) sectorTotal += ((sBars[sBars.length - 1].c - sBars[0].c) / sBars[0].c) * 100;
+                if (sBars && sBars.length >= 2) {
+                    const sRecent5 = sBars.slice(-5);
+                    sectorTotal += ((sRecent5[sRecent5.length - 1].c - sRecent5[0].c) / sRecent5[0].c) * 100;
+                }
                 else sectorTotal += (stock.changePercent || 0);
                 sectorCount++;
             });
@@ -2160,7 +2166,10 @@
                 if (!sectors[sector]) sectors[sector] = { stocks: [], totalReturn5d: 0, totalChangeToday: 0, leaders5d: 0, laggards5d: 0, leadersToday: 0, laggardsToday: 0 };
                 const bars = multiDayCache[symbol];
                 let return5d = data.changePercent || 0;
-                if (bars && bars.length >= 2) return5d = ((bars[bars.length - 1].c - bars[0].c) / bars[0].c) * 100;
+                if (bars && bars.length >= 2) {
+                    const recent5 = bars.slice(-5);
+                    return5d = ((recent5[recent5.length - 1].c - recent5[0].c) / recent5[0].c) * 100;
+                }
                 sectors[sector].stocks.push({ symbol, ...data, return5d });
                 sectors[sector].totalReturn5d += return5d;
                 sectors[sector].totalChangeToday += (data.changePercent || 0);
@@ -2184,6 +2193,163 @@
                 sectorAnalysis[sector] = { avgChange: avgChange.toFixed(2), avgReturn5d: avgReturn5d.toFixed(2), leaders5d: data.leaders5d, laggards5d: data.laggards5d, leadersToday: data.leadersToday, laggardsToday: data.laggardsToday, total: count, leaderRatio5d: (leaderRatio5d * 100).toFixed(0) + '%', moneyFlow: flow, rotationSignal };
             });
             return sectorAnalysis;
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // MARKET STRUCTURE DETECTION: CHoCH (Change of Character) & BOS (Break of Structure)
+        // Uses 20-day daily bars to identify swing highs/lows and structural shifts
+        // ══════════════════════════════════════════════════════════════
+        
+        function detectStructure(symbol) {
+            const bars = multiDayCache[symbol];
+            if (!bars || bars.length < 7) {
+                return { structure: 'unknown', choch: false, bos: false, basis: 'insufficient-data' };
+            }
+            
+            // Step 1: Identify swing highs and swing lows
+            // A swing high = bar whose high is higher than the bar before AND after it
+            // A swing low = bar whose low is lower than the bar before AND after it
+            const swingHighs = []; // { index, price, timestamp }
+            const swingLows = [];
+            
+            for (let i = 1; i < bars.length - 1; i++) {
+                if (bars[i].h > bars[i-1].h && bars[i].h > bars[i+1].h) {
+                    swingHighs.push({ index: i, price: bars[i].h, time: bars[i].t });
+                }
+                if (bars[i].l < bars[i-1].l && bars[i].l < bars[i+1].l) {
+                    swingLows.push({ index: i, price: bars[i].l, time: bars[i].t });
+                }
+            }
+            
+            if (swingHighs.length < 2 || swingLows.length < 2) {
+                return { structure: 'unknown', choch: false, bos: false, basis: 'insufficient-swings', swingHighs: swingHighs.length, swingLows: swingLows.length };
+            }
+            
+            // Step 2: Determine prevailing structure from the swing sequence
+            // Bullish structure: Higher Highs (HH) + Higher Lows (HL)
+            // Bearish structure: Lower Highs (LH) + Lower Lows (LL)
+            const lastSH = swingHighs[swingHighs.length - 1];
+            const prevSH = swingHighs[swingHighs.length - 2];
+            const lastSL = swingLows[swingLows.length - 1];
+            const prevSL = swingLows[swingLows.length - 2];
+            
+            const higherHigh = lastSH.price > prevSH.price;
+            const higherLow = lastSL.price > prevSL.price;
+            const lowerHigh = lastSH.price < prevSH.price;
+            const lowerLow = lastSL.price < prevSL.price;
+            
+            let structure = 'ranging';
+            if (higherHigh && higherLow) structure = 'bullish';
+            else if (lowerHigh && lowerLow) structure = 'bearish';
+            else if (higherHigh && lowerLow) structure = 'ranging'; // Expanding
+            else if (lowerHigh && higherLow) structure = 'contracting'; // Compressing
+            
+            // Step 3: Detect CHoCH (Change of Character)
+            // CHoCH = structure was bullish (HH+HL) but just made a LL, or was bearish (LH+LL) but just made a HH
+            // We need at least 3 swing points to detect a change
+            let choch = false;
+            let chochType = null;
+            
+            if (swingHighs.length >= 3 && swingLows.length >= 3) {
+                const prevPrevSH = swingHighs[swingHighs.length - 3];
+                const prevPrevSL = swingLows[swingLows.length - 3];
+                
+                // Was previously bullish (earlier swings were HH+HL)?
+                const wasBullish = prevSH.price > prevPrevSH.price && prevSL.price > prevPrevSL.price;
+                // Was previously bearish (earlier swings were LH+LL)?
+                const wasBearish = prevSH.price < prevPrevSH.price && prevSL.price < prevPrevSL.price;
+                
+                if (wasBullish && lowerLow) {
+                    // Was making HH+HL, now made a LL → bearish CHoCH
+                    choch = true;
+                    chochType = 'bearish';
+                } else if (wasBearish && higherHigh) {
+                    // Was making LH+LL, now made a HH → bullish CHoCH
+                    choch = true;
+                    chochType = 'bullish';
+                }
+            }
+            
+            // Step 4: Detect BOS (Break of Structure)
+            // BOS = current price confirms the prevailing trend
+            // Bullish BOS: price breaks above the most recent swing high (trend continuation)
+            // Bearish BOS: price breaks below the most recent swing low (trend continuation)
+            let bos = false;
+            let bosType = null;
+            const currentPrice = bars[bars.length - 1].c;
+            
+            if (structure === 'bullish' && currentPrice > prevSH.price) {
+                bos = true;
+                bosType = 'bullish';
+            } else if (structure === 'bearish' && currentPrice < prevSL.price) {
+                bos = true;
+                bosType = 'bearish';
+            }
+            
+            // Step 5: Detect potential liquidity sweep patterns
+            // A sweep = price briefly pierced a swing level then reversed
+            // Check if the most recent bar's wick went past a swing level but closed back
+            let sweepDetected = false;
+            let sweepType = null;
+            const latestBar = bars[bars.length - 1];
+            
+            // Check for sweep of recent swing high (wick above, close below)
+            if (latestBar.h > lastSH.price && latestBar.c < lastSH.price) {
+                sweepDetected = true;
+                sweepType = 'high-swept'; // Bearish signal — swept buy-side liquidity
+            }
+            // Check for sweep of recent swing low (wick below, close above)
+            if (latestBar.l < lastSL.price && latestBar.c > lastSL.price) {
+                sweepDetected = true;
+                sweepType = 'low-swept'; // Bullish signal — swept sell-side liquidity
+            }
+            
+            // Step 6: Detect Fair Value Gaps (FVG) in the last 5 bars
+            // FVG = gap between bar[i-1].high and bar[i+1].low (bullish) or bar[i-1].low and bar[i+1].high (bearish)
+            let fvg = null;
+            for (let i = Math.max(1, bars.length - 4); i < bars.length - 1; i++) {
+                // Bullish FVG: bar[i-1].h < bar[i+1].l (gap up — price moved so fast it left an unfilled zone)
+                if (bars[i-1].h < bars[i+1].l) {
+                    fvg = { type: 'bullish', gapTop: bars[i+1].l, gapBottom: bars[i-1].h, barIndex: i };
+                }
+                // Bearish FVG: bar[i-1].l > bar[i+1].h (gap down)
+                if (bars[i-1].l > bars[i+1].h) {
+                    fvg = { type: 'bearish', gapTop: bars[i-1].l, gapBottom: bars[i+1].h, barIndex: i };
+                }
+            }
+            
+            // Build composite structure signal for Claude
+            let structureSignal = 'neutral';
+            let structureScore = 0; // -3 to +3 scale
+            
+            if (bos && bosType === 'bullish') { structureSignal = 'strong-bullish'; structureScore = 3; }
+            else if (bos && bosType === 'bearish') { structureSignal = 'strong-bearish'; structureScore = -3; }
+            else if (choch && chochType === 'bullish') { structureSignal = 'reversal-bullish'; structureScore = 2; }
+            else if (choch && chochType === 'bearish') { structureSignal = 'reversal-bearish'; structureScore = -2; }
+            else if (structure === 'bullish') { structureSignal = 'bullish'; structureScore = 1; }
+            else if (structure === 'bearish') { structureSignal = 'bearish'; structureScore = -1; }
+            
+            // Sweep modifies the signal
+            if (sweepDetected && sweepType === 'low-swept') structureScore += 1; // Bullish reversal signal
+            if (sweepDetected && sweepType === 'high-swept') structureScore -= 1; // Bearish reversal signal
+            
+            return {
+                structure,
+                structureSignal,
+                structureScore: Math.max(-3, Math.min(3, structureScore)),
+                choch,
+                chochType: chochType || 'none',
+                bos,
+                bosType: bosType || 'none',
+                sweep: sweepDetected ? sweepType : 'none',
+                fvg: fvg ? fvg.type : 'none',
+                swingHighs: swingHighs.length,
+                swingLows: swingLows.length,
+                lastSwingHigh: lastSH.price,
+                lastSwingLow: lastSL.price,
+                currentPrice,
+                basis: '20-day-structure'
+            };
         }
 
 
@@ -3336,10 +3502,10 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
 
             try {
                 // MARKET HOURS CHECK: Warn if markets are closed to avoid wasting API costs
-                const now = new Date();
-                const day = now.getDay();
-                const hour = now.getHours();
-                const minute = now.getMinutes();
+                const marketCheckTime = new Date();
+                const day = marketCheckTime.getDay();
+                const hour = marketCheckTime.getHours();
+                const minute = marketCheckTime.getMinutes();
                 const currentTime = hour * 60 + minute;
                 const marketOpen = 9 * 60 + 30; // 9:30 AM local (approximation)
                 const marketClose = 16 * 60; // 4:00 PM local
@@ -3558,17 +3724,21 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     // Calculate relative strength vs sector
                     const relativeStrength = calculateRelativeStrength(data, sectorData, symbol);
                     
+                    // Detect market structure (CHoCH, BOS, sweeps, FVG)
+                    const marketStructure = detectStructure(symbol);
+                    
                     // Combine all data
                     enhancedMarketData[symbol] = {
                         ...data,
                         sector: sector,
                         momentum: momentum,
                         relativeStrength: relativeStrength,
-                        sectorRotation: sectorRotation[sector]
+                        sectorRotation: sectorRotation[sector],
+                        marketStructure: marketStructure
                     };
                 });
                 
-                console.log('✅ Enhanced market data prepared with momentum, RS, and rotation analysis');
+                console.log('✅ Enhanced market data prepared with momentum, RS, rotation, and structure analysis');
 
                 // === PRE-SCREEN: Rank all stocks and select top candidates for Claude ===
                 thinkingDetail.textContent = 'Pre-screening: ranking stocks by composite score...';
@@ -3590,8 +3760,10 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     const consistencyBonus = (data.momentum?.upDays >= 3 && data.momentum?.totalDays >= 4) ? 1.0 : 0;
                     // Reduced big-mover bonus
                     const bigMoverBonus = Math.abs(data.changePercent || 0) > 5 ? 0.5 : 0;
+                    // Structure bonus: reward bullish structure, BOS, bullish CHoCH; penalize bearish
+                    const structureBonus = (data.marketStructure?.structureScore || 0) * 0.75;
                     
-                    const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus + bigMoverBonus;
+                    const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus + bigMoverBonus + structureBonus;
                     
                     return { symbol, compositeScore, data };
                 });
@@ -4772,6 +4944,26 @@ Each stock includes:
 IMPORTANT: momentum and RS reflect MULTI-DAY trends, not just today's move.
 A stock flat today but up 8% over 5 days → HIGH momentum.
 A stock up 5% today but down over 5 days → MODERATE momentum (spike, weak trend).
+
+• marketStructure: { structure, structureSignal, structureScore, choch, chochType, bos, bosType, sweep, fvg, lastSwingHigh, lastSwingLow }
+  → Based on 20-day price bars. Detects swing highs/lows and structural shifts.
+  → structure: 'bullish' (HH+HL), 'bearish' (LH+LL), 'ranging', 'contracting'
+  → choch: true if Change of Character detected (trend reversal starting)
+    • chochType 'bearish' = was bullish, now broke structure down. EXIT SIGNAL for longs.
+    • chochType 'bullish' = was bearish, now broke structure up. ENTRY SIGNAL for longs.
+  → bos: true if Break of Structure confirmed (trend continuation)
+    • bosType 'bullish' = price broke above prior swing high. Confirms uptrend. BUY SIGNAL.
+    • bosType 'bearish' = price broke below prior swing low. Confirms downtrend. AVOID.
+  → sweep: 'high-swept' (bearish: liquidity taken above swing high, reversed) or 'low-swept' (bullish: liquidity taken below swing low, reversed)
+  → fvg: 'bullish' or 'bearish' Fair Value Gap detected in recent bars
+  → structureScore: -3 to +3 composite (+3 = strong bullish BOS, -3 = strong bearish BOS)
+
+HOW TO USE STRUCTURE DATA:
+- Bullish BOS (structureScore +3) + high momentum = STRONG BUY setup
+- Bearish CHoCH on a holding = SELL SIGNAL (structure breaking down)
+- Bullish CHoCH + low-swept = potential reversal entry (smart money accumulated)
+- Bearish structure + sweep of highs = avoid (likely distribution)
+- FVG = price may return to fill the gap; use as entry zone for confirmed setups
 
 CRITICAL REMINDERS:
 • Catalyst is the gate - without it (8+/10), don't trade
