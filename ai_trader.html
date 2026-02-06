@@ -4083,6 +4083,38 @@ Include a decision for EVERY holding.` }]
                     });
                 }
                 
+                // Flag recently-sold stocks in candidate data (sold within last 5 trading days)
+                // Forces Claude to justify re-buying with a NEW catalyst, not just "price dropped more"
+                const RECENT_SELL_COOLDOWN_DAYS = 5;
+                const cooldownMs = RECENT_SELL_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+                const nowMs = Date.now();
+                const recentSells = (portfolio.closedTrades || []).filter(t => {
+                    const sellTime = new Date(t.sellDate).getTime();
+                    return (nowMs - sellTime) < cooldownMs;
+                });
+                
+                let recentlySoldWarnings = '';
+                recentSells.forEach(trade => {
+                    if (filteredMarketData[trade.symbol]) {
+                        const daysSinceSell = Math.round((nowMs - new Date(trade.sellDate).getTime()) / (24 * 60 * 60 * 1000) * 10) / 10;
+                        const exitReason = trade.exitReason || trade.exitReasoning?.substring(0, 80) || 'unknown';
+                        
+                        // Tag the market data so Claude sees it inline
+                        filteredMarketData[trade.symbol].RECENTLY_SOLD = {
+                            soldDate: trade.sellDate.split('T')[0],
+                            daysAgo: daysSinceSell,
+                            sellPrice: '$' + trade.sellPrice.toFixed(2),
+                            buyPrice: '$' + trade.buyPrice.toFixed(2),
+                            realizedPL: (trade.returnPercent >= 0 ? '+' : '') + trade.returnPercent.toFixed(1) + '%',
+                            exitReason: exitReason
+                        };
+                        
+                        recentlySoldWarnings += `⚠️ ${trade.symbol}: Sold ${daysSinceSell.toFixed(1)} days ago at $${trade.sellPrice.toFixed(2)} (reason: ${exitReason}). To re-buy, you MUST identify a NEW catalyst not present at time of sale. "Price dropped more" is NOT sufficient.\n`;
+                        
+                        console.log(`⚠️ Recently sold: ${trade.symbol} (${daysSinceSell.toFixed(1)} days ago, reason: ${exitReason})`);
+                    }
+                });
+                
                 thinkingDetail.textContent = hasHoldings ? 'Phase 2: Finding buy opportunities...' : 'Researching buy opportunities...';
                 
                 // Call Claude API for BUY decisions (Phase 2) via Cloudflare Worker proxy
@@ -5042,6 +5074,10 @@ UNDERSTANDING THE DATA:
 These ${candidateCount} stocks were pre-screened from 300+ by composite score (momentum + relative strength + sector flow).
 All current holdings are included regardless of score so you can evaluate sell decisions.
 The sector summary covers ALL 300 stocks so you have full market context.
+${recentlySoldWarnings ? `
+🚫 RECENTLY SOLD — RE-BUY REQUIRES NEW CATALYST:
+${recentlySoldWarnings}Do NOT re-buy these stocks unless you can cite a specific NEW development (earnings, contract, upgrade, policy change) that was NOT known when the sell decision was made. The original exit reason is listed above — your new thesis must directly address why that reason no longer applies.
+` : ''}
 
 Each stock includes:
 • price, change, changePercent - Current price data (today vs prev close)
