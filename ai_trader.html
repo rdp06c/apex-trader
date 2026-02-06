@@ -6559,6 +6559,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     
                     // Shorten reasoning for display (first 60 chars)
                     const shortReasoning = reasoning.length > 60 ? reasoning.substring(0, 60) + '...' : reasoning;
+                    const isLongReasoning = reasoning.length > 60;
+                    const catalystId = `catalyst-${symbol}-${Date.now()}`;
                     
                     // Get stock name from mapping
                     const stockName = stockNames[symbol] || symbol;
@@ -6596,15 +6598,18 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 </div>
                             </div>
                             ${reasoning ? `
-                            <div style="margin: 12px 0; padding: 10px; background: rgba(99, 102, 241, 0.1); border-left: 3px solid #6366f1; border-radius: 4px;">
+                            <div style="margin: 12px 0; padding: 10px; background: rgba(99, 102, 241, 0.1); border-left: 3px solid #6366f1; border-radius: 4px; ${isLongReasoning ? 'cursor: pointer;' : ''}" ${isLongReasoning ? `onclick="const full = document.getElementById('${catalystId}-full'); const short = document.getElementById('${catalystId}-short'); const arrow = document.getElementById('${catalystId}-arrow'); if (full.style.display === 'none') { full.style.display = 'block'; short.style.display = 'none'; arrow.textContent = '▾'; } else { full.style.display = 'none'; short.style.display = 'block'; arrow.textContent = '▸'; }"` : ''}>
                                 <div style="font-size: 13px; color: #cbd5e1; line-height: 1.5;">
-                                    💡 <strong>Catalyst:</strong> ${shortReasoning}
+                                    💡 <strong>Catalyst:</strong>
+                                    ${isLongReasoning ? `<span id="${catalystId}-arrow" style="color: #818cf8; font-size: 11px; margin-left: 4px;">▸</span>` : ''}
+                                    <span id="${catalystId}-short" style="display: block; margin-top: 4px;">${shortReasoning}</span>
+                                    <span id="${catalystId}-full" style="display: none; margin-top: 4px;">${reasoning}</span>
                                 </div>
                             </div>
                             ` : ''}
                             <div style="margin: 10px 0; padding: 10px; background: rgba(15, 15, 35, 0.5); border-radius: 4px;">
                                 <div style="font-size: 13px; color: #cbd5e1; line-height: 1.6;">
-                                    ⏰ <strong>Held ${daysHeld} day${daysHeld !== 1 ? 's' : ''}</strong> | Expected: ${expectedDays.label}
+                                    ⏰ <strong>${daysHeld === 0 ? 'Bought today' : `Held ${daysHeld} day${daysHeld !== 1 ? 's' : ''}`}</strong> | Expected: ${expectedDays.label}
                                     ${isPastTimeframe ? 
                                         '<div style="color: #fbbf24; margin-top: 6px; font-weight: 600;">⚠️ REVIEW: Past expected timeframe - re-evaluate thesis!</div>' 
                                         : daysRemaining > 0 ? 
@@ -6620,7 +6625,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     <span style="color: #cbd5e1; font-weight: 500;">Current:</span> <span style="color: #e2e8f0; font-weight: 600;">$${stockPrice.price.toFixed(2)}</span> <span class="stat-change ${changeClass}" style="font-size: 13px;">${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}%</span>
                                 </div>
                                 <div>
-                                    <span style="color: #cbd5e1; font-weight: 500;">Purchased:</span> <span style="color: #e2e8f0; font-weight: 600;">${earliestDate ? earliestDate.toLocaleDateString() : 'N/A'}</span>
+                                    <span style="color: #cbd5e1; font-weight: 500;">Purchased:</span> <span style="color: #e2e8f0; font-weight: 600;">${earliestDate ? earliestDate.toLocaleDateString() + ' ' + earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span>
                                 </div>
                             </div>
                         </div>
