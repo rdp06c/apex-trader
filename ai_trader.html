@@ -6395,97 +6395,85 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 console.log('Price data received:', priceData);
                 console.log('Total portfolio value:', totalValue);
                 
-            // Calculate DAILY PERFORMANCE from current holdings AND today's realized trades
+            // Calculate DAILY PERFORMANCE using portfolio value snapshots
+            // This is the most reliable method: compare current total value to start-of-day value,
+            // adjusting for any deposits made today. No stock-by-stock reconstruction needed.
             let dailyGain = 0;
-            let totalHoldingsValue = 0;
+            let dailyGainPercent = 0;
             
             console.log('═══ DAILY PERFORMANCE CALCULATION ═══');
             
-            // Part 1: Unrealized daily P&L from current holdings (using today's price change)
-            for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
-                if (priceData[symbol]) {
-                    const stockPrice = priceData[symbol].price;
-                    const stockChangePercent = priceData[symbol].changePercent; // Today's % change from API
-                    const currentValue = stockPrice * shares;
-                    const openingValue = currentValue / (1 + (stockChangePercent / 100)); // Back-calculate opening value
-                    const stockDailyGain = currentValue - openingValue;
-                    
-                    console.log(`  Part1 HOLDING: ${symbol} | ${shares} shares @ $${stockPrice.toFixed(2)} | change: ${stockChangePercent.toFixed(2)}% | daily P&L: ${stockDailyGain >= 0 ? '+' : ''}$${stockDailyGain.toFixed(2)}`);
-                    
-                    dailyGain += stockDailyGain;
-                    totalHoldingsValue += currentValue;
-                }
-            }
-            console.log(`  Part1 TOTAL: dailyGain=$${dailyGain.toFixed(2)}, holdingsValue=$${totalHoldingsValue.toFixed(2)}`);
-            
-            // Part 2: Daily price movement on stocks SOLD today
-            // For daily performance, we only care about TODAY's price movement, not the full realized P&L.
-            // We use the same changePercent approach as Part 1 to get just today's contribution.
-            // Use LOCAL date for comparison (not UTC — toISOString shifts dates for US timezones)
             const now_local = new Date();
             const todayLocal = now_local.getFullYear() + '-' + 
                 String(now_local.getMonth() + 1).padStart(2, '0') + '-' + 
                 String(now_local.getDate()).padStart(2, '0');
-            const todaysSells = (portfolio.transactions || []).filter(t => {
-                if (t.type !== 'SELL' || !t.timestamp) return false;
-                const sellDate = new Date(t.timestamp);
-                const sellLocal = sellDate.getFullYear() + '-' + 
-                    String(sellDate.getMonth() + 1).padStart(2, '0') + '-' + 
-                    String(sellDate.getDate()).padStart(2, '0');
-                return sellLocal === todayLocal;
-            });
             
-            console.log(`  Part2: Looking for sells on ${todayLocal} (local), found ${todaysSells.length} sells`);
-            if (todaysSells.length === 0) {
-                // Debug: show recent sells to check timestamp format
-                const recentSells = (portfolio.transactions || []).filter(t => t.type === 'SELL').slice(-3);
-                recentSells.forEach(s => console.log(`    Recent sell: ${s.symbol} at ${s.timestamp}`));
+            // Find the start-of-day portfolio value:
+            // Look for the last performanceHistory entry BEFORE today (end of previous day)
+            // If none exists, use the first entry of today as baseline
+            const perfHistory = portfolio.performanceHistory || [];
+            let startOfDayValue = null;
+            let todaysDeposits = 0;
+            
+            for (let i = perfHistory.length - 1; i >= 0; i--) {
+                const entry = perfHistory[i];
+                if (!entry.timestamp || entry.value === null || entry.value === undefined) continue;
+                
+                const entryDate = new Date(entry.timestamp);
+                const entryLocal = entryDate.getFullYear() + '-' + 
+                    String(entryDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(entryDate.getDate()).padStart(2, '0');
+                
+                if (entryLocal < todayLocal) {
+                    // This is the last snapshot from before today — our start-of-day value
+                    startOfDayValue = entry.value;
+                    console.log(`  Start-of-day value (from ${entry.timestamp}): $${startOfDayValue.toFixed(2)}`);
+                    break;
+                }
             }
             
-            // For sold stocks, we need TODAY's price movement only, not the full realized P&L.
-            // The full realized P&L includes gains/losses from previous days, which shouldn't
-            // be counted in daily performance. We use the stock's changePercent (today's move
-            // from market open) to calculate just today's contribution, same as held stocks.
-            // Group sells by symbol to avoid double-counting
-            const soldSymbols = {};
-            todaysSells.forEach(sell => {
-                if (!soldSymbols[sell.symbol]) {
-                    soldSymbols[sell.symbol] = { totalShares: 0, sellPrice: sell.price };
-                }
-                soldSymbols[sell.symbol].totalShares += sell.shares;
-            });
-            
-            Object.entries(soldSymbols).forEach(([symbol, info]) => {
-                // If we already have price data with changePercent, use it for today's move
-                const pd = priceData[symbol];
-                if (pd && pd.changePercent !== undefined) {
-                    const sellPrice = info.sellPrice;
-                    const shares = info.totalShares;
-                    const currentValue = sellPrice * shares;
-                    const openingValue = currentValue / (1 + (pd.changePercent / 100));
-                    const stockDailyGain = currentValue - openingValue;
+            // If no previous day entry found, use the earliest entry from today
+            if (startOfDayValue === null) {
+                for (let i = 0; i < perfHistory.length; i++) {
+                    const entry = perfHistory[i];
+                    if (!entry.timestamp || entry.value === null || entry.value === undefined) continue;
                     
-                    dailyGain += stockDailyGain;
-                    totalHoldingsValue += currentValue;
-                    console.log(`  Part2 SOLD: ${symbol} | ${shares} shares @ $${sellPrice.toFixed(2)} | today's change: ${pd.changePercent.toFixed(2)}% | daily P&L: ${stockDailyGain >= 0 ? '+' : ''}$${stockDailyGain.toFixed(2)}`);
-                } else {
-                    // No price data available — fall back to 0 daily contribution
-                    // (we can't determine today's move without changePercent)
-                    console.log(`  Part2 SOLD (no price data): ${symbol} | ${info.totalShares} shares — skipping daily contribution`);
+                    const entryDate = new Date(entry.timestamp);
+                    const entryLocal = entryDate.getFullYear() + '-' + 
+                        String(entryDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                        String(entryDate.getDate()).padStart(2, '0');
+                    
+                    if (entryLocal === todayLocal) {
+                        startOfDayValue = entry.value;
+                        console.log(`  Start-of-day value (first today entry ${entry.timestamp}): $${startOfDayValue.toFixed(2)}`);
+                        break;
+                    }
+                }
+            }
+            
+            // Sum up any deposits made today (these inflate portfolio value but aren't gains)
+            perfHistory.forEach(entry => {
+                if (!entry.timestamp) return;
+                const entryDate = new Date(entry.timestamp);
+                const entryLocal = entryDate.getFullYear() + '-' + 
+                    String(entryDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(entryDate.getDate()).padStart(2, '0');
+                if (entryLocal === todayLocal && entry.deposit) {
+                    todaysDeposits += entry.deposit;
                 }
             });
             
-            console.log(`  FINAL: dailyGain=$${dailyGain.toFixed(2)}, totalExposure=$${totalHoldingsValue.toFixed(2)}, pct=${totalHoldingsValue > 0 ? (dailyGain / totalHoldingsValue * 100).toFixed(2) : 0}%`);
+            if (startOfDayValue !== null && startOfDayValue > 0) {
+                dailyGain = totalValue - startOfDayValue - todaysDeposits;
+                dailyGainPercent = (dailyGain / startOfDayValue) * 100;
+                console.log(`  Current value: $${totalValue.toFixed(2)}`);
+                console.log(`  Today's deposits: $${todaysDeposits.toFixed(2)}`);
+                console.log(`  Daily gain: $${dailyGain.toFixed(2)} (${dailyGainPercent.toFixed(2)}%)`);
+            } else {
+                console.log('  No start-of-day baseline available — showing 0');
+            }
+            
             console.log('═══ END DAILY PERFORMANCE ═══');
-            
-            // Also account for stocks bought and still held today (their buy cost reduces today's P&L 
-            // if the price moved since purchase — but this is already captured by Part 1 since 
-            // changePercent is the full day's move from open, not from our buy point)
-            
-            // Daily gain % = total daily gain / total holdings exposure (at current prices)
-            // This represents today's price movement across all positions (held + sold today)
-            const startingExposure = totalHoldingsValue > 0 ? totalHoldingsValue : 1;
-            const dailyGainPercent = (dailyGain / startingExposure) * 100;
             
             document.getElementById('dailyPerformance').textContent = dailyGainPercent.toFixed(2) + '%';
             document.getElementById('dailyPerformance').className = 'index-price';
