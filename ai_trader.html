@@ -6244,12 +6244,21 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Part 2: Realized P&L from stocks SOLD today
             // This is the KEY fix: when you sell at a loss, that realized loss must appear in daily performance.
             // The daily impact of a sell = (sellPrice - avgBuyPrice) × shares = the actual realized P&L
-            const today = new Date().toISOString().split('T')[0];
-            const todaysSells = (portfolio.transactions || []).filter(t => 
-                t.type === 'SELL' && t.timestamp && t.timestamp.startsWith(today)
-            );
+            // Use LOCAL date for comparison (not UTC — toISOString shifts dates for US timezones)
+            const now_local = new Date();
+            const todayLocal = now_local.getFullYear() + '-' + 
+                String(now_local.getMonth() + 1).padStart(2, '0') + '-' + 
+                String(now_local.getDate()).padStart(2, '0');
+            const todaysSells = (portfolio.transactions || []).filter(t => {
+                if (t.type !== 'SELL' || !t.timestamp) return false;
+                const sellDate = new Date(t.timestamp);
+                const sellLocal = sellDate.getFullYear() + '-' + 
+                    String(sellDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(sellDate.getDate()).padStart(2, '0');
+                return sellLocal === todayLocal;
+            });
             
-            console.log(`  Part2: Looking for sells on ${today}, found ${todaysSells.length} sells`);
+            console.log(`  Part2: Looking for sells on ${todayLocal} (local), found ${todaysSells.length} sells`);
             if (todaysSells.length === 0) {
                 // Debug: show recent sells to check timestamp format
                 const recentSells = (portfolio.transactions || []).filter(t => t.type === 'SELL').slice(-3);
