@@ -6553,6 +6553,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 <div style="text-align: right;">
                                     <div class="holding-price" style="font-size: 22px; font-weight: 600; color: #e2e8f0;">$${currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                                     <div class="stat-change ${gainLossClass}" style="font-size: 15px; margin-top: 4px;">${gainLoss >= 0 ? '+' : ''}$${Math.abs(gainLoss).toFixed(2)} (${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}%)</div>
+                                    <div style="font-size: 13px; margin-top: 3px; color: ${stockPrice.changePercent >= 0 ? '#48bb78' : '#fc8181'};">
+                                        Today: ${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}% · ${stockPrice.change >= 0 ? '+' : ''}$${(stockPrice.change * shares).toFixed(2)}
+                                    </div>
                                     <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
                                         ${positionSizePercent.toFixed(1)}% of portfolio
                                         ${positionSizePercent > 30 ? '<span style="color: #fbbf24;">⚠️ Large</span>' : ''}
