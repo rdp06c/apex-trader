@@ -5949,42 +5949,68 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 return; // Don't execute duplicate trades
             }
             
-            // VALIDATE BUDGET BEFORE SHOWING DECISIONS
-            // Calculate total cost of all BUY decisions
-            let totalCost = 0;
-            let budgetWarning = '';
-            const validatedDecisions = [];
+            // ══════════════════════════════════════════════════════════════
+            // EXECUTE SELLS FIRST, then validate buy budget against ACTUAL post-sell cash
+            // This prevents the bug where AI plans buys using updatedCash (cash + sell proceeds)
+            // but the validator was checking against pre-sell portfolio.cash
+            // ══════════════════════════════════════════════════════════════
             
-            for (const decision of decisions) {
-                if (decision.action === 'BUY') {
-                    const price = marketData[decision.symbol]?.price || 0;
-                    const cost = price * decision.shares;
-                    totalCost += cost;
+            const sellDecisions = decisions.filter(d => d.action === 'SELL');
+            const buyDecisionsAll = decisions.filter(d => d.action === 'BUY');
+            const holdDecisions = decisions.filter(d => d.action === 'HOLD');
+            let successCount = 0;
+            let failCount = 0;
+            
+            // Step 1: Execute all SELL decisions first to free up cash
+            for (const decision of sellDecisions) {
+                try {
+                    const success = await executeSingleTrade(decision, marketData, overallReasoning);
+                    if (success) {
+                        successCount++;
+                        console.log(`✅ Sell executed: ${decision.symbol}, cash now $${portfolio.cash.toFixed(2)}`);
+                    } else {
+                        failCount++;
+                    }
+                } catch (error) {
+                    console.error(`Failed to execute sell for ${decision.symbol}:`, error);
+                    addActivity(`⚠️ Failed to execute SELL for ${decision.symbol}: ${error.message}`, 'error');
+                    failCount++;
                 }
             }
             
-            // If total cost exceeds available cash, filter out decisions that won't work
+            // Step 2: Now validate BUY budget against ACTUAL post-sell cash
+            let totalCost = 0;
+            let budgetWarning = '';
+            const validatedBuyDecisions = [];
+            
+            for (const decision of buyDecisionsAll) {
+                const price = marketData[decision.symbol]?.price || 0;
+                const cost = price * decision.shares;
+                totalCost += cost;
+            }
+            
+            // Check against actual current cash (which now includes sell proceeds)
             if (totalCost > portfolio.cash) {
                 budgetWarning = `⚠️ APEX's original plan required $${totalCost.toFixed(2)} but only $${portfolio.cash.toFixed(2)} available. Adjusting trades...`;
                 addActivity(budgetWarning, 'warning');
                 
                 // Keep only decisions that fit within budget (prioritize by conviction)
-                const buyDecisions = decisions.filter(d => d.action === 'BUY')
+                const sortedBuys = [...buyDecisionsAll]
                     .sort((a, b) => (b.conviction || 5) - (a.conviction || 5)); // Highest conviction first
                 
                 let remainingCash = portfolio.cash;
-                for (const decision of buyDecisions) {
+                for (const decision of sortedBuys) {
                     const price = marketData[decision.symbol]?.price || 0;
                     const cost = price * decision.shares;
                     
                     if (cost <= remainingCash) {
-                        validatedDecisions.push(decision);
+                        validatedBuyDecisions.push(decision);
                         remainingCash -= cost;
                     } else {
                         // Try to buy fewer shares if possible
                         const affordableShares = Math.floor(remainingCash / price);
                         if (affordableShares > 0) {
-                            validatedDecisions.push({
+                            validatedBuyDecisions.push({
                                 ...decision,
                                 shares: affordableShares,
                                 reasoning: decision.reasoning + ` (reduced from ${decision.shares} to ${affordableShares} shares due to budget)`
@@ -5993,14 +6019,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         }
                     }
                 }
-                
-                // Add SELL decisions (they don't cost money)
-                validatedDecisions.push(...decisions.filter(d => d.action === 'SELL'));
-                
             } else {
-                // Budget is fine, use all decisions
-                validatedDecisions.push(...decisions);
+                // Budget is fine, use all buy decisions
+                validatedBuyDecisions.push(...buyDecisionsAll);
             }
+            
+            // Combine all decisions for display: sells (already executed) + validated buys + holds
+            const validatedDecisions = [...sellDecisions, ...validatedBuyDecisions, ...holdDecisions];
             
             // Add overall reasoning to decision panel (with validated decisions)
             addDecisionReasoning({
@@ -6011,16 +6036,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 budgetWarning: budgetWarning
             }, marketData);
             
-            // If no decisions after validation, it's a HOLD
-            if (validatedDecisions.length === 0) {
+            // If no buy decisions after validation and no sells succeeded, it's a HOLD
+            if (validatedBuyDecisions.length === 0 && successCount === 0) {
                 addActivity(`APEX wanted to trade but insufficient funds for any positions`, 'error');
                 return;
             }
             
-            // Execute each trade
-            let successCount = 0;
-            let failCount = 0;
-            for (const decision of validatedDecisions) {
+            // Step 3: Execute validated BUY decisions
+            for (const decision of validatedBuyDecisions) {
                 try {
                     const success = await executeSingleTrade(decision, marketData, overallReasoning);
                     if (success) {
@@ -6036,10 +6059,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
             
             // Summary message - show buy/sell breakdown
-            const buyCount = validatedDecisions.filter(d => d.action === 'BUY' && d.symbol).length;
-            const sellCount = validatedDecisions.filter(d => d.action === 'SELL').length;
+            const buyCount = validatedBuyDecisions.length;
+            const sellCount = sellDecisions.length;
+            const executableCount = sellCount + buyCount; // Don't count HOLDs
             
-            if (successCount === validatedDecisions.length) {
+            if (successCount === executableCount && executableCount > 0) {
                 let message = '✅ APEX ';
                 const actions = [];
                 if (buyCount > 0) actions.push(`BOUGHT ${buyCount}`);
@@ -6047,7 +6071,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 message += actions.join(' and ') + '!';
                 addActivity(message, 'success');
             } else if (successCount > 0) {
-                addActivity(`⚠️ APEX executed ${successCount}/${validatedDecisions.length} trades (${failCount} failed)`, 'warning');
+                addActivity(`⚠️ APEX executed ${successCount}/${executableCount} trades (${failCount} failed)`, 'warning');
             } else {
                 addActivity(`❌ No trades executed - all ${failCount} trades failed`, 'error');
             }
