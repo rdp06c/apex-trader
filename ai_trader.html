@@ -7195,7 +7195,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 `;
                 
                 let stocksList = '';
-                decision.decisions.forEach(d => {
+                // Display order: SELL → HOLD → BUY (mirrors Phase 1→2 logic: sell to free cash, then buy)
+                const actionOrder = { 'SELL': 0, 'BUY': 1, 'HOLD': 2 };
+                const sortedDecisions = [...decision.decisions].sort((a, b) => 
+                    (actionOrder[a.action] ?? 3) - (actionOrder[b.action] ?? 3)
+                );
+                sortedDecisions.forEach(d => {
                     // Color by ACTION first, then conviction
                     const isSell = d.action === 'SELL';
                     const isBuy = d.action === 'BUY';
