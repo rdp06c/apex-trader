@@ -2065,10 +2065,17 @@
                 const response = await fetch(
                     `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${fromStr}/${toStr}?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`
                 );
+                if (!response.ok) {
+                    console.warn(`[${symbol}] History fetch HTTP ${response.status}: ${response.statusText}`);
+                    return null;
+                }
                 const data = await response.json();
                 if (data.status === 'OK' && data.results && data.results.length >= 2) {
                     multiDayCache[symbol] = data.results;
                     return data.results;
+                }
+                if (data.status !== 'OK') {
+                    console.warn(`[${symbol}] History API error: status=${data.status}, message=${data.message || 'none'}`);
                 }
                 return null;
             } catch (error) {
@@ -2203,7 +2210,7 @@
         function detectStructure(symbol) {
             const bars = multiDayCache[symbol];
             if (!bars || bars.length < 7) {
-                return { structure: 'unknown', choch: false, bos: false, basis: 'insufficient-data' };
+                return { structure: 'unknown', structureSignal: 'neutral', structureScore: 0, choch: false, chochType: 'none', bos: false, bosType: 'none', sweep: 'none', fvg: 'none', swingHighs: 0, swingLows: 0, lastSwingHigh: null, lastSwingLow: null, currentPrice: null, basis: 'insufficient-data' };
             }
             
             // Step 1: Identify swing highs and swing lows
@@ -2222,7 +2229,7 @@
             }
             
             if (swingHighs.length < 2 || swingLows.length < 2) {
-                return { structure: 'unknown', choch: false, bos: false, basis: 'insufficient-swings', swingHighs: swingHighs.length, swingLows: swingLows.length };
+                return { structure: 'unknown', structureSignal: 'neutral', structureScore: 0, choch: false, chochType: 'none', bos: false, bosType: 'none', sweep: 'none', fvg: 'none', swingHighs: swingHighs.length, swingLows: swingLows.length, lastSwingHigh: null, lastSwingLow: null, currentPrice: null, basis: 'insufficient-swings' };
             }
             
             // Step 2: Determine prevailing structure from the swing sequence
