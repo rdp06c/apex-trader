@@ -3806,6 +3806,35 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     }
                 }
                 
+                // REVERSAL CANDIDATES: Add stocks with bullish CHoCH or low-swept signals
+                // These may have low composite scores (beaten down) but are showing early structural reversal
+                // Without this, the pre-screening systematically filters out the best contrarian plays
+                const REVERSAL_SLOTS = 5;
+                let reversalsAdded = 0;
+                const reversalCandidates = scoredStocks.filter(s => {
+                    if (topCandidates.has(s.symbol)) return false; // Already included
+                    const struct = s.data.marketStructure;
+                    if (!struct) return false;
+                    // Bullish CHoCH = was bearish, now showing reversal
+                    if (struct.choch && struct.chochType === 'bullish') return true;
+                    // Low-swept = liquidity taken below swing low, then reversed (smart money accumulation)
+                    if (struct.sweep === 'low-swept') return true;
+                    // Bullish BOS on a stock not in the top 25 = breakout that composite missed
+                    if (struct.bos && struct.bosType === 'bullish' && s.data.momentum?.score >= 5) return true;
+                    return false;
+                });
+                
+                reversalCandidates.slice(0, REVERSAL_SLOTS).forEach(s => {
+                    topCandidates.add(s.symbol);
+                    reversalsAdded++;
+                });
+                
+                if (reversalsAdded > 0) {
+                    console.log(`🔄 Added ${reversalsAdded} reversal candidates:`, reversalCandidates.slice(0, REVERSAL_SLOTS).map(s => 
+                        `${s.symbol} (${s.data.marketStructure.choch ? 'CHoCH-' + s.data.marketStructure.chochType : s.data.marketStructure.sweep !== 'none' ? 'sweep-' + s.data.marketStructure.sweep : 'BOS-' + s.data.marketStructure.bosType})`
+                    ));
+                }
+                
                 // 4. Build filtered data (only candidates go to Claude)
                 const filteredMarketData = {};
                 topCandidates.forEach(symbol => {
@@ -3831,8 +3860,20 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 const candidateCount = topCandidates.size;
                 const holdingSymbols = Object.keys(portfolio.holdings);
                 console.log(`🎯 Pre-screened to ${candidateCount} candidates from ${Object.keys(enhancedMarketData).length} stocks`);
-                console.log(`📊 Includes: Top ${TOP_N} by score, ${holdingSymbols.length} current holdings, ${wildCardsAdded} wild cards`);
+                console.log(`📊 Includes: Top ${TOP_N} by score, ${holdingSymbols.length} current holdings, ${wildCardsAdded} wild cards, ${reversalsAdded} reversal candidates`);
                 console.log(`📈 Candidates:`, [...topCandidates]);
+
+                // Build TOP BUY OPPORTUNITIES summary for Phase 1 (opportunity cost awareness)
+                // Phase 1 only sees holdings — without this, it can't weigh "hold mediocre position" vs "sell and buy something better"
+                const topBuyOpportunities = scoredStocks
+                    .filter(s => !portfolio.holdings[s.symbol]) // Exclude current holdings
+                    .slice(0, 5)
+                    .map(s => {
+                        const struct = s.data.marketStructure || {};
+                        return `${s.symbol} (score:${s.compositeScore.toFixed(1)}, momentum:${s.data.momentum?.score || '?'}, RS:${s.data.relativeStrength?.rsScore || '?'}, structure:${struct.structureSignal || '?'})`;
+                    });
+                
+                console.log('💡 Top buy opportunities for Phase 1 context:', topBuyOpportunities);
 
                 thinkingDetail.textContent = `AI analyzing ${candidateCount} pre-screened candidates...`;
 
@@ -3906,6 +3947,10 @@ Recent Transactions: ${(() => {
 })()}
 
 ⚠️ ANTI-WHIPSAW: Do NOT contradict last 24hr decisions.
+
+💡 OPPORTUNITY COST — Top buy candidates waiting in Phase 2:
+${topBuyOpportunities.join('\\n')}
+If a holding is mediocre (flat thesis, weak momentum) and these candidates are significantly stronger, consider SELLING to free up cash. Don't hold a 4/10 position when 8/10 opportunities are available.
 
 JSON ONLY response:
 { "decisions": [{ "action": "SELL" or "HOLD", "symbol": "X", "shares": N, "conviction": 1-10, "reasoning": "..." }], "holdings_summary": "...", "market_regime": "bull/bear/choppy" }
