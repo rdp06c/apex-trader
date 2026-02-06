@@ -6222,6 +6222,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             let dailyGain = 0;
             let totalHoldingsValue = 0;
             
+            console.log('═══ DAILY PERFORMANCE CALCULATION ═══');
+            
             // Part 1: Unrealized daily P&L from current holdings (using today's price change)
             for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
                 if (priceData[symbol]) {
@@ -6231,10 +6233,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const openingValue = currentValue / (1 + (stockChangePercent / 100)); // Back-calculate opening value
                     const stockDailyGain = currentValue - openingValue;
                     
+                    console.log(`  Part1 HOLDING: ${symbol} | ${shares} shares @ $${stockPrice.toFixed(2)} | change: ${stockChangePercent.toFixed(2)}% | daily P&L: ${stockDailyGain >= 0 ? '+' : ''}$${stockDailyGain.toFixed(2)}`);
+                    
                     dailyGain += stockDailyGain;
                     totalHoldingsValue += currentValue;
                 }
             }
+            console.log(`  Part1 TOTAL: dailyGain=$${dailyGain.toFixed(2)}, holdingsValue=$${totalHoldingsValue.toFixed(2)}`);
             
             // Part 2: Realized P&L from stocks SOLD today
             // This is the KEY fix: when you sell at a loss, that realized loss must appear in daily performance.
@@ -6243,6 +6248,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const todaysSells = (portfolio.transactions || []).filter(t => 
                 t.type === 'SELL' && t.timestamp && t.timestamp.startsWith(today)
             );
+            
+            console.log(`  Part2: Looking for sells on ${today}, found ${todaysSells.length} sells`);
+            if (todaysSells.length === 0) {
+                // Debug: show recent sells to check timestamp format
+                const recentSells = (portfolio.transactions || []).filter(t => t.type === 'SELL').slice(-3);
+                recentSells.forEach(s => console.log(`    Recent sell: ${s.symbol} at ${s.timestamp}`));
+            }
             
             todaysSells.forEach(sell => {
                 // Find the buy transactions for this symbol to get avg cost
@@ -6259,12 +6271,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const realizedPL = (sell.price - avgBuyPrice) * sell.shares;
                     dailyGain += realizedPL;
                     
-                    // Add the sell value to the base for % calculation
+                    // Add the cost basis to the denominator for % calculation
                     totalHoldingsValue += avgBuyPrice * sell.shares;
                     
-                    console.log(`📊 Daily P&L: SOLD ${sell.symbol} — realized ${realizedPL >= 0 ? '+' : ''}$${realizedPL.toFixed(2)} (bought avg $${avgBuyPrice.toFixed(2)}, sold $${sell.price.toFixed(2)})`);
+                    console.log(`  Part2 SOLD: ${sell.symbol} | ${sell.shares} shares | avg cost $${avgBuyPrice.toFixed(2)} → sold $${sell.price.toFixed(2)} | realized P&L: ${realizedPL >= 0 ? '+' : ''}$${realizedPL.toFixed(2)}`);
                 }
             });
+            
+            console.log(`  FINAL: dailyGain=$${dailyGain.toFixed(2)}, totalExposure=$${totalHoldingsValue.toFixed(2)}, pct=${totalHoldingsValue > 0 ? (dailyGain / totalHoldingsValue * 100).toFixed(2) : 0}%`);
+            console.log('═══ END DAILY PERFORMANCE ═══');
             
             // Also account for stocks bought and still held today (their buy cost reduces today's P&L 
             // if the price moved since purchase — but this is already captured by Part 1 since 
