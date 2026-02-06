@@ -3258,50 +3258,105 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 const symbols = await screenStocks();
                 console.log(`✅ Screener selected ${symbols.length} stocks:`, symbols);
                 
-                thinkingDetail.textContent = `🧪 Fetching ${symbols.length} stock prices...`;
-                
-                const marketData = {};
+                // Step 1: Bulk snapshot (same as real analysis)
+                thinkingDetail.textContent = '🧪 Fetching bulk market snapshot...';
+                let marketData = {};
                 let fetchErrors = [];
                 
-                // Batched API calls (same as real analysis)
-                const BATCH_SIZE_DR = 50;
-                const BATCH_DELAY_DR = 1200;
+                const bulkData = await fetchBulkSnapshot(symbols);
                 
-                for (let i = 0; i < symbols.length; i += BATCH_SIZE_DR) {
-                    const batch = symbols.slice(i, i + BATCH_SIZE_DR);
-                    const batchNum = Math.floor(i / BATCH_SIZE_DR) + 1;
-                    const totalBatches = Math.ceil(symbols.length / BATCH_SIZE_DR);
-                    thinkingDetail.textContent = `🧪 Fetching batch ${batchNum}/${totalBatches} (${Object.keys(marketData).length} stocks so far)...`;
-                    
-                    const batchPromises = batch.map(async (symbol) => {
-                        try {
-                            const data = await getStockPrice(symbol);
-                            return { symbol, data, success: true };
-                        } catch (error) {
-                            return { symbol, error: error.message, success: false };
+                if (bulkData && Object.keys(bulkData).length > symbols.length * 0.5) {
+                    marketData = { ...bulkData };
+                    const missingSymbols = symbols.filter(s => !marketData[s]);
+                    if (missingSymbols.length > 0) {
+                        thinkingDetail.textContent = `🧪 Fetching ${missingSymbols.length} remaining stocks...`;
+                        const BATCH_SIZE = 50;
+                        const BATCH_DELAY_MS = 1200;
+                        for (let i = 0; i < missingSymbols.length; i += BATCH_SIZE) {
+                            const batch = missingSymbols.slice(i, i + BATCH_SIZE);
+                            const batchResults = await Promise.all(batch.map(async (symbol) => {
+                                try {
+                                    const data = await getStockPrice(symbol);
+                                    return { symbol, data, success: true };
+                                } catch (error) {
+                                    return { symbol, error: error.message, success: false };
+                                }
+                            }));
+                            batchResults.forEach(result => {
+                                if (result.success) marketData[result.symbol] = result.data;
+                                else fetchErrors.push({ symbol: result.symbol, error: result.error });
+                            });
+                            if (i + BATCH_SIZE < missingSymbols.length) {
+                                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+                            }
                         }
-                    });
-                    
-                    const batchResults = await Promise.all(batchPromises);
-                    
-                    batchResults.forEach(result => {
-                        if (result.success) {
-                            marketData[result.symbol] = result.data;
-                        } else {
-                            fetchErrors.push({ symbol: result.symbol, error: result.error });
+                    }
+                    console.log(`✅ Bulk snapshot: ${Object.keys(marketData).length}/${symbols.length} stocks`);
+                } else {
+                    // Fallback to individual calls
+                    console.warn('Bulk snapshot failed, falling back to individual calls');
+                    const BATCH_SIZE_DR = 50;
+                    const BATCH_DELAY_DR = 1200;
+                    for (let i = 0; i < symbols.length; i += BATCH_SIZE_DR) {
+                        const batch = symbols.slice(i, i + BATCH_SIZE_DR);
+                        thinkingDetail.textContent = `🧪 Fetching batch ${Math.floor(i / BATCH_SIZE_DR) + 1}/${Math.ceil(symbols.length / BATCH_SIZE_DR)}...`;
+                        const batchResults = await Promise.all(batch.map(async (symbol) => {
+                            try {
+                                const data = await getStockPrice(symbol);
+                                return { symbol, data, success: true };
+                            } catch (error) {
+                                return { symbol, error: error.message, success: false };
+                            }
+                        }));
+                        batchResults.forEach(result => {
+                            if (result.success) marketData[result.symbol] = result.data;
+                            else fetchErrors.push({ symbol: result.symbol, error: result.error });
+                        });
+                        if (i + BATCH_SIZE_DR < symbols.length) {
+                            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_DR));
                         }
-                    });
-                    
-                    if (i + BATCH_SIZE_DR < symbols.length) {
-                        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_DR));
                     }
                 }
+                
+                const snapshotTime = performance.now();
+                console.log(`⏱️ Snapshot phase: ${((snapshotTime - startTime) / 1000).toFixed(2)}s`);
+                
+                // Step 2: Fetch 20-day history for all symbols
+                thinkingDetail.textContent = `🧪 Fetching 20-day price history...`;
+                await fetchAll5DayHistories(symbols);
+                const historyTime = performance.now();
+                console.log(`⏱️ History phase: ${((historyTime - snapshotTime) / 1000).toFixed(2)}s`);
+                console.log(`✅ 20-day history cached for ${Object.keys(multiDayCache).length}/${symbols.length} stocks`);
+                
+                // Step 3: Run enhanced analysis (momentum, RS, structure)
+                thinkingDetail.textContent = `🧪 Running momentum, RS, and structure analysis...`;
+                const stocksBySector = {};
+                Object.entries(marketData).forEach(([symbol, data]) => {
+                    const sector = stockSectors[symbol] || 'Unknown';
+                    if (!stocksBySector[sector]) stocksBySector[sector] = [];
+                    stocksBySector[sector].push({ symbol, ...data });
+                });
+                const sectorRotation = detectSectorRotation(marketData);
+                
+                let structureStats = { bullish: 0, bearish: 0, choch: 0, bos: 0, sweeps: 0, fvg: 0 };
+                Object.keys(marketData).forEach(symbol => {
+                    const momentum = calculate5DayMomentum(marketData[symbol], symbol);
+                    const struct = detectStructure(symbol);
+                    if (struct.structure === 'bullish') structureStats.bullish++;
+                    if (struct.structure === 'bearish') structureStats.bearish++;
+                    if (struct.choch) structureStats.choch++;
+                    if (struct.bos) structureStats.bos++;
+                    if (struct.sweep !== 'none') structureStats.sweeps++;
+                    if (struct.fvg !== 'none') structureStats.fvg++;
+                });
                 
                 const endTime = performance.now();
                 const duration = ((endTime - startTime) / 1000).toFixed(2);
                 
                 // Success report
-                console.log(`✅ Successfully fetched ${Object.keys(marketData).length}/${symbols.length} stocks in ${duration}s`);
+                console.log(`\n✅ DRY RUN COMPLETE in ${duration}s`);
+                console.log(`📊 Data: ${Object.keys(marketData).length} prices, ${Object.keys(multiDayCache).length} histories`);
+                console.log(`📈 Structure: ${structureStats.bullish} bullish, ${structureStats.bearish} bearish, ${structureStats.choch} CHoCH, ${structureStats.bos} BOS, ${structureStats.sweeps} sweeps, ${structureStats.fvg} FVG`);
                 
                 if (fetchErrors.length > 0) {
                     console.warn(`⚠️ Failed to fetch ${fetchErrors.length} stocks:`, fetchErrors.map(e => e.symbol));
@@ -3309,31 +3364,38 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 
                 // Show sample data
                 const sampleSymbols = Object.keys(marketData).slice(0, 5);
-                console.log('📊 Sample price data:');
+                console.log('\n📊 Sample data:');
                 sampleSymbols.forEach(symbol => {
                     const data = marketData[symbol];
-                    console.log(`  ${symbol}: $${data.price.toFixed(2)} (${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%)`);
+                    const struct = detectStructure(symbol);
+                    const mom = calculate5DayMomentum(data, symbol);
+                    console.log(`  ${symbol}: $${data.price.toFixed(2)} (${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%) | momentum:${mom.score} ${mom.trend} | structure:${struct.structureSignal} ${struct.choch ? 'CHoCH-' + struct.chochType : ''} ${struct.bos ? 'BOS-' + struct.bosType : ''}`);
                 });
                 
                 // Calculate cost if this were a real run
-                const estimatedTokens = 18000; // Approximate
-                const costPer1MTokens = 3.00; // Claude Sonnet 4 input cost
-                const estimatedCost = (estimatedTokens / 1000000) * costPer1MTokens;
+                const estimatedTokens = 25000; // Updated estimate with structure data
+                const costPer1MInputTokens = 3.00;
+                const costPer1MOutputTokens = 15.00;
+                const estimatedOutputTokens = 8000;
+                const estimatedCost = (estimatedTokens / 1000000) * costPer1MInputTokens + (estimatedOutputTokens / 1000000) * costPer1MOutputTokens * 2; // 2 phases
                 
                 console.log('\n💰 If this were a real run:');
-                console.log(`  - Input tokens: ~${estimatedTokens.toLocaleString()}`);
+                console.log(`  - Input tokens: ~${estimatedTokens.toLocaleString()} (×2 phases)`);
+                console.log(`  - Output tokens: ~${estimatedOutputTokens.toLocaleString()} (×2 phases)`);
                 console.log(`  - Estimated cost: ~$${estimatedCost.toFixed(4)}`);
                 console.log(`  - You saved: $${estimatedCost.toFixed(4)} by using Dry Run! 🎉`);
                 
                 console.log('\n=== DRY RUN TEST COMPLETE ===');
                 
-                // Show success message
                 thinking.classList.remove('active');
-                addActivity(`✅ DRY RUN: Fetched ${Object.keys(marketData).length}/${symbols.length} stocks in ${duration}s. Check console for details!`, 'success');
+                addActivity(`✅ DRY RUN: ${Object.keys(marketData).length} prices + ${Object.keys(multiDayCache).length} histories in ${duration}s. Structure: ${structureStats.choch} CHoCH, ${structureStats.bos} BOS. Console for details!`, 'success');
                 
-                // Show alert with summary
                 alert(`🧪 DRY RUN COMPLETE!\n\n` +
-                      `✅ Fetched: ${Object.keys(marketData).length}/${symbols.length} stocks\n` +
+                      `✅ Prices: ${Object.keys(marketData).length}/${symbols.length} stocks\n` +
+                      `📈 Histories: ${Object.keys(multiDayCache).length} (20-day bars)\n` +
+                      `🏗️ Structure: ${structureStats.bullish} bullish, ${structureStats.bearish} bearish\n` +
+                      `    ${structureStats.choch} CHoCH signals, ${structureStats.bos} BOS signals\n` +
+                      `    ${structureStats.sweeps} liquidity sweeps, ${structureStats.fvg} FVGs\n` +
                       `⏱️ Time: ${duration}s\n` +
                       `❌ Failures: ${fetchErrors.length}\n\n` +
                       `💰 Saved ~$${estimatedCost.toFixed(4)} by not calling Claude!\n\n` +
