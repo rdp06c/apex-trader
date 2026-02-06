@@ -2431,6 +2431,37 @@
             }
         }
 
+        // Get buy transactions for the CURRENT open position only.
+        // Excludes buys from prior closed positions by finding the most recent full sell
+        // and only counting buys after it. This prevents avg cost from blending
+        // old closed positions with the current one.
+        function getCurrentPositionBuys(symbol) {
+            const allTx = portfolio.transactions || [];
+            
+            // Find the last time this symbol was fully sold (shares went to 0)
+            // Walk backwards through transactions tracking running share count
+            let lastFullSellIdx = -1;
+            let runningShares = 0;
+            
+            for (let i = 0; i < allTx.length; i++) {
+                const t = allTx[i];
+                if (t.symbol !== symbol) continue;
+                if (t.type === 'BUY') runningShares += t.shares;
+                if (t.type === 'SELL') {
+                    runningShares -= t.shares;
+                    if (runningShares <= 0) {
+                        lastFullSellIdx = i;
+                        runningShares = 0; // Reset in case of over-sell
+                    }
+                }
+            }
+            
+            // Only include buys AFTER the last full sell
+            return allTx.filter((t, idx) => 
+                t.type === 'BUY' && t.symbol === symbol && idx > lastFullSellIdx
+            );
+        }
+
         async function getStockPrice(symbol) {
             // Check if API key is set
             if (!POLYGON_API_KEY) {
@@ -3991,7 +4022,7 @@ Portfolio Cash: $${portfolio.cash.toFixed(2)}
 Holdings: ${(() => {
     const eh = {};
     Object.entries(portfolio.holdings).forEach(([sym, sh]) => {
-        const buys = (portfolio.transactions || []).filter(t => t.type === 'BUY' && t.symbol === sym);
+        const buys = getCurrentPositionBuys(sym);
         let tsB = 0, tc = 0;
         buys.forEach(t => { tsB += t.shares; tc += t.price * t.shares; });
         const ac = tsB > 0 ? tc / tsB : 0;
@@ -4965,11 +4996,11 @@ Current Portfolio:
     // Build enriched holdings with avg cost, P&L, and hold duration
     const enrichedHoldings = {};
     Object.entries(portfolio.holdings).forEach(([symbol, shares]) => {
-        // Calculate average cost from buy transactions
-        const buys = (portfolio.transactions || []).filter(t => t.type === 'BUY' && t.symbol === symbol);
+        // Calculate average cost from CURRENT position buys only (excludes prior closed positions)
+        const buys = getCurrentPositionBuys(symbol);
         const sells = (portfolio.transactions || []).filter(t => t.type === 'SELL' && t.symbol === symbol);
         
-        // Weighted average cost across all buys
+        // Weighted average cost across current position buys
         let totalSharesBought = 0;
         let totalCost = 0;
         buys.forEach(t => {
@@ -6121,10 +6152,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         if (portfolio.holdingTheses && portfolio.holdingTheses[symbol]) delete portfolio.holdingTheses[symbol];
                     }
                     
-                    // Find corresponding buy transactions to calculate profit/loss
-                    const buyTransactions = portfolio.transactions.filter(t => 
-                        t.type === 'BUY' && t.symbol === symbol
-                    );
+                    // Find buy transactions for CURRENT position to calculate profit/loss
+                    const buyTransactions = getCurrentPositionBuys(symbol);
                     
                     if (buyTransactions.length > 0) {
                         const totalBuyCost = buyTransactions.reduce((sum, t) => sum + t.cost, 0);
@@ -6259,10 +6288,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         if (portfolio.holdingTheses && portfolio.holdingTheses[symbol]) delete portfolio.holdingTheses[symbol];
                     }
                     
-                    // Find corresponding buy transactions to calculate profit/loss
-                    const buyTransactions = portfolio.transactions.filter(t => 
-                        t.type === 'BUY' && t.symbol === symbol
-                    );
+                    // Find buy transactions for CURRENT position to calculate profit/loss
+                    const buyTransactions = getCurrentPositionBuys(symbol);
                     
                     if (buyTransactions.length > 0) {
                         // Use FIFO (First In First Out) to match trades
@@ -6416,24 +6443,36 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
             
             todaysSells.forEach(sell => {
-                // Find the buy transactions for this symbol to get avg cost
-                const buys = (portfolio.transactions || []).filter(t => 
-                    t.type === 'BUY' && t.symbol === sell.symbol
+                // Find the matching closed trade for this sell (has correct avg cost from current position)
+                const matchingTrade = (portfolio.closedTrades || []).find(ct => 
+                    ct.symbol === sell.symbol && ct.sellDate && 
+                    (() => {
+                        const ctDate = new Date(ct.sellDate);
+                        const ctLocal = ctDate.getFullYear() + '-' + String(ctDate.getMonth() + 1).padStart(2, '0') + '-' + String(ctDate.getDate()).padStart(2, '0');
+                        return ctLocal === todayLocal;
+                    })()
                 );
                 
-                if (buys.length > 0) {
-                    const totalBuyCost = buys.reduce((s, b) => s + (b.price || b.cost / b.shares) * b.shares, 0);
-                    const totalBuyShares = buys.reduce((s, b) => s + b.shares, 0);
-                    const avgBuyPrice = totalBuyCost / totalBuyShares;
-                    
-                    // The realized P&L is the actual gain/loss you locked in today
+                if (matchingTrade) {
+                    const avgBuyPrice = matchingTrade.buyPrice;
                     const realizedPL = (sell.price - avgBuyPrice) * sell.shares;
                     dailyGain += realizedPL;
-                    
-                    // Add the cost basis to the denominator for % calculation
                     totalHoldingsValue += avgBuyPrice * sell.shares;
-                    
                     console.log(`  Part2 SOLD: ${sell.symbol} | ${sell.shares} shares | avg cost $${avgBuyPrice.toFixed(2)} → sold $${sell.price.toFixed(2)} | realized P&L: ${realizedPL >= 0 ? '+' : ''}$${realizedPL.toFixed(2)}`);
+                } else {
+                    // Fallback: use getCurrentPositionBuys (may not work if position fully closed)
+                    const buys = (portfolio.transactions || []).filter(t => 
+                        t.type === 'BUY' && t.symbol === sell.symbol
+                    );
+                    if (buys.length > 0) {
+                        const totalBuyCost = buys.reduce((s, b) => s + (b.price || b.cost / b.shares) * b.shares, 0);
+                        const totalBuyShares = buys.reduce((s, b) => s + b.shares, 0);
+                        const avgBuyPrice = totalBuyCost / totalBuyShares;
+                        const realizedPL = (sell.price - avgBuyPrice) * sell.shares;
+                        dailyGain += realizedPL;
+                        totalHoldingsValue += avgBuyPrice * sell.shares;
+                        console.log(`  Part2 SOLD (fallback): ${sell.symbol} | ${sell.shares} shares | avg cost $${avgBuyPrice.toFixed(2)} → sold $${sell.price.toFixed(2)} | realized P&L: ${realizedPL >= 0 ? '+' : ''}$${realizedPL.toFixed(2)}`);
+                    }
                 }
             });
             
@@ -6485,8 +6524,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const currentValue = stockPrice.price * shares;
                     const changeClass = stockPrice.change >= 0 ? 'positive' : 'negative';
                     
-                    // Find purchase info from transactions
-                    const buyTransactions = portfolio.transactions.filter(t => t.type === 'BUY' && t.symbol === symbol);
+                    // Find purchase info from CURRENT position only (excludes prior closed positions)
+                    const buyTransactions = getCurrentPositionBuys(symbol);
                     let avgPurchasePrice = 0;
                     let earliestDate = null;
                     let conviction = null;
@@ -6499,7 +6538,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         avgPurchasePrice = totalCost / totalShares;
                         earliestDate = new Date(buyTransactions[0].timestamp);
                         
-                        // Get conviction and reasoning from first buy
+                        // Get conviction and reasoning from first buy of CURRENT position
                         conviction = buyTransactions[0].conviction || null;
                         reasoning = buyTransactions[0].reasoning || '';
                         
@@ -6553,8 +6592,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 <div style="text-align: right;">
                                     <div class="holding-price" style="font-size: 22px; font-weight: 600; color: #e2e8f0;">$${currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                                     <div class="stat-change ${gainLossClass}" style="font-size: 15px; margin-top: 4px;">${gainLoss >= 0 ? '+' : ''}$${Math.abs(gainLoss).toFixed(2)} (${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}%)</div>
-                                    <div style="font-size: 13px; margin-top: 3px; color: ${stockPrice.changePercent >= 0 ? '#48bb78' : '#fc8181'};">
-                                        Today: ${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}% · ${stockPrice.change >= 0 ? '+' : ''}$${(stockPrice.change * shares).toFixed(2)}
+                                    <div style="font-size: 13px; margin-top: 3px; color: ${
+                                        daysHeld === 0 
+                                            ? (gainLossPercent >= 0 ? '#48bb78' : '#fc8181')
+                                            : (stockPrice.changePercent >= 0 ? '#48bb78' : '#fc8181')
+                                    };">
+                                        ${daysHeld === 0 
+                                            ? `Since entry: ${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}% · ${gainLoss >= 0 ? '+' : ''}$${gainLoss.toFixed(2)}`
+                                            : `Today: ${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}% · ${stockPrice.change >= 0 ? '+' : ''}$${(stockPrice.change * shares).toFixed(2)}`
+                                        }
                                     </div>
                                     <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
                                         ${positionSizePercent.toFixed(1)}% of portfolio
@@ -8148,7 +8194,7 @@ Current Portfolio Status:
 - Holdings: ${(() => {
     const summary = {};
     Object.entries(portfolio.holdings).forEach(([sym, shares]) => {
-        const buys = (portfolio.transactions || []).filter(t => t.type === 'BUY' && t.symbol === sym);
+        const buys = getCurrentPositionBuys(sym);
         let totalCost = 0, totalShares = 0;
         buys.forEach(t => { totalShares += t.shares; totalCost += t.price * t.shares; });
         const avgCost = totalShares > 0 ? totalCost / totalShares : 0;
