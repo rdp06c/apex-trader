@@ -6236,37 +6236,33 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
             }
             
-            // Part 2: Realized daily P&L from stocks SOLD today
-            // Without this, selling a loser makes the daily performance look artificially good
+            // Part 2: Realized P&L from stocks SOLD today
+            // This is the KEY fix: when you sell at a loss, that realized loss must appear in daily performance.
+            // The daily impact of a sell = (sellPrice - avgBuyPrice) × shares = the actual realized P&L
             const today = new Date().toISOString().split('T')[0];
             const todaysSells = (portfolio.transactions || []).filter(t => 
                 t.type === 'SELL' && t.timestamp && t.timestamp.startsWith(today)
             );
             
             todaysSells.forEach(sell => {
-                // Find the corresponding buy(s) to calculate what we lost/gained today
-                // The sell happened today, so the daily impact is:
-                // (sell price - today's opening price) × shares sold
-                // We can approximate today's opening price from the sell price and the stock's daily change
-                if (priceData[sell.symbol]) {
-                    const stockChangePercent = priceData[sell.symbol].changePercent || 0;
-                    const openingPrice = sell.price / (1 + (stockChangePercent / 100));
-                    const dailyImpact = (sell.price - openingPrice) * sell.shares;
-                    dailyGain += dailyImpact;
-                    totalHoldingsValue += sell.price * sell.shares; // Include in the base for % calc
-                } else {
-                    // No current price data — use buy history to estimate realized P&L
-                    const buys = (portfolio.transactions || []).filter(t => 
-                        t.type === 'BUY' && t.symbol === sell.symbol
-                    );
-                    if (buys.length > 0) {
-                        const avgBuyPrice = buys.reduce((s, b) => s + b.price * b.shares, 0) / buys.reduce((s, b) => s + b.shares, 0);
-                        // If no price data, assume the daily P&L is sell price vs avg cost
-                        // This isn't perfect but better than ignoring the loss entirely
-                        const realizedPL = (sell.price - avgBuyPrice) * sell.shares;
-                        dailyGain += realizedPL;
-                        totalHoldingsValue += sell.price * sell.shares;
-                    }
+                // Find the buy transactions for this symbol to get avg cost
+                const buys = (portfolio.transactions || []).filter(t => 
+                    t.type === 'BUY' && t.symbol === sell.symbol
+                );
+                
+                if (buys.length > 0) {
+                    const totalBuyCost = buys.reduce((s, b) => s + (b.price || b.cost / b.shares) * b.shares, 0);
+                    const totalBuyShares = buys.reduce((s, b) => s + b.shares, 0);
+                    const avgBuyPrice = totalBuyCost / totalBuyShares;
+                    
+                    // The realized P&L is the actual gain/loss you locked in today
+                    const realizedPL = (sell.price - avgBuyPrice) * sell.shares;
+                    dailyGain += realizedPL;
+                    
+                    // Add the sell value to the base for % calculation
+                    totalHoldingsValue += avgBuyPrice * sell.shares;
+                    
+                    console.log(`📊 Daily P&L: SOLD ${sell.symbol} — realized ${realizedPL >= 0 ? '+' : ''}$${realizedPL.toFixed(2)} (bought avg $${avgBuyPrice.toFixed(2)}, sold $${sell.price.toFixed(2)})`);
                 }
             });
             
@@ -6274,7 +6270,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // if the price moved since purchase — but this is already captured by Part 1 since 
             // changePercent is the full day's move from open, not from our buy point)
             
-            const dailyGainPercent = totalHoldingsValue > 0 ? (dailyGain / (totalHoldingsValue - dailyGain)) * 100 : 0;
+            // Daily gain % = total daily gain / starting portfolio exposure
+            // Starting exposure = current holdings value minus today's gains + cost basis of stocks sold today
+            const startingExposure = totalHoldingsValue > 0 ? totalHoldingsValue : 1;
+            const dailyGainPercent = (dailyGain / startingExposure) * 100;
             
             document.getElementById('dailyPerformance').textContent = dailyGainPercent.toFixed(2) + '%';
             document.getElementById('dailyPerformance').className = 'index-price';
