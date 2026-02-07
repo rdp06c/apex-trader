@@ -24,6 +24,9 @@
             PORTFOLIO_FILENAME: 'Apex_Portfolio.json'
         };
 
+        // Concurrent execution guard — prevents double-clicks and overlapping runs
+        let isAnalysisRunning = false;
+
         // Initialize GDRIVE_CONFIG with stored keys
         function initGdriveConfig() {
             GDRIVE_CONFIG.CLIENT_ID = GOOGLE_CLIENT_ID;
@@ -2164,14 +2167,19 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
         // AI Analysis using Claude API
         // DRY RUN: Test data fetching without calling Claude API
         async function testDataFetch() {
+            if (isAnalysisRunning) {
+                addActivity('Analysis already in progress — please wait', 'warning');
+                return;
+            }
+            isAnalysisRunning = true;
             const thinking = document.getElementById('aiThinking');
             const thinkingDetail = document.getElementById('thinkingDetail');
             thinking.classList.add('active');
             thinkingDetail.textContent = '🧪 DRY RUN: Testing data fetch...';
-            
+
             console.log('=== DRY RUN TEST STARTED ===');
             const startTime = performance.now();
-            
+
             try {
                 // Smart screener picks stocks dynamically
                 thinkingDetail.textContent = '🧪 Running stock screener...';
@@ -2326,6 +2334,8 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 thinking.classList.remove('active');
                 addActivity('❌ DRY RUN ERROR: ' + error.message, 'error');
                 alert('Dry run failed. Check console for details.');
+            } finally {
+                isAnalysisRunning = false;
             }
         }
 
@@ -2475,11 +2485,16 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
         }
 
         async function runAIAnalysis() {
+            if (isAnalysisRunning) {
+                addActivity('Analysis already in progress — please wait', 'warning');
+                return;
+            }
+            isAnalysisRunning = true;
             const thinking = document.getElementById('aiThinking');
             const thinkingDetail = document.getElementById('thinkingDetail');
             thinking.classList.add('active');
             thinkingDetail.textContent = 'Running smart stock screener...';
-            
+
             let aiResponse = '';  // Declare here so catch block can access it
 
             try {
@@ -2901,11 +2916,14 @@ Today: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long'
 
 TASK: Review each holding → decide SELL or HOLD. NO BUY decisions.
 
-For each holding, use ORIGINAL_THESIS data to evaluate:
+For each holding, compare ORIGINAL_THESIS vs CURRENT_INDICATORS:
 1. Has catalyst played out, strengthened, or broken?
-2. Compare entry momentum/RS/sector to current
-3. Time elapsed vs expected catalyst timeframe
-4. Would you buy TODAY at current price?
+2. Entry momentum → current momentum (improving or fading?)
+3. Entry RS → current RS (outperforming or lagging sector?)
+4. Entry sector flow → current sector flow (rotation for or against?)
+5. Current structure signals (CHoCH = reversal warning, BOS = trend continues)
+6. Time elapsed vs expected catalyst timeframe
+7. Would you buy TODAY at current price with current indicators?
 
 SEARCH: Check news for each holding + one market regime search.
 
@@ -2924,13 +2942,24 @@ Holdings: ${(() => {
         const hh = fb ? Math.floor((Date.now() - new Date(fb.timestamp).getTime()) / 3600000) : 0;
         const th = (portfolio.holdingTheses || {})[sym];
         eh[sym] = { shares: sh, avgCost: '$' + ac.toFixed(2), price: '$' + cp.toFixed(2), PL: uPL.toFixed(1) + '%', held: hd >= 1 ? hd + 'd' : hh + 'h',
-            ORIGINAL_THESIS: th ? { catalyst: th.originalCatalyst, entryConviction: th.entryConviction, entryPrice: '$' + th.entryPrice.toFixed(2), entryDate: th.entryDate.split('T')[0], entryMomentum: th.entryMomentum, entryRS: th.entryRS, entrySectorFlow: th.entrySectorFlow } : 'No thesis recorded' };
+            ORIGINAL_THESIS: th ? { catalyst: th.originalCatalyst, entryConviction: th.entryConviction, entryPrice: '$' + th.entryPrice.toFixed(2), entryDate: th.entryDate.split('T')[0], entryMomentum: th.entryMomentum, entryRS: th.entryRS, entrySectorFlow: th.entrySectorFlow } : 'No thesis recorded',
+            CURRENT_INDICATORS: {
+                sector: holdingsData[sym]?.sector || 'Unknown',
+                momentum: holdingsData[sym]?.momentum?.score ?? null,
+                relativeStrength: holdingsData[sym]?.relativeStrength?.rsScore ?? null,
+                sectorFlow: holdingsData[sym]?.sectorRotation?.moneyFlow ?? null,
+                structure: holdingsData[sym]?.marketStructure?.structure ?? null,
+                structureSignals: {
+                    choch: holdingsData[sym]?.marketStructure?.choch ?? null,
+                    bos: holdingsData[sym]?.marketStructure?.bos ?? null,
+                    liquiditySweep: holdingsData[sym]?.marketStructure?.liquiditySweep ?? false,
+                    fvgCount: holdingsData[sym]?.marketStructure?.fvgs?.length ?? 0
+                }
+            } };
         if (hh < 24) eh[sym].WARNING = 'RECENTLY PURCHASED - only sell on negative catalyst';
     });
     return JSON.stringify(eh, null, 2);
 })()}
-
-Holdings Market Data: ${JSON.stringify(holdingsData, null, 2)}
 
 Recent Transactions: ${(() => {
     const r = (portfolio.transactions || []).slice(-10).reverse();
@@ -4842,6 +4871,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 setTimeout(() => {
                     thinking.classList.remove('active');
                 }, 3000);
+            } finally {
+                isAnalysisRunning = false;
             }
         }
 
