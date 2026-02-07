@@ -1699,12 +1699,12 @@
             }
             
             // Analyze momentum score
-            const momentumHigh = tradesWithTechnicals.filter(t => t.entryTechnicals.momentumScore >= 7);
-            const momentumLow = tradesWithTechnicals.filter(t => t.entryTechnicals.momentumScore < 7 && t.entryTechnicals.momentumScore != null);
-            
+            const momentumHigh = tradesWithTechnicals.filter(t => t.entryTechnicals.momentumScore != null && t.entryTechnicals.momentumScore >= 7);
+            const momentumLow = tradesWithTechnicals.filter(t => t.entryTechnicals.momentumScore != null && t.entryTechnicals.momentumScore < 7);
+
             // Analyze rsScore
-            const rsHigh = tradesWithTechnicals.filter(t => t.entryTechnicals.rsScore >= 70);
-            const rsLow = tradesWithTechnicals.filter(t => t.entryTechnicals.rsScore < 70 && t.entryTechnicals.rsScore != null);
+            const rsHigh = tradesWithTechnicals.filter(t => t.entryTechnicals.rsScore != null && t.entryTechnicals.rsScore >= 70);
+            const rsLow = tradesWithTechnicals.filter(t => t.entryTechnicals.rsScore != null && t.entryTechnicals.rsScore < 70);
             
             // Analyze sector rotation
             const sectorInflow = tradesWithTechnicals.filter(t => t.entryTechnicals.sectorRotation === 'accumulate' || t.entryTechnicals.sectorRotation === 'favorable');
@@ -2027,13 +2027,14 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 }
                 
                 const sellTime = new Date(trade.sellDate).getTime();
+                if (isNaN(sellTime)) continue; // Skip trades with invalid dates
                 const timeSinceSell = now - sellTime;
-                
+
                 // Check 1-week tracking (after 7+ days)
                 if (trade.tracking.priceAfter1Week === null && timeSinceSell >= ONE_WEEK) {
                     try {
                         const priceData = await getStockPrice(trade.symbol);
-                        if (priceData && priceData.price > 0) {
+                        if (priceData && priceData.price > 0 && trade.sellPrice > 0) {
                             trade.tracking.priceAfter1Week = priceData.price;
                             trade.tracking.weekReturnVsSell = ((priceData.price - trade.sellPrice) / trade.sellPrice * 100).toFixed(2) + '%';
                             updated = true;
@@ -2046,7 +2047,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 if (trade.tracking.priceAfter1Month === null && timeSinceSell >= ONE_MONTH) {
                     try {
                         const priceData = await getStockPrice(trade.symbol);
-                        if (priceData && priceData.price > 0) {
+                        if (priceData && priceData.price > 0 && trade.sellPrice > 0) {
                             trade.tracking.priceAfter1Month = priceData.price;
                             trade.tracking.monthReturnVsSell = ((priceData.price - trade.sellPrice) / trade.sellPrice * 100).toFixed(2) + '%';
                             trade.tracking.tracked = true;
@@ -2977,18 +2978,48 @@ Include a decision for EVERY holding.` }]
                                 ps = ps.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
                                 const parsed = JSON.parse(ps);
                                 if (parsed.decisions) {
-                                    phase1SellDecisions = parsed.decisions.filter(d => d.action === 'SELL' && d.shares > 0);
+                                    phase1SellDecisions = parsed.decisions.filter(d => {
+                                        if (d.action !== 'SELL' || !d.shares || d.shares <= 0) return false;
+
+                                        // Validate symbol is actually held
+                                        const held = portfolio.holdings[d.symbol] || 0;
+                                        if (held === 0) {
+                                            console.warn(`⚠️ Phase 1 recommended selling ${d.symbol} but it's not held — skipping`);
+                                            return false;
+                                        }
+
+                                        // Anti-whipsaw: block sells for positions < 24 hours old
+                                        const buys = getCurrentPositionBuys(d.symbol);
+                                        if (buys.length > 0) {
+                                            const holdHours = (Date.now() - new Date(buys[0].timestamp).getTime()) / 3600000;
+                                            if (holdHours < 24) {
+                                                console.warn(`⚠️ Anti-whipsaw: blocking sell of ${d.symbol} (held only ${holdHours.toFixed(1)}hrs)`);
+                                                addActivity(`⚠️ Anti-whipsaw blocked sell of ${d.symbol} (held < 24hrs)`, 'warning');
+                                                return false;
+                                            }
+                                        }
+                                        return true;
+                                    });
                                     phase1Summary = parsed.holdings_summary || '';
                                     phase1Regime = parsed.market_regime || '';
                                     for (const sd of phase1SellDecisions) {
                                         sd.shares = Math.floor(sd.shares || 0);
+                                        // Clamp to actual position size
+                                        const held = portfolio.holdings[sd.symbol] || 0;
+                                        if (sd.shares > held) {
+                                            console.warn(`⚠️ Phase 1 wants to sell ${sd.shares} ${sd.symbol} but only ${held} held — clamping`);
+                                            sd.shares = held;
+                                        }
                                         const sp = enhancedMarketData[sd.symbol]?.price || 0;
                                         if (sp > 0 && sd.shares > 0) updatedCash += sp * sd.shares;
                                     }
                                     console.log('✅ Phase 1:', phase1SellDecisions.length, 'sells, cash now $' + updatedCash.toFixed(2));
                                 }
                             }
-                        } catch (pe) { console.warn('Phase 1 parse (non-fatal):', pe.message); }
+                        } catch (pe) {
+                            console.warn('Phase 1 parse (non-fatal):', pe.message);
+                            addActivity('⚠️ Phase 1 response had formatting issues — sell analysis may be incomplete', 'warning');
+                        }
                     }
                 }
                 
@@ -4868,7 +4899,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
             }
             
-            // Step 2: Now validate BUY budget against ACTUAL post-sell cash
+            // Step 2: Enforce 5-day re-buy cooldown
+            const cooldownMs = 5 * 24 * 60 * 60 * 1000;
+            const recentlySold = (portfolio.closedTrades || []).filter(t => {
+                const sellTime = new Date(t.sellDate).getTime();
+                return !isNaN(sellTime) && (Date.now() - sellTime) < cooldownMs;
+            });
+            const recentlySoldSymbols = new Set(recentlySold.map(t => t.symbol));
+            buyDecisionsAll = buyDecisionsAll.filter(d => {
+                if (recentlySoldSymbols.has(d.symbol)) {
+                    console.warn(`⚠️ 5-day cooldown: blocking re-buy of ${d.symbol}`);
+                    addActivity(`⚠️ 5-day cooldown blocked re-buy of ${d.symbol}`, 'warning');
+                    return false;
+                }
+                return true;
+            });
+
+            // Step 3: Now validate BUY budget against ACTUAL post-sell cash
             let totalCost = 0;
             let budgetWarning = '';
             const validatedBuyDecisions = [];
@@ -4898,7 +4945,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         remainingCash -= cost;
                     } else {
                         // Try to buy fewer shares if possible
-                        const affordableShares = Math.floor(remainingCash / price);
+                        const affordableShares = price > 0 ? Math.floor(remainingCash / price) : 0;
                         if (affordableShares > 0) {
                             validatedBuyDecisions.push({
                                 ...decision,
@@ -4983,11 +5030,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             const symbol = decision.symbol;
             const shares = decision.shares;
+            if (!marketData[symbol] || !marketData[symbol].price) {
+                console.error(`❌ No market data for ${symbol} — cannot execute trade`);
+                addActivity(`❌ Trade skipped for ${symbol}: no price data available`, 'error');
+                return false;
+            }
             const price = marketData[symbol].price;
             const conviction = decision.conviction || 5;
-            
+
             // Check if this price is from cache and warn if old
-            const cacheAge = Date.now() - new Date(marketData[symbol].timestamp).getTime();
+            const cacheAge = Date.now() - new Date(marketData[symbol].timestamp || 0).getTime();
             const cacheMinutes = Math.floor(cacheAge / 60000);
             if (cacheMinutes > 15) {
                 console.warn(`⚠️ Trading ${symbol} with ${cacheMinutes}-minute old price data`);
@@ -5003,7 +5055,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const totalPortfolioValue = portfolio.cash + cost + Object.entries(portfolio.holdings)
                         .filter(([s]) => s !== symbol)
                         .reduce((sum, [s, sh]) => sum + (marketData[s]?.price || 0) * sh, 0);
-                    const positionSizePercent = (cost / totalPortfolioValue) * 100;
+                    const positionSizePercent = totalPortfolioValue > 0 ? (cost / totalPortfolioValue) * 100 : 0;
                     
                     portfolio.transactions.push({
                         type: 'BUY',
@@ -5056,25 +5108,25 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     return false; // Failed - insufficient funds
                 }
             } else if (decision.action === 'SELL') {
-                if (portfolio.holdings[symbol] >= shares) {
+                if ((portfolio.holdings[symbol] || 0) >= shares) {
                     const revenue = price * shares;
                     portfolio.cash += revenue;
                     portfolio.holdings[symbol] -= shares;
-                    
+
                     if (portfolio.holdings[symbol] === 0) {
                         delete portfolio.holdings[symbol];
                         if (portfolio.holdingTheses && portfolio.holdingTheses[symbol]) delete portfolio.holdingTheses[symbol];
                     }
-                    
+
                     // Find buy transactions for CURRENT position to calculate profit/loss
                     const buyTransactions = getCurrentPositionBuys(symbol);
-                    
+
                     if (buyTransactions.length > 0) {
                         const totalBuyCost = buyTransactions.reduce((sum, t) => sum + t.cost, 0);
                         const totalBuyShares = buyTransactions.reduce((sum, t) => sum + t.shares, 0);
-                        const avgBuyPrice = totalBuyCost / totalBuyShares;
-                        const profitLoss = (price - avgBuyPrice) * shares;
-                        const returnPercent = ((price - avgBuyPrice) / avgBuyPrice) * 100;
+                        const avgBuyPrice = totalBuyShares > 0 ? totalBuyCost / totalBuyShares : 0;
+                        const profitLoss = avgBuyPrice > 0 ? (price - avgBuyPrice) * shares : 0;
+                        const returnPercent = avgBuyPrice > 0 ? ((price - avgBuyPrice) / avgBuyPrice) * 100 : 0;
                         
                         // Get the original buy transaction data for learning
                         const originalBuyTx = buyTransactions[0];
@@ -5163,10 +5215,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             const symbol = decision.symbol;
             const shares = decision.shares;
+            if (!marketData[symbol] || !marketData[symbol].price) {
+                console.error(`❌ No market data for ${symbol} — cannot execute trade`);
+                addActivity(`❌ Trade skipped for ${symbol}: no price data available`, 'error');
+                return;
+            }
             const price = marketData[symbol].price;
-            
+
             // Check if this price is from cache and warn if old
-            const cacheAge = Date.now() - new Date(marketData[symbol].timestamp).getTime();
+            const cacheAge = Date.now() - new Date(marketData[symbol].timestamp || 0).getTime();
             const cacheMinutes = Math.floor(cacheAge / 60000);
             if (cacheMinutes > 15) {
                 console.warn(`⚠️ Trading ${symbol} with ${cacheMinutes}-minute old price data`);
@@ -5177,7 +5234,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 if (portfolio.cash >= cost) {
                     portfolio.cash -= cost;
                     portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
-                    
+
                     portfolio.transactions.push({
                         type: 'BUY',
                         symbol: symbol,
@@ -5186,13 +5243,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         timestamp: new Date().toISOString(),
                         cost: cost
                     });
-                    
+
                     addActivity(`APEX BOUGHT ${shares} shares of ${symbol} at $${price.toFixed(2)} – "${decision.reasoning}"`, 'buy');
                 } else {
                     addActivity(`APEX wanted to buy ${symbol} but needs more capital`, 'error');
                 }
             } else if (decision.action === 'SELL') {
-                if (portfolio.holdings[symbol] >= shares) {
+                if ((portfolio.holdings[symbol] || 0) >= shares) {
                     const revenue = price * shares;
                     portfolio.cash += revenue;
                     portfolio.holdings[symbol] -= shares;
@@ -5213,9 +5270,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         const sellTime = new Date();
                         const holdTime = sellTime - buyTime;
                         
-                        const profitLoss = (price - buyPrice) * shares;
-                        const returnPercent = ((price - buyPrice) / buyPrice) * 100;
-                        
+                        const profitLoss = buyPrice > 0 ? (price - buyPrice) * shares : 0;
+                        const returnPercent = buyPrice > 0 ? ((price - buyPrice) / buyPrice) * 100 : 0;
+
                         // Record closed trade for analytics
                         portfolio.closedTrades.push({
                             symbol: symbol,
