@@ -2764,12 +2764,29 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     const accelBonus = data.momentum?.isAccelerating && data.momentum?.score >= 6 ? 1.5 : 0;
                     // Consistency bonus: reward multi-day uptrends
                     const consistencyBonus = (data.momentum?.upDays >= 3 && data.momentum?.totalDays >= 4) ? 1.0 : 0;
-                    // Reduced big-mover bonus
-                    const bigMoverBonus = Math.abs(data.changePercent || 0) > 5 ? 0.5 : 0;
+                    // bigMoverBonus disabled: rewarding stocks already up >5% today is chasing by definition
+                    const bigMoverBonus = 0;
                     // Structure bonus: reward bullish structure, BOS, bullish CHoCH; penalize bearish
                     const structureBonus = (data.marketStructure?.structureScore || 0) * 0.75;
-                    
-                    const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus + bigMoverBonus + structureBonus;
+
+                    // Extension penalty: extremely stretched stocks get dampened in ranking
+                    const extensionPenalty = (momentumScore >= 9 && rsNormalized >= 8.5) ? -3
+                        : (momentumScore >= 8 && rsNormalized >= 8) ? -2
+                        : (momentumScore >= 7.5 && rsNormalized >= 7.5) ? -1
+                        : 0;
+
+                    // Pullback bonus: stock dipped but structure/sector still supportive
+                    const totalReturn5d = data.momentum?.totalReturn5d ?? 0;
+                    const pullbackBonus = (totalReturn5d >= -8 && totalReturn5d <= -2
+                        && (data.marketStructure?.structureScore ?? 0) >= 1
+                        && data.sectorRotation?.moneyFlow !== 'outflow'
+                        && data.sectorRotation?.moneyFlow !== 'modest-outflow') ? 2
+                        : (totalReturn5d >= -5 && totalReturn5d < 0
+                        && (data.marketStructure?.structureScore ?? 0) >= 0
+                        && data.sectorRotation?.moneyFlow !== 'outflow') ? 1
+                        : 0;
+
+                    const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus + bigMoverBonus + structureBonus + extensionPenalty + pullbackBonus;
                     
                     return { symbol, compositeScore, data };
                 });
@@ -2815,7 +2832,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 // REVERSAL CANDIDATES: Add stocks with bullish CHoCH or low-swept signals
                 // These may have low composite scores (beaten down) but are showing early structural reversal
                 // Without this, the pre-screening systematically filters out the best contrarian plays
-                const REVERSAL_SLOTS = 5;
+                const REVERSAL_SLOTS = 10;
                 let reversalsAdded = 0;
                 const reversalCandidates = scoredStocks.filter(s => {
                     if (topCandidates.has(s.symbol)) return false; // Already included
@@ -3303,31 +3320,31 @@ Use enhanced market data:
 • relativeStrength.rsScore (0-100)
 • momentum.trend (building/fading/neutral)
 
-**EXTENDED (Possibly Too Late):**
-rsScore >90 AND momentum 9-10 AND stock up 8%+ today
-  → Consider waiting for 3-5% pullback
-  → OR buy if expecting much bigger move (20%+)
+**EXTENDED — AVOID UNLESS EXCEPTIONAL (rsScore >85 AND momentum 8+):**
+Stocks in this zone have already moved significantly.
+  → DEFAULT: Skip or wait for 3-5% pullback
+  → EXCEPTION ONLY: Buy if a brand-new catalyst JUST emerged (today/yesterday)
+    that hasn't been priced in yet. "Strong momentum" alone is NOT a new catalyst.
+  → If buying extended, reduce position size by 50%
 
-**GOOD ENTRY:**
-rsScore 70-85 OR momentum 6-8
-  → Building strength, not exhausted
-  → Good entry point
+**GOOD ENTRY (rsScore 60-80 AND momentum 5-8):**
+Building strength, not yet extended. This is the sweet spot.
+  → Full position size appropriate
+  → Catalyst + technical alignment = high conviction
 
-**OPPORTUNITY (Buy the Dip!):**
-Stock down 2-5% today BUT:
-  • Strong catalyst (9-10)
-  • rsScore still >60 (relative strength intact)
-  • No technical breakdown
-  → BETTER entry point!
+**PULLBACK SETUP — PREFERRED ENTRY (Stock down 2-8% over 5 days):**
+Stocks that pulled back but retain bullish structure + sector support.
+  → BEST risk/reward — buying strength on a dip
+  → Look for: bullish structure intact, sector inflow/neutral, catalyst still valid
+  → These setups often outperform because entry price is lower
 
-**RED FLAG:**
-rsScore <30 AND momentum <3 AND breaking support
-  → Even with catalyst, technical is very weak
-  → Caution, might need more time
+**RED FLAG (rsScore <30 AND momentum <3 AND breaking support):**
+  → Avoid regardless of catalyst — technical damage too severe
 
-CRITICAL: Don't require stock to be up today!
-• Down with strong catalyst = opportunity
-• Up big with no catalyst = probably late
+CRITICAL: Prefer pullback entries over chasing extended stocks!
+• Stock pulled back 3% with bullish structure + catalyst = IDEAL entry
+• Stock up 8% with high momentum = likely late, wait for pullback
+• Down with strong catalyst = opportunity > Up big with no catalyst = trap
 
 ────────────────────────────────────────────────────────────────
 
