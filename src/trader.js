@@ -4807,14 +4807,18 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             thinking.classList.remove('active');
                         }, 3000);
                     }
-                    // Fallback for old single-stock format
+                    // Fallback for old single-stock format — normalize to multi-trade format
                     else if (decision.action) {
                         if (decision.shares) {
                             decision.shares = Math.floor(decision.shares);
                             if (decision.shares < 1) decision.shares = 1;
                         }
                         thinkingDetail.textContent = `AI Decision: ${decision.action}...`;
-                        await executeTrade(decision, marketData);
+                        console.log('⚠️ Single-decision fallback — wrapping in multi-trade format');
+                        await executeMultipleTrades({
+                            decisions: [decision],
+                            overall_reasoning: decision.reasoning || ''
+                        }, marketData);
                         setTimeout(() => {
                             thinking.classList.remove('active');
                         }, 3000);
@@ -5020,6 +5024,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
             
             await updateUI();
+            updatePerformanceAnalytics();
         }
 
         // Execute a single trade (helper function for multi-trade support)
@@ -5203,109 +5208,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             return false; // Unknown action type
         }
 
-        // Execute trade
-        async function executeTrade(decision, marketData) {
-            // Always add APEX's reasoning to the decision panel
-            addDecisionReasoning(decision, marketData);
-            
-            if (decision.action === 'HOLD') {
-                addActivity('APEX is holding steady – "' + decision.reasoning + '"', 'hold');
-                return;
-            }
-
-            const symbol = decision.symbol;
-            const shares = decision.shares;
-            if (!marketData[symbol] || !marketData[symbol].price) {
-                console.error(`❌ No market data for ${symbol} — cannot execute trade`);
-                addActivity(`❌ Trade skipped for ${symbol}: no price data available`, 'error');
-                return;
-            }
-            const price = marketData[symbol].price;
-
-            // Check if this price is from cache and warn if old
-            const cacheAge = Date.now() - new Date(marketData[symbol].timestamp || 0).getTime();
-            const cacheMinutes = Math.floor(cacheAge / 60000);
-            if (cacheMinutes > 15) {
-                console.warn(`⚠️ Trading ${symbol} with ${cacheMinutes}-minute old price data`);
-            }
-
-            if (decision.action === 'BUY') {
-                const cost = price * shares;
-                if (portfolio.cash >= cost) {
-                    portfolio.cash -= cost;
-                    portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
-
-                    portfolio.transactions.push({
-                        type: 'BUY',
-                        symbol: symbol,
-                        shares: shares,
-                        price: price,
-                        timestamp: new Date().toISOString(),
-                        cost: cost
-                    });
-
-                    addActivity(`APEX BOUGHT ${shares} shares of ${symbol} at $${price.toFixed(2)} – "${decision.reasoning}"`, 'buy');
-                } else {
-                    addActivity(`APEX wanted to buy ${symbol} but needs more capital`, 'error');
-                }
-            } else if (decision.action === 'SELL') {
-                if ((portfolio.holdings[symbol] || 0) >= shares) {
-                    const revenue = price * shares;
-                    portfolio.cash += revenue;
-                    portfolio.holdings[symbol] -= shares;
-                    
-                    if (portfolio.holdings[symbol] === 0) {
-                        delete portfolio.holdings[symbol];
-                        if (portfolio.holdingTheses && portfolio.holdingTheses[symbol]) delete portfolio.holdingTheses[symbol];
-                    }
-                    
-                    // Find buy transactions for CURRENT position to calculate profit/loss
-                    const buyTransactions = getCurrentPositionBuys(symbol);
-                    
-                    if (buyTransactions.length > 0) {
-                        // Use FIFO (First In First Out) to match trades
-                        const buyTx = buyTransactions[0];
-                        const buyPrice = buyTx.price;
-                        const buyTime = new Date(buyTx.timestamp);
-                        const sellTime = new Date();
-                        const holdTime = sellTime - buyTime;
-                        
-                        const profitLoss = buyPrice > 0 ? (price - buyPrice) * shares : 0;
-                        const returnPercent = buyPrice > 0 ? ((price - buyPrice) / buyPrice) * 100 : 0;
-
-                        // Record closed trade for analytics
-                        portfolio.closedTrades.push({
-                            symbol: symbol,
-                            shares: shares,
-                            buyPrice: buyPrice,
-                            sellPrice: price,
-                            profitLoss: profitLoss,
-                            returnPercent: returnPercent,
-                            holdTime: holdTime,
-                            buyDate: buyTx.timestamp,
-                            sellDate: new Date().toISOString()
-                        });
-                    }
-                    
-                    portfolio.transactions.push({
-                        type: 'SELL',
-                        symbol: symbol,
-                        shares: shares,
-                        price: price,
-                        timestamp: new Date().toISOString(),
-                        revenue: revenue
-                    });
-                    
-                    addActivity(`APEX SOLD ${shares} shares of ${symbol} at $${price.toFixed(2)} – "${decision.reasoning}"`, 'sell');
-                } else {
-                    addActivity(`APEX can't sell ${symbol} – insufficient shares`, 'error');
-                }
-            }
-
-            updateUI();
-            updatePerformanceAnalytics();
-            savePortfolio();
-        }
+        // Legacy executeTrade removed — all trades now flow through
+        // executeMultipleTrades → executeSingleTrade for consistent learning data.
 
         // Calculate total portfolio value and return price data
         async function calculatePortfolioValue() {
