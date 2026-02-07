@@ -2718,7 +2718,16 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                         marketStructure: marketStructure
                     };
                 });
-                
+
+                // Write computed indicators back to marketData so trade execution can record them
+                Object.entries(enhancedMarketData).forEach(([symbol, data]) => {
+                    if (marketData[symbol]) {
+                        marketData[symbol].momentum = data.momentum;
+                        marketData[symbol].relativeStrength = data.relativeStrength;
+                        marketData[symbol].sectorRotation = data.sectorRotation;
+                    }
+                });
+
                 console.log('✅ Enhanced market data prepared with momentum, RS, rotation, and structure analysis');
 
                 // === PRE-SCREEN: Rank all stocks and select top candidates for Claude ===
