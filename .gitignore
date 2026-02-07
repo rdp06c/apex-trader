@@ -6,3 +6,6 @@ node_modules/
 *.log
 *.db
 .DS_Store
+
+# Generated output — rebuild with build.cmd or build.sh
+ai_trader.html

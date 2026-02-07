@@ -1,0 +1,304 @@
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
+                <div>
+                    <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px;">
+                        Powered by ARC Investments
+                    </div>
+                    <h1>🤖 APEX</h1>
+                    <p style="color: #94a3b8; font-size: 14px; margin-top: 5px;">Autonomous Portfolio EXpert</p>
+                </div>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <div id="cloudSyncStatus" onclick="handleCloudSyncClick()" style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; padding: 8px 12px; background: rgba(99, 102, 241, 0.1); border-radius: 8px; cursor: pointer;">
+                        <span id="syncIcon">☁️</span>
+                        <span id="syncText">Not synced</span>
+                    </div>
+                    <span class="status" id="status">● Active</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Portfolio Value</div>
+                <div class="stat-value" id="portfolioValue">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Cash Available</div>
+                <div class="stat-value" id="cashValue">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Invested</div>
+                <div class="stat-value" id="investedValue">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Positions</div>
+                <div class="stat-value" id="positionsCount">0</div>
+            </div>
+        </div>
+
+        <!-- Performance Analytics -->
+        <div class="market-indices">
+            <h2 class="chart-title">📈 Performance Analytics</h2>
+            <div class="indices-grid">
+                <div class="index-card">
+                    <div class="index-header">
+                        <div class="index-name">Total Return</div>
+                        <div class="index-symbol">ROI</div>
+                    </div>
+                    <div class="index-price" id="totalReturn">0.00%</div>
+                    <div class="index-change" id="totalReturnDollar">$0.00</div>
+                </div>
+                <div class="index-card">
+                    <div class="index-header">
+                        <div class="index-name">Daily Performance</div>
+                        <div class="index-symbol">TODAY</div>
+                    </div>
+                    <div class="index-price" id="dailyPerformance">0.00%</div>
+                    <div class="index-change" id="dailyPerformanceDollar">$0.00</div>
+                </div>
+                <div class="index-card">
+                    <div class="index-header">
+                        <div class="index-name">Win Rate</div>
+                        <div class="index-symbol">W/L</div>
+                    </div>
+                    <div class="index-price" id="winRate">0%</div>
+                    <div class="index-change" id="winLossRatio">0W / 0L</div>
+                </div>
+                <div class="index-card">
+                    <div class="index-header">
+                        <div class="index-name">Best Trade</div>
+                        <div class="index-symbol">TOP</div>
+                    </div>
+                    <div class="index-price" id="bestTrade">--</div>
+                    <div class="index-change positive" id="bestTradeGain">+0%</div>
+                </div>
+                <div class="index-card">
+                    <div class="index-header">
+                        <div class="index-name">Worst Trade</div>
+                        <div class="index-symbol">BTM</div>
+                    </div>
+                    <div class="index-price" id="worstTrade">--</div>
+                    <div class="index-change negative" id="worstTradeLoss">-0%</div>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                <div style="background: rgba(15, 15, 35, 0.4); border-radius: 8px; padding: 15px;">
+                    <div style="font-size: 12px; color: #94a3b8; margin-bottom: 5px;">Avg Hold Time</div>
+                    <div style="font-size: 20px; color: #f1f5f9; font-weight: 700;" id="avgHoldTime">--</div>
+                </div>
+                <div style="background: rgba(15, 15, 35, 0.4); border-radius: 8px; padding: 15px;">
+                    <div style="font-size: 12px; color: #94a3b8; margin-bottom: 5px;">Total Trades</div>
+                    <div style="font-size: 20px; color: #f1f5f9; font-weight: 700;" id="totalTrades">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Learning Insights Section -->
+        <div class="market-overview">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <h2 style="margin: 0;">📚 Learning Insights</h2>
+                <div style="font-size: 12px; color: #64748b; background: rgba(99, 102, 241, 0.1); padding: 4px 10px; border-radius: 12px;">
+                    AI is learning from your trades
+                </div>
+            </div>
+            <div id="learningInsights" style="font-size: 13px; color: #cbd5e1; line-height: 1.6;">
+                <div style="text-align: center; color: #64748b; padding: 20px;">
+                    No trades yet - Learning will begin after your first completed trade
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat with APEX - Moved higher for easier access -->
+        <div class="chat-section">
+            <h2 class="chart-title">💬 Chat with APEX</h2>
+            <div class="chat-messages" id="chatMessages">
+                <div class="agent-message">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        <div class="message-name">APEX</div>
+                        <div class="message-text">*thumps chest twice* Mmm-mm-mm. Alright, alright - welcome to ARC Investments' finest creation. I'm APEX, and I've been engineered to maximize your returns with aggressive, calculated moves. Look, I know what you're thinking. "Is this AI gonna be insufferable?" Maybe a little. But here's the thing - I make money AND I make jokes. It's called multitasking. *winks* The market's got rhythm, I've got rhythm - ask me anything about trading and I'll teach you what I know. Risk it for the biscuit, baby! 📈💰</div>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <input type="text" id="chatInput" placeholder="Ask APEX about trading decisions..." onkeypress="handleChatKeyPress(event)">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="chart-card">
+                <h2 class="chart-title">Portfolio Performance</h2>
+                <canvas id="performanceChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h2 class="chart-title">Sector Allocation</h2>
+                <div style="height: 300px; display: flex; align-items: center; justify-content: center;">
+                    <canvas id="sectorChart"></canvas>
+                </div>
+                <div id="sectorLegend" style="margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;"></div>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="chart-card">
+                <h2 class="chart-title">Current Holdings</h2>
+                <div class="holdings-list" id="holdingsList">
+                    <div style="text-align: center; color: #718096; padding: 40px;">
+                        No positions yet
+                    </div>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h2 class="chart-title">🧠 APEX's Decision Reasoning</h2>
+                <div id="decisionReasoning" style="max-height: 400px; overflow-y: auto;">
+                    <div style="text-align: center; color: #718096; padding: 40px; font-size: 12px;">
+                        No trades yet. Run AI Analysis to see APEX's reasoning!
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="activity-feed">
+            <h2 class="chart-title">Recent Activity</h2>
+            <div id="activityFeed">
+                <div style="text-align: center; color: #718096; padding: 40px;">
+                    No activity yet
+                </div>
+            </div>
+        </div>
+
+        <!-- Collapsible Account Controls -->
+        <div class="controls collapsible">
+            <div class="controls-header" onclick="toggleControls()">
+                <h2 class="chart-title" style="margin-bottom: 0;">⚙️ Account Controls & Settings</h2>
+                <span id="controlsToggle" style="font-size: 24px; cursor: pointer;">▲</span>
+            </div>
+            <div id="controlsContent" class="controls-content" style="display: block;">
+                <!-- API Configuration Panel -->
+                <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 15px; margin-bottom: 20px; margin-top: 20px;">
+                    <div style="font-size: 14px; color: #cbd5e1; margin-bottom: 10px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                        <span>🔐 API Configuration</span>
+                        <button onclick="toggleApiConfig()" style="padding: 4px 12px; font-size: 12px; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.4);">
+                            <span id="apiConfigToggle">Show</span>
+                        </button>
+                    </div>
+                    
+                    <div id="apiConfigPanel" style="display: none; margin-top: 15px;">
+                        <div style="font-size: 12px; color: #fbbf24; margin-bottom: 15px; padding: 10px; background: rgba(251, 191, 36, 0.1); border-radius: 4px;">
+                            ⚠️ <strong>Security:</strong> API keys are stored locally in your browser only. They are NEVER uploaded to GitHub or shared publicly.
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 15px;">
+                            <label for="polygonKeyInput">Polygon.io API Key</label>
+                            <input type="password" id="polygonKeyInput" placeholder="Enter your Polygon API key" style="font-family: monospace;">
+                            <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+                                Get your key at <a href="https://polygon.io/dashboard/api-keys" target="_blank" style="color: #6366f1;">polygon.io/dashboard</a>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 15px;">
+                            <label for="googleClientIdInput">Google Client ID</label>
+                            <input type="password" id="googleClientIdInput" placeholder="Enter your Google Client ID" style="font-family: monospace;">
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 15px;">
+                            <label for="googleApiKeyInput">Google API Key</label>
+                            <input type="password" id="googleApiKeyInput" placeholder="Enter your Google API Key" style="font-family: monospace;">
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 15px;">
+                            <label for="anthropicUrlInput">Anthropic API Worker URL</label>
+                            <input type="text" id="anthropicUrlInput" placeholder="https://apex-proxy.your-username.workers.dev" style="font-family: monospace;">
+                            <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+                                Your Cloudflare Worker URL (see setup guide)
+                            </div>
+                        </div>
+                        
+                        <button onclick="saveApiKeys()" style="padding: 10px 20px; font-size: 14px; background: #6366f1; color: white; font-weight: 600; margin-right: 10px;">
+                            💾 Save Locally
+                        </button>
+                        
+                        <button onclick="syncKeysToGoogleDrive()" style="padding: 10px 20px; font-size: 14px; background: #10b981; color: white; font-weight: 600; margin-right: 10px;">
+                            ☁️ Sync to Google Drive
+                        </button>
+                        
+                        <button onclick="downloadKeysFromGoogleDrive()" style="padding: 10px 20px; font-size: 14px; background: #3b82f6; color: white; font-weight: 600;">
+                            📥 Download from Google Drive
+                        </button>
+                        
+                        <div id="apiKeySaveStatus" style="font-size: 12px; margin-top: 10px; display: none;"></div>
+                    </div>
+                    
+                    <div id="apiConfigStatus" style="font-size: 11px; margin-top: 10px;">
+                        <div id="polygonStatus" style="color: #64748b;">Polygon: Not configured</div>
+                        <div id="googleStatus" style="color: #64748b;">Google Drive: Not configured</div>
+                        <div id="anthropicStatus" style="color: #64748b;">Anthropic: Not configured</div>
+                    </div>
+                    
+                    <div id="apiUsageStatus" style="font-size: 11px; color: #34d399; margin-top: 8px; font-weight: 600;">
+                        API Calls: 0 used today | Unlimited remaining ✅
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="control-group">
+                        <label for="initialBalance">Initial Balance ($)</label>
+                        <input type="number" id="initialBalance" value="10000" step="1000">
+                    </div>
+                    <div class="control-group">
+                        <label for="weeklyFunding">Weekly Funding ($)</label>
+                        <input type="number" id="weeklyFunding" value="1000" step="100">
+                    </div>
+                </div>
+                <button onclick="initializeAccount()">Initialize Account</button>
+                <button onclick="addWeeklyFunding()" class="secondary">Add Weekly Funding</button>
+                
+                <!-- Portfolio Backup & Recovery -->
+                <div style="margin-top: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px;">
+                    <div style="font-size: 14px; color: #cbd5e1; margin-bottom: 10px; font-weight: 600;">
+                        💾 Portfolio Backup & Recovery
+                    </div>
+                    
+                    <!-- Save to Drive -->
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">
+                            Save your current portfolio to Google Drive as a backup.
+                        </div>
+                        <button onclick="manualSaveToDrive()" style="padding: 8px 16px; font-size: 13px; background: #10b981; color: white; font-weight: 600;">
+                            ☁️ Save Portfolio to Google Drive
+                        </button>
+                    </div>
+                    
+                    <div style="border-top: 1px solid rgba(100, 116, 139, 0.3); margin: 12px 0;"></div>
+                    
+                    <!-- Restore from local file -->
+                    <div>
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">
+                            Restore from a previously saved Apex_Portfolio.json file on your computer.
+                        </div>
+                        <input type="file" id="localPortfolioFile" accept=".json" style="display: none;" onchange="restoreFromLocalFile(this)">
+                        <button onclick="document.getElementById('localPortfolioFile').click()" style="padding: 8px 16px; font-size: 13px; background: #8b5cf6; color: white; font-weight: 600; margin-right: 10px;">
+                            📂 Restore from Local File
+                        </button>
+                        <button onclick="clearLocalStorage()" style="padding: 8px 16px; font-size: 13px; background: #ef4444; color: white; font-weight: 600;">
+                            🗑️ Clear Local Storage
+                        </button>
+                    </div>
+                    
+                    <div id="recoveryStatus" style="font-size: 11px; margin-top: 8px; color: #64748b;"></div>
+                </div>
+                <button onclick="runAIAnalysis()">🤖 Run AI Analysis</button>
+                <button onclick="testDataFetch()" class="secondary" style="background: #4a5568;">🧪 Dry Run (Test Only)</button>
+                <button onclick="refreshPrices()" class="secondary" style="background: #2563eb;">🔄 Refresh Prices</button>
+                <button onclick="resetAccount()" class="danger">Reset Account</button>
+
+                <div class="ai-thinking" id="aiThinking">
+                    <div class="thinking-text pulse">🤖 APEX is analyzing the markets...</div>
+                    <div class="thinking-detail" id="thinkingDetail">Reading the charts and making moves...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
