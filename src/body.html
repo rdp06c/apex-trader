@@ -270,6 +270,19 @@
                 </div>
             </div>
 
+            <!-- Holdings Detail (collapsible) -->
+            <div class="card collapsible-section" id="holdingsDetailSection">
+                <div class="section-header" onclick="toggleSection('holdingsDetail')">
+                    <h2 class="chart-title">Current Holdings</h2>
+                    <span class="toggle-icon" id="holdingsDetailToggle">&#9662;</span>
+                </div>
+                <div class="section-body" id="holdingsDetailBody">
+                    <div class="holdings-detail-grid" id="holdingsDetailGrid">
+                        <div class="empty-state">No positions yet</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Decision Reasoning (collapsible) -->
             <div class="chart-card card collapsible-section" id="decisionReasoningSection">
                 <div class="section-header" onclick="toggleSection('decisionReasoning')">

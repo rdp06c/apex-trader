@@ -281,6 +281,61 @@
             max-height: none;
         }
 
+        /* ── Compact Holdings (Sidebar) ──────────────────── */
+        .sidebar-holding-compact {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 7px 4px;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background var(--transition-fast);
+        }
+
+        .sidebar-holding-compact:last-child {
+            border-bottom: none;
+        }
+
+        .sidebar-holding-compact:hover {
+            background: var(--bg-hover);
+        }
+
+        .compact-left {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+
+        .compact-symbol {
+            font-weight: 700;
+            font-size: 13px;
+            color: var(--text-primary);
+            letter-spacing: 0.3px;
+        }
+
+        .compact-shares {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .compact-right {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+
+        .compact-price {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .compact-daily {
+            font-size: 11px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
         /* ── Sidebar Actions ──────────────────────────────── */
         .sidebar-actions {
             display: flex;
@@ -292,12 +347,22 @@
         }
 
         .sidebar-actions button {
-            flex: 1;
             min-width: 0;
             margin: 0;
             padding: 8px 10px;
             font-size: 12px;
             white-space: nowrap;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar-actions button:first-child {
+            flex: 1 1 100%;
+        }
+
+        .sidebar-actions button:not(:first-child) {
+            flex: 1 1 0;
         }
 
         /* ── Section Titles ────────────────────────────────── */
@@ -549,6 +614,35 @@
 
         .position-warning {
             color: var(--yellow);
+        }
+
+        /* ── Holdings Detail Grid (Main Area) ────────────── */
+        .holdings-detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .holdings-detail-grid .holding-card {
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            background: var(--bg-inset);
+            padding: 16px;
+            border-bottom: none;
+            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        }
+
+        .holdings-detail-grid .holding-card:hover {
+            border-color: var(--border-medium);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .holdings-detail-grid .holding-card:last-child {
+            border-bottom: none;
+        }
+
+        .holdings-detail-grid .empty-state {
+            grid-column: 1 / -1;
         }
 
         /* ── Activity Feed ─────────────────────────────────── */
@@ -1660,8 +1754,12 @@
                 border-bottom: 1px solid var(--border-subtle);
             }
 
-            .sidebar-holdings .holdings-list {
-                max-height: 300px;
+            .sidebar-holdings {
+                display: none;
+            }
+
+            .holdings-detail-grid {
+                grid-template-columns: 1fr 1fr;
             }
 
             .charts-grid {
@@ -1692,7 +1790,8 @@
             .sub-stats-grid,
             .insights-grid,
             .stock-context-grid,
-            .sector-insights-grid {
+            .sector-insights-grid,
+            .holdings-detail-grid {
                 grid-template-columns: 1fr;
             }
 

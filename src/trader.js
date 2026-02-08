@@ -41,11 +41,11 @@
                 alert('⚙️ Google Drive Not Configured\n\nPlease configure your Google API keys first:\n\n1. Click "Account Controls & Settings"\n2. Go to "API Configuration" → Show\n3. Enter your Google Client ID and API Key\n4. Click "Save Locally"\n5. Then come back and click this cloud icon');
                 
                 // Auto-open settings
-                const controls = document.getElementById('controlsContent');
-                const toggle = document.getElementById('controlsToggle');
-                if (controls.style.display === 'none') {
-                    controls.style.display = 'block';
-                    toggle.textContent = '▲';
+                const controlsBody = document.getElementById('controlsBody');
+                const controlsIcon = document.getElementById('controlsToggle');
+                if (controlsBody && controlsBody.classList.contains('collapsed')) {
+                    controlsBody.classList.remove('collapsed');
+                    if (controlsIcon) controlsIcon.classList.remove('collapsed');
                 }
                 
                 // Auto-open API config
@@ -428,8 +428,8 @@
                         {
                             label: 'Portfolio Value',
                             data: [],
-                            borderColor: '#6366f1',
-                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
                             borderWidth: 3,
                             tension: 0.4,
                             fill: true
@@ -470,17 +470,17 @@
                         legend: {
                             display: true,
                             labels: {
-                                color: '#e2e8f0',
+                                color: '#f5f5f0',
                                 font: {
                                     size: 12
                                 }
                             }
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(30, 30, 60, 0.9)',
-                            titleColor: '#f1f5f9',
-                            bodyColor: '#e2e8f0',
-                            borderColor: 'rgba(99, 102, 241, 0.5)',
+                            backgroundColor: 'rgba(26, 26, 34, 0.95)',
+                            titleColor: '#f5f5f0',
+                            bodyColor: '#a8a8a0',
+                            borderColor: 'rgba(245, 158, 11, 0.4)',
                             borderWidth: 1,
                             callbacks: {
                                 afterBody: function(tooltipItems) {
@@ -501,21 +501,21 @@
                         y: {
                             beginAtZero: false,
                             ticks: {
-                                color: '#94a3b8',
+                                color: '#a8a8a0',
                                 callback: function(value) {
                                     return '$' + value.toLocaleString();
                                 }
                             },
                             grid: {
-                                color: 'rgba(99, 102, 241, 0.1)'
+                                color: 'rgba(245, 158, 11, 0.08)'
                             }
                         },
                         x: {
                             ticks: {
-                                color: '#94a3b8'
+                                color: '#a8a8a0'
                             },
                             grid: {
-                                color: 'rgba(99, 102, 241, 0.1)'
+                                color: 'rgba(245, 158, 11, 0.08)'
                             }
                         }
                     }
@@ -531,16 +531,16 @@
                     datasets: [{
                         data: [],
                         backgroundColor: [
-                            '#6366f1',
-                            '#8b5cf6',
-                            '#ec4899',
                             '#f59e0b',
-                            '#10b981',
-                            '#3b82f6',
+                            '#a78bfa',
+                            '#f97316',
+                            '#34d399',
+                            '#fbbf24',
+                            '#60a5fa',
                             '#ef4444'
                         ],
                         borderWidth: 2,
-                        borderColor: '#0f0f23'
+                        borderColor: '#121215'
                     }]
                 },
                 options: {
@@ -551,10 +551,10 @@
                             display: false
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(30, 30, 60, 0.9)',
-                            titleColor: '#f1f5f9',
-                            bodyColor: '#e2e8f0',
-                            borderColor: 'rgba(99, 102, 241, 0.5)',
+                            backgroundColor: 'rgba(26, 26, 34, 0.95)',
+                            titleColor: '#f5f5f0',
+                            bodyColor: '#a8a8a0',
+                            borderColor: 'rgba(245, 158, 11, 0.4)',
                             borderWidth: 1,
                             callbacks: {
                                 label: function(context) {
@@ -5422,18 +5422,21 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('investedValue').textContent = '$' + totalInvested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('positionsCount').textContent = Object.keys(portfolio.holdings).length;
 
-            // Update holdings
+            // Update holdings (compact sidebar + detail main area)
             const holdingsList = document.getElementById('holdingsList');
+            const holdingsDetailGrid = document.getElementById('holdingsDetailGrid');
             if (Object.keys(portfolio.holdings).length === 0) {
-                holdingsList.innerHTML = '<div style="text-align: center; color: #718096; padding: 40px;">No positions yet</div>';
+                holdingsList.innerHTML = '<div class="empty-state">No positions yet</div>';
+                if (holdingsDetailGrid) holdingsDetailGrid.innerHTML = '<div class="empty-state">No positions yet</div>';
             } else {
-                let html = '';
+                let compactHtml = '';
+                let detailHtml = '';
                 for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
                     // Use priceData passed from calculatePortfolioValue - no API call!
                     const stockPrice = priceData[symbol] || { price: 0, change: 0, changePercent: 0 };
                     const currentValue = stockPrice.price * shares;
                     const changeClass = stockPrice.change >= 0 ? 'positive' : 'negative';
-                    
+
                     // Find purchase info from CURRENT position only (excludes prior closed positions)
                     const buyTransactions = getCurrentPositionBuys(symbol);
                     let avgPurchasePrice = 0;
@@ -5441,28 +5444,28 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     let conviction = null;
                     let reasoning = '';
                     let daysHeld = 0;
-                    
+
                     if (buyTransactions.length > 0) {
                         const totalCost = buyTransactions.reduce((sum, t) => sum + t.cost, 0);
                         const totalShares = buyTransactions.reduce((sum, t) => sum + t.shares, 0);
                         avgPurchasePrice = totalCost / totalShares;
                         earliestDate = new Date(buyTransactions[0].timestamp);
-                        
+
                         // Get conviction and reasoning from first buy of CURRENT position
                         conviction = buyTransactions[0].conviction || null;
                         reasoning = buyTransactions[0].reasoning || '';
-                        
+
                         // Calculate days held
                         daysHeld = Math.floor((new Date() - earliestDate) / (1000 * 60 * 60 * 24));
                     }
-                    
+
                     const gainLoss = currentValue - (avgPurchasePrice * shares);
                     const gainLossPercent = avgPurchasePrice > 0 ? ((stockPrice.price - avgPurchasePrice) / avgPurchasePrice) * 100 : 0;
                     const gainLossClass = gainLoss >= 0 ? 'positive' : 'negative';
-                    
+
                     // Calculate position size as % of total portfolio
                     const positionSizePercent = totalValue > 0 ? (currentValue / totalValue) * 100 : 0;
-                    
+
                     // Determine expected timeframe based on catalyst keywords
                     let expectedDays = { min: 7, max: 14, label: '1-2 weeks' }; // Default
                     const reasoningLower = reasoning.toLowerCase();
@@ -5475,86 +5478,100 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     } else if (reasoningLower.includes('sector') || reasoningLower.includes('rotation')) {
                         expectedDays = { min: 7, max: 14, label: '1-2 weeks' };
                     }
-                    
+
                     // Check if past expected timeframe
                     const isPastTimeframe = daysHeld > expectedDays.max;
                     const daysRemaining = expectedDays.max - daysHeld;
-                    
+
                     // Shorten reasoning for display (first 60 chars)
                     const shortReasoning = reasoning.length > 60 ? reasoning.substring(0, 60) + '...' : reasoning;
                     const isLongReasoning = reasoning.length > 60;
                     const catalystId = `catalyst-${symbol}-${Date.now()}`;
-                    
+
                     // Get stock name from mapping
                     const stockName = stockNames[symbol] || symbol;
-                    
+
                     // Conviction emoji
                     const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : conviction >= 5 ? '👍' : '';
-                    
-                    html += `
-                        <div class="holding-item" style="flex-direction: column; align-items: stretch; padding: 18px;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+
+                    const dailyClass = daysHeld === 0
+                        ? (gainLossPercent >= 0 ? 'positive' : 'negative')
+                        : (stockPrice.changePercent >= 0 ? 'positive' : 'negative');
+
+                    // Compact row for sidebar
+                    compactHtml += `
+                        <div class="sidebar-holding-compact">
+                            <div class="compact-left">
+                                <span class="compact-symbol">${symbol}</span>
+                                <span class="compact-shares">${shares} shares</span>
+                            </div>
+                            <div class="compact-right">
+                                <span class="compact-price">$${stockPrice.price.toFixed(2)}</span>
+                                <span class="compact-daily ${changeClass}">${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}%</span>
+                            </div>
+                        </div>
+                    `;
+
+                    // Full detail card for main area
+                    detailHtml += `
+                        <div class="holding-item holding-card">
+                            <div class="holding-card-header">
                                 <div>
-                                    <div class="holding-symbol" style="font-size: 24px; font-weight: 700; color: #e2e8f0;">${symbol}</div>
-                                    <div style="font-size: 14px; color: #94a3b8; margin-top: 2px;">${stockName}</div>
-                                    <div class="holding-shares" style="font-size: 15px; color: #94a3b8; margin-top: 4px;">
+                                    <div class="holding-card-symbol">${symbol}</div>
+                                    <div class="holding-card-name">${stockName}</div>
+                                    <div class="holding-card-shares">
                                         ${shares} shares · ${conviction ? convictionEmoji + ' ' + conviction + '/10 conviction' : 'No conviction data'}
                                     </div>
                                 </div>
-                                <div style="text-align: right;">
-                                    <div class="holding-price" style="font-size: 22px; font-weight: 600; color: #e2e8f0;">$${currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                                    <div class="stat-change ${gainLossClass}" style="font-size: 15px; margin-top: 4px;">${gainLoss >= 0 ? '+' : ''}$${Math.abs(gainLoss).toFixed(2)} (${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}%)</div>
-                                    <div style="font-size: 13px; margin-top: 3px; color: ${
-                                        daysHeld === 0 
-                                            ? (gainLossPercent >= 0 ? '#48bb78' : '#fc8181')
-                                            : (stockPrice.changePercent >= 0 ? '#48bb78' : '#fc8181')
-                                    };">
-                                        ${daysHeld === 0 
+                                <div>
+                                    <div class="holding-card-value">$${currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                    <div class="holding-card-gainloss ${gainLossClass}">${gainLoss >= 0 ? '+' : ''}$${Math.abs(gainLoss).toFixed(2)} (${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}%)</div>
+                                    <div class="holding-card-daily ${dailyClass}">
+                                        ${daysHeld === 0
                                             ? `Since entry: ${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}% · ${gainLoss >= 0 ? '+' : ''}$${gainLoss.toFixed(2)}`
                                             : `Today: ${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}% · ${stockPrice.change >= 0 ? '+' : ''}$${(stockPrice.change * shares).toFixed(2)}`
                                         }
                                     </div>
-                                    <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
+                                    <div class="holding-card-position-size">
                                         ${positionSizePercent.toFixed(1)}% of portfolio
-                                        ${positionSizePercent > 30 ? '<span style="color: #fbbf24;">⚠️ Large</span>' : ''}
+                                        ${positionSizePercent > 30 ? '<span class="position-warning">Large</span>' : ''}
                                     </div>
                                 </div>
                             </div>
                             ${reasoning ? `
-                            <div style="margin: 12px 0; padding: 10px; background: rgba(99, 102, 241, 0.1); border-left: 3px solid #6366f1; border-radius: 4px; ${isLongReasoning ? 'cursor: pointer;' : ''}" ${isLongReasoning ? `onclick="const full = document.getElementById('${catalystId}-full'); const short = document.getElementById('${catalystId}-short'); const arrow = document.getElementById('${catalystId}-arrow'); if (full.style.display === 'none') { full.style.display = 'block'; short.style.display = 'none'; arrow.textContent = '▾'; } else { full.style.display = 'none'; short.style.display = 'block'; arrow.textContent = '▸'; }"` : ''}>
-                                <div style="font-size: 13px; color: #cbd5e1; line-height: 1.5;">
-                                    💡 <strong>Catalyst:</strong>
-                                    ${isLongReasoning ? `<span id="${catalystId}-arrow" style="color: #818cf8; font-size: 11px; margin-left: 4px;">▸</span>` : ''}
+                            <div class="holding-card-catalyst${isLongReasoning ? ' clickable' : ''}" ${isLongReasoning ? `onclick="const full = document.getElementById('${catalystId}-full'); const short = document.getElementById('${catalystId}-short'); const arrow = document.getElementById('${catalystId}-arrow'); if (full.style.display === 'none') { full.style.display = 'block'; short.style.display = 'none'; arrow.textContent = '▾'; } else { full.style.display = 'none'; short.style.display = 'block'; arrow.textContent = '▸'; }"` : ''}>
+                                <div class="holding-card-catalyst-text">
+                                    <strong>Catalyst:</strong>
+                                    ${isLongReasoning ? `<span id="${catalystId}-arrow" style="color: #fbbf24; font-size: 11px; margin-left: 4px;">▸</span>` : ''}
                                     <span id="${catalystId}-short" style="display: block; margin-top: 4px;">${shortReasoning}</span>
                                     <span id="${catalystId}-full" style="display: none; margin-top: 4px;">${reasoning}</span>
                                 </div>
                             </div>
                             ` : ''}
-                            <div style="margin: 10px 0; padding: 10px; background: rgba(15, 15, 35, 0.5); border-radius: 4px;">
-                                <div style="font-size: 13px; color: #cbd5e1; line-height: 1.6;">
-                                    ⏰ <strong>${daysHeld === 0 ? 'Bought today' : `Held ${daysHeld} day${daysHeld !== 1 ? 's' : ''}`}</strong> | Expected: ${expectedDays.label}
-                                    ${isPastTimeframe ? 
-                                        '<div style="color: #fbbf24; margin-top: 6px; font-weight: 600;">⚠️ REVIEW: Past expected timeframe - re-evaluate thesis!</div>' 
-                                        : daysRemaining > 0 ? 
-                                        `<span style="color: #94a3b8;">(${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining)</span>` 
-                                        : ''}
-                                </div>
+                            <div class="holding-card-timeframe">
+                                <strong>${daysHeld === 0 ? 'Bought today' : `Held ${daysHeld} day${daysHeld !== 1 ? 's' : ''}`}</strong> | Expected: ${expectedDays.label}
+                                ${isPastTimeframe ?
+                                    '<div class="holding-card-timeframe-warning">REVIEW: Past expected timeframe - re-evaluate thesis!</div>'
+                                    : daysRemaining > 0 ?
+                                    `<span class="text-muted">(${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining)</span>`
+                                    : ''}
                             </div>
-                            <div style="display: flex; justify-content: space-between; font-size: 14px; color: #94a3b8; padding-top: 10px; border-top: 1px solid rgba(100, 116, 139, 0.3);">
+                            <div class="holding-card-footer">
                                 <div>
-                                    <span style="color: #cbd5e1; font-weight: 500;">Avg Cost:</span> <span style="color: #e2e8f0; font-weight: 600;">$${avgPurchasePrice.toFixed(2)}</span>
+                                    <span class="holding-card-footer-label">Avg Cost:</span> <span class="holding-card-footer-value">$${avgPurchasePrice.toFixed(2)}</span>
                                 </div>
                                 <div>
-                                    <span style="color: #cbd5e1; font-weight: 500;">Current:</span> <span style="color: #e2e8f0; font-weight: 600;">$${stockPrice.price.toFixed(2)}</span> <span class="stat-change ${changeClass}" style="font-size: 13px;">${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}%</span>
+                                    <span class="holding-card-footer-label">Current:</span> <span class="holding-card-footer-value">$${stockPrice.price.toFixed(2)}</span> <span class="stat-change ${changeClass}">${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}%</span>
                                 </div>
                                 <div>
-                                    <span style="color: #cbd5e1; font-weight: 500;">Purchased:</span> <span style="color: #e2e8f0; font-weight: 600;">${earliestDate ? earliestDate.toLocaleDateString() + ' ' + earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span>
+                                    <span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${earliestDate ? earliestDate.toLocaleDateString() + ' ' + earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span>
                                 </div>
                             </div>
                         </div>
                     `;
                 }
-                holdingsList.innerHTML = html;
+                holdingsList.innerHTML = compactHtml;
+                if (holdingsDetailGrid) holdingsDetailGrid.innerHTML = detailHtml;
             }
 
             // Update chart
@@ -5695,7 +5712,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     performanceHistory: []
                 };
                 localStorage.removeItem('aiTradingPortfolio');
-                document.getElementById('activityFeed').innerHTML = '<div style="text-align: center; color: #718096; padding: 40px;">No activity yet</div>';
+                document.getElementById('activityFeed').innerHTML = '<div class="empty-state">No activity yet</div>';
                 updateUI();
                 if (performanceChart) {
                     performanceChart.data.labels = [];
@@ -6032,9 +6049,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const value = sectorValues[sector];
                 const color = sectorChart.data.datasets[0].backgroundColor[index % sectorChart.data.datasets[0].backgroundColor.length];
                 return `
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="width: 12px; height: 12px; background: ${color}; border-radius: 2px;"></div>
-                        <div style="color: #e2e8f0;">${sector}: <strong>${percentage.toFixed(1)}%</strong> ($${value.toFixed(2)})</div>
+                    <div class="sector-legend-item">
+                        <div class="sector-legend-swatch" style="background: ${color};"></div>
+                        <div class="sector-legend-text">${sector}: <strong>${percentage.toFixed(1)}%</strong> ($${value.toFixed(2)})</div>
                     </div>
                 `;
             }).join('');
@@ -6071,20 +6088,18 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
             
             if (portfolio.journalEntries.length === 0) {
-                container.innerHTML = '<div style="text-align: center; color: #718096; padding: 20px; font-size: 12px;">No journal entries yet</div>';
+                container.innerHTML = '<div class="empty-state">No journal entries yet</div>';
                 return;
             }
 
             const html = portfolio.journalEntries.slice().reverse().map(entry => {
                 const date = new Date(entry.timestamp);
                 return `
-                    <div style="background: rgba(99, 102, 241, 0.05); border-left: 3px solid #6366f1; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-                        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 5px;">
+                    <div class="journal-entry">
+                        <div class="journal-entry-time">
                             ${date.toLocaleDateString()} ${date.toLocaleTimeString()} • Portfolio: $${entry.portfolioValue.toLocaleString(undefined, {minimumFractionDigits: 2})}
                         </div>
-                        <div style="color: #e2e8f0; font-size: 13px; line-height: 1.5;">
-                            ${entry.text}
-                        </div>
+                        <div class="journal-entry-text">${entry.text}</div>
                     </div>
                 `;
             }).join('');
@@ -6100,120 +6115,81 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Handle multi-stock format
             if (decision.action === 'MULTI' && decision.decisions) {
                 const reasoningCard = document.createElement('div');
-                reasoningCard.style.cssText = `
-                    background: rgba(15, 15, 35, 0.6);
-                    border-left: 4px solid #6366f1;
-                    border-radius: 8px;
-                    padding: 15px;
-                    margin-bottom: 15px;
-                    animation: slideIn 0.3s ease-out;
-                `;
-                
+                reasoningCard.className = 'decision-card';
+
                 let stocksList = '';
                 // Display order: SELL → HOLD → BUY (mirrors Phase 1→2 logic: sell to free cash, then buy)
                 const actionOrder = { 'SELL': 0, 'BUY': 1, 'HOLD': 2 };
-                const sortedDecisions = [...decision.decisions].sort((a, b) => 
+                const sortedDecisions = [...decision.decisions].sort((a, b) =>
                     (actionOrder[a.action] ?? 3) - (actionOrder[b.action] ?? 3)
                 );
                 sortedDecisions.forEach(d => {
-                    // Color by ACTION first, then conviction
                     const isSell = d.action === 'SELL';
                     const isBuy = d.action === 'BUY';
-                    const isHold = d.action === 'HOLD';
-                    
-                    // Action-based colors
+
+                    const actionClass = isSell ? 'sell' : isBuy ? 'buy' : 'hold';
                     const actionColor = isSell ? '#ef4444' : isBuy ? '#34d399' : '#60a5fa';
-                    const actionBg = isSell ? 'rgba(239, 68, 68, 0.12)' : isBuy ? 'rgba(52, 211, 153, 0.08)' : 'rgba(96, 165, 250, 0.08)';
-                    const actionLabel = isSell ? '🔴 SELL' : isBuy ? '🟢 BUY' : '🔵 HOLD';
+                    const actionLabel = isSell ? 'SELL' : isBuy ? 'BUY' : 'HOLD';
                     const actionIcon = isSell ? '📉' : isBuy ? '📈' : '📊';
-                    
-                    // Conviction color (secondary indicator)
-                    const convictionColor = d.conviction >= 9 ? '#34d399' : d.conviction >= 7 ? '#60a5fa' : '#94a3b8';
+
+                    const convictionColor = d.conviction >= 9 ? '#34d399' : d.conviction >= 7 ? '#60a5fa' : '#a8a8a0';
                     const convictionEmoji = d.conviction >= 9 ? '🔥' : d.conviction >= 7 ? '💪' : '👍';
                     const price = marketData[d.symbol] ? `$${marketData[d.symbol].price.toFixed(2)}` : '';
                     stocksList += `
-                        <div style="margin: 12px 0; padding: 14px; background: ${actionBg}; border-radius: 6px; border-left: 4px solid ${actionColor};">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <span style="font-weight: 700; font-size: 18px; color: ${actionColor};">
+                        <div class="decision-stock-item ${actionClass}">
+                            <div class="decision-stock-item-header">
+                                <span class="decision-stock-item-title" style="color: ${actionColor};">
                                     ${actionIcon} ${d.shares} ${d.symbol} @ ${price}
                                 </span>
-                                <div style="display: flex; gap: 10px; align-items: center;">
-                                    <span style="font-size: 12px; font-weight: 700; color: ${actionColor}; background: ${actionBg}; border: 1px solid ${actionColor}; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.5px;">
+                                <div class="decision-stock-item-badges">
+                                    <span class="decision-action-badge" style="color: ${actionColor}; background: ${actionClass === 'sell' ? 'rgba(239,68,68,0.12)' : actionClass === 'buy' ? 'rgba(52,211,153,0.08)' : 'rgba(96,165,250,0.08)'}; border: 1px solid ${actionColor};">
                                         ${actionLabel}
                                     </span>
-                                    <span style="font-size: 15px; color: ${convictionColor}; font-weight: 600;">
+                                    <span class="decision-conviction" style="color: ${convictionColor};">
                                         ${convictionEmoji} ${d.conviction}/10
                                     </span>
                                 </div>
                             </div>
-                            <div style="font-size: 15px; color: #cbd5e1; margin-top: 6px; line-height: 1.5;">
+                            <div class="decision-stock-reasoning">
                                 ${d.reasoning}
                             </div>
                         </div>
                     `;
                 });
-                
+
                 const buyCount = decision.decisions.filter(d => d.action === 'BUY').length;
                 const sellCount = decision.decisions.filter(d => d.action === 'SELL').length;
                 const holdCount = decision.decisions.filter(d => d.action === 'HOLD').length;
                 let picksSummary = [];
-                if (buyCount > 0) picksSummary.push(`<span style="color: #34d399;">${buyCount} buy${buyCount > 1 ? 's' : ''}</span>`);
-                if (sellCount > 0) picksSummary.push(`<span style="color: #ef4444;">${sellCount} sell${sellCount > 1 ? 's' : ''}</span>`);
+                if (buyCount > 0) picksSummary.push(`<span class="positive">${buyCount} buy${buyCount > 1 ? 's' : ''}</span>`);
+                if (sellCount > 0) picksSummary.push(`<span class="negative">${sellCount} sell${sellCount > 1 ? 's' : ''}</span>`);
                 if (holdCount > 0) picksSummary.push(`<span style="color: #60a5fa;">${holdCount} hold${holdCount > 1 ? 's' : ''}</span>`);
-                
+
                 reasoningCard.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
+                    <div class="decision-card-header">
                         <div>
-                            <div style="font-size: 20px; font-weight: 700; color: #6366f1;">
-                                🎯 APEX's Analysis
-                            </div>
-                            <div style="font-size: 14px; color: #94a3b8; margin-top: 4px;">
-                                ${picksSummary.join(' · ')}
-                            </div>
+                            <div class="decision-card-title">APEX's Analysis</div>
+                            <div class="decision-card-summary">${picksSummary.join(' · ')}</div>
                         </div>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <div style="font-size: 14px; color: #94a3b8;">
-                                ${timestamp.toLocaleTimeString()}
-                            </div>
-                            <button onclick="saveDecisionReasoning(this)" style="
-                                background: rgba(99, 102, 241, 0.2);
-                                border: 1px solid #6366f1;
-                                color: #818cf8;
-                                padding: 6px 12px;
-                                border-radius: 6px;
-                                cursor: pointer;
-                                font-size: 13px;
-                                font-weight: 600;
-                                transition: all 0.2s;
-                            " onmouseover="this.style.background='rgba(99, 102, 241, 0.3)'" onmouseout="this.style.background='rgba(99, 102, 241, 0.2)'">
-                                💾 Save
-                            </button>
+                        <div class="decision-card-actions">
+                            <div class="decision-card-time">${timestamp.toLocaleTimeString()}</div>
+                            <button class="decision-save-btn" onclick="saveDecisionReasoning(this)">Save</button>
                         </div>
                     </div>
                     ${decision.budgetWarning ? `
-                        <div style="background: rgba(251, 191, 36, 0.15); border-left: 4px solid #fbbf24; padding: 12px 16px; margin-bottom: 16px; border-radius: 6px; font-size: 15px; color: #fbbf24; font-weight: 500;">
-                            ${decision.budgetWarning}
-                        </div>
+                        <div class="budget-warning">${decision.budgetWarning}</div>
                     ` : ''}
                     ${stocksList}
                     ${decision.reasoning ? `
-                        <div style="margin-top: 16px; padding: 16px; background: rgba(99, 102, 241, 0.08); border-radius: 8px;">
-                            <div style="font-size: 14px; font-weight: 700; color: #818cf8; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">
-                                💭 APEX's Thoughts
-                            </div>
-                            <div style="color: #e2e8f0; font-size: 16px; line-height: 1.8;">
-                                ${decision.reasoning}
-                            </div>
+                        <div class="decision-thoughts">
+                            <div class="decision-thoughts-label">APEX's Thoughts</div>
+                            <div class="decision-thoughts-text">${decision.reasoning}</div>
                         </div>
                     ` : ''}
                     ${decision.research_summary ? `
-                        <div style="margin-top: 16px; padding: 16px; background: rgba(34, 197, 94, 0.08); border-radius: 8px;">
-                            <div style="font-size: 14px; font-weight: 700; color: #4ade80; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">
-                                📰 Research Summary
-                            </div>
-                            <div style="font-size: 15px; color: #cbd5e1; line-height: 1.7;">
-                                ${decision.research_summary}
-                            </div>
+                        <div class="research-summary">
+                            <div class="research-summary-label">Research Summary</div>
+                            <div class="research-summary-text">${decision.research_summary}</div>
                         </div>
                     ` : ''}
                 `;
@@ -6236,7 +6212,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 actionIcon = '📉';
                 actionText = 'SOLD';
             } else {
-                actionColor = '#94a3b8';
+                actionColor = '#a8a8a0';
                 actionIcon = '⏸️';
                 actionText = 'HELD';
             }
@@ -6247,42 +6223,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
 
             const reasoningCard = document.createElement('div');
-            reasoningCard.style.cssText = `
-                background: rgba(15, 15, 35, 0.6);
-                border-left: 4px solid ${actionColor};
-                border-radius: 8px;
-                padding: 15px;
-                margin-bottom: 15px;
-                animation: slideIn 0.3s ease-out;
-            `;
-            
+            reasoningCard.className = 'decision-card';
+            reasoningCard.style.borderLeftColor = actionColor;
+
             reasoningCard.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-                    <div style="font-size: 16px; font-weight: 700; color: ${actionColor};">
+                <div class="decision-single-header">
+                    <div class="decision-single-title" style="color: ${actionColor};">
                         ${actionIcon} ${actionText} ${decision.shares || ''} ${decision.symbol || ''}${priceText}
                     </div>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <div style="font-size: 11px; color: #64748b;">
-                            ${timestamp.toLocaleTimeString()}
-                        </div>
-                        <button onclick="saveDecisionReasoning(this)" style="
-                            background: rgba(99, 102, 241, 0.2);
-                            border: 1px solid #6366f1;
-                            color: #818cf8;
-                            padding: 4px 10px;
-                            border-radius: 6px;
-                            cursor: pointer;
-                            font-size: 12px;
-                            font-weight: 600;
-                            transition: all 0.2s;
-                        " onmouseover="this.style.background='rgba(99, 102, 241, 0.3)'" onmouseout="this.style.background='rgba(99, 102, 241, 0.2)'">
-                            💾 Save
-                        </button>
+                    <div class="decision-card-actions">
+                        <div class="decision-card-time" style="font-size: 11px;">${timestamp.toLocaleTimeString()}</div>
+                        <button class="decision-save-btn" onclick="saveDecisionReasoning(this)">Save</button>
                     </div>
                 </div>
-                <div style="color: #cbd5e1; font-size: 14px; line-height: 1.6; font-style: italic;">
-                    "${decision.reasoning}"
-                </div>
+                <div class="decision-single-reasoning">"${decision.reasoning}"</div>
             `;
             
             if (container.children.length === 1 && container.children[0].textContent.includes('No trades yet')) {
@@ -6294,8 +6248,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         // Save decision reasoning as a text file
         async function saveDecisionReasoning(button) {
             try {
-                // Find the card element (button's parent's parent's parent)
-                const card = button.closest('div[style*="border-left: 4px solid"]');
+                // Find the card element
+                const card = button.closest('.decision-card');
                 
                 if (!card) {
                     console.error('Could not find decision card');
@@ -6307,7 +6261,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const time = new Date().toLocaleTimeString();
                 
                 // Get header text
-                const headerText = card.querySelector('div[style*="font-size: 20px"]')?.textContent || 'APEX Analysis';
+                const headerText = card.querySelector('.decision-card-title, .decision-single-title')?.textContent || 'APEX Analysis';
                 
                 // Build the text content
                 let content = `═══════════════════════════════════════════════════════════════\n`;
@@ -6316,11 +6270,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 content += `═══════════════════════════════════════════════════════════════\n\n`;
                 
                 // Extract all sections
-                const sections = card.querySelectorAll('div[style*="padding: 14px"], div[style*="padding: 16px"]');
+                const sections = card.querySelectorAll('.decision-stock-item, .decision-thoughts, .research-summary');
                 
                 sections.forEach((section, index) => {
                     // Check if it's a stock pick, thoughts, or research section
-                    const sectionTitle = section.querySelector('div[style*="text-transform: uppercase"]')?.textContent;
+                    const sectionTitle = section.querySelector('.decision-thoughts-label, .research-summary-label, .decision-action-badge')?.textContent;
                     
                     if (sectionTitle) {
                         content += `\n${sectionTitle}\n`;
@@ -6371,9 +6325,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         console.log('Google Drive not connected, skipping upload');
                         setTimeout(() => {
                             button.innerHTML = originalText;
-                            button.style.background = 'rgba(99, 102, 241, 0.2)';
-                            button.style.borderColor = '#6366f1';
-                            button.style.color = '#818cf8';
+                            button.style.background = 'rgba(245, 158, 11, 0.15)';
+                            button.style.borderColor = '#f59e0b';
+                            button.style.color = '#fbbf24';
                         }, 2000);
                         return;
                     }
@@ -6426,9 +6380,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 // Reset button after 3 seconds
                 setTimeout(() => {
                     button.innerHTML = originalText;
-                    button.style.background = 'rgba(99, 102, 241, 0.2)';
-                    button.style.borderColor = '#6366f1';
-                    button.style.color = '#818cf8';
+                    button.style.background = 'rgba(245, 158, 11, 0.15)';
+                    button.style.borderColor = '#f59e0b';
+                    button.style.color = '#fbbf24';
                 }, 3000);
                 
             } catch (error) {
@@ -6600,6 +6554,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             
             // Update Learning Insights Display
             updateLearningInsightsDisplay();
+
+            // Close any expanded analytics panels on data refresh
+            ['winRate', 'bestTrade', 'worstTrade'].forEach(t => {
+                const p = document.getElementById(t + 'Expansion');
+                if (p) p.classList.remove('open');
+                const c = p ? p.closest('.expandable-card') : null;
+                if (c) c.classList.remove('expanded');
+            });
         }
         
         // Update Learning Insights Display
@@ -6608,26 +6570,22 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const container = document.getElementById('learningInsights');
             
             if (!analysis.hasData) {
-                container.innerHTML = `
-                    <div style="text-align: center; color: #64748b; padding: 20px;">
-                        ${analysis.message}
-                    </div>
-                `;
+                container.innerHTML = `<div class="empty-state">${analysis.message}</div>`;
                 return;
             }
             
             const { overall, sectorPerformance, stockPerformance, behaviorPatterns, recent } = analysis;
             
-            let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
-            
+            let html = '<div class="insights-grid">';
+
             // Overall Performance
             html += `
-                <div style="background: rgba(15, 15, 35, 0.4); border-radius: 8px; padding: 15px;">
-                    <div style="font-weight: 600; margin-bottom: 10px; color: #f1f5f9;">📊 Overall Performance</div>
-                    <div style="color: #cbd5e1;">
+                <div class="insight-panel">
+                    <div class="insight-panel-title">Overall Performance</div>
+                    <div class="insight-panel-body">
                         <div>Record: ${overall.wins}W - ${overall.losses}L (${overall.winRate.toFixed(1)}%)</div>
-                        <div>Avg Winner: <span style="color: #34d399;">+${overall.avgWinReturn.toFixed(1)}%</span> (${overall.avgWinHoldTime.toFixed(1)} days)</div>
-                        <div>Avg Loser: <span style="color: #f87171;">${overall.avgLossReturn.toFixed(1)}%</span> (${overall.avgLossHoldTime.toFixed(1)} days)</div>
+                        <div>Avg Winner: <span class="positive">+${overall.avgWinReturn.toFixed(1)}%</span> (${overall.avgWinHoldTime.toFixed(1)} days)</div>
+                        <div>Avg Loser: <span class="negative">${overall.avgLossReturn.toFixed(1)}%</span> (${overall.avgLossHoldTime.toFixed(1)} days)</div>
                     </div>
                 </div>
             `;
@@ -6638,12 +6596,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const trendText = recent.trend.improving ? 'IMPROVING!' : 
                              recent.trend.declining ? 'DECLINING' : 'STEADY';
             const trendColor = recent.trend.improving ? '#34d399' : 
-                              recent.trend.declining ? '#f87171' : '#94a3b8';
+                              recent.trend.declining ? '#f87171' : '#a8a8a0';
             
             html += `
-                <div style="background: rgba(15, 15, 35, 0.4); border-radius: 8px; padding: 15px;">
-                    <div style="font-weight: 600; margin-bottom: 10px; color: #f1f5f9;">📈 Recent Trend</div>
-                    <div style="color: #cbd5e1;">
+                <div class="insight-panel">
+                    <div class="insight-panel-title">Recent Trend</div>
+                    <div class="insight-panel-body">
                         <div>Last ${recent.trades} trades: ${recent.wins}W - ${recent.trades - recent.wins}L</div>
                         <div>Win Rate: ${recent.winRate.toFixed(1)}%</div>
                         <div style="color: ${trendColor}; font-weight: 600; margin-top: 5px;">${trendIcon} ${trendText}</div>
@@ -6656,16 +6614,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Behavioral Patterns - Most important!
             if (behaviorPatterns.length > 0) {
                 html += `
-                    <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 15px; margin-top: 15px;">
-                        <div style="font-weight: 600; margin-bottom: 10px; color: #818cf8;">🔍 Your Trading Behavior</div>
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div class="behavior-section">
+                        <div class="behavior-section-title">Your Trading Behavior</div>
+                        <div class="behavior-list">
                 `;
                 behaviorPatterns.forEach(bp => {
                     html += `
-                        <div style="background: rgba(15, 15, 35, 0.6); padding: 10px; border-radius: 6px;">
-                            <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${bp.pattern}</div>
-                            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">${bp.insight}</div>
-                            <div style="font-size: 12px; color: #818cf8;">→ ${bp.action}</div>
+                        <div class="behavior-item">
+                            <div class="behavior-item-pattern">${bp.pattern}</div>
+                            <div class="behavior-item-insight">${bp.insight}</div>
+                            <div class="behavior-item-action">→ ${bp.action}</div>
                         </div>
                     `;
                 });
@@ -6680,22 +6638,22 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             
             if (stocksWithContext.length > 0) {
                 html += `
-                    <div style="background: rgba(15, 15, 35, 0.2); border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 8px; padding: 15px; margin-top: 15px;">
-                        <div style="font-weight: 600; margin-bottom: 10px; color: #cbd5e1;">📊 Stock Performance Context</div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="stock-context-section">
+                        <div class="stock-context-title">Stock Performance Context</div>
+                        <div class="stock-context-grid">
                 `;
                 stocksWithContext.forEach(([symbol, perf]) => {
-                    const color = perf.avgReturn > 5 ? '#34d399' : perf.avgReturn > 0 ? '#94a3b8' : '#f87171';
-                    const interpretation = perf.losses > perf.wins ? 
-                        'Review entry timing' : 
+                    const color = perf.avgReturn > 5 ? '#34d399' : perf.avgReturn > 0 ? '#a8a8a0' : '#f87171';
+                    const interpretation = perf.losses > perf.wins ?
+                        'Review entry timing' :
                         perf.wins > perf.losses ? 'Working well' : 'Mixed results';
-                    
+
                     html += `
-                        <div style="background: rgba(15, 15, 35, 0.6); padding: 8px 12px; border-radius: 6px; font-size: 12px;">
-                            <div style="font-weight: 600; margin-bottom: 2px;">${symbol}</div>
-                            <div style="color: #94a3b8;">${perf.wins}-${perf.losses} (${perf.winRate.toFixed(0)}%)</div>
-                            <div style="color: ${color}; font-weight: 600;">${perf.avgReturn >= 0 ? '+' : ''}${perf.avgReturn.toFixed(1)}%</div>
-                            <div style="color: #64748b; font-size: 11px; margin-top: 2px;">${interpretation}</div>
+                        <div class="stock-context-item">
+                            <div class="stock-context-item-symbol">${symbol}</div>
+                            <div class="stock-context-item-record">${perf.wins}-${perf.losses} (${perf.winRate.toFixed(0)}%)</div>
+                            <div class="stock-context-item-return" style="color: ${color};">${perf.avgReturn >= 0 ? '+' : ''}${perf.avgReturn.toFixed(1)}%</div>
+                            <div class="stock-context-item-note">${interpretation}</div>
                         </div>
                     `;
                 });
@@ -6710,19 +6668,19 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             
             if (sortedSectors.length > 0) {
                 html += `
-                    <div style="background: rgba(15, 15, 35, 0.2); border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 8px; padding: 15px; margin-top: 15px;">
-                        <div style="font-weight: 600; margin-bottom: 10px; color: #cbd5e1;">🎯 Sector Performance</div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="sector-insights-section">
+                        <div class="sector-insights-title">Sector Performance</div>
+                        <div class="sector-insights-grid">
                 `;
                 sortedSectors.forEach(([sector, perf]) => {
                     const icon = perf.avgReturn > 5 ? '✅' : perf.avgReturn > 0 ? '➖' : '⚠️';
-                    const color = perf.avgReturn > 5 ? '#34d399' : perf.avgReturn > 0 ? '#94a3b8' : '#f87171';
+                    const color = perf.avgReturn > 5 ? '#34d399' : perf.avgReturn > 0 ? '#a8a8a0' : '#f87171';
                     html += `
-                        <div style="background: rgba(15, 15, 35, 0.6); padding: 8px 12px; border-radius: 6px; font-size: 12px;">
-                            <div style="font-weight: 600;">${icon} ${sector}</div>
-                            <div style="color: #94a3b8;">${perf.wins}-${perf.losses} (${perf.winRate.toFixed(0)}%)</div>
-                            <div style="color: ${color}; font-weight: 600;">${perf.avgReturn >= 0 ? '+' : ''}${perf.avgReturn.toFixed(1)}%</div>
-                            ${perf.insight ? `<div style="color: #64748b; font-size: 11px; margin-top: 2px;">${perf.insight}</div>` : ''}
+                        <div class="sector-insights-item">
+                            <div class="sector-insights-item-name">${icon} ${sector}</div>
+                            <div class="sector-insights-item-record">${perf.wins}-${perf.losses} (${perf.winRate.toFixed(0)}%)</div>
+                            <div class="sector-insights-item-return" style="color: ${color};">${perf.avgReturn >= 0 ? '+' : ''}${perf.avgReturn.toFixed(1)}%</div>
+                            ${perf.insight ? `<div class="sector-insights-item-note">${perf.insight}</div>` : ''}
                         </div>
                     `;
                 });
@@ -7197,17 +7155,117 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
             }
         }
 
-        // Toggle controls visibility
-        function toggleControls() {
-            const content = document.getElementById('controlsContent');
-            const toggle = document.getElementById('controlsToggle');
-            
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-                toggle.textContent = '▲';
-            } else {
-                content.style.display = 'none';
-                toggle.textContent = '▼';
+        // Unified collapse/expand for all sections
+        function toggleSection(sectionId) {
+            const body = document.getElementById(sectionId + 'Body');
+            const icon = document.getElementById(sectionId + 'Toggle');
+            if (!body) return;
+            body.classList.toggle('collapsed');
+            if (icon) icon.classList.toggle('collapsed');
+        }
+
+        // Analytics card expansion — only one open at a time
+        function toggleAnalyticsExpansion(cardType) {
+            const types = ['winRate', 'bestTrade', 'worstTrade'];
+            const panel = document.getElementById(cardType + 'Expansion');
+            const card = panel ? panel.closest('.expandable-card') : null;
+            const isOpen = panel && panel.classList.contains('open');
+
+            // Close all panels first
+            types.forEach(t => {
+                const p = document.getElementById(t + 'Expansion');
+                if (p) {
+                    p.classList.remove('open');
+                    const c = p.closest('.expandable-card');
+                    if (c) c.classList.remove('expanded');
+                }
+            });
+
+            // Toggle current (if it was closed, open it)
+            if (!isOpen && panel) {
+                populateAnalyticsExpansion(cardType);
+                panel.classList.add('open');
+                if (card) card.classList.add('expanded');
+            }
+        }
+
+        // Populate expansion panel content from closedTrades
+        function populateAnalyticsExpansion(cardType) {
+            const closedTrades = portfolio.closedTrades || [];
+            let html = '';
+
+            if (cardType === 'winRate') {
+                const container = document.getElementById('winRateExpansionContent');
+                if (!container) return;
+                if (closedTrades.length === 0) {
+                    container.innerHTML = '<div style="font-size:12px;color:var(--text-faint);padding:8px 0;">No closed trades yet</div>';
+                    return;
+                }
+                const recent = closedTrades.slice(-10).reverse();
+                recent.forEach(t => {
+                    const isWin = t.profitLoss > 0;
+                    const badge = isWin ? '<span class="trade-history-badge win">W</span>' : '<span class="trade-history-badge loss">L</span>';
+                    const retColor = isWin ? 'var(--green)' : 'var(--red)';
+                    const retStr = (isWin ? '+' : '') + (t.returnPercent || 0).toFixed(2) + '%';
+                    html += `<div class="trade-history-row">
+                        <span class="trade-history-symbol">${t.symbol}</span>
+                        ${badge}
+                        <span class="trade-history-return" style="color:${retColor}">${retStr}</span>
+                    </div>`;
+                });
+                container.innerHTML = html;
+
+            } else if (cardType === 'bestTrade') {
+                const container = document.getElementById('bestTradeExpansionContent');
+                if (!container) return;
+                const winners = closedTrades.filter(t => t.profitLoss > 0)
+                    .sort((a, b) => b.profitLoss - a.profitLoss)
+                    .slice(0, 5);
+                if (winners.length === 0) {
+                    container.innerHTML = '<div style="font-size:12px;color:var(--text-faint);padding:8px 0;">No winning trades yet</div>';
+                    return;
+                }
+                winners.forEach(t => {
+                    const holdDays = t.holdTime ? (t.holdTime / (1000*60*60*24)).toFixed(1) : '?';
+                    const conviction = t.entryConviction || '--';
+                    const profit = '+$' + (t.profitLoss || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+                    const reasoning = t.exitReasoning || t.exitReason || '';
+                    html += `<div class="top-trade-row">
+                        <div class="top-trade-header">
+                            <span class="top-trade-symbol">${t.symbol}</span>
+                            <span class="top-trade-return" style="color:var(--green)">+${(t.returnPercent||0).toFixed(2)}%</span>
+                        </div>
+                        <div class="top-trade-details">${profit} &middot; ${holdDays}d hold &middot; ${conviction} conviction</div>
+                        ${reasoning ? `<div class="top-trade-reasoning">${reasoning}</div>` : ''}
+                    </div>`;
+                });
+                container.innerHTML = html;
+
+            } else if (cardType === 'worstTrade') {
+                const container = document.getElementById('worstTradeExpansionContent');
+                if (!container) return;
+                const losers = closedTrades.filter(t => t.profitLoss < 0)
+                    .sort((a, b) => a.profitLoss - b.profitLoss)
+                    .slice(0, 5);
+                if (losers.length === 0) {
+                    container.innerHTML = '<div style="font-size:12px;color:var(--text-faint);padding:8px 0;">No losing trades yet</div>';
+                    return;
+                }
+                losers.forEach(t => {
+                    const holdDays = t.holdTime ? (t.holdTime / (1000*60*60*24)).toFixed(1) : '?';
+                    const conviction = t.entryConviction || '--';
+                    const loss = '$' + (t.profitLoss || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+                    const reasoning = t.exitReasoning || t.exitReason || '';
+                    html += `<div class="top-trade-row">
+                        <div class="top-trade-header">
+                            <span class="top-trade-symbol">${t.symbol}</span>
+                            <span class="top-trade-return" style="color:var(--red)">${(t.returnPercent||0).toFixed(2)}%</span>
+                        </div>
+                        <div class="top-trade-details">${loss} &middot; ${holdDays}d hold &middot; ${conviction} conviction</div>
+                        ${reasoning ? `<div class="top-trade-reasoning">${reasoning}</div>` : ''}
+                    </div>`;
+                });
+                container.innerHTML = html;
             }
         }
 
