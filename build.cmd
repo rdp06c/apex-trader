@@ -6,7 +6,7 @@ REM Usage: build.cmd
 
 set "SCRIPT_DIR=%~dp0"
 set "SRC=%SCRIPT_DIR%src"
-set "OUT=%SCRIPT_DIR%ai_trader.html"
+set "OUT=%SCRIPT_DIR%index.html"
 
 REM Verify source files exist
 if not exist "%SRC%\template.html" (

@@ -7,5 +7,5 @@ node_modules/
 *.db
 .DS_Store
 
-# Generated output — rebuild with build.cmd or build.sh
+# Old generated output name (no longer produced)
 ai_trader.html

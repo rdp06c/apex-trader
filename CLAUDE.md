@@ -2,7 +2,7 @@
 
 ## What This Is
 
-APEX (Autonomous Portfolio EXpert) is a single-page AI-powered paper trading application. It uses Claude's API (via Cloudflare Worker proxy) to make autonomous buy/sell/hold decisions on stocks, and Polygon.io for market data. The source is split into separate files under `src/` and assembled into a single `ai_trader.html` via a build script. There is no framework, no backend beyond the Cloudflare Worker proxy.
+APEX (Autonomous Portfolio EXpert) is a single-page AI-powered paper trading application. It uses Claude's API (via Cloudflare Worker proxy) to make autonomous buy/sell/hold decisions on stocks, and Polygon.io for market data. The source is split into separate files under `src/` and assembled into a single `index.html` via a build script. There is no framework, no backend beyond the Cloudflare Worker proxy.
 
 ## Project Structure
 
@@ -15,7 +15,7 @@ C:\RP\Apex\
     template.html     ← Skeleton HTML with placeholders
   build.cmd           ← Windows batch build script
   build.sh            ← Bash build script (Git Bash / WSL / CI)
-  ai_trader.html      ← Generated output (do not edit directly)
+  index.html          ← Generated output (do not edit directly, served by GitHub Pages)
   CLAUDE.md
   .gitignore
 ```
@@ -31,12 +31,12 @@ build.cmd
 ./build.sh
 ```
 
-The build assembles `src/template.html` + `src/styles.css` + `src/body.html` + `src/trader.js` → `ai_trader.html`. The output file is in `.gitignore` since it's generated.
+The build assembles `src/template.html` + `src/styles.css` + `src/body.html` + `src/trader.js` → `index.html`. The output is committed to git so GitHub Pages can serve it directly.
 
 ## Architecture Overview
 
 ```
-Browser (ai_trader.html)
+Browser (index.html)
   ├── Cloudflare Worker proxy → Anthropic API (Claude Sonnet)
   ├── Polygon.io API → Market data (snapshots, price history)
   ├── Google Drive API → Portfolio backup/restore, encrypted API key sync
@@ -163,7 +163,7 @@ All API keys stored in localStorage:
 ## Important Design Decisions & Constraints
 
 ### Single HTML Output
-The build produces a single `ai_trader.html` file. This is intentional for portability (can be opened from any device, hosted on any static server, or run locally). Source is split across `src/` for development convenience but always assembles into one file.
+The build produces a single `index.html` file. This is intentional for portability (can be opened from any device, hosted on any static server, or run locally). Source is split across `src/` for development convenience but always assembles into one file.
 
 ### Cloudflare Worker Proxy
 The Anthropic API is not called directly from the browser. All Claude API calls go through a Cloudflare Worker that injects the API key server-side. The `ANTHROPIC_API_URL` points to this worker.
@@ -245,8 +245,8 @@ When modifying prompts, be careful about:
 
 ## Development Notes
 
-- Edit files in `src/`, then run `build.cmd` (Windows) or `./build.sh` (Bash) to regenerate `ai_trader.html`.
-- **Do not edit `ai_trader.html` directly** — it is a generated file and changes will be overwritten on next build.
+- Edit files in `src/`, then run `build.cmd` (Windows) or `./build.sh` (Bash) to regenerate `index.html`.
+- **Do not edit `index.html` directly** — it is a generated file and changes will be overwritten on next build.
 - Test with "🧪 Dry Run" button which fetches market data without calling Claude API.
 - Console logging is extensive – most functions log their progress.
 - The file uses `let`/`const` throughout (no `var`).

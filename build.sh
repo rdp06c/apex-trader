@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$SCRIPT_DIR/src"
-OUT="$SCRIPT_DIR/ai_trader.html"
+OUT="$SCRIPT_DIR/index.html"
 
 # Verify source files exist
 for f in template.html styles.css body.html trader.js; do
