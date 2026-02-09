@@ -1028,6 +1028,7 @@
         
         // Cache for 5-day price history (fetched once per analysis run)
         let multiDayCache = {};
+        const MULTIDAY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
         
         // Fetch 5-day price history from Polygon aggregate bars
         async function fetch5DayHistory(symbol) {
@@ -1062,14 +1063,35 @@
         
         // Batch-fetch 5-day history for all symbols
         async function fetchAll5DayHistories(symbols) {
-            multiDayCache = {};
-            const BATCH = 50, DELAY = 1200;
+            // Restore from localStorage cache if fresh enough
+            try {
+                const cached = localStorage.getItem('multiDayCache');
+                const ts = parseInt(localStorage.getItem('multiDayCacheTs') || '0');
+                if (cached && Date.now() - ts < MULTIDAY_CACHE_TTL) {
+                    multiDayCache = JSON.parse(cached);
+                    const hitCount = symbols.filter(s => multiDayCache[s]).length;
+                    console.log(`📦 Restored ${hitCount}/${symbols.length} stocks from 5-day cache (${Math.round((Date.now() - ts) / 60000)}min old)`);
+                    // Only fetch symbols not in cache
+                    symbols = symbols.filter(s => !multiDayCache[s]);
+                    if (symbols.length === 0) return;
+                } else {
+                    multiDayCache = {};
+                }
+            } catch { multiDayCache = {}; }
+
+            const BATCH = 50, DELAY = 300;
             for (let i = 0; i < symbols.length; i += BATCH) {
                 const batch = symbols.slice(i, i + BATCH);
                 await Promise.all(batch.map(s => fetch5DayHistory(s)));
                 if (i + BATCH < symbols.length) await new Promise(r => setTimeout(r, DELAY));
             }
-            console.log(`✅ Fetched 5-day history for ${Object.keys(multiDayCache).length}/${symbols.length} stocks`);
+            console.log(`✅ Fetched 5-day history for ${Object.keys(multiDayCache).length} stocks (${symbols.length} new)`);
+
+            // Persist to localStorage
+            try {
+                localStorage.setItem('multiDayCache', JSON.stringify(multiDayCache));
+                localStorage.setItem('multiDayCacheTs', String(Date.now()));
+            } catch (e) { console.warn('Could not persist 5-day cache:', e.message); }
         }
         
         // Calculate REAL 5-day momentum score (uses last 5 bars from 20-day cache)
@@ -1634,7 +1656,7 @@
             // 3. SECTOR PERFORMANCE WITH CONTEXT
             const sectorPerformance = {};
             closedTrades.forEach(trade => {
-                const sector = stockSectors[trade.symbol] || 'Unknown';
+                const sector = trade.sector || stockSectors[trade.symbol] || 'Unknown';
                 if (!sectorPerformance[sector]) {
                     sectorPerformance[sector] = {
                         wins: 0,
@@ -1948,7 +1970,7 @@
             
             // Sector insights
             const sortedSectors = Object.entries(sectorPerformance)
-                .filter(([_, perf]) => perf.count >= 2)
+                .filter(([_, perf]) => perf.count >= 1)
                 .sort((a, b) => b[1].avgReturn - a[1].avgReturn);
             
             if (sortedSectors.length > 0) {
@@ -2310,7 +2332,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     if (missingSymbols.length > 0) {
                         thinkingDetail.textContent = `🧪 Fetching ${missingSymbols.length} remaining stocks...`;
                         const BATCH_SIZE = 50;
-                        const BATCH_DELAY_MS = 1200;
+                        const BATCH_DELAY_MS = 300;
                         for (let i = 0; i < missingSymbols.length; i += BATCH_SIZE) {
                             const batch = missingSymbols.slice(i, i + BATCH_SIZE);
                             const batchResults = await Promise.all(batch.map(async (symbol) => {
@@ -2727,7 +2749,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                         
                         // Fetch missing ones individually (small batch)
                         const BATCH_SIZE = 50;
-                        const BATCH_DELAY_MS = 1200;
+                        const BATCH_DELAY_MS = 300;
                         for (let i = 0; i < missingSymbols.length; i += BATCH_SIZE) {
                             const batch = missingSymbols.slice(i, i + BATCH_SIZE);
                             const batchResults = await Promise.all(batch.map(async (symbol) => {
@@ -2751,7 +2773,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     // Bulk fetch failed — fall back to individual batched calls
                     console.warn('Bulk snapshot insufficient, falling back to individual calls');
                     const BATCH_SIZE = 50;
-                    const BATCH_DELAY_MS = 1200;
+                    const BATCH_DELAY_MS = 300;
                     
                     for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
                         const batch = symbols.slice(i, i + BATCH_SIZE);
@@ -5341,7 +5363,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         portfolioValueAtEntry: totalPortfolioValue
                     });
                     
-                    const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : '👍';
+                    const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : '';
                     addActivity(`${convictionEmoji} APEX BOUGHT ${shares} shares of ${symbol} at $${price.toFixed(2)} (Conviction: ${conviction}/10) – "${decision.reasoning}"`, 'buy');
                     
                     // THESIS MEMORY: Store the thesis for this holding
@@ -5410,6 +5432,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         portfolio.closedTrades = portfolio.closedTrades || [];
                         portfolio.closedTrades.push({
                             symbol: symbol,
+                            sector: stockSectors[symbol] || 'Unknown',
                             buyPrice: avgBuyPrice,
                             sellPrice: price,
                             shares: shares,
@@ -5418,7 +5441,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             buyDate: buyTransactions[0].timestamp,
                             sellDate: new Date().toISOString(),
                             holdTime: new Date() - new Date(buyTransactions[0].timestamp),
-                            
+
                             // PHASE 1 LEARNING DATA:
                             // 1. Conviction Accuracy
                             entryConviction: originalBuyTx.conviction || null,
@@ -5704,7 +5727,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const entryRS = thesis?.entryRS;
 
                     // Conviction emoji
-                    const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : conviction >= 5 ? '👍' : '';
+                    const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : '';
 
                     const dailyClass = daysHeld === 0
                         ? (gainLossPercent >= 0 ? 'positive' : 'negative')
@@ -5824,6 +5847,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         function escapeHtml(str) {
             if (typeof str !== 'string') return str;
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        // Format AI text for readable HTML (escape first, then apply structure)
+        function formatDecisionText(str) {
+            if (typeof str !== 'string') return str;
+            return escapeHtml(str)
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n{2,}/g, '</p><p>')
+                .replace(/\n/g, '<br>')
+                .replace(/^/, '<p>').replace(/$/, '</p>')
+                .replace(/([\u{1F300}-\u{1F9FF}])/gu, ' $1 ');
         }
 
         function addActivity(text, type = 'general') {
@@ -6354,7 +6388,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const actionIcon = isSell ? '📉' : isBuy ? '📈' : '📊';
 
                     const convictionColor = d.conviction >= 9 ? '#34d399' : d.conviction >= 7 ? '#60a5fa' : '#a8a8a0';
-                    const convictionEmoji = d.conviction >= 9 ? '🔥' : d.conviction >= 7 ? '💪' : '👍';
+                    const convictionEmoji = d.conviction >= 9 ? '🔥' : d.conviction >= 7 ? '💪' : '';
                     const price = marketData[d.symbol] ? `$${marketData[d.symbol].price.toFixed(2)}` : '';
                     stocksList += `
                         <div class="decision-stock-item ${actionClass}" onclick="this.classList.toggle('expanded')">
@@ -6373,7 +6407,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 </div>
                             </div>
                             <div class="decision-stock-reasoning">
-                                ${escapeHtml(d.reasoning)}
+                                ${formatDecisionText(d.reasoning)}
                             </div>
                         </div>
                     `;
@@ -6408,7 +6442,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 <span>APEX's Thoughts</span>
                                 <span class="decision-expand-icon">&#9662;</span>
                             </div>
-                            <div class="decision-thoughts-text">${escapeHtml(decision.reasoning)}</div>
+                            <div class="decision-thoughts-text">${formatDecisionText(decision.reasoning)}</div>
                         </div>
                     ` : ''}
                     ${decision.research_summary ? `
@@ -6417,7 +6451,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 <span>Research Summary</span>
                                 <span class="decision-expand-icon">&#9662;</span>
                             </div>
-                            <div class="research-summary-text">${escapeHtml(decision.research_summary)}</div>
+                            <div class="research-summary-text">${formatDecisionText(decision.research_summary)}</div>
                         </div>
                     ` : ''}
                 `;
@@ -6457,7 +6491,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             <button class="decision-save-btn" onclick="saveDecisionReasoning(this)">Save</button>
                         </div>
                     </div>
-                    <div class="decision-single-reasoning">"${decision.reasoning}"</div>
+                    <div class="decision-single-reasoning">${formatDecisionText(decision.reasoning)}</div>
                 `;
             }
 
@@ -7162,7 +7196,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             
             // Sector Insights
             const sortedSectors = Object.entries(sectorPerformance)
-                .filter(([_, perf]) => perf.count >= 2)
+                .filter(([_, perf]) => perf.count >= 1)
                 .sort((a, b) => b[1].avgReturn - a[1].avgReturn)
                 .slice(0, 6);
             

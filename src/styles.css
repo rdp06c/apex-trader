@@ -1430,6 +1430,20 @@
             margin-bottom: 0;
         }
 
+        /* ── Formatted text inside decision cards ──────────── */
+        .decision-stock-reasoning p,
+        .decision-thoughts-text p,
+        .research-summary-text p,
+        .decision-single-reasoning p {
+            margin: 0 0 8px 0;
+        }
+        .decision-stock-reasoning p:last-child,
+        .decision-thoughts-text p:last-child,
+        .research-summary-text p:last-child,
+        .decision-single-reasoning p:last-child {
+            margin-bottom: 0;
+        }
+
         /* ── Expand/Collapse Icon ─────────────────────────── */
         .decision-expand-icon {
             font-size: 12px;
