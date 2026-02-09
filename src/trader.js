@@ -1827,7 +1827,13 @@
             // Analyze sector rotation
             const sectorInflow = tradesWithTechnicals.filter(t => t.entryTechnicals.sectorRotation === 'accumulate' || t.entryTechnicals.sectorRotation === 'favorable');
             const sectorOutflow = tradesWithTechnicals.filter(t => t.entryTechnicals.sectorRotation === 'avoid' || t.entryTechnicals.sectorRotation === 'caution');
-            
+
+            // Analyze runner entries (intraday change at purchase)
+            const withTodayChg = tradesWithTechnicals.filter(t => t.entryTechnicals.todayChange != null);
+            const runners = withTodayChg.filter(t => t.entryTechnicals.todayChange >= 5);
+            const bigRunners = withTodayChg.filter(t => t.entryTechnicals.todayChange >= 10);
+            const nonRunners = withTodayChg.filter(t => t.entryTechnicals.todayChange < 5);
+
             const calcStats = (trades) => {
                 if (trades.length === 0) return null;
                 const wins = trades.filter(t => t.profitLoss > 0).length;
@@ -1851,6 +1857,12 @@
                 sectorRotation: {
                     inflow: calcStats(sectorInflow),
                     outflow: calcStats(sectorOutflow)
+                },
+                runners: {
+                    hasData: withTodayChg.length >= 3,
+                    runners: calcStats(runners),
+                    bigRunners: calcStats(bigRunners),
+                    nonRunners: calcStats(nonRunners)
                 }
             };
         }
@@ -2052,6 +2064,24 @@
                     const diff = technicalAnalysis.sectorRotation.inflow.winRate - technicalAnalysis.sectorRotation.outflow.winRate;
                     if (diff > 10) {
                         insights += `  → Sector rotation IS predictive - avoid 'outflow' sectors\n`;
+                    }
+                    insights += '\n';
+                }
+
+                if (technicalAnalysis.runners?.hasData && technicalAnalysis.runners.runners && technicalAnalysis.runners.nonRunners) {
+                    insights += `Runner Entry Analysis (intraday % at purchase):\n`;
+                    insights += `  • Runners (up 5%+ day of buy): ${technicalAnalysis.runners.runners.winRate.toFixed(1)}% win rate, ${technicalAnalysis.runners.runners.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.runners.runners.avgReturn.toFixed(1)}% avg (${technicalAnalysis.runners.runners.count} trades)\n`;
+                    if (technicalAnalysis.runners.bigRunners && technicalAnalysis.runners.bigRunners.count > 0) {
+                        insights += `  • Big runners (up 10%+): ${technicalAnalysis.runners.bigRunners.winRate.toFixed(1)}% win rate, ${technicalAnalysis.runners.bigRunners.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.runners.bigRunners.avgReturn.toFixed(1)}% avg (${technicalAnalysis.runners.bigRunners.count} trades)\n`;
+                    }
+                    insights += `  • Non-runners (<5%): ${technicalAnalysis.runners.nonRunners.winRate.toFixed(1)}% win rate, ${technicalAnalysis.runners.nonRunners.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.runners.nonRunners.avgReturn.toFixed(1)}% avg (${technicalAnalysis.runners.nonRunners.count} trades)\n`;
+                    const runnerDiff = technicalAnalysis.runners.nonRunners.winRate - technicalAnalysis.runners.runners.winRate;
+                    if (runnerDiff > 10) {
+                        insights += `  ⚠️ RUNNERS UNDERPERFORM by ${runnerDiff.toFixed(0)}% win rate — avoid chasing stocks already up big today!\n`;
+                    } else if (runnerDiff > 0) {
+                        insights += `  → Non-runners slightly outperform — prefer calmer entries when possible\n`;
+                    } else {
+                        insights += `  → Runners holding up well so far — but monitor as data grows\n`;
                     }
                     insights += '\n';
                 }
@@ -5354,6 +5384,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         // Technical indicators at entry
                         entryTechnicals: {
                             momentumScore: marketData[symbol].momentum?.score || null,
+                            todayChange: marketData[symbol].momentum?.todayChange ?? marketData[symbol].changePercent ?? null,
+                            totalReturn5d: marketData[symbol].momentum?.totalReturn5d ?? null,
                             rsScore: marketData[symbol].relativeStrength?.rsScore || null,
                             sectorRotation: marketData[symbol].sectorRotation?.rotationSignal || null
                         },
@@ -7045,6 +7077,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     { name: 'RS', highLabel: 'High (70+)', lowLabel: 'Low (&lt;70)', high: signalData.relativeStrength.high, low: signalData.relativeStrength.low },
                     { name: 'Sector Flow', highLabel: 'Inflow', lowLabel: 'Outflow', high: signalData.sectorRotation.inflow, low: signalData.sectorRotation.outflow }
                 ];
+                if (signalData.runners?.hasData) {
+                    signals.push({ name: 'Runner Entry', highLabel: 'Runner (5%+)', lowLabel: 'Non-runner', high: signalData.runners.runners, low: signalData.runners.nonRunners });
+                }
                 signals.forEach(sig => {
                     if (sig.high && sig.low) {
                         const highWins = sig.high.winRate > sig.low.winRate;
