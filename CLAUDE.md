@@ -164,7 +164,7 @@ All API keys stored in localStorage:
 The build produces a single `index.html` file. This is intentional for portability (can be opened from any device, hosted on any static server, or run locally). Source is split across `src/` for development convenience but always assembles into one file.
 
 ### Cloudflare Worker Proxy
-The Anthropic API is not called directly from the browser. All Claude API calls go through a Cloudflare Worker that injects the API key server-side. The `ANTHROPIC_API_URL` points to this worker.
+The Anthropic API is not called directly from the browser. All Claude API calls go through a Cloudflare Worker that injects the API key server-side. The `ANTHROPIC_API_URL` points to this worker. The worker injects `stream: true` into every request and pipes the SSE stream straight through to the browser — this keeps the connection alive and avoids Cloudflare's free-plan 100s timeout. On the client side, `fetchAnthropicStreaming()` reads the SSE events and reconstructs the same message object shape as the non-streaming API, so all downstream code (JSON parsing, text extraction) works unchanged.
 
 ### API Cost Consciousness
 - Polygon Stocks Advanced plan – real-time data, unlimited API calls. Caching (4hr TTL for individual prices, 15s for bulk snapshots) avoids redundant requests and keeps responses fast
@@ -202,6 +202,7 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | Function | Purpose |
 |----------|---------|
 | `screenStocks` | Builds 300-stock universe across 12 sectors |
+| `fetchAnthropicStreaming` | SSE streaming fetch — reconstructs Messages API response shape |
 | `fetchBulkSnapshot` | Single API call for all ticker prices |
 | `fetchAll5DayHistories` | 20-day OHLCV bars for candidates |
 | `detectStructure` | ICT/SMC market structure analysis |
