@@ -350,7 +350,6 @@
         let apiCallsToday = 0;  // Consolidated - removed duplicate apiCallCount
         let lastResetDate = new Date().toDateString();
         let chatHistory = []; // Conversation memory for chat (last 5 exchanges)
-        const MAX_API_CALLS_PER_DAY = 25;
         
         // Load cached prices from localStorage
         function loadPriceCache() {
@@ -400,28 +399,6 @@
             return null;
         }
 
-        // Increment and save API call count
-        function incrementApiCallCount() {
-            apiCallsToday++;
-            localStorage.setItem('apiCallsToday', apiCallsToday.toString());
-            updateApiStatus();
-        }
-
-        // Update API status display
-        function updateApiStatus() {
-            const remaining = MAX_API_CALLS_PER_DAY - apiCallsToday;
-            const statusEl = document.getElementById('apiKeyStatus');
-            if (statusEl && POLYGON_API_KEY) {
-                statusEl.textContent = `✓ Polygon API active - ${remaining} calls remaining today`;
-                if (remaining < 5) {
-                    statusEl.style.color = '#f87171';
-                } else if (remaining < 10) {
-                    statusEl.style.color = '#fbbf24';
-                } else {
-                    statusEl.style.color = '#34d399';
-                }
-            }
-        }
 
         // Initialize the chart
         function initChart() {
@@ -976,7 +953,7 @@
             }
         }
 
-        // Get live stock price with caching (15-minute cache to avoid stale prices)
+        // Get live stock price with caching
         // ENHANCED MARKET ANALYSIS - Real multi-day momentum and strength metrics
         
         // Cache for 5-day price history (fetched once per analysis run)
@@ -1290,14 +1267,13 @@
 
 
         // BULK SNAPSHOT: Fetch all tickers in ONE call instead of 300 individual calls
-        // Uses /v2/snapshot/locale/us/markets/stocks/tickers (same data, same 15min delay)
         let bulkSnapshotCache = {};
         let bulkSnapshotTimestamp = 0;
         
         async function fetchBulkSnapshot(symbols) {
             const now = Date.now();
-            // Only refetch if cache is >60 seconds old
-            if (now - bulkSnapshotTimestamp < 60000 && Object.keys(bulkSnapshotCache).length > 0) {
+            // Only refetch if cache is >15 seconds old (real-time data)
+            if (now - bulkSnapshotTimestamp < 15000 && Object.keys(bulkSnapshotCache).length > 0) {
                 console.log('Using cached bulk snapshot (' + Math.floor((now - bulkSnapshotTimestamp) / 1000) + 's old)');
                 return bulkSnapshotCache;
             }
@@ -1321,22 +1297,24 @@
                         const prevDay = ticker.prevDay;
                         
                         if (!day || !prevDay) return;
-                        
-                        let currentPrice = day.c || day.l;
+
+                        // Prefer real-time lastTrade price, fall back to daily aggregate
+                        let currentPrice = (ticker.lastTrade && ticker.lastTrade.p) || day.c || day.l;
                         const prevClose = prevDay.c;
                         if (!currentPrice || currentPrice === 0) currentPrice = prevClose;
                         if (!currentPrice || !prevClose) return;
-                        
-                        const change = currentPrice - prevClose;
-                        const changePercent = (change / prevClose) * 100;
-                        
+
+                        // Use pre-computed change fields when available
+                        const change = ticker.todaysChange != null ? ticker.todaysChange : (currentPrice - prevClose);
+                        const changePercent = ticker.todaysChangePerc != null ? ticker.todaysChangePerc : ((currentPrice - prevClose) / prevClose * 100);
+
                         result[symbol] = {
                             price: parseFloat(currentPrice),
                             change: parseFloat(change),
                             changePercent: parseFloat(changePercent),
                             timestamp: new Date().toISOString(),
                             isReal: true,
-                            note: currentPrice === prevClose ? 'Market closed' : '15min delayed'
+                            note: currentPrice === prevClose ? 'Market closed' : 'Real-time'
                         };
                         
                         // Also update the regular price cache
@@ -1421,7 +1399,6 @@
             
             try {
                 // Use Polygon.io Snapshot endpoint for current trading day
-                // Free tier: 15-minute delayed data
                 // URL: /v2/snapshot/locale/us/markets/stocks/tickers/{ticker}
                 const response = await fetch(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
                 const data = await response.json();
@@ -1442,32 +1419,32 @@
                         throw new Error('Missing price data in response');
                     }
                     
-                    // Calculate change from previous close to current price
-                    // If day.c is 0 (market closed), use prevDay.c as current price
-                    let currentPrice = day.c || day.l; // Use close if available, otherwise last price
+                    // Prefer real-time lastTrade price, fall back to daily aggregate
+                    let currentPrice = (ticker.lastTrade && ticker.lastTrade.p) || day.c || day.l;
                     const prevClose = prevDay.c;
-                    
+
                     // If currentPrice is still 0 or null, use prevClose (market closed/weekend)
                     if (!currentPrice || currentPrice === 0) {
                         console.log(`[${symbol}] Market closed, using previous close: ${prevClose}`);
                         currentPrice = prevClose;
                     }
-                    
+
                     if (!currentPrice || !prevClose) {
                         console.error(`[${symbol}] Missing price values - currentPrice: ${currentPrice}, prevClose: ${prevClose}`);
                         throw new Error('Missing price values');
                     }
-                    
-                    const change = currentPrice - prevClose;
-                    const changePercent = (change / prevClose) * 100;
-                    
+
+                    // Use pre-computed change fields when available
+                    const change = ticker.todaysChange != null ? ticker.todaysChange : (currentPrice - prevClose);
+                    const changePercent = ticker.todaysChangePerc != null ? ticker.todaysChangePerc : ((currentPrice - prevClose) / prevClose * 100);
+
                     const priceData = {
                         price: parseFloat(currentPrice),
                         change: parseFloat(change),
                         changePercent: parseFloat(changePercent),
                         timestamp: new Date().toISOString(),
                         isReal: true,
-                        note: currentPrice === prevClose ? 'Market closed' : '15min delayed'
+                        note: currentPrice === prevClose ? 'Market closed' : 'Real-time'
                     };
                     
                     // Cache the data
@@ -2787,8 +2764,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                         `This costs ~$3 per analysis. Running with stale data wastes money.\n\n` +
                         `Reasons:\n` +
                         `• Market is closed (after 4PM ET)\n` +
-                        `• Weekend trading data\n` +
-                        `• Data provider delay\n\n` +
+                        `• Weekend trading data\n\n` +
                         `Continue anyway?`
                     );
                     
