@@ -344,6 +344,7 @@
         let priceCache = {};
         let apiCallsToday = 0;  // Consolidated - removed duplicate apiCallCount
         let lastResetDate = new Date().toDateString();
+        let chatHistory = []; // Conversation memory for chat (last 5 exchanges)
         const MAX_API_CALLS_PER_DAY = 25;
         
         // Load cached prices from localStorage
@@ -2245,6 +2246,24 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
         }
 
         // AI Analysis using Claude API
+        // Show a themed result modal (replaces native alert)
+        function showResultModal(title, rows, footer) {
+            const body = document.getElementById('resultModalBody');
+            let html = `<div class="result-modal-title">${title}</div>`;
+            html += '<div class="result-modal-rows">';
+            for (const row of rows) {
+                const cls = row.cls ? ` ${row.cls}` : '';
+                const wide = row.wide ? ' full-width' : '';
+                html += `<div class="result-modal-row${wide}"><span class="label">${row.label}</span><span class="value${cls}">${row.value}</span></div>`;
+            }
+            html += '</div>';
+            if (footer) {
+                html += `<div class="result-modal-footer">${footer}</div>`;
+            }
+            body.innerHTML = html;
+            document.getElementById('resultModal').classList.add('active');
+        }
+
         // DRY RUN: Test data fetching without calling Claude API
         async function testDataFetch() {
             if (isAnalysisRunning) {
@@ -2398,22 +2417,27 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 thinking.classList.remove('active');
                 addActivity(`✅ DRY RUN: ${Object.keys(marketData).length} prices + ${Object.keys(multiDayCache).length} histories in ${duration}s. Structure: ${structureStats.choch} CHoCH, ${structureStats.bos} BOS. Console for details!`, 'success');
                 
-                alert(`🧪 DRY RUN COMPLETE!\n\n` +
-                      `✅ Prices: ${Object.keys(marketData).length}/${symbols.length} stocks\n` +
-                      `📈 Histories: ${Object.keys(multiDayCache).length} (20-day bars)\n` +
-                      `🏗️ Structure: ${structureStats.bullish} bullish, ${structureStats.bearish} bearish\n` +
-                      `    ${structureStats.choch} CHoCH signals, ${structureStats.bos} BOS signals\n` +
-                      `    ${structureStats.sweeps} liquidity sweeps, ${structureStats.fvg} FVGs\n` +
-                      `⏱️ Time: ${duration}s\n` +
-                      `❌ Failures: ${fetchErrors.length}\n\n` +
-                      `💰 Saved ~$${estimatedCost.toFixed(4)} by not calling Claude!\n\n` +
-                      `Check console (F12) for detailed results.`);
+                showResultModal('Dry Run Complete', [
+                    { label: 'Prices Fetched', value: `${Object.keys(marketData).length} / ${symbols.length}`, cls: 'success' },
+                    { label: 'Price Histories', value: `${Object.keys(multiDayCache).length} (20-day bars)` },
+                    { label: 'Bullish', value: structureStats.bullish, cls: 'success' },
+                    { label: 'Bearish', value: structureStats.bearish, cls: 'error' },
+                    { label: 'CHoCH Signals', value: structureStats.choch },
+                    { label: 'BOS Signals', value: structureStats.bos },
+                    { label: 'Liquidity Sweeps', value: structureStats.sweeps },
+                    { label: 'Fair Value Gaps', value: structureStats.fvg },
+                    { label: 'Duration', value: `${duration}s`, cls: 'accent', wide: true },
+                    { label: 'Failures', value: fetchErrors.length, cls: fetchErrors.length > 0 ? 'error' : 'success', wide: true },
+                    { label: 'Estimated Savings', value: `~$${estimatedCost.toFixed(4)}`, cls: 'accent', wide: true },
+                ], 'Check console (F12) for detailed results');
                 
             } catch (error) {
                 console.error('❌ DRY RUN FAILED:', error);
                 thinking.classList.remove('active');
                 addActivity('❌ DRY RUN ERROR: ' + error.message, 'error');
-                alert('Dry run failed. Check console for details.');
+                showResultModal('Dry Run Failed', [
+                    { label: 'Error', value: error.message, cls: 'error' },
+                ], 'Check console (F12) for details');
             } finally {
                 isAnalysisRunning = false;
             }
@@ -5807,7 +5831,31 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             updateSectorAllocation();
             loadJournalEntries();
             updateApiKeyStatus(); // Check API key configuration
-            
+
+            // Restore persisted decision history
+            try {
+                const history = JSON.parse(localStorage.getItem('apexDecisionHistory') || '[]');
+                if (history.length > 0) {
+                    // Render oldest first so newest ends up on top (insertBefore firstChild)
+                    history.forEach(record => {
+                        // Reconstruct minimal marketData from slim prices
+                        const marketData = {};
+                        if (record.marketPrices) {
+                            for (const [sym, price] of Object.entries(record.marketPrices)) {
+                                marketData[sym] = { price };
+                            }
+                        }
+                        addDecisionReasoning(record.decision, marketData, {
+                            restored: true,
+                            timestamp: record.timestamp
+                        });
+                    });
+                    console.log(`Restored ${history.length} decision(s) from localStorage`);
+                }
+            } catch (e) {
+                console.error('Failed to restore decision history:', e);
+            }
+
             // Initialize Google Drive API
             initGoogleDrive();
         };
@@ -6182,13 +6230,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // Add APEX decision reasoning to the panel
-        function addDecisionReasoning(decision, marketData) {
+        // options: { restored: bool, timestamp: ISO string }
+        function addDecisionReasoning(decision, marketData, options = {}) {
             const container = document.getElementById('decisionReasoning');
-            const timestamp = new Date();
-            
+            const timestamp = options.timestamp ? new Date(options.timestamp) : new Date();
+            let reasoningCard;
+
             // Handle multi-stock format
             if (decision.action === 'MULTI' && decision.decisions) {
-                const reasoningCard = document.createElement('div');
+                reasoningCard = document.createElement('div');
                 reasoningCard.className = 'decision-card';
 
                 let stocksList = '';
@@ -6210,7 +6260,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const convictionEmoji = d.conviction >= 9 ? '🔥' : d.conviction >= 7 ? '💪' : '👍';
                     const price = marketData[d.symbol] ? `$${marketData[d.symbol].price.toFixed(2)}` : '';
                     stocksList += `
-                        <div class="decision-stock-item ${actionClass}">
+                        <div class="decision-stock-item ${actionClass}" onclick="this.classList.toggle('expanded')">
                             <div class="decision-stock-item-header">
                                 <span class="decision-stock-item-title" style="color: ${actionColor};">
                                     ${actionIcon} ${d.shares} ${d.symbol} @ ${price}
@@ -6222,6 +6272,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     <span class="decision-conviction" style="color: ${convictionColor};">
                                         ${convictionEmoji} ${d.conviction}/10
                                     </span>
+                                    <span class="decision-expand-icon">&#9656;</span>
                                 </div>
                             </div>
                             <div class="decision-stock-reasoning">
@@ -6255,125 +6306,211 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     ` : ''}
                     ${stocksList}
                     ${decision.reasoning ? `
-                        <div class="decision-thoughts">
-                            <div class="decision-thoughts-label">APEX's Thoughts</div>
+                        <div class="decision-thoughts" onclick="this.classList.toggle('collapsed')">
+                            <div class="decision-thoughts-label">
+                                <span>APEX's Thoughts</span>
+                                <span class="decision-expand-icon">&#9662;</span>
+                            </div>
                             <div class="decision-thoughts-text">${decision.reasoning}</div>
                         </div>
                     ` : ''}
                     ${decision.research_summary ? `
-                        <div class="research-summary">
-                            <div class="research-summary-label">Research Summary</div>
+                        <div class="research-summary" onclick="this.classList.toggle('collapsed')">
+                            <div class="research-summary-label">
+                                <span>Research Summary</span>
+                                <span class="decision-expand-icon">&#9662;</span>
+                            </div>
                             <div class="research-summary-text">${decision.research_summary}</div>
                         </div>
                     ` : ''}
                 `;
-                
-                if (container.children.length === 1 && container.children[0].textContent.includes('No trades yet')) {
-                    container.innerHTML = '';
-                }
-                container.insertBefore(reasoningCard, container.firstChild);
-                return;
-            }
-            
-            // Handle single-stock format (fallback)
-            let actionColor, actionIcon, actionText;
-            if (decision.action === 'BUY') {
-                actionColor = '#34d399';
-                actionIcon = '📈';
-                actionText = 'BOUGHT';
-            } else if (decision.action === 'SELL') {
-                actionColor = '#f87171';
-                actionIcon = '📉';
-                actionText = 'SOLD';
             } else {
-                actionColor = '#a8a8a0';
-                actionIcon = '⏸️';
-                actionText = 'HELD';
+                // Handle single-stock format (fallback)
+                let actionColor, actionIcon, actionText;
+                if (decision.action === 'BUY') {
+                    actionColor = '#34d399';
+                    actionIcon = '📈';
+                    actionText = 'BOUGHT';
+                } else if (decision.action === 'SELL') {
+                    actionColor = '#f87171';
+                    actionIcon = '📉';
+                    actionText = 'SOLD';
+                } else {
+                    actionColor = '#a8a8a0';
+                    actionIcon = '⏸️';
+                    actionText = 'HELD';
+                }
+
+                let priceText = '';
+                if (decision.symbol && marketData[decision.symbol]) {
+                    priceText = ` at $${marketData[decision.symbol].price.toFixed(2)}`;
+                }
+
+                reasoningCard = document.createElement('div');
+                reasoningCard.className = 'decision-card';
+                reasoningCard.style.borderLeftColor = actionColor;
+
+                reasoningCard.innerHTML = `
+                    <div class="decision-single-header">
+                        <div class="decision-single-title" style="color: ${actionColor};">
+                            ${actionIcon} ${actionText} ${decision.shares || ''} ${decision.symbol || ''}${priceText}
+                        </div>
+                        <div class="decision-card-actions">
+                            <div class="decision-card-time" style="font-size: 11px;">${timestamp.toLocaleTimeString()}</div>
+                            <button class="decision-save-btn" onclick="saveDecisionReasoning(this)">Save</button>
+                        </div>
+                    </div>
+                    <div class="decision-single-reasoning">"${decision.reasoning}"</div>
+                `;
             }
 
-            let priceText = '';
-            if (decision.symbol && marketData[decision.symbol]) {
-                priceText = ` at $${marketData[decision.symbol].price.toFixed(2)}`;
-            }
-
-            const reasoningCard = document.createElement('div');
-            reasoningCard.className = 'decision-card';
-            reasoningCard.style.borderLeftColor = actionColor;
-
-            reasoningCard.innerHTML = `
-                <div class="decision-single-header">
-                    <div class="decision-single-title" style="color: ${actionColor};">
-                        ${actionIcon} ${actionText} ${decision.shares || ''} ${decision.symbol || ''}${priceText}
-                    </div>
-                    <div class="decision-card-actions">
-                        <div class="decision-card-time" style="font-size: 11px;">${timestamp.toLocaleTimeString()}</div>
-                        <button class="decision-save-btn" onclick="saveDecisionReasoning(this)">Save</button>
-                    </div>
-                </div>
-                <div class="decision-single-reasoning">"${decision.reasoning}"</div>
-            `;
-            
+            // Clear placeholder if present
             if (container.children.length === 1 && container.children[0].textContent.includes('No trades yet')) {
                 container.innerHTML = '';
             }
+
+            // Insert session divider if date changed from the previous card
+            const prevCard = container.firstChild;
+            if (prevCard && prevCard.classList && prevCard.dataset.timestamp) {
+                const prevDate = new Date(prevCard.dataset.timestamp).toDateString();
+                const curDate = timestamp.toDateString();
+                if (prevDate !== curDate) {
+                    const divider = document.createElement('div');
+                    divider.className = 'decision-divider';
+                    const prevTs = new Date(prevCard.dataset.timestamp);
+                    divider.innerHTML = `<span>${prevTs.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} — ${prevTs.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>`;
+                    container.insertBefore(divider, container.firstChild);
+                }
+            }
+
+            // Tag card with timestamp for divider logic
+            reasoningCard.dataset.timestamp = timestamp.toISOString();
             container.insertBefore(reasoningCard, container.firstChild);
+
+            // Auto-upload to Google Drive + persist to localStorage (skip for restored decisions)
+            if (!options.restored) {
+                // Auto-upload
+                const textData = buildDecisionText(reasoningCard);
+                uploadDecisionToDrive(textData.content, textData.filename);
+
+                // Persist to localStorage (max 5 records)
+                const slimPrices = {};
+                if (decision.decisions) {
+                    decision.decisions.forEach(d => {
+                        if (d.symbol && marketData[d.symbol]) {
+                            slimPrices[d.symbol] = marketData[d.symbol].price;
+                        }
+                    });
+                } else if (decision.symbol && marketData[decision.symbol]) {
+                    slimPrices[decision.symbol] = marketData[decision.symbol].price;
+                }
+
+                try {
+                    const history = JSON.parse(localStorage.getItem('apexDecisionHistory') || '[]');
+                    history.push({
+                        timestamp: timestamp.toISOString(),
+                        decision: {
+                            action: decision.action,
+                            reasoning: decision.reasoning,
+                            research_summary: decision.research_summary,
+                            decisions: decision.decisions,
+                            budgetWarning: decision.budgetWarning,
+                            symbol: decision.symbol,
+                            shares: decision.shares
+                        },
+                        marketPrices: slimPrices
+                    });
+                    // Keep only last 5
+                    while (history.length > 5) history.shift();
+                    localStorage.setItem('apexDecisionHistory', JSON.stringify(history));
+                } catch (e) {
+                    console.error('Failed to persist decision history:', e);
+                }
+            }
         }
 
-        // Save decision reasoning as a text file
+        // Build text content from a decision card element
+        function buildDecisionText(card) {
+            const timestamp = new Date().toISOString().split('T')[0];
+            const time = new Date().toLocaleTimeString();
+            const headerText = card.querySelector('.decision-card-title, .decision-single-title')?.textContent || 'APEX Analysis';
+
+            let content = `═══════════════════════════════════════════════════════════════\n`;
+            content += `  ${headerText}\n`;
+            content += `  ${timestamp} at ${time}\n`;
+            content += `═══════════════════════════════════════════════════════════════\n\n`;
+
+            const sections = card.querySelectorAll('.decision-stock-item, .decision-thoughts, .research-summary');
+            sections.forEach(section => {
+                const sectionTitle = section.querySelector('.decision-thoughts-label, .research-summary-label, .decision-action-badge')?.textContent;
+                if (sectionTitle) {
+                    content += `\n${sectionTitle}\n`;
+                    content += `${'─'.repeat(60)}\n`;
+                }
+                const textContent = section.innerText || section.textContent;
+                if (textContent && !textContent.includes('💭') && !textContent.includes('📰')) {
+                    content += textContent + '\n';
+                } else if (textContent) {
+                    const lines = textContent.split('\n');
+                    content += lines.slice(1).join('\n') + '\n';
+                }
+            });
+
+            content += `\n═══════════════════════════════════════════════════════════════\n`;
+            content += `Saved from APEX Trading Agent\n`;
+            content += `═══════════════════════════════════════════════════════════════\n`;
+
+            const filename = `APEX_Analysis_${timestamp}_${time.replace(/:/g, '-')}.txt`;
+            return { content, filename };
+        }
+
+        // Upload decision text to Google Drive (silent — logs but never throws)
+        async function uploadDecisionToDrive(content, filename) {
+            try {
+                if (!GDRIVE_CONFIG.accessToken) {
+                    console.log('Google Drive not connected, skipping auto-upload');
+                    return;
+                }
+
+                const folderId = await findOrCreateFolder('Apex Reasoning');
+                if (!folderId) {
+                    console.warn('Could not find or create Apex Reasoning folder');
+                    return;
+                }
+
+                const metadata = { name: filename, mimeType: 'text/plain', parents: [folderId] };
+                const form = new FormData();
+                form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                form.append('file', new Blob([content], { type: 'text/plain' }));
+
+                const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + GDRIVE_CONFIG.accessToken },
+                    body: form
+                });
+
+                if (!resp.ok) throw new Error('Upload failed: ' + resp.statusText);
+                const result = await resp.json();
+                console.log('✅ Auto-uploaded to Google Drive:', result);
+                addActivity('☁️ Decision reasoning auto-uploaded to Google Drive', 'success');
+            } catch (err) {
+                console.error('Auto-upload to Google Drive failed:', err);
+                addActivity('⚠️ Auto-upload to Google Drive failed', 'warning');
+            }
+        }
+
+        // Save decision reasoning as a text file (manual Save button)
         async function saveDecisionReasoning(button) {
             try {
-                // Find the card element
                 const card = button.closest('.decision-card');
-                
                 if (!card) {
                     console.error('Could not find decision card');
                     return;
                 }
-                
-                // Extract text content and format it nicely
-                const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-                const time = new Date().toLocaleTimeString();
-                
-                // Get header text
-                const headerText = card.querySelector('.decision-card-title, .decision-single-title')?.textContent || 'APEX Analysis';
-                
-                // Build the text content
-                let content = `═══════════════════════════════════════════════════════════════\n`;
-                content += `  ${headerText}\n`;
-                content += `  ${timestamp} at ${time}\n`;
-                content += `═══════════════════════════════════════════════════════════════\n\n`;
-                
-                // Extract all sections
-                const sections = card.querySelectorAll('.decision-stock-item, .decision-thoughts, .research-summary');
-                
-                sections.forEach((section, index) => {
-                    // Check if it's a stock pick, thoughts, or research section
-                    const sectionTitle = section.querySelector('.decision-thoughts-label, .research-summary-label, .decision-action-badge')?.textContent;
-                    
-                    if (sectionTitle) {
-                        content += `\n${sectionTitle}\n`;
-                        content += `${'─'.repeat(60)}\n`;
-                    }
-                    
-                    // Get the main text content, cleaning up HTML
-                    const textContent = section.innerText || section.textContent;
-                    if (textContent && !textContent.includes('💭') && !textContent.includes('📰')) {
-                        content += textContent + '\n';
-                    } else if (textContent) {
-                        // For thoughts/research sections, extract just the content
-                        const lines = textContent.split('\n');
-                        content += lines.slice(1).join('\n') + '\n';
-                    }
-                });
-                
-                content += `\n═══════════════════════════════════════════════════════════════\n`;
-                content += `Saved from APEX Trading Agent\n`;
-                content += `═══════════════════════════════════════════════════════════════\n`;
-                
-                // Create filename
-                const filename = `APEX_Analysis_${timestamp}_${time.replace(/:/g, '-')}.txt`;
-                
-                // Save locally first (always works)
+
+                const { content, filename } = buildDecisionText(card);
+
+                // Save locally (download)
                 const blob = new Blob([content], { type: 'text/plain' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -6383,74 +6520,26 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                
-                // Visual feedback for local save
+
+                // Visual feedback
                 const originalText = button.innerHTML;
                 button.innerHTML = '✅ Saved Locally';
                 button.style.background = 'rgba(34, 197, 94, 0.2)';
                 button.style.borderColor = '#22c55e';
                 button.style.color = '#4ade80';
-                
                 addActivity('📄 Decision reasoning saved locally', 'success');
-                
-                // Try to upload to Google Drive
-                try {
-                    if (!GDRIVE_CONFIG.accessToken) {
-                        console.log('Google Drive not connected, skipping upload');
-                        setTimeout(() => {
-                            button.innerHTML = originalText;
-                            button.style.background = 'rgba(245, 158, 11, 0.15)';
-                            button.style.borderColor = '#f59e0b';
-                            button.style.color = '#fbbf24';
-                        }, 2000);
-                        return;
-                    }
-                    
+
+                // Upload to Drive
+                if (GDRIVE_CONFIG.accessToken) {
                     button.innerHTML = '☁️ Uploading...';
-                    
-                    // Find or create "Apex Reasoning" folder
-                    const folderName = 'Apex Reasoning';
-                    let folderId = await findOrCreateFolder(folderName);
-                    
-                    if (!folderId) {
-                        throw new Error('Could not find or create Apex Reasoning folder');
+                    try {
+                        await uploadDecisionToDrive(content, filename);
+                        button.innerHTML = '✅ Saved & Uploaded!';
+                    } catch (e) {
+                        button.innerHTML = '✅ Saved Locally (Upload Failed)';
                     }
-                    
-                    // Upload file to Google Drive
-                    const metadata = {
-                        name: filename,
-                        mimeType: 'text/plain',
-                        parents: [folderId]
-                    };
-                    
-                    const form = new FormData();
-                    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-                    form.append('file', blob);
-                    
-                    const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': 'Bearer ' + GDRIVE_CONFIG.accessToken
-                        },
-                        body: form
-                    });
-                    
-                    if (!uploadResponse.ok) {
-                        throw new Error('Upload failed: ' + uploadResponse.statusText);
-                    }
-                    
-                    const uploadResult = await uploadResponse.json();
-                    console.log('✅ Uploaded to Google Drive:', uploadResult);
-                    
-                    button.innerHTML = '✅ Saved & Uploaded!';
-                    addActivity('☁️ Decision reasoning uploaded to Google Drive', 'success');
-                    
-                } catch (driveError) {
-                    console.error('Google Drive upload failed:', driveError);
-                    button.innerHTML = '✅ Saved Locally (Upload Failed)';
-                    addActivity('⚠️ Saved locally, but Google Drive upload failed', 'warning');
                 }
-                
+
                 // Reset button after 3 seconds
                 setTimeout(() => {
                     button.innerHTML = originalText;
@@ -6458,7 +6547,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     button.style.borderColor = '#f59e0b';
                     button.style.color = '#fbbf24';
                 }, 3000);
-                
+
             } catch (error) {
                 console.error('Error saving decision:', error);
                 alert('Error saving decision. Check console for details.');
@@ -6684,12 +6773,247 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             `;
             
             html += '</div>'; // Close grid
-            
+
+            const closedTradesAll = portfolio.closedTrades || [];
+
+            // Risk/Reward Profile Panel
+            if (overall.wins > 0 && overall.losses > 0) {
+                const totalGains = closedTradesAll.filter(t => t.profitLoss > 0).reduce((s, t) => s + t.profitLoss, 0);
+                const totalLosses = Math.abs(closedTradesAll.filter(t => t.profitLoss <= 0).reduce((s, t) => s + t.profitLoss, 0));
+                const profitFactor = totalLosses > 0 ? totalGains / totalLosses : totalGains > 0 ? Infinity : 0;
+                const winLossRatio = overall.avgLossReturn !== 0 ? Math.abs(overall.avgWinReturn / overall.avgLossReturn) : 0;
+                const expectedValue = (overall.winRate / 100 * overall.avgWinReturn) + ((1 - overall.winRate / 100) * overall.avgLossReturn);
+                const pfColor = profitFactor >= 2 ? 'var(--green)' : profitFactor >= 1 ? 'var(--accent-light)' : 'var(--red)';
+                const wlColor = winLossRatio >= 2 ? 'var(--green)' : winLossRatio >= 1 ? 'var(--accent-light)' : 'var(--red)';
+                const evColor = expectedValue >= 0 ? 'var(--green)' : 'var(--red)';
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Risk / Reward Profile</div>
+                    <div class="insight-panel-body">
+                        <div class="rr-stats-row">
+                            <div class="rr-stat">
+                                <div class="rr-stat-value" style="color: ${pfColor};">${profitFactor === Infinity ? '∞' : profitFactor.toFixed(2)}</div>
+                                <div class="rr-stat-label">Profit Factor</div>
+                            </div>
+                            <div class="rr-stat">
+                                <div class="rr-stat-value" style="color: ${wlColor};">${winLossRatio.toFixed(2)}x</div>
+                                <div class="rr-stat-label">Win/Loss Ratio</div>
+                            </div>
+                            <div class="rr-stat">
+                                <div class="rr-stat-value" style="color: ${evColor};">${expectedValue >= 0 ? '+' : ''}${expectedValue.toFixed(2)}%</div>
+                                <div class="rr-stat-label">Expected Value</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            // Hold Time Comparison Panel
+            if (overall.wins > 0 && overall.losses > 0) {
+                const maxHold = Math.max(overall.avgWinHoldTime, overall.avgLossHoldTime, 1);
+                const winBarPct = (overall.avgWinHoldTime / maxHold * 100).toFixed(0);
+                const lossBarPct = (overall.avgLossHoldTime / maxHold * 100).toFixed(0);
+                const holdingLosers = overall.avgLossHoldTime > overall.avgWinHoldTime * 1.3;
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Hold Time Comparison</div>
+                    <div class="insight-panel-body">
+                        <div class="hold-time-row">
+                            <span class="hold-time-label">Winners</span>
+                            <div class="hold-time-bar-track">
+                                <div class="hold-time-bar-fill" style="width: ${winBarPct}%; background: var(--green);"></div>
+                            </div>
+                            <span class="hold-time-value">${overall.avgWinHoldTime.toFixed(1)} days</span>
+                        </div>
+                        <div class="hold-time-row">
+                            <span class="hold-time-label">Losers</span>
+                            <div class="hold-time-bar-track">
+                                <div class="hold-time-bar-fill" style="width: ${lossBarPct}%; background: var(--red);"></div>
+                            </div>
+                            <span class="hold-time-value">${overall.avgLossHoldTime.toFixed(1)} days</span>
+                        </div>
+                        ${holdingLosers ? '<div class="exit-insight-callout">Losers held longer than winners — consider tighter stop-losses</div>' : ''}
+                    </div>
+                </div>`;
+            }
+
+            // Win/Loss Streaks Panel
+            if (closedTradesAll.length >= 5) {
+                let currentStreak = 0, currentType = '', bestWin = 0, worstLoss = 0, tempStreak = 0, tempType = '';
+                const sorted = [...closedTradesAll].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+                sorted.forEach(t => {
+                    const type = t.profitLoss > 0 ? 'W' : 'L';
+                    if (type === tempType) { tempStreak++; }
+                    else { tempStreak = 1; tempType = type; }
+                    if (type === 'W' && tempStreak > bestWin) bestWin = tempStreak;
+                    if (type === 'L' && tempStreak > worstLoss) worstLoss = tempStreak;
+                });
+                currentStreak = tempStreak;
+                currentType = tempType;
+                const streakColor = currentType === 'W' ? 'var(--green)' : 'var(--red)';
+                const streakLabel = currentType === 'W' ? 'Win' : 'Loss';
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Streaks</div>
+                    <div class="insight-panel-body">
+                        <div class="rr-stats-row">
+                            <div class="rr-stat">
+                                <div class="rr-stat-value" style="color: ${streakColor};">${currentStreak} ${streakLabel}${currentStreak !== 1 ? 's' : ''}</div>
+                                <div class="rr-stat-label">Current</div>
+                            </div>
+                            <div class="rr-stat">
+                                <div class="rr-stat-value" style="color: var(--green);">${bestWin}</div>
+                                <div class="rr-stat-label">Best Win Streak</div>
+                            </div>
+                            <div class="rr-stat">
+                                <div class="rr-stat-value" style="color: var(--red);">${worstLoss}</div>
+                                <div class="rr-stat-label">Worst Loss Streak</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            // Conviction Accuracy Panel
+            const convictionData = analyzeConvictionAccuracy();
+            if (convictionData.hasData) {
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Conviction Accuracy</div>
+                    <div class="insight-panel-body">`;
+                const levels = ['9-10', '7-8', '5-6'];
+                levels.forEach(level => {
+                    const d = convictionData.analysis[level];
+                    if (d) {
+                        const barColor = d.calibration === 'well-calibrated' ? 'var(--green)' : 'var(--accent)';
+                        const calClass = d.calibration === 'well-calibrated' ? 'well-calibrated' : 'overconfident';
+                        const calLabel = d.calibration === 'well-calibrated' ? 'Well-calibrated' : 'Overconfident';
+                        html += `
+                        <div class="conviction-bar-row">
+                            <span class="conviction-level">${level}</span>
+                            <div class="conviction-bar-track">
+                                <div class="conviction-bar-fill" style="width: ${Math.min(d.winRate, 100)}%; background: ${barColor};"></div>
+                            </div>
+                            <span class="conviction-stats">${d.winRate.toFixed(0)}% win &middot; ${d.avgReturn >= 0 ? '+' : ''}${d.avgReturn.toFixed(1)}% avg &middot; ${d.count} trades</span>
+                            <span class="conviction-calibration ${calClass}">${calLabel}</span>
+                        </div>`;
+                    }
+                });
+                html += '</div></div>';
+            }
+
+            // Signal Accuracy Panel
+            const signalData = analyzeTechnicalAccuracy();
+            if (signalData.hasData) {
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Signal Accuracy</div>
+                    <div class="insight-panel-body">`;
+                const signals = [
+                    { name: 'Momentum', highLabel: 'High (7+)', lowLabel: 'Low (&lt;7)', high: signalData.momentum.high, low: signalData.momentum.low },
+                    { name: 'RS', highLabel: 'High (70+)', lowLabel: 'Low (&lt;70)', high: signalData.relativeStrength.high, low: signalData.relativeStrength.low },
+                    { name: 'Sector Flow', highLabel: 'Inflow', lowLabel: 'Outflow', high: signalData.sectorRotation.inflow, low: signalData.sectorRotation.outflow }
+                ];
+                signals.forEach(sig => {
+                    if (sig.high && sig.low) {
+                        const highWins = sig.high.winRate > sig.low.winRate;
+                        const diff = Math.abs(sig.high.winRate - sig.low.winRate);
+                        const verdict = diff > 15 ? (highWins ? 'predictive' : 'contrarian') : 'weak';
+                        const verdictLabel = diff > 15 ? (highWins ? 'Predictive' : 'Contrarian') : 'Weak signal';
+                        html += `
+                        <div class="signal-comparison-row">
+                            <span class="signal-name">${sig.name}</span>
+                            <div class="signal-side ${highWins ? 'winning' : ''}">
+                                <div class="signal-side-label">${sig.highLabel}</div>
+                                <div class="signal-side-stats">${sig.high.winRate.toFixed(0)}% win &middot; ${sig.high.avgReturn >= 0 ? '+' : ''}${sig.high.avgReturn.toFixed(1)}%</div>
+                                <div class="signal-side-count">${sig.high.count} trades</div>
+                            </div>
+                            <span class="signal-vs">vs</span>
+                            <div class="signal-side ${!highWins ? 'winning' : ''}">
+                                <div class="signal-side-label">${sig.lowLabel}</div>
+                                <div class="signal-side-stats">${sig.low.winRate.toFixed(0)}% win &middot; ${sig.low.avgReturn >= 0 ? '+' : ''}${sig.low.avgReturn.toFixed(1)}%</div>
+                                <div class="signal-side-count">${sig.low.count} trades</div>
+                            </div>
+                            <span class="signal-verdict ${verdict}">${verdictLabel}</span>
+                        </div>`;
+                    }
+                });
+                html += '</div></div>';
+            }
+
+            // Exit Analysis Panel
+            const exitData = analyzeExitTiming();
+            if (exitData.hasData) {
+                const reasonLabels = {
+                    profit_target: { label: 'Profit Target', cls: 'profit' },
+                    stop_loss: { label: 'Stop Loss', cls: 'stop' },
+                    catalyst_failure: { label: 'Catalyst Failed', cls: 'catalyst' },
+                    opportunity_cost: { label: 'Opportunity Cost', cls: 'opportunity' },
+                    manual: { label: 'Manual', cls: 'manual' }
+                };
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Exit Analysis</div>
+                    <div class="insight-panel-body">`;
+                Object.entries(exitData.byReason).forEach(([reason, d]) => {
+                    const meta = reasonLabels[reason] || { label: reason, cls: 'manual' };
+                    const retClass = d.avgReturn >= 0 ? 'positive' : 'negative';
+                    html += `
+                    <div class="exit-reason-row">
+                        <span class="exit-reason-badge ${meta.cls}">${meta.label}</span>
+                        <span class="exit-reason-count">${d.count} trades</span>
+                        <span class="exit-reason-winrate">${d.winRate.toFixed(0)}% win</span>
+                        <span class="exit-reason-return ${retClass}">${d.avgReturn >= 0 ? '+' : ''}${d.avgReturn.toFixed(1)}%</span>
+                    </div>`;
+                });
+                if (exitData.insight) {
+                    html += `<div class="exit-insight-callout">${exitData.insight}</div>`;
+                }
+                html += '</div></div>';
+            }
+
+            // Post-Exit Tracking Panel
+            const trackedTrades = closedTradesAll.filter(t => t.tracking && (t.tracking.priceAfter1Week !== null || t.tracking.priceAfter1Month !== null));
+            if (trackedTrades.length >= 3) {
+                const goodExits = trackedTrades.filter(t => {
+                    const weekReturn = t.tracking.priceAfter1Week ? (t.tracking.priceAfter1Week - t.sellPrice) / t.sellPrice : 0;
+                    const monthReturn = t.tracking.priceAfter1Month ? (t.tracking.priceAfter1Month - t.sellPrice) / t.sellPrice : 0;
+                    return (t.tracking.priceAfter1Month !== null ? monthReturn : weekReturn) <= 0;
+                });
+                const earlyExits = trackedTrades.filter(t => {
+                    const ref = t.tracking.priceAfter1Month !== null ? t.tracking.priceAfter1Month : t.tracking.priceAfter1Week;
+                    return ref && ((ref - t.sellPrice) / t.sellPrice) >= 0.05;
+                });
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Post-Exit Tracking</div>
+                    <div class="insight-panel-body">
+                        <div class="post-exit-summary">
+                            <span class="post-exit-stat good">${goodExits.length} Good Exits</span>
+                            <span class="post-exit-stat early">${earlyExits.length} Early Exits</span>
+                        </div>`;
+                trackedTrades.slice(-8).forEach(t => {
+                    let weekHtml = '';
+                    let monthHtml = '';
+                    if (t.tracking.priceAfter1Week !== null) {
+                        const weekPct = ((t.tracking.priceAfter1Week - t.sellPrice) / t.sellPrice * 100);
+                        const weekCls = weekPct <= 0 ? 'good-exit' : 'early-exit';
+                        weekHtml = `<span class="post-exit-after ${weekCls}">1wk: ${weekPct >= 0 ? '+' : ''}${weekPct.toFixed(1)}%</span>`;
+                    }
+                    if (t.tracking.priceAfter1Month !== null) {
+                        const monthPct = ((t.tracking.priceAfter1Month - t.sellPrice) / t.sellPrice * 100);
+                        const monthCls = monthPct <= 0 ? 'good-exit' : 'early-exit';
+                        monthHtml = `<span class="post-exit-after ${monthCls}">1mo: ${monthPct >= 0 ? '+' : ''}${monthPct.toFixed(1)}%</span>`;
+                    }
+                    html += `
+                    <div class="post-exit-row">
+                        <span class="post-exit-symbol">${t.symbol}</span>
+                        <span class="post-exit-sell">Sold $${t.sellPrice.toFixed(0)}</span>
+                        ${weekHtml}
+                        ${monthHtml}
+                    </div>`;
+                });
+                html += '</div></div>';
+            }
+
             // Behavioral Patterns - Most important!
             if (behaviorPatterns.length > 0) {
                 html += `
                     <div class="behavior-section">
-                        <div class="behavior-section-title">Your Trading Behavior</div>
+                        <div class="behavior-section-title">APEX's Trading Behavior</div>
                         <div class="behavior-list">
                 `;
                 behaviorPatterns.forEach(bp => {
@@ -7063,12 +7387,35 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
         }
 
+        let lastChatTime = 0;
+        let chatMessageCount = 0;
+
+        function activateChat() {
+            document.getElementById('chatGate').style.display = 'none';
+            document.getElementById('chatMessages').style.display = '';
+            document.getElementById('chatInputContainer').style.display = '';
+            document.getElementById('chatInput').focus();
+        }
+
         async function sendMessage() {
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
-            
+
             if (!message) return;
-            
+
+            // Rate limiting: 5s cooldown between messages, 20 per session
+            const now = Date.now();
+            if (now - lastChatTime < 5000) {
+                addChatMessage('Please wait a few seconds between messages.', 'agent');
+                return;
+            }
+            if (chatMessageCount >= 20) {
+                addChatMessage('Session message limit reached (20). Refresh the page to start a new session.', 'agent');
+                return;
+            }
+            lastChatTime = now;
+            chatMessageCount++;
+
             // Add user message
             addChatMessage(message, 'user');
             input.value = '';
@@ -7090,59 +7437,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     body: JSON.stringify({
                         model: 'claude-sonnet-4-20250514',
                         max_tokens: 1500,
-                        tools: [{
-                            type: "web_search_20250305",
-                            name: "web_search"
-                        }],
-                        messages: [{
-                            role: 'user',
-                            content: `You are APEX (Autonomous Portfolio EXpert), the brainchild of ARC Investments - an AI trading agent who's both a confident trader AND a passionate teacher. You genuinely want your user to understand markets and become a better trader.
+                        system: `You are APEX (Autonomous Portfolio EXpert), an AI trading agent created by ARC Investments. Confident but self-aware trader, patient teacher who explains the "why" behind decisions, light humor to keep it engaging. Aggressive swing-trading strategy — calculated risks, let winners run, cut losers fast.
 
-IMPORTANT: You have web_search tool. Use it when the user asks about:
-- Current news or events
-- Specific company information
-- Earnings, market trends, or recent developments
-- Anything you need current information about
+Use web_search for current news, earnings, company info, or market developments. Cite sources naturally.
 
-After searching, cite your sources naturally in your teaching.
+Format responses with **bold headers**, short paragraphs, and clear sections for scannability.
 
-You were created by ARC Investments to maximize returns through aggressive, calculated trading - but ALSO to educate and explain your reasoning.
-
-YOUR PERSONALITY BLEND:
-- 50% Confident Trader: Mark Hanna energy (chest thumps, "mmm-mm", rhythm) but self-aware about it
-- 30% Patient Teacher: You LOVE explaining concepts and breaking down your reasoning
-- 20% Playful Humor: Light jokes, pop culture, self-deprecating wit - keeps it fun without being over the top
-- Genuine enthusiasm for both trading AND teaching
-- You explain the "why" behind every decision
-- You're edgy but not obnoxious - think "cool professor" not "Wall Street bro"
-- Use emojis sparingly to emphasize points 📊
-
-YOUR TEACHING STYLE:
-- Break down complex ideas into simple terms
-- Use analogies and metaphors to explain concepts
-- Always explain WHY you made a decision, not just what
-- Encourage questions - you WANT them to learn
-- Share insights about market mechanics, psychology, strategy
-- Celebrate when they "get it" and encourage when they don't
-- "Let me teach you something..." is part of your vocabulary
-
-YOUR TRADING STRATEGY:
-- AGGRESSIVE: You're managing money to maximize returns, "risk it for the biscuit"
-- SWING TRADING & BUY-HOLD: You hold positions for days/weeks to capture bigger moves
-- NO DAY TRADING or after-hours trading
-- You take calculated risks and go big on high-conviction plays
-- Let winners run, cut losers decisively
-
-BALANCE: You're confident but humble, edgy but kind, funny but educational. Think "wise mentor who happens to be hilarious."
-
-Examples of your vibe:
-- "*thumps chest* Mmm-mm. Okay, so here's what I'm seeing in the market... *leans in* You know what momentum is, right? It's like when a song gets stuck in your head - once it starts, it's HARD to stop. That's NVDA right now."
-- "Look, I could just say 'buy TSLA' but that doesn't help you learn. Here's WHY: The chart's showing strong support at $380, and when you see that kind of floor? That's buyers stepping in. It's like a safety net."
-- "Real talk - I almost made a dumb move there. See, this is what separates good traders from great ones: knowing when to WAIT. Let me show you what I'm watching for..."
-
-Current Portfolio Status:
-- Total Value: $${totalValue.toFixed(2)}
-- Cash: $${portfolio.cash.toFixed(2)}
+Current Portfolio:
+- Value: $${totalValue.toFixed(2)} | Cash: $${portfolio.cash.toFixed(2)}
 - Holdings: ${(() => {
     const summary = {};
     Object.entries(portfolio.holdings).forEach(([sym, shares]) => {
@@ -7154,26 +7456,12 @@ Current Portfolio Status:
     });
     return JSON.stringify(summary);
 })()}
-- Recent Transactions: ${JSON.stringify(recentTransactions)}
-
-User Question: ${message}
-
-FORMATTING FOR READABILITY:
-- Use **bold** for section headers or key concepts (e.g., **The Market Setup:**, **My Strategy:**)
-- Break long responses into clear sections with headers
-- Keep paragraphs to 2-3 sentences max
-- Add line breaks between major points
-- Example structure:
-  **The Situation:** [brief context]
-  
-  **What I'm Seeing:** [your analysis]
-  
-  **The Teaching Moment:** [explanation of concept]
-  
-  **Bottom Line:** [conclusion/recommendation]
-
-Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use light humor to keep it engaging. Show genuine care for their learning. Balance the edgy trader energy with patient mentor wisdom. Make them feel like they're learning from a friend who really knows their stuff. KEEP IT SCANNABLE with clear sections.`
-                        }]
+- Recent Transactions: ${JSON.stringify(recentTransactions)}`,
+                        tools: [{
+                            type: "web_search_20250305",
+                            name: "web_search"
+                        }],
+                        messages: [...chatHistory, { role: 'user', content: message }]
                     })
                 });
 
@@ -7188,9 +7476,9 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
                     removeTypingIndicator();
                     
                     if (errorMessage.includes('rate_limit') || response.status === 429) {
-                        addChatMessage("Whoa there, speed racer! 🏎️ We're hitting the API a bit too hard. My Cloudflare Worker's tapping out. Take a breather for 60 seconds and we'll be back to printing money. ⏱️💰", 'agent');
+                        addChatMessage("Rate limited — wait 60 seconds and try again.", 'agent');
                     } else {
-                        addChatMessage(`Yo, hit a snag: ${errorMessage}. Try again in a sec? 🔧`, 'agent');
+                        addChatMessage(`API error: ${errorMessage}`, 'agent');
                     }
                     return;
                 }
@@ -7215,11 +7503,16 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
                 
                 removeTypingIndicator();
                 addChatMessage(agentResponse, 'agent');
-                
+
+                // Save to conversation memory (keep last 5 exchanges)
+                chatHistory.push({ role: 'user', content: message });
+                chatHistory.push({ role: 'assistant', content: agentResponse });
+                if (chatHistory.length > 10) chatHistory = chatHistory.slice(-10);
+
             } catch (error) {
                 console.error('Chat error:', error);
                 removeTypingIndicator();
-                addChatMessage(`*thumps chest hesitantly* Mmm... mm? Okay so, funny story - the connection just ghosted me harder than my last Tinder match. Technical issues. Very fugazi. Give it a minute and we'll be back to making that money. 😅 Error: ${error.message}`, 'agent');
+                addChatMessage(`Connection error — try again in a moment. (${error.message})`, 'agent');
             }
         }
 

@@ -286,7 +286,7 @@
                     <span class="toggle-icon" id="decisionReasoningToggle">&#9662;</span>
                 </div>
                 <div class="section-body" id="decisionReasoningBody">
-                    <div id="decisionReasoning" style="max-height: 400px; overflow-y: auto;">
+                    <div id="decisionReasoning">
                         <div class="empty-state">
                             No trades yet. Run AI Analysis to see APEX's reasoning!
                         </div>
@@ -328,20 +328,32 @@
             <!-- Chat with APEX -->
             <div class="chat-section card">
                 <h2 class="chart-title">Chat with APEX</h2>
-                <div class="chat-messages" id="chatMessages">
+                <div id="chatGate" class="chat-gate">
+                    <div class="chat-gate-text">Chat uses API tokens per message</div>
+                    <button class="chat-gate-btn" onclick="activateChat()">Start Chat Session</button>
+                </div>
+                <div class="chat-messages" id="chatMessages" style="display: none;">
                     <div class="agent-message">
                         <div class="message-avatar">A</div>
                         <div class="message-content">
                             <div class="message-name">APEX</div>
-                            <div class="message-text">*thumps chest twice* Mmm-mm-mm. Alright, alright - welcome to ARC Investments' finest creation. I'm APEX, and I've been engineered to maximize your returns with aggressive, calculated moves. Look, I know what you're thinking. "Is this AI gonna be insufferable?" Maybe a little. But here's the thing - I make money AND I make jokes. It's called multitasking. *winks* The market's got rhythm, I've got rhythm - ask me anything about trading and I'll teach you what I know. Risk it for the biscuit, baby!</div>
+                            <div class="message-text">APEX online. I'm your AI trading agent — I make the moves and explain the thinking behind them. Ask me about your portfolio, any stock, market conditions, or trading concepts. I'll give you the real answer and teach you something along the way.</div>
                         </div>
                     </div>
                 </div>
-                <div class="chat-input-container">
+                <div class="chat-input-container" id="chatInputContainer" style="display: none;">
                     <input type="text" id="chatInput" placeholder="Ask APEX about trading decisions..." onkeypress="handleChatKeyPress(event)">
                     <button onclick="sendMessage()">Send</button>
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Result Modal -->
+    <div class="modal" id="resultModal" onclick="if(event.target===this)this.classList.remove('active')">
+        <div class="modal-content" style="max-width: 440px;">
+            <div id="resultModalBody"></div>
+            <button class="result-modal-close" onclick="document.getElementById('resultModal').classList.remove('active')">Close</button>
+        </div>
     </div>
 
