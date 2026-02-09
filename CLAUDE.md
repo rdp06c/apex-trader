@@ -46,7 +46,7 @@ Browser (index.html)
 ### Core Data Flow: AI Analysis Cycle
 
 1. **Stock Screening** (`screenStocks`) – Builds a universe of ~300 stocks across 12 sectors
-2. **Bulk Snapshot** (`fetchBulkSnapshot`) – Fetches prices for all stocks via Polygon `/v2/snapshot` endpoint (single API call, cached 60s)
+2. **Bulk Snapshot** (`fetchBulkSnapshot`) – Fetches prices for all stocks via Polygon `/v2/snapshot` endpoint (single API call, cached 15s)
 3. **5-Day History** (`fetchAll5DayHistories`) – Gets 20-day OHLCV bars for top candidates via Polygon `/v2/aggs`
 4. **Technical Analysis** (client-side):
    - `detectStructure` – Swing high/low detection, CHoCH, BOS, liquidity sweeps, FVGs
@@ -167,7 +167,7 @@ The build produces a single `index.html` file. This is intentional for portabili
 The Anthropic API is not called directly from the browser. All Claude API calls go through a Cloudflare Worker that injects the API key server-side. The `ANTHROPIC_API_URL` points to this worker.
 
 ### API Cost Consciousness
-- Polygon Stocks Starter plan – unlimited API calls, but the app still uses caching (4hr TTL for individual prices, 60s for bulk snapshots) to avoid unnecessary requests and keep responses fast
+- Polygon Stocks Advanced plan – real-time data, unlimited API calls. Caching (4hr TTL for individual prices, 15s for bulk snapshots) avoids redundant requests and keeps responses fast
 - Claude API calls are expensive – freshness checks prevent wasting analysis on stale data
 - Phase 1 uses `claude-sonnet-4-5-20250929` with `max_tokens: 4000`
 - Phase 2 uses `claude-sonnet-4-5-20250929` with `max_tokens: 8000`
