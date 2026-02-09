@@ -1078,8 +1078,9 @@
             if (!allBars || allBars.length < 2) {
                 if (!priceData || !priceData.price) return { score: 0, trend: 'unknown', basis: 'no-data' };
                 const cp = priceData.changePercent || 0;
+                // Cap at 7 — without multi-day context a single-day spike shouldn't dominate rankings
                 let score = 5;
-                if (cp > 5) score = 10; else if (cp > 2) score = 8; else if (cp > 0) score = 6;
+                if (cp > 5) score = 7; else if (cp > 2) score = 6.5; else if (cp > 0) score = 6;
                 else if (cp > -2) score = 4; else if (cp > -5) score = 2; else score = 0;
                 return { score, trend: score >= 6 ? 'building' : score <= 4 ? 'fading' : 'neutral', changePercent: cp, basis: '1-day-fallback' };
             }
@@ -2947,10 +2948,18 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     // Structure bonus: reward bullish structure, BOS, bullish CHoCH; penalize bearish
                     const structureBonus = (data.marketStructure?.structureScore || 0) * 0.75;
 
-                    // Extension penalty: extremely stretched stocks get dampened in ranking
-                    const extensionPenalty = (momentumScore >= 9 && rsNormalized >= 8.5) ? -3
-                        : (momentumScore >= 8 && rsNormalized >= 8) ? -2
-                        : (momentumScore >= 7.5 && rsNormalized >= 7.5) ? -1
+                    // Intraday runner penalty: stocks already up big today are chasing risk
+                    const todayChg = data.momentum?.todayChange || data.changePercent || 0;
+                    const runnerPenalty = todayChg >= 15 ? -4
+                        : todayChg >= 10 ? -3
+                        : todayChg >= 7 ? -2
+                        : todayChg >= 5 ? -1
+                        : 0;
+
+                    // Extension penalty: stretched on momentum OR relative strength (not both required)
+                    const extensionPenalty = (momentumScore >= 9 || rsNormalized >= 8.5) ? -3
+                        : (momentumScore >= 8 || rsNormalized >= 8) ? -2
+                        : (momentumScore >= 7.5 || rsNormalized >= 7.5) ? -1
                         : 0;
 
                     // Pullback bonus: stock dipped but structure/sector still supportive
@@ -2964,7 +2973,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                         && data.sectorRotation?.moneyFlow !== 'outflow') ? 1
                         : 0;
 
-                    const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus + bigMoverBonus + structureBonus + extensionPenalty + pullbackBonus;
+                    const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus + bigMoverBonus + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty;
                     
                     return { symbol, compositeScore, data };
                 });
