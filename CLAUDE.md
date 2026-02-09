@@ -53,11 +53,17 @@ Browser (ai_trader.html)
    - `calculate5DayMomentum` – Price momentum scoring
    - `calculateRelativeStrength` – Stock vs sector performance
    - `detectSectorRotation` – Money flow between sectors
-5. **Two-Phase AI Decision**:
-   - **Phase 1** (`runAIAnalysis`, first API call) – Reviews existing holdings → SELL or HOLD decisions. Claude gets holdings data, theses, P&L, and web search capability.
+5. **Candidate Scoring & Selection** (~line 2750 in `trader.js`):
+   - Composite score = momentum (0-10) + RS normalized (0-10) + sector bonus (-1 to +2) + acceleration bonus (0/1.5) + consistency bonus (0/1) + structure bonus (-2.25 to +2.25) + extension penalty (0 to -3) + pullback bonus (0 to +2)
+   - `bigMoverBonus` is disabled (was rewarding stocks already up >5% today — chasing)
+   - **Extension penalty**: Graduated dampening when BOTH momentum AND RS are very high (9+/85+ → -3, 8+/80+ → -2, 7.5+/75+ → -1). Prevents runners from monopolizing top slots.
+   - **Pullback bonus**: Stocks down 2-8% over 5 days with bullish structure + non-outflow sector get +2. Mild pullbacks (0 to -5%) with intact structure get +1. Helps quality dips compete with runners.
+   - Final candidate pool: top 25 by score + all current holdings + 5 sector wildcards + up to 10 reversal candidates (bullish CHoCH, low-swept, bullish BOS)
+6. **Two-Phase AI Decision**:
+   - **Phase 1** (`runAIAnalysis`, first API call) – Reviews existing holdings → SELL or HOLD decisions. Claude gets holdings data, theses, P&L, current technical indicators, and web search capability.
    - Between phases: Sell proceeds are projected into `updatedCash`. Sold symbols are removed from Phase 2 candidates.
-   - **Phase 2** (second API call) – Evaluates buy candidates using `updatedCash` as available budget. Gets market data, structure analysis, Phase 1 results, learning insights, market regime context.
-6. **Budget Validation & Execution** (`executeMultipleTrades`):
+   - **Phase 2** (second API call) – Evaluates buy candidates using `updatedCash` as available budget. Gets market data, structure analysis, Phase 1 results, learning insights, market regime context. Entry quality guidance prioritizes pullback setups over extended stocks.
+7. **Budget Validation & Execution** (`executeMultipleTrades`):
    - Sells execute first (freeing up actual cash)
    - Buy budget validates against real post-sell `portfolio.cash`
    - Buys execute in conviction-priority order
@@ -100,10 +106,14 @@ Tracks performance patterns from `closedTrades`:
 - **Exit Timing Analysis** (`analyzeExitTiming`) – Post-exit price tracking to evaluate sell decisions
 - **Behavioral Patterns** – Detects tendency to sell winners too early, hold losers too long, etc.
 
-These insights are injected into Phase 2's prompt so Claude can learn from past decisions.
+These insights are injected into Phase 2's prompt so Claude can learn from past decisions. They're also surfaced in the Learning Insights UI via `updateLearningInsightsDisplay()`, which renders 7 analytics panels: Risk/Reward Profile, Hold Time Comparison, Streaks, Conviction Accuracy, Signal Accuracy, Exit Analysis, and Post-Exit Tracking. Each panel has a minimum data threshold and won't render with insufficient trades.
 
 ### Chat Interface (`sendMessage` in `src/trader.js`)
-Conversational interface where users can ask APEX questions. APEX has a defined personality (confident trader + patient teacher) and gets portfolio context + web search capability.
+Conversational interface where users can ask APEX questions. Gets portfolio context + web search capability.
+- **Gated**: Chat is hidden behind an activation button (`activateChat()`) — user must click "Start Chat Session" to reveal the input
+- **Conversation memory**: Last 5 exchanges (10 messages) stored in `chatHistory` and sent with each request. Resets on page refresh.
+- **Rate limiting**: 5-second cooldown between messages (`lastChatTime`), 20 messages per session max (`chatMessageCount`). Both reset on refresh.
+- **System prompt**: Concise ~80 token personality in the `system` parameter (not embedded in user message). Portfolio snapshot included as context.
 
 ### Google Drive Integration (in `src/trader.js`)
 - OAuth 2.0 with `drive.file` scope (APEX can only see files it created)
@@ -133,19 +143,26 @@ The Anthropic API is not called directly from the browser. All Claude API calls 
 - Phase 2 uses `claude-sonnet-4-20250514` with `max_tokens: 8000`
 - Chat uses `max_tokens: 1500`
 
-### Anti-Whipsaw Protections
-- 24-hour cooldown: Phase 1 won't contradict decisions made within 24 hours
-- 5-day sell cooldown: Recently sold stocks are flagged if they appear as buy candidates – requires a NEW catalyst to re-buy
-- Thesis tracking: Entry conditions are stored so Phase 1 can evaluate if the original thesis still holds
+### Anti-Whipsaw Protections (5 layers)
+1. **24-hour sell block** (code-enforced): `executeSingleTrade` rejects sells on holdings < 24 hours old regardless of AI recommendation
+2. **5-day re-buy cooldown** (code-enforced): `executeMultipleTrades` filters out symbols sold within 5 days from buy candidates
+3. **Phase 1 sells removed from Phase 2** (code-enforced): Sold symbols deleted from Phase 2 candidate list — prevents same-session re-buy
+4. **Recently-sold warnings** (prompt-level): Phase 2 tags recently-sold symbols with sell date, P&L, exit reason — requires NEW catalyst to re-buy
+5. **Prompt anti-whipsaw rules**: "Do not contradict decisions made in last 24 hours", "consistency builds trust"
+- **Thesis tracking**: Entry conditions (catalyst, conviction, price, momentum, RS, sector flow) stored in `holdingTheses` so Phase 1 can compare original thesis vs current state
 
 ### Two-Phase Architecture Rationale
 Splitting sell/buy into separate API calls solves information asymmetry: Phase 1 focuses purely on "should I exit?" without being biased by new opportunities, and Phase 2 gets accurate cash figures (including projected sell proceeds) to plan buys.
 
 ## Known Issues / Areas of Ongoing Work
 
-- **Budget validation mismatch** (recently fixed): The sell-first execution flow ensures buy validation uses post-sell cash. If you see "original plan required $X but only $Y available" it's now a genuine AI arithmetic error, not a code bug.
+- **Budget validation mismatch** (fixed): The sell-first execution flow ensures buy validation uses post-sell cash. If you see "original plan required $X but only $Y available" it's now a genuine AI arithmetic error, not a code bug.
+- **Runner bias** (mitigated): Extension penalty + pullback bonus + doubled reversal slots + stronger prompt guidance. Runners still score well (momentum matters), but no longer monopolize top 25.
 - **JSON parsing fragility**: AI responses sometimes include markdown, citations, or malformed JSON. Multiple fallback parsers handle this (regex extraction, brace matching, citation stripping).
 - **Post-exit tracking** (`updatePostExitTracking`): Checks prices 1 week / 1 month after sells to evaluate exit quality. Depends on Polygon API availability.
+- **Volume trend unused**: `calculate5DayMomentum` computes `volumeTrend` but it's never used in composite scoring. Could confirm momentum quality.
+- **FVG detection unused**: `detectStructure` detects Fair Value Gaps but they're not used in scoring or reversal filtering. Scaffolding for potential future use.
+- **No hard cap on candidate count**: With many holdings, candidate list can exceed 50+. Could degrade Phase 2 decision quality.
 
 ## Function Reference (Key Functions)
 
@@ -168,7 +185,9 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `calculatePortfolioValue` | Current total value calculation |
 | `updateUI` | Refreshes all dashboard elements |
 | `addDecisionReasoning` | Renders decision cards in UI |
-| `sendMessage` | Chat interface message handling |
+| `sendMessage` | Chat interface message handling (with rate limiting) |
+| `activateChat` | Unlocks chat UI for the session |
+| `updateLearningInsightsDisplay` | Renders all analytics panels in Learning Insights |
 | `savePortfolio` / `loadPortfolio` | localStorage persistence |
 | `savePortfolioToDrive` | Google Drive backup |
 | `initChart` | Chart.js performance chart setup |
@@ -178,8 +197,8 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 The AI prompts are extensive and embedded inline in `src/trader.js`. Key sections (search for these strings):
 
 - **Phase 1 prompt** (in `runAIAnalysis`, search `"Phase 1"`): Holdings review. Includes thesis comparison, anti-whipsaw rules, opportunity cost context (top buy candidates teased).
-- **Phase 2 prompt** (in `runAIAnalysis`, search `"Phase 2"`): Buy decisions. Includes market regime guidance (bull/bear/choppy with different cash deployment strategies), conviction-based allocation rules, entry quality requirements, recently-sold warnings, and learning insights.
-- **Chat prompt** (in `sendMessage`): APEX personality definition, teaching style, portfolio context.
+- **Phase 2 prompt** (in `runAIAnalysis`, search `"Phase 2"`): Buy decisions. Includes market regime guidance (bull/bear/choppy with different cash deployment strategies), conviction-based allocation rules, entry quality tiers (Extended → avoid, Good Entry → sweet spot, Pullback → preferred, Red Flag → skip), recently-sold warnings, and learning insights.
+- **Chat prompt** (in `sendMessage`): Concise system prompt with personality, portfolio context. Uses `system` parameter with conversation memory.
 
 When modifying prompts, be careful about:
 - The `updatedCash` variable must be correctly referenced in Phase 2's budget section
