@@ -1834,6 +1834,37 @@
             const bigRunners = withTodayChg.filter(t => t.entryTechnicals.todayChange >= 10);
             const nonRunners = withTodayChg.filter(t => t.entryTechnicals.todayChange < 5);
 
+            // Analyze market structure at entry
+            const withStructure = tradesWithTechnicals.filter(t => t.entryTechnicals.structure != null);
+            const bullishStructure = withStructure.filter(t => t.entryTechnicals.structure === 'bullish');
+            const bearishStructure = withStructure.filter(t => t.entryTechnicals.structure === 'bearish');
+            const otherStructure = withStructure.filter(t => t.entryTechnicals.structure !== 'bullish' && t.entryTechnicals.structure !== 'bearish');
+
+            // Analyze CHoCH vs BOS entries
+            const withChoch = withStructure.filter(t => t.entryTechnicals.choch);
+            const withBos = withStructure.filter(t => t.entryTechnicals.bos);
+
+            // Analyze acceleration
+            const withAccel = tradesWithTechnicals.filter(t => t.entryTechnicals.isAccelerating != null);
+            const accelerating = withAccel.filter(t => t.entryTechnicals.isAccelerating);
+            const decelerating = withAccel.filter(t => !t.entryTechnicals.isAccelerating);
+
+            // Analyze market regime at entry
+            const withRegime = closedTrades.filter(t => t.entryMarketRegime);
+            const bullRegime = withRegime.filter(t => t.entryMarketRegime === 'bull');
+            const bearRegime = withRegime.filter(t => t.entryMarketRegime === 'bear');
+            const choppyRegime = withRegime.filter(t => t.entryMarketRegime === 'choppy');
+
+            // Analyze portfolio concentration at entry
+            const withHoldings = closedTrades.filter(t => t.entryHoldingsCount != null);
+            const concentrated = withHoldings.filter(t => t.entryHoldingsCount <= 3);
+            const diversified = withHoldings.filter(t => t.entryHoldingsCount > 3);
+
+            // Analyze position sizing
+            const withSizing = closedTrades.filter(t => t.positionSizePercent != null && t.positionSizePercent > 0);
+            const bigPositions = withSizing.filter(t => t.positionSizePercent >= 15);
+            const smallPositions = withSizing.filter(t => t.positionSizePercent < 15);
+
             const calcStats = (trades) => {
                 if (trades.length === 0) return null;
                 const wins = trades.filter(t => t.profitLoss > 0).length;
@@ -1863,6 +1894,35 @@
                     runners: calcStats(runners),
                     bigRunners: calcStats(bigRunners),
                     nonRunners: calcStats(nonRunners)
+                },
+                structure: {
+                    hasData: withStructure.length >= 3,
+                    bullish: calcStats(bullishStructure),
+                    bearish: calcStats(bearishStructure),
+                    other: calcStats(otherStructure),
+                    choch: calcStats(withChoch),
+                    bos: calcStats(withBos)
+                },
+                acceleration: {
+                    hasData: withAccel.length >= 3,
+                    accelerating: calcStats(accelerating),
+                    decelerating: calcStats(decelerating)
+                },
+                regime: {
+                    hasData: withRegime.length >= 3,
+                    bull: calcStats(bullRegime),
+                    bear: calcStats(bearRegime),
+                    choppy: calcStats(choppyRegime)
+                },
+                concentration: {
+                    hasData: withHoldings.length >= 3,
+                    concentrated: calcStats(concentrated),
+                    diversified: calcStats(diversified)
+                },
+                sizing: {
+                    hasData: withSizing.length >= 3,
+                    big: calcStats(bigPositions),
+                    small: calcStats(smallPositions)
                 }
             };
         }
@@ -1901,16 +1961,34 @@
             
             // Analyze if selling winners too early
             const winners = closedTrades.filter(t => t.profitLoss > 0);
-            const avgWinnerReturn = winners.length > 0 
-                ? winners.reduce((sum, t) => sum + t.returnPercent, 0) / winners.length 
+            const avgWinnerReturn = winners.length > 0
+                ? winners.reduce((sum, t) => sum + t.returnPercent, 0) / winners.length
                 : 0;
-            
+
+            // Hold time bucketing — find optimal hold periods
+            const holdBuckets = {};
+            closedTrades.forEach(t => {
+                if (!t.holdTime) return;
+                const days = Math.floor(t.holdTime / 86400000);
+                const bucket = days <= 1 ? '0-1d' : days <= 3 ? '2-3d' : days <= 7 ? '4-7d' : days <= 14 ? '1-2w' : '2w+';
+                if (!holdBuckets[bucket]) holdBuckets[bucket] = { wins: 0, losses: 0, totalReturn: 0, count: 0 };
+                const b = holdBuckets[bucket];
+                b.count++;
+                b.totalReturn += t.returnPercent;
+                if (t.profitLoss > 0) b.wins++; else b.losses++;
+            });
+            Object.values(holdBuckets).forEach(b => {
+                b.winRate = b.count > 0 ? (b.wins / b.count) * 100 : 0;
+                b.avgReturn = b.count > 0 ? b.totalReturn / b.count : 0;
+            });
+
             return {
                 hasData: true,
                 byReason: analysis,
                 avgWinnerReturn: avgWinnerReturn,
                 profitTargetCount: byReason.profit_target.length,
-                insight: avgWinnerReturn < 15 && byReason.profit_target.length > 2 
+                holdBuckets: holdBuckets,
+                insight: avgWinnerReturn < 15 && byReason.profit_target.length > 2
                     ? "Consider holding winners longer - average win is only " + avgWinnerReturn.toFixed(1) + "%"
                     : null
             };
@@ -2085,8 +2163,90 @@
                     }
                     insights += '\n';
                 }
+
+                if (technicalAnalysis.structure?.hasData && technicalAnalysis.structure.bullish && technicalAnalysis.structure.bearish) {
+                    insights += `Market Structure at Entry:\n`;
+                    insights += `  • Bullish: ${technicalAnalysis.structure.bullish.winRate.toFixed(1)}% win rate, ${technicalAnalysis.structure.bullish.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.structure.bullish.avgReturn.toFixed(1)}% avg (${technicalAnalysis.structure.bullish.count} trades)\n`;
+                    insights += `  • Bearish: ${technicalAnalysis.structure.bearish.winRate.toFixed(1)}% win rate, ${technicalAnalysis.structure.bearish.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.structure.bearish.avgReturn.toFixed(1)}% avg (${technicalAnalysis.structure.bearish.count} trades)\n`;
+                    if (technicalAnalysis.structure.choch) {
+                        insights += `  • CHoCH entries: ${technicalAnalysis.structure.choch.winRate.toFixed(1)}% win rate (${technicalAnalysis.structure.choch.count} trades)\n`;
+                    }
+                    if (technicalAnalysis.structure.bos) {
+                        insights += `  • BOS entries: ${technicalAnalysis.structure.bos.winRate.toFixed(1)}% win rate (${technicalAnalysis.structure.bos.count} trades)\n`;
+                    }
+                    const structDiff = technicalAnalysis.structure.bullish.winRate - technicalAnalysis.structure.bearish.winRate;
+                    if (structDiff > 15) {
+                        insights += `  → Bullish structure IS predictive (+${structDiff.toFixed(0)}%) — respect the trend!\n`;
+                    } else if (structDiff < -15) {
+                        insights += `  ⚠️ Bearish structure entries outperform — contrarian setups working better\n`;
+                    }
+                    insights += '\n';
+                }
+
+                if (technicalAnalysis.acceleration?.hasData && technicalAnalysis.acceleration.accelerating && technicalAnalysis.acceleration.decelerating) {
+                    insights += `Momentum Acceleration:\n`;
+                    insights += `  • Accelerating: ${technicalAnalysis.acceleration.accelerating.winRate.toFixed(1)}% win rate (${technicalAnalysis.acceleration.accelerating.count} trades)\n`;
+                    insights += `  • Decelerating: ${technicalAnalysis.acceleration.decelerating.winRate.toFixed(1)}% win rate (${technicalAnalysis.acceleration.decelerating.count} trades)\n`;
+                    const accelDiff = technicalAnalysis.acceleration.accelerating.winRate - technicalAnalysis.acceleration.decelerating.winRate;
+                    if (accelDiff > 10) {
+                        insights += `  → Acceleration IS predictive — building momentum matters\n`;
+                    } else if (accelDiff < -10) {
+                        insights += `  ⚠️ Decelerating entries outperform — consider fading momentum\n`;
+                    }
+                    insights += '\n';
+                }
+
+                if (technicalAnalysis.regime?.hasData) {
+                    insights += `Market Regime at Entry:\n`;
+                    if (technicalAnalysis.regime.bull) insights += `  • Bull: ${technicalAnalysis.regime.bull.winRate.toFixed(1)}% win rate, ${technicalAnalysis.regime.bull.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.regime.bull.avgReturn.toFixed(1)}% avg (${technicalAnalysis.regime.bull.count} trades)\n`;
+                    if (technicalAnalysis.regime.bear) insights += `  • Bear: ${technicalAnalysis.regime.bear.winRate.toFixed(1)}% win rate, ${technicalAnalysis.regime.bear.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.regime.bear.avgReturn.toFixed(1)}% avg (${technicalAnalysis.regime.bear.count} trades)\n`;
+                    if (technicalAnalysis.regime.choppy) insights += `  • Choppy: ${technicalAnalysis.regime.choppy.winRate.toFixed(1)}% win rate, ${technicalAnalysis.regime.choppy.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.regime.choppy.avgReturn.toFixed(1)}% avg (${technicalAnalysis.regime.choppy.count} trades)\n`;
+                    insights += '\n';
+                }
+
+                if (technicalAnalysis.concentration?.hasData && technicalAnalysis.concentration.concentrated && technicalAnalysis.concentration.diversified) {
+                    insights += `Portfolio Concentration at Entry:\n`;
+                    insights += `  • Concentrated (1-3 holdings): ${technicalAnalysis.concentration.concentrated.winRate.toFixed(1)}% win rate (${technicalAnalysis.concentration.concentrated.count} trades)\n`;
+                    insights += `  • Diversified (4+ holdings): ${technicalAnalysis.concentration.diversified.winRate.toFixed(1)}% win rate (${technicalAnalysis.concentration.diversified.count} trades)\n`;
+                    const concDiff = technicalAnalysis.concentration.concentrated.winRate - technicalAnalysis.concentration.diversified.winRate;
+                    if (Math.abs(concDiff) > 10) {
+                        insights += `  → ${concDiff > 0 ? 'Concentrated' : 'Diversified'} portfolios outperform by ${Math.abs(concDiff).toFixed(0)}%\n`;
+                    }
+                    insights += '\n';
+                }
+
+                if (technicalAnalysis.sizing?.hasData && technicalAnalysis.sizing.big && technicalAnalysis.sizing.small) {
+                    insights += `Position Sizing:\n`;
+                    insights += `  • Large (15%+): ${technicalAnalysis.sizing.big.winRate.toFixed(1)}% win rate, ${technicalAnalysis.sizing.big.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.sizing.big.avgReturn.toFixed(1)}% avg (${technicalAnalysis.sizing.big.count} trades)\n`;
+                    insights += `  • Small (<15%): ${technicalAnalysis.sizing.small.winRate.toFixed(1)}% win rate, ${technicalAnalysis.sizing.small.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.sizing.small.avgReturn.toFixed(1)}% avg (${technicalAnalysis.sizing.small.count} trades)\n`;
+                    const sizeDiff = technicalAnalysis.sizing.big.winRate - technicalAnalysis.sizing.small.winRate;
+                    if (sizeDiff > 10) {
+                        insights += `  → Large positions outperform — conviction sizing is working!\n`;
+                    } else if (sizeDiff < -10) {
+                        insights += `  ⚠️ Large positions underperform — reduce position sizes or improve conviction accuracy\n`;
+                    }
+                    insights += '\n';
+                }
             }
-            
+
+            // Hold Time Analysis
+            if (exitAnalysis.hasData && exitAnalysis.holdBuckets && Object.keys(exitAnalysis.holdBuckets).length >= 2) {
+                insights += `⏱️ HOLD TIME ANALYSIS:\n\n`;
+                const bucketOrder = ['0-1d', '2-3d', '4-7d', '1-2w', '2w+'];
+                let bestBucket = null, bestWinRate = -1;
+                bucketOrder.forEach(b => {
+                    const data = exitAnalysis.holdBuckets[b];
+                    if (data && data.count >= 1) {
+                        insights += `  • ${b}: ${data.winRate.toFixed(0)}% win rate, ${data.avgReturn >= 0 ? '+' : ''}${data.avgReturn.toFixed(1)}% avg (${data.count} trades)\n`;
+                        if (data.count >= 2 && data.winRate > bestWinRate) { bestWinRate = data.winRate; bestBucket = b; }
+                    }
+                });
+                if (bestBucket) {
+                    insights += `  → Best hold period: ${bestBucket} (${bestWinRate.toFixed(0)}% win rate)\n`;
+                }
+                insights += '\n';
+            }
+
             // Exit Timing Analysis
             if (exitAnalysis.hasData) {
                 insights += `⏰ EXIT TIMING ANALYSIS (Phase 1 Learning):\n\n`;
@@ -5386,10 +5546,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             momentumScore: marketData[symbol].momentum?.score || null,
                             todayChange: marketData[symbol].momentum?.todayChange ?? marketData[symbol].changePercent ?? null,
                             totalReturn5d: marketData[symbol].momentum?.totalReturn5d ?? null,
+                            isAccelerating: marketData[symbol].momentum?.isAccelerating ?? null,
+                            upDays: marketData[symbol].momentum?.upDays ?? null,
                             rsScore: marketData[symbol].relativeStrength?.rsScore || null,
-                            sectorRotation: marketData[symbol].sectorRotation?.rotationSignal || null
+                            sectorRotation: marketData[symbol].sectorRotation?.rotationSignal || null,
+                            structureScore: marketData[symbol].marketStructure?.structureScore ?? null,
+                            structure: marketData[symbol].marketStructure?.structure || null,
+                            choch: marketData[symbol].marketStructure?.choch || null,
+                            chochType: marketData[symbol].marketStructure?.chochType || null,
+                            bos: marketData[symbol].marketStructure?.bos || null,
+                            bosType: marketData[symbol].marketStructure?.bosType || null,
+                            sweep: marketData[symbol].marketStructure?.sweep || null
                         },
-                        
+
+                        // Market context at entry
+                        entryMarketRegime: portfolio.lastMarketRegime?.regime || null,
+                        entryHoldingsCount: Object.keys(portfolio.holdings).length,
+
                         // Position context
                         positionSizePercent: positionSizePercent,
                         portfolioValueAtEntry: totalPortfolioValue
@@ -5480,12 +5653,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             
                             // 2. Technical Indicators at Entry
                             entryTechnicals: originalBuyTx.entryTechnicals || {},
-                            
+                            entryMarketRegime: originalBuyTx.entryMarketRegime || null,
+                            entryHoldingsCount: originalBuyTx.entryHoldingsCount || null,
+
                             // 3. Exit Context
                             exitReason: exitReason,
                             exitReasoning: decision.reasoning || '',
                             exitConviction: decision.conviction || null,
-                            
+                            exitMarketRegime: portfolio.lastMarketRegime?.regime || null,
+                            exitHoldingsCount: Object.keys(portfolio.holdings).length,
+
                             // Position context
                             positionSizePercent: originalBuyTx.positionSizePercent || null,
                             
@@ -7079,6 +7256,21 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 ];
                 if (signalData.runners?.hasData) {
                     signals.push({ name: 'Runner Entry', highLabel: 'Runner (5%+)', lowLabel: 'Non-runner', high: signalData.runners.runners, low: signalData.runners.nonRunners });
+                }
+                if (signalData.structure?.hasData) {
+                    signals.push({ name: 'Structure', highLabel: 'Bullish', lowLabel: 'Bearish', high: signalData.structure.bullish, low: signalData.structure.bearish });
+                }
+                if (signalData.acceleration?.hasData) {
+                    signals.push({ name: 'Acceleration', highLabel: 'Accel', lowLabel: 'Decel', high: signalData.acceleration.accelerating, low: signalData.acceleration.decelerating });
+                }
+                if (signalData.regime?.hasData && signalData.regime.bull && signalData.regime.bear) {
+                    signals.push({ name: 'Regime', highLabel: 'Bull', lowLabel: 'Bear', high: signalData.regime.bull, low: signalData.regime.bear });
+                }
+                if (signalData.concentration?.hasData) {
+                    signals.push({ name: 'Concentration', highLabel: '1-3 holdings', lowLabel: '4+', high: signalData.concentration.concentrated, low: signalData.concentration.diversified });
+                }
+                if (signalData.sizing?.hasData) {
+                    signals.push({ name: 'Position Size', highLabel: 'Large (15%+)', lowLabel: 'Small', high: signalData.sizing.big, low: signalData.sizing.small });
                 }
                 signals.forEach(sig => {
                     if (sig.high && sig.low) {
