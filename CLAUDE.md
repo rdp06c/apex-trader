@@ -80,7 +80,10 @@ Browser (ai_trader.html)
   transactions: [...],       // Full trade log (BUY/SELL entries)
   performanceHistory: [...], // Time-series for chart (value + deposit markers)
   closedTrades: [...],       // Completed round-trip trades with learning data
-  holdingTheses: { SYMBOL: { originalCatalyst, entryConviction, entryPrice, ... } },
+  holdingTheses: { SYMBOL: { originalCatalyst, entryConviction, entryPrice, entryMomentum, entryRS, entrySectorFlow, ... } },
+  lastMarketRegime: { regime, timestamp },           // Persisted from Phase 1 AI response
+  lastCandidateScores: { timestamp, candidates: [] }, // Top 40 scored candidates
+  lastSectorRotation: { timestamp, sectors: {} },     // All sectors with money flow data
   tradingStrategy: 'aggressive',
   journalEntries: [...]
 }
@@ -107,6 +110,32 @@ Tracks performance patterns from `closedTrades`:
 - **Behavioral Patterns** – Detects tendency to sell winners too early, hold losers too long, etc.
 
 These insights are injected into Phase 2's prompt so Claude can learn from past decisions. They're also surfaced in the Learning Insights UI via `updateLearningInsightsDisplay()`, which renders 7 analytics panels: Risk/Reward Profile, Hold Time Comparison, Streaks, Conviction Accuracy, Signal Accuracy, Exit Analysis, and Post-Exit Tracking. Each panel has a minimum data threshold and won't render with insufficient trades.
+
+### Analytics Modules (in `src/trader.js` and `src/body.html`)
+Four modules provide visibility into APEX's analysis data and portfolio state. UI section order in `body.html`:
+
+1. Performance Analytics (existing)
+2. Charts (existing — perf chart + sector pie)
+3. **Market Regime Indicator** — non-collapsible banner
+4. Current Holdings (existing collapsible)
+5. **Thesis Tracker** — collapsible
+6. Decision Reasoning (existing collapsible)
+7. **Candidate Scorecard** — collapsible, collapsed by default
+8. **Sector Rotation Heatmap** — collapsible, collapsed by default
+9. Learning Insights (existing collapsible)
+10. Recent Activity (existing collapsible)
+11. Chat (existing)
+
+**Data persistence**: Three transient datasets (regime, candidate scores, sector rotation) are saved to the `portfolio` object in `runAIAnalysis()` (full analysis) and `testDataFetch()` (dry run) so they survive page refresh. Thesis data (`holdingTheses`) was already persistent.
+
+**Backfill**: Holdings bought before thesis tracking was added get momentum/RS/sectorFlow backfilled on next analysis or dry run.
+
+| Module | Function | Data Source | Trigger |
+|--------|----------|-------------|---------|
+| Market Regime | `updateRegimeBanner()` | `portfolio.lastMarketRegime` | `updatePerformanceAnalytics()` |
+| Thesis Tracker | `updateThesisTracker()` | `portfolio.holdingTheses` + live prices | `updateUI()` (async) |
+| Candidate Scorecard | `updateCandidateScorecard()` | `portfolio.lastCandidateScores` | `updatePerformanceAnalytics()` |
+| Sector Rotation | `updateSectorRotationHeatmap()` | `portfolio.lastSectorRotation` | `updatePerformanceAnalytics()` |
 
 ### Chat Interface (`sendMessage` in `src/trader.js`)
 Conversational interface where users can ask APEX questions. Gets portfolio context + web search capability.
@@ -187,6 +216,10 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `addDecisionReasoning` | Renders decision cards in UI |
 | `sendMessage` | Chat interface message handling (with rate limiting) |
 | `activateChat` | Unlocks chat UI for the session |
+| `updateRegimeBanner` | Renders market regime banner (bull/bear/choppy) |
+| `updateThesisTracker` | Renders thesis cards for current holdings (async) |
+| `updateCandidateScorecard` | Renders scored candidates table |
+| `updateSectorRotationHeatmap` | Renders sector rotation card grid |
 | `updateLearningInsightsDisplay` | Renders all analytics panels in Learning Insights |
 | `savePortfolio` / `loadPortfolio` | localStorage persistence |
 | `savePortfolioToDrive` | Google Drive backup |
