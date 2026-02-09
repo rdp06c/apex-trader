@@ -5653,8 +5653,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const isPastTimeframe = daysHeld > expectedDays.max;
                     const daysRemaining = expectedDays.max - daysHeld;
 
-                    // Get stock name from mapping
+                    // Get stock name and sector from mappings
                     const stockName = stockNames[symbol] || symbol;
+                    const stockSector = stockSectors[symbol] || 'Unknown';
 
                     // Conviction emoji
                     const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : conviction >= 5 ? '👍' : '';
@@ -5683,7 +5684,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             <div class="holding-card-header">
                                 <div>
                                     <div class="holding-card-symbol">${symbol}</div>
-                                    <div class="holding-card-name">${stockName}</div>
+                                    <div class="holding-card-name">${stockName} <span class="holding-card-sector">· ${stockSector}</span></div>
                                     <div class="holding-card-shares">
                                         ${shares} shares · ${conviction ? convictionEmoji + ' ' + conviction + '/10 conviction' : 'No conviction data'}
                                     </div>

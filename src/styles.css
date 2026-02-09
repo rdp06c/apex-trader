@@ -503,6 +503,11 @@
             margin-top: 2px;
         }
 
+        .holding-card-sector {
+            color: var(--accent);
+            font-weight: 500;
+        }
+
         .holding-card-shares {
             font-size: 11px;
             color: var(--text-muted);
