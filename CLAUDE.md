@@ -89,7 +89,7 @@ Browser (ai_trader.html)
 }
 ```
 
-Persisted to `localStorage` on every change. Backed up to Google Drive as `Apex_Portfolio.json`.
+Persisted to `localStorage` on every change. Backed up to Google Drive as `Apex_Portfolio.json`. Performance history is throttled to one entry per 15 minutes (most recent entry is updated in between) with a hard cap of 3000 entries to prevent localStorage quota exhaustion.
 
 ## Key Subsystems
 
@@ -144,6 +144,9 @@ Conversational interface where users can ask APEX questions. Gets portfolio cont
 - **Rate limiting**: 5-second cooldown between messages (`lastChatTime`), 20 messages per session max (`chatMessageCount`). Both reset on refresh.
 - **System prompt**: Concise ~80 token personality in the `system` parameter (not embedded in user message). Portfolio snapshot included as context.
 
+### XSS Prevention
+All AI-generated and user-generated content is escaped via `escapeHtml()` before `innerHTML` insertion. This covers `addActivity()`, `addDecisionReasoning()` (reasoning, budget warnings, research summaries), and `addChatMessage()` (both user input and AI responses). The chat formatter applies markdown-like transforms (bold, line breaks) after escaping so the formatting tags are trusted.
+
 ### Google Drive Integration (in `src/trader.js`)
 - OAuth 2.0 with `drive.file` scope (APEX can only see files it created)
 - Portfolio backup/restore as JSON
@@ -185,13 +188,14 @@ Splitting sell/buy into separate API calls solves information asymmetry: Phase 1
 
 ## Known Issues / Areas of Ongoing Work
 
-- **Budget validation mismatch** (fixed): The sell-first execution flow ensures buy validation uses post-sell cash. If you see "original plan required $X but only $Y available" it's now a genuine AI arithmetic error, not a code bug.
 - **Runner bias** (mitigated): Extension penalty + pullback bonus + doubled reversal slots + stronger prompt guidance. Runners still score well (momentum matters), but no longer monopolize top 25.
 - **JSON parsing fragility**: AI responses sometimes include markdown, citations, or malformed JSON. Multiple fallback parsers handle this (regex extraction, brace matching, citation stripping).
 - **Post-exit tracking** (`updatePostExitTracking`): Checks prices 1 week / 1 month after sells to evaluate exit quality. Depends on Polygon API availability.
 - **Volume trend unused**: `calculate5DayMomentum` computes `volumeTrend` but it's never used in composite scoring. Could confirm momentum quality.
 - **FVG detection unused**: `detectStructure` detects Fair Value Gaps but they're not used in scoring or reversal filtering. Scaffolding for potential future use.
 - **No hard cap on candidate count**: With many holdings, candidate list can exceed 50+. Could degrade Phase 2 decision quality.
+- **Keyboard accessibility**: Collapsible section headers and expandable cards use `<div onclick>` — not keyboard-navigable. Should migrate to `<button>` or add `role="button"` + `tabindex="0"`.
+- **`bigMoverBonus` dead code**: Always set to 0 in scoring formula. Intentionally disabled but still present in the code.
 
 ## Function Reference (Key Functions)
 
@@ -213,6 +217,7 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `formatPerformanceInsights` | Formats ML insights for Claude's prompt |
 | `calculatePortfolioValue` | Current total value calculation |
 | `updateUI` | Refreshes all dashboard elements |
+| `escapeHtml` | Sanitizes strings for safe innerHTML insertion |
 | `addDecisionReasoning` | Renders decision cards in UI |
 | `sendMessage` | Chat interface message handling (with rate limiting) |
 | `activateChat` | Unlocks chat UI for the session |
