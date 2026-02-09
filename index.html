@@ -8604,6 +8604,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     : daysRemaining > 0 ?
                                     `<span class="text-muted">(${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining)</span>`
                                     : ''}
+                                <span class="text-muted" style="margin-left:8px">| Mtm: <strong>${entryMomentum != null ? entryMomentum.toFixed(1) : '--'}</strong> · RS: <strong>${entryRS != null ? entryRS.toFixed(0) : '--'}</strong></span>
                             </div>
                             <div class="holding-card-footer">
                                 <div>
@@ -8611,10 +8612,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 </div>
                                 <div>
                                     <span class="holding-card-footer-label">Current:</span> <span class="holding-card-footer-value">$${stockPrice.price.toFixed(2)}</span> <span class="stat-change ${changeClass}">${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}%</span>
-                                </div>
-                                <div>
-                                    <span class="holding-card-footer-label">Momentum:</span> <span class="holding-card-footer-value">${entryMomentum != null ? entryMomentum.toFixed(1) : '--'}</span>
-                                    <span class="holding-card-footer-label" style="margin-left:12px">RS:</span> <span class="holding-card-footer-value">${entryRS != null ? entryRS.toFixed(0) : '--'}</span>
                                 </div>
                                 <div>
                                     <span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${earliestDate ? earliestDate.toLocaleDateString() + ' ' + earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span>
