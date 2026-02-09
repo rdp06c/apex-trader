@@ -420,6 +420,12 @@
         // Initialize the chart
         function initChart() {
             const ctx = document.getElementById('performanceChart').getContext('2d');
+            // Build gradient fill for portfolio line
+            const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
+            gradient.addColorStop(0, 'rgba(245, 158, 11, 0.25)');
+            gradient.addColorStop(0.6, 'rgba(245, 158, 11, 0.06)');
+            gradient.addColorStop(1, 'rgba(245, 158, 11, 0)');
+
             performanceChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -429,31 +435,46 @@
                             label: 'Portfolio Value',
                             data: [],
                             borderColor: '#f59e0b',
-                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                            borderWidth: 3,
-                            tension: 0.4,
-                            fill: true
+                            backgroundColor: gradient,
+                            borderWidth: 2.5,
+                            tension: 0.35,
+                            fill: true,
+                            pointRadius: 0,
+                            pointHoverRadius: 5,
+                            pointHoverBackgroundColor: '#f59e0b',
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2
                         },
                         {
                             label: 'Trading P&L (excl. deposits)',
                             data: [],
                             borderColor: '#34d399',
                             backgroundColor: 'transparent',
-                            borderWidth: 2,
+                            borderWidth: 1.5,
                             borderDash: [6, 3],
-                            tension: 0.4,
+                            tension: 0.35,
                             fill: false,
-                            pointRadius: 0
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            pointHoverBackgroundColor: '#34d399',
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2
                         },
                         {
                             label: 'Deposits',
                             data: [],
                             borderColor: 'transparent',
-                            backgroundColor: '#fbbf24',
+                            backgroundColor: '#60a5fa',
                             pointRadius: [],
-                            pointStyle: 'triangle',
-                            pointBackgroundColor: '#fbbf24',
-                            pointBorderColor: '#fbbf24',
+                            pointStyle: 'rectRot',
+                            pointBackgroundColor: '#60a5fa',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 1.5,
+                            pointHoverStyle: 'rectRot',
+                            pointHoverBackgroundColor: '#60a5fa',
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2,
+                            pointHoverRadius: 8,
                             showLine: false,
                             order: 0
                         }
@@ -461,7 +482,7 @@
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: true,
+                    maintainAspectRatio: false,
                     interaction: {
                         intersect: false,
                         mode: 'index'
@@ -469,19 +490,42 @@
                     plugins: {
                         legend: {
                             display: true,
+                            position: 'top',
+                            align: 'end',
                             labels: {
-                                color: '#f5f5f0',
+                                color: '#a8a8a0',
                                 font: {
-                                    size: 12
-                                }
+                                    family: "'Inter', sans-serif",
+                                    size: 11,
+                                    weight: '500'
+                                },
+                                boxWidth: 12,
+                                boxHeight: 3,
+                                usePointStyle: false,
+                                padding: 16
                             }
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(26, 26, 34, 0.95)',
+                            backgroundColor: 'rgba(22, 22, 25, 0.95)',
                             titleColor: '#f5f5f0',
                             bodyColor: '#a8a8a0',
-                            borderColor: 'rgba(245, 158, 11, 0.4)',
+                            borderColor: 'rgba(245, 158, 11, 0.3)',
                             borderWidth: 1,
+                            padding: 12,
+                            cornerRadius: 8,
+                            titleFont: {
+                                family: "'Inter', sans-serif",
+                                size: 12,
+                                weight: '600'
+                            },
+                            bodyFont: {
+                                family: "'Inter', sans-serif",
+                                size: 12
+                            },
+                            displayColors: true,
+                            boxWidth: 8,
+                            boxHeight: 8,
+                            boxPadding: 4,
                             callbacks: {
                                 afterBody: function(tooltipItems) {
                                     const idx = tooltipItems[0]?.dataIndex;
@@ -492,7 +536,6 @@
                                 }
                             },
                             filter: function(tooltipItem) {
-                                // Hide the "Deposits" marker dataset from tooltip lines
                                 return tooltipItem.datasetIndex !== 2;
                             }
                         }
@@ -500,22 +543,40 @@
                     scales: {
                         y: {
                             beginAtZero: false,
+                            border: {
+                                display: false
+                            },
                             ticks: {
-                                color: '#a8a8a0',
+                                color: '#78786e',
+                                font: {
+                                    family: "'Inter', sans-serif",
+                                    size: 11
+                                },
+                                padding: 8,
                                 callback: function(value) {
                                     return '$' + value.toLocaleString();
                                 }
                             },
                             grid: {
-                                color: 'rgba(245, 158, 11, 0.08)'
+                                color: 'rgba(255, 200, 100, 0.05)',
+                                drawTicks: false
                             }
                         },
                         x: {
+                            border: {
+                                display: false
+                            },
                             ticks: {
-                                color: '#a8a8a0'
+                                color: '#78786e',
+                                font: {
+                                    family: "'Inter', sans-serif",
+                                    size: 10
+                                },
+                                padding: 6,
+                                maxRotation: 0
                             },
                             grid: {
-                                color: 'rgba(245, 158, 11, 0.08)'
+                                display: false
                             }
                         }
                     }
@@ -533,32 +594,51 @@
                         backgroundColor: [
                             '#f59e0b',
                             '#a78bfa',
-                            '#f97316',
                             '#34d399',
-                            '#fbbf24',
                             '#60a5fa',
-                            '#ef4444'
+                            '#f97316',
+                            '#ec4899',
+                            '#fbbf24',
+                            '#14b8a6',
+                            '#8b5cf6',
+                            '#f43f5e',
+                            '#06b6d4',
+                            '#84cc16'
                         ],
-                        borderWidth: 2,
-                        borderColor: '#121215'
+                        borderWidth: 3,
+                        borderColor: '#1a1a22',
+                        hoverBorderColor: '#1a1a22',
+                        hoverOffset: 6
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: true,
+                    maintainAspectRatio: false,
+                    cutout: '68%',
                     plugins: {
                         legend: {
                             display: false
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(26, 26, 34, 0.95)',
+                            backgroundColor: 'rgba(22, 22, 25, 0.95)',
                             titleColor: '#f5f5f0',
                             bodyColor: '#a8a8a0',
-                            borderColor: 'rgba(245, 158, 11, 0.4)',
+                            borderColor: 'rgba(255, 200, 100, 0.15)',
                             borderWidth: 1,
+                            padding: 12,
+                            cornerRadius: 8,
+                            titleFont: {
+                                family: "'Inter', sans-serif",
+                                size: 12,
+                                weight: '600'
+                            },
+                            bodyFont: {
+                                family: "'Inter', sans-serif",
+                                size: 12
+                            },
                             callbacks: {
                                 label: function(context) {
-                                    return context.label + ': ' + context.parsed + '%';
+                                    return ' ' + context.label + ': ' + context.parsed.toFixed(1) + '%';
                                 }
                             }
                         }
@@ -5323,10 +5403,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // adjusting for any deposits made today. No stock-by-stock reconstruction needed.
             let dailyGain = 0;
             let dailyGainPercent = 0;
-            
+
             console.log('═══ DAILY PERFORMANCE CALCULATION ═══');
-            
+
             const now_local = new Date();
+            const dayOfWeek = now_local.getDay(); // 0=Sun, 6=Sat
+            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
             const todayLocal = now_local.getFullYear() + '-' + 
                 String(now_local.getMonth() + 1).padStart(2, '0') + '-' + 
                 String(now_local.getDate()).padStart(2, '0');
@@ -5386,7 +5468,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
             });
             
-            if (startOfDayValue !== null && startOfDayValue > 0) {
+            if (isWeekend) {
+                console.log('  Weekend — market closed, forcing daily gain to 0');
+            } else if (startOfDayValue !== null && startOfDayValue > 0) {
                 dailyGain = totalValue - startOfDayValue - todaysDeposits;
                 dailyGainPercent = (dailyGain / startOfDayValue) * 100;
                 console.log(`  Current value: $${totalValue.toFixed(2)}`);
@@ -5483,11 +5567,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const isPastTimeframe = daysHeld > expectedDays.max;
                     const daysRemaining = expectedDays.max - daysHeld;
 
-                    // Shorten reasoning for display (first 60 chars)
-                    const shortReasoning = reasoning.length > 60 ? reasoning.substring(0, 60) + '...' : reasoning;
-                    const isLongReasoning = reasoning.length > 60;
-                    const catalystId = `catalyst-${symbol}-${Date.now()}`;
-
                     // Get stock name from mapping
                     const stockName = stockNames[symbol] || symbol;
 
@@ -5539,13 +5618,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 </div>
                             </div>
                             ${reasoning ? `
-                            <div class="holding-card-catalyst${isLongReasoning ? ' clickable' : ''}" ${isLongReasoning ? `onclick="const full = document.getElementById('${catalystId}-full'); const short = document.getElementById('${catalystId}-short'); const arrow = document.getElementById('${catalystId}-arrow'); if (full.style.display === 'none') { full.style.display = 'block'; short.style.display = 'none'; arrow.textContent = '▾'; } else { full.style.display = 'none'; short.style.display = 'block'; arrow.textContent = '▸'; }"` : ''}>
-                                <div class="holding-card-catalyst-text">
-                                    <strong>Catalyst:</strong>
-                                    ${isLongReasoning ? `<span id="${catalystId}-arrow" style="color: #fbbf24; font-size: 11px; margin-left: 4px;">▸</span>` : ''}
-                                    <span id="${catalystId}-short" style="display: block; margin-top: 4px;">${shortReasoning}</span>
-                                    <span id="${catalystId}-full" style="display: none; margin-top: 4px;">${reasoning}</span>
-                                </div>
+                            <div class="holding-card-catalyst" onclick="event.stopPropagation(); showCatalystPopover(this, '${symbol}');" data-full-catalyst="${reasoning.replace(/'/g, '&#39;').replace(/"/g, '&quot;')}">
+                                <span class="catalyst-label">View Catalyst</span>
                             </div>
                             ` : ''}
                             <div class="holding-card-timeframe">
@@ -7165,38 +7239,141 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
         }
 
         // Analytics card expansion — only one open at a time
-        function toggleAnalyticsExpansion(cardType) {
-            const types = ['winRate', 'bestTrade', 'worstTrade'];
-            const panel = document.getElementById(cardType + 'Expansion');
-            const card = panel ? panel.closest('.expandable-card') : null;
-            const isOpen = panel && panel.classList.contains('open');
+        let _popoverCloseHandler = null;
 
-            // Close all panels first
-            types.forEach(t => {
-                const p = document.getElementById(t + 'Expansion');
-                if (p) {
-                    p.classList.remove('open');
-                    const c = p.closest('.expandable-card');
-                    if (c) c.classList.remove('expanded');
-                }
-            });
+        function toggleAnalyticsExpansion(cardType, cardEl) {
+            const popover = document.getElementById('analyticsPopover');
+            const allCards = document.querySelectorAll('.expandable-card');
+            const wasOpen = popover.classList.contains('open') && popover.dataset.cardType === cardType;
 
-            // Toggle current (if it was closed, open it)
-            if (!isOpen && panel) {
-                populateAnalyticsExpansion(cardType);
-                panel.classList.add('open');
-                if (card) card.classList.add('expanded');
+            // Remove any existing outside-click handler before closing
+            if (_popoverCloseHandler) {
+                document.removeEventListener('click', _popoverCloseHandler);
+                _popoverCloseHandler = null;
             }
+
+            // Close popover and remove expanded state from all cards
+            popover.classList.remove('open');
+            allCards.forEach(c => c.classList.remove('expanded'));
+
+            if (wasOpen) return; // Was already open for this card — just close
+
+            // Populate content
+            populateAnalyticsExpansion(cardType);
+
+            // Position popover below the clicked card
+            const section = cardEl.closest('.analytics-section');
+            const sectionRect = section.getBoundingClientRect();
+            const cardRect = cardEl.getBoundingClientRect();
+            const top = cardRect.bottom - sectionRect.top + 6;
+            let left = cardRect.left - sectionRect.left;
+            // Keep popover within section bounds
+            const popoverWidth = 400;
+            if (left + popoverWidth > section.offsetWidth) {
+                left = section.offsetWidth - popoverWidth;
+            }
+            if (left < 0) left = 0;
+
+            popover.style.top = top + 'px';
+            popover.style.left = left + 'px';
+            popover.dataset.cardType = cardType;
+            popover.classList.add('open');
+            cardEl.classList.add('expanded');
+
+            // Close on outside click (but not on other expandable cards — they handle themselves)
+            _popoverCloseHandler = (e) => {
+                if (!popover.contains(e.target) && !e.target.closest('.expandable-card')) {
+                    popover.classList.remove('open');
+                    allCards.forEach(c => c.classList.remove('expanded'));
+                    document.removeEventListener('click', _popoverCloseHandler);
+                    _popoverCloseHandler = null;
+                }
+            };
+            setTimeout(() => document.addEventListener('click', _popoverCloseHandler), 0);
         }
 
-        // Populate expansion panel content from closedTrades
+        // Catalyst popover for holding cards
+        let _catalystCloseHandler = null;
+        let _catalystScrollHandler = null;
+
+        function showCatalystPopover(el, symbol) {
+            const popover = document.getElementById('catalystPopover');
+            const wasOpen = popover.classList.contains('open') && popover.dataset.symbol === symbol;
+
+            // Remove existing handlers
+            if (_catalystCloseHandler) {
+                document.removeEventListener('click', _catalystCloseHandler);
+                _catalystCloseHandler = null;
+            }
+            if (_catalystScrollHandler) {
+                window.removeEventListener('scroll', _catalystScrollHandler, true);
+                _catalystScrollHandler = null;
+            }
+            popover.classList.remove('open');
+
+            if (wasOpen) return;
+
+            // Populate
+            const fullText = el.getAttribute('data-full-catalyst');
+            document.getElementById('catalystPopoverText').textContent = fullText;
+            popover.dataset.symbol = symbol;
+
+            // Position near the clicked element using fixed positioning
+            const rect = el.getBoundingClientRect();
+            let top = rect.bottom + 6;
+            let left = rect.left;
+
+            // Keep within viewport
+            const popoverWidth = 520;
+            if (left + popoverWidth > window.innerWidth - 16) {
+                left = window.innerWidth - popoverWidth - 16;
+            }
+            if (left < 16) left = 16;
+            if (top + 300 > window.innerHeight) {
+                top = rect.top - 306;
+            }
+
+            popover.style.top = top + 'px';
+            popover.style.left = left + 'px';
+            popover.classList.add('open');
+            requestAnimationFrame(() => { popover.scrollTop = 0; });
+
+            // Close on outside click or scroll
+            const closeCatalyst = () => {
+                popover.classList.remove('open');
+                document.removeEventListener('click', _catalystCloseHandler);
+                window.removeEventListener('scroll', _catalystScrollHandler, true);
+                _catalystCloseHandler = null;
+                _catalystScrollHandler = null;
+            };
+
+            _catalystCloseHandler = (e) => {
+                if (!popover.contains(e.target) && !el.contains(e.target)) {
+                    closeCatalyst();
+                }
+            };
+
+            _catalystScrollHandler = (e) => {
+                // Don't close if scrolling inside the popover itself
+                if (!popover.contains(e.target)) {
+                    closeCatalyst();
+                }
+            };
+
+            setTimeout(() => {
+                document.addEventListener('click', _catalystCloseHandler);
+                window.addEventListener('scroll', _catalystScrollHandler, true);
+            }, 0);
+        }
+
+        // Populate popover content from closedTrades
         function populateAnalyticsExpansion(cardType) {
+            const container = document.getElementById('analyticsPopoverContent');
+            if (!container) return;
             const closedTrades = portfolio.closedTrades || [];
             let html = '';
 
             if (cardType === 'winRate') {
-                const container = document.getElementById('winRateExpansionContent');
-                if (!container) return;
                 if (closedTrades.length === 0) {
                     container.innerHTML = '<div style="font-size:12px;color:var(--text-faint);padding:8px 0;">No closed trades yet</div>';
                     return;
@@ -7213,11 +7390,8 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
                         <span class="trade-history-return" style="color:${retColor}">${retStr}</span>
                     </div>`;
                 });
-                container.innerHTML = html;
 
             } else if (cardType === 'bestTrade') {
-                const container = document.getElementById('bestTradeExpansionContent');
-                if (!container) return;
                 const winners = closedTrades.filter(t => t.profitLoss > 0)
                     .sort((a, b) => b.profitLoss - a.profitLoss)
                     .slice(0, 5);
@@ -7227,23 +7401,17 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
                 }
                 winners.forEach(t => {
                     const holdDays = t.holdTime ? (t.holdTime / (1000*60*60*24)).toFixed(1) : '?';
-                    const conviction = t.entryConviction || '--';
                     const profit = '+$' + (t.profitLoss || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-                    const reasoning = t.exitReasoning || t.exitReason || '';
                     html += `<div class="top-trade-row">
                         <div class="top-trade-header">
                             <span class="top-trade-symbol">${t.symbol}</span>
                             <span class="top-trade-return" style="color:var(--green)">+${(t.returnPercent||0).toFixed(2)}%</span>
                         </div>
-                        <div class="top-trade-details">${profit} &middot; ${holdDays}d hold &middot; ${conviction} conviction</div>
-                        ${reasoning ? `<div class="top-trade-reasoning">${reasoning}</div>` : ''}
+                        <div class="top-trade-details">${profit} &middot; ${holdDays}d hold</div>
                     </div>`;
                 });
-                container.innerHTML = html;
 
             } else if (cardType === 'worstTrade') {
-                const container = document.getElementById('worstTradeExpansionContent');
-                if (!container) return;
                 const losers = closedTrades.filter(t => t.profitLoss < 0)
                     .sort((a, b) => a.profitLoss - b.profitLoss)
                     .slice(0, 5);
@@ -7253,20 +7421,18 @@ Respond as APEX: Be confident but teach as you go. Explain your reasoning. Use l
                 }
                 losers.forEach(t => {
                     const holdDays = t.holdTime ? (t.holdTime / (1000*60*60*24)).toFixed(1) : '?';
-                    const conviction = t.entryConviction || '--';
                     const loss = '$' + (t.profitLoss || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-                    const reasoning = t.exitReasoning || t.exitReason || '';
                     html += `<div class="top-trade-row">
                         <div class="top-trade-header">
                             <span class="top-trade-symbol">${t.symbol}</span>
                             <span class="top-trade-return" style="color:var(--red)">${(t.returnPercent||0).toFixed(2)}%</span>
                         </div>
-                        <div class="top-trade-details">${loss} &middot; ${holdDays}d hold &middot; ${conviction} conviction</div>
-                        ${reasoning ? `<div class="top-trade-reasoning">${reasoning}</div>` : ''}
+                        <div class="top-trade-details">${loss} &middot; ${holdDays}d hold</div>
                     </div>`;
                 });
-                container.innerHTML = html;
             }
+
+            container.innerHTML = html;
         }
 
         // API Key Management Functions

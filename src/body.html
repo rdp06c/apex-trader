@@ -203,20 +203,15 @@
                         <div class="index-price" id="dailyPerformance">0.00%</div>
                         <div class="index-change" id="dailyPerformanceDollar">$0.00</div>
                     </div>
-                    <div class="index-card expandable-card" onclick="toggleAnalyticsExpansion('winRate')">
-                        <span class="expand-icon">&#9662;</span>
+                    <div class="index-card">
                         <div class="index-header">
                             <div class="index-name">Win Rate</div>
                             <div class="index-symbol">W/L</div>
                         </div>
                         <div class="index-price" id="winRate">0%</div>
                         <div class="index-change" id="winLossRatio">0W / 0L</div>
-                        <div class="expansion-panel" id="winRateExpansion">
-                            <div class="expansion-divider"></div>
-                            <div class="expansion-content" id="winRateExpansionContent"></div>
-                        </div>
                     </div>
-                    <div class="index-card expandable-card" onclick="toggleAnalyticsExpansion('bestTrade')">
+                    <div class="index-card expandable-card" onclick="toggleAnalyticsExpansion('bestTrade', this)">
                         <span class="expand-icon">&#9662;</span>
                         <div class="index-header">
                             <div class="index-name">Best Trade</div>
@@ -224,12 +219,8 @@
                         </div>
                         <div class="index-price" id="bestTrade">--</div>
                         <div class="index-change positive" id="bestTradeGain">+0%</div>
-                        <div class="expansion-panel" id="bestTradeExpansion">
-                            <div class="expansion-divider"></div>
-                            <div class="expansion-content" id="bestTradeExpansionContent"></div>
-                        </div>
                     </div>
-                    <div class="index-card expandable-card" onclick="toggleAnalyticsExpansion('worstTrade')">
+                    <div class="index-card expandable-card" onclick="toggleAnalyticsExpansion('worstTrade', this)">
                         <span class="expand-icon">&#9662;</span>
                         <div class="index-header">
                             <div class="index-name">Worst Trade</div>
@@ -237,11 +228,11 @@
                         </div>
                         <div class="index-price" id="worstTrade">--</div>
                         <div class="index-change negative" id="worstTradeLoss">-0%</div>
-                        <div class="expansion-panel" id="worstTradeExpansion">
-                            <div class="expansion-divider"></div>
-                            <div class="expansion-content" id="worstTradeExpansionContent"></div>
-                        </div>
                     </div>
+                </div>
+                <!-- Shared popover for analytics cards -->
+                <div class="analytics-popover" id="analyticsPopover">
+                    <div class="analytics-popover-content" id="analyticsPopoverContent"></div>
                 </div>
                 <div class="sub-stats-grid">
                     <div class="sub-stat-card">
@@ -279,6 +270,11 @@
                 <div class="section-body" id="holdingsDetailBody">
                     <div class="holdings-detail-grid" id="holdingsDetailGrid">
                         <div class="empty-state">No positions yet</div>
+                    </div>
+                    <!-- Shared catalyst popover -->
+                    <div class="catalyst-popover" id="catalystPopover">
+                        <div class="catalyst-popover-title">Catalyst</div>
+                        <div class="catalyst-popover-text" id="catalystPopoverText"></div>
                     </div>
                 </div>
             </div>
