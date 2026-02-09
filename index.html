@@ -3233,7 +3233,77 @@
         let apiCallsToday = 0;  // Consolidated - removed duplicate apiCallCount
         let lastResetDate = new Date().toDateString();
         let chatHistory = []; // Conversation memory for chat (last 5 exchanges)
-        
+
+        // Streaming fetch for Anthropic API — reads SSE events and reconstructs
+        // the same message object shape that response.json() would return.
+        // Keeps the Cloudflare Worker connection alive so free-plan 100s timeout is never hit.
+        async function fetchAnthropicStreaming(bodyParams) {
+            const resp = await fetch(ANTHROPIC_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bodyParams)
+            });
+
+            // Non-streaming path: error responses or worker didn't enable streaming
+            const ct = resp.headers.get('content-type') || '';
+            if (!resp.ok || !ct.includes('text/event-stream')) {
+                return await resp.json();
+            }
+
+            // SSE streaming path — reconstruct a Messages-API-shaped object
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+            let message = null;   // top-level envelope from message_start
+            const blocks = [];    // content blocks accumulated here
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+
+                // Process complete lines
+                let nl;
+                while ((nl = buf.indexOf('\n')) !== -1) {
+                    const line = buf.slice(0, nl).trim();
+                    buf = buf.slice(nl + 1);
+                    if (!line.startsWith('data: ')) continue;
+                    const payload = line.slice(6);
+                    if (payload === '[DONE]') continue;
+
+                    let evt;
+                    try { evt = JSON.parse(payload); } catch { continue; }
+
+                    switch (evt.type) {
+                        case 'message_start':
+                            message = evt.message;          // { id, type, role, content:[], model, ... }
+                            break;
+                        case 'content_block_start':
+                            blocks[evt.index] = evt.content_block; // { type:'text', text:'' }
+                            break;
+                        case 'content_block_delta':
+                            if (evt.delta?.type === 'text_delta' && blocks[evt.index] != null) {
+                                blocks[evt.index].text = (blocks[evt.index].text || '') + evt.delta.text;
+                            }
+                            break;
+                        case 'message_delta':
+                            if (message) {
+                                if (evt.delta?.stop_reason) message.stop_reason = evt.delta.stop_reason;
+                                if (evt.usage) message.usage = { ...message.usage, ...evt.usage };
+                            }
+                            break;
+                    }
+                }
+            }
+
+            if (message) {
+                message.content = blocks;
+                return message;
+            }
+            // Fallback — shouldn't happen, but return an error shape so callers handle it
+            return { type: 'error', error: { message: 'Stream ended without message_start event' } };
+        }
+
         // Load cached prices from localStorage
         function loadPriceCache() {
             const cached = localStorage.getItem('priceCache');
@@ -5939,10 +6009,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     const holdingsData = {};
                     holdingSymbolsList.forEach(sym => { if (enhancedMarketData[sym]) holdingsData[sym] = enhancedMarketData[sym]; });
                     
-                    const p1Resp = await fetch(ANTHROPIC_API_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
+                    const p1Data = await fetchAnthropicStreaming({
                             model: 'claude-sonnet-4-5-20250929',
                             max_tokens: 4000,
                             tools: [{ type: "web_search_20250305", name: "web_search" }],
@@ -6010,10 +6077,7 @@ If a holding is mediocre (flat thesis, weak momentum) and these candidates are s
 JSON ONLY response:
 { "decisions": [{ "action": "SELL" or "HOLD", "symbol": "X", "shares": N, "conviction": 1-10, "reasoning": "..." }], "holdings_summary": "...", "market_regime": "bull/bear/choppy" }
 Include a decision for EVERY holding.` }]
-                        })
                     });
-                    
-                    const p1Data = await p1Resp.json();
                     if (p1Data.type === 'error' || p1Data.error) {
                         const em = p1Data.error?.message || 'Phase 1 error';
                         if (em.includes('rate_limit')) throw new Error('Rate limit on Phase 1! Wait 60s. 🕐');
@@ -6138,12 +6202,7 @@ Include a decision for EVERY holding.` }]
                 thinkingDetail.textContent = hasHoldings ? 'Phase 2: Finding buy opportunities...' : 'Researching buy opportunities...';
                 
                 // Call Claude API for BUY decisions (Phase 2) via Cloudflare Worker proxy
-                const response = await fetch(ANTHROPIC_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
+                const data = await fetchAnthropicStreaming({
                         model: 'claude-sonnet-4-5-20250929',
                         max_tokens: 8000,
                         tools: [{
@@ -7699,18 +7758,15 @@ CRITICAL RULES:
 
 Remember: You're managing real money to MAXIMIZE returns through INFORMED decisions AND teaching your user. Back every decision with research. Be specific. Explain your conviction.`
                         }]
-                    })
                 });
-
-                const data = await response.json();
                 console.log('AI Analysis response:', data);
-                
+
                 // Check for API errors (rate limits, etc.)
                 if (data.type === 'error' || data.error) {
                     const errorMessage = data.error?.message || data.message || 'API error occurred';
                     console.error('API error:', errorMessage);
-                    
-                    if (errorMessage.includes('rate_limit') || response.status === 429) {
+
+                    if (errorMessage.includes('rate_limit') || data.error?.type === 'rate_limit_error') {
                         throw new Error('Rate limit exceeded! Wait 60 seconds before running analysis again. 🕐');
                     } else {
                         throw new Error(`API error: ${errorMessage}`);
@@ -10116,12 +10172,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const recentTransactions = portfolio.transactions.slice(-5);
                 
                 // Call Claude API via Cloudflare Worker proxy
-                const response = await fetch(ANTHROPIC_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
+                const data = await fetchAnthropicStreaming({
                         model: 'claude-sonnet-4-5-20250929',
                         max_tokens: 1500,
                         system: `You are APEX (Autonomous Portfolio EXpert), an AI trading agent created by ARC Investments. Confident but self-aware trader, patient teacher who explains the "why" behind decisions, light humor to keep it engaging. Aggressive swing-trading strategy — calculated risks, let winners run, cut losers fast.
@@ -10149,20 +10200,17 @@ Current Portfolio:
                             name: "web_search"
                         }],
                         messages: [...chatHistory, { role: 'user', content: message }]
-                    })
                 });
-
-                const data = await response.json();
                 console.log('Chat response data:', data);
-                
+
                 // Check for API errors (rate limits, etc.)
                 if (data.type === 'error' || data.error) {
                     const errorMessage = data.error?.message || data.message || 'API error occurred';
                     console.error('API error in chat:', errorMessage);
-                    
+
                     removeTypingIndicator();
-                    
-                    if (errorMessage.includes('rate_limit') || response.status === 429) {
+
+                    if (errorMessage.includes('rate_limit') || data.error?.type === 'rate_limit_error') {
                         addChatMessage("Rate limited — wait 60 seconds and try again.", 'agent');
                     } else {
                         addChatMessage(`API error: ${errorMessage}`, 'agent');
