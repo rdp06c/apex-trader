@@ -2255,98 +2255,6 @@
             flex-shrink: 0;
         }
 
-        /* ── Thesis Tracker ──────────────────────────────── */
-        .thesis-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
-        }
-
-        .thesis-card {
-            background: var(--bg-inset);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-md);
-            padding: 16px;
-            transition: border-color var(--transition-fast);
-        }
-
-        .thesis-card:hover {
-            border-color: var(--border-medium);
-        }
-
-        .thesis-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .thesis-card-symbol {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--text-primary);
-            letter-spacing: 0.5px;
-        }
-
-        .thesis-conviction-badge {
-            font-size: 11px;
-            font-weight: 700;
-            padding: 2px 10px;
-            border-radius: 12px;
-        }
-
-        .thesis-conviction-badge.high {
-            background: var(--green-dim);
-            color: var(--green);
-        }
-
-        .thesis-conviction-badge.mid {
-            background: var(--yellow-dim);
-            color: var(--yellow);
-        }
-
-        .thesis-conviction-badge.low {
-            background: var(--red-dim);
-            color: var(--red);
-        }
-
-        .thesis-catalyst {
-            font-size: 12px;
-            color: var(--text-secondary);
-            line-height: 1.5;
-            padding: 8px 10px;
-            background: var(--accent-dim);
-            border: 1px solid rgba(245, 158, 11, 0.15);
-            border-radius: var(--radius-sm);
-            margin-bottom: 10px;
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-        }
-
-        .thesis-metrics {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-        }
-
-        .thesis-metric {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            padding: 4px 0;
-        }
-
-        .thesis-metric-label {
-            color: var(--text-muted);
-        }
-
-        .thesis-metric-value {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
         /* ── Candidate Scorecard ─────────────────────────── */
         .scorecard-table-wrap {
             max-height: 500px;
@@ -2554,8 +2462,7 @@
             .insights-grid,
             .stock-context-grid,
             .sector-insights-grid,
-            .holdings-detail-grid,
-            .thesis-grid {
+            .holdings-detail-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -2865,19 +2772,6 @@
                     <div class="catalyst-popover" id="catalystPopover">
                         <div class="catalyst-popover-title">Catalyst</div>
                         <div class="catalyst-popover-text" id="catalystPopoverText"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Thesis Tracker (collapsible) -->
-            <div class="card collapsible-section" id="thesisTrackerSection">
-                <div class="section-header" onclick="toggleSection('thesisTracker')">
-                    <h2 class="chart-title">Thesis Tracker</h2>
-                    <span class="toggle-icon" id="thesisTrackerToggle">&#9662;</span>
-                </div>
-                <div class="section-body" id="thesisTrackerBody">
-                    <div class="thesis-grid" id="thesisGrid">
-                        <div class="empty-state">No position theses tracked yet</div>
                     </div>
                 </div>
             </div>
@@ -8646,6 +8540,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const stockName = stockNames[symbol] || symbol;
                     const stockSector = stockSectors[symbol] || 'Unknown';
 
+                    // Thesis data (momentum, RS, sector flow at entry)
+                    const thesis = (portfolio.holdingTheses || {})[symbol];
+                    const entryMomentum = thesis?.entryMomentum;
+                    const entryRS = thesis?.entryRS;
+
                     // Conviction emoji
                     const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : conviction >= 5 ? '👍' : '';
 
@@ -8714,6 +8613,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     <span class="holding-card-footer-label">Current:</span> <span class="holding-card-footer-value">$${stockPrice.price.toFixed(2)}</span> <span class="stat-change ${changeClass}">${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}%</span>
                                 </div>
                                 <div>
+                                    <span class="holding-card-footer-label">Momentum:</span> <span class="holding-card-footer-value">${entryMomentum != null ? entryMomentum.toFixed(1) : '--'}</span>
+                                    <span class="holding-card-footer-label" style="margin-left:12px">RS:</span> <span class="holding-card-footer-value">${entryRS != null ? entryRS.toFixed(0) : '--'}</span>
+                                </div>
+                                <div>
                                     <span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${earliestDate ? earliestDate.toLocaleDateString() + ' ' + earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span>
                                 </div>
                             </div>
@@ -8750,8 +8653,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             updatePerformanceAnalytics();
             updateSectorAllocation(priceData); // Pass priceData to avoid re-fetching
 
-            // Update async analytics modules (need price data)
-            updateThesisTracker();
+            // (Thesis Tracker removed — momentum/RS now shown in holdings cards)
 
             } catch (error) {
                 console.error('Error updating UI:', error);
@@ -10468,56 +10370,6 @@ Current Portfolio:
         }
 
         // Module: Thesis Tracker
-        async function updateThesisTracker() {
-            const grid = document.getElementById('thesisGrid');
-            if (!grid) return;
-
-            const theses = portfolio.holdingTheses || {};
-            const holdingSymbols = Object.keys(portfolio.holdings);
-
-            // Only show theses for current holdings
-            const activeTheses = holdingSymbols.filter(sym => theses[sym]);
-            if (activeTheses.length === 0) {
-                grid.innerHTML = '<div class="empty-state">No position theses tracked yet</div>';
-                return;
-            }
-
-            const { total: totalValue, priceData } = await calculatePortfolioValue();
-
-            let html = '';
-            activeTheses.forEach(sym => {
-                const t = theses[sym];
-                const currentPrice = priceData[sym]?.price || 0;
-                const entryPrice = t.entryPrice || 0;
-                const pnlPct = entryPrice > 0 ? ((currentPrice - entryPrice) / entryPrice * 100) : 0;
-                const pnlColor = pnlPct >= 0 ? 'var(--green)' : 'var(--red)';
-
-                const conviction = t.entryConviction || 0;
-                const convClass = conviction >= 7 ? 'high' : conviction >= 5 ? 'mid' : 'low';
-
-                // Hold time
-                const entryDate = t.entryDate ? new Date(t.entryDate) : null;
-                const holdDays = entryDate ? Math.floor((Date.now() - entryDate.getTime()) / 86400000) : '--';
-
-                html += `<div class="thesis-card">
-                    <div class="thesis-card-header">
-                        <span class="thesis-card-symbol">${sym}</span>
-                        <span class="thesis-conviction-badge ${convClass}">${conviction}/10</span>
-                    </div>
-                    <div class="thesis-metrics">
-                        <div class="thesis-metric"><span class="thesis-metric-label">Entry</span><span class="thesis-metric-value">$${entryPrice.toFixed(2)}</span></div>
-                        <div class="thesis-metric"><span class="thesis-metric-label">Current</span><span class="thesis-metric-value" style="color:${pnlColor}">$${currentPrice.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)</span></div>
-                        <div class="thesis-metric"><span class="thesis-metric-label">Momentum</span><span class="thesis-metric-value">${t.entryMomentum != null ? t.entryMomentum.toFixed(1) : '--'}</span></div>
-                        <div class="thesis-metric"><span class="thesis-metric-label">RS</span><span class="thesis-metric-value">${t.entryRS != null ? t.entryRS.toFixed(0) : '--'}</span></div>
-                        <div class="thesis-metric"><span class="thesis-metric-label">Sector Flow</span><span class="thesis-metric-value">${t.entrySectorFlow || '--'}</span></div>
-                        <div class="thesis-metric"><span class="thesis-metric-label">Hold Time</span><span class="thesis-metric-value">${holdDays}d</span></div>
-                    </div>
-                </div>`;
-            });
-
-            grid.innerHTML = html;
-        }
-
         // Unified collapse/expand for all sections
         function toggleSection(sectionId) {
             const body = document.getElementById(sectionId + 'Body');

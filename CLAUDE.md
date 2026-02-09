@@ -117,14 +117,13 @@ Four modules provide visibility into APEX's analysis data and portfolio state. U
 1. Performance Analytics (existing)
 2. Charts (existing — perf chart + sector pie)
 3. **Market Regime Indicator** — non-collapsible banner
-4. Current Holdings (existing collapsible)
-5. **Thesis Tracker** — collapsible
-6. Decision Reasoning (existing collapsible)
-7. **Candidate Scorecard** — collapsible, collapsed by default
-8. **Sector Rotation Heatmap** — collapsible, collapsed by default
-9. Learning Insights (existing collapsible)
-10. Recent Activity (existing collapsible)
-11. Chat (existing)
+4. Current Holdings (existing collapsible) — includes sector, entry momentum, and RS
+5. Decision Reasoning (existing collapsible)
+6. **Candidate Scorecard** — collapsible, collapsed by default
+7. **Sector Rotation Heatmap** — collapsible, collapsed by default
+8. Learning Insights (existing collapsible)
+9. Recent Activity (existing collapsible)
+10. Chat (existing)
 
 **Data persistence**: Three transient datasets (regime, candidate scores, sector rotation) are saved to the `portfolio` object in `runAIAnalysis()` (full analysis) and `testDataFetch()` (dry run) so they survive page refresh. Thesis data (`holdingTheses`) was already persistent.
 
@@ -133,7 +132,6 @@ Four modules provide visibility into APEX's analysis data and portfolio state. U
 | Module | Function | Data Source | Trigger |
 |--------|----------|-------------|---------|
 | Market Regime | `updateRegimeBanner()` | `portfolio.lastMarketRegime` | `updatePerformanceAnalytics()` |
-| Thesis Tracker | `updateThesisTracker()` | `portfolio.holdingTheses` + live prices | `updateUI()` (async) |
 | Candidate Scorecard | `updateCandidateScorecard()` | `portfolio.lastCandidateScores` | `updatePerformanceAnalytics()` |
 | Sector Rotation | `updateSectorRotationHeatmap()` | `portfolio.lastSectorRotation` | `updatePerformanceAnalytics()` |
 
@@ -222,7 +220,6 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `sendMessage` | Chat interface message handling (with rate limiting) |
 | `activateChat` | Unlocks chat UI for the session |
 | `updateRegimeBanner` | Renders market regime banner (bull/bear/choppy) |
-| `updateThesisTracker` | Renders thesis cards for current holdings (async) |
 | `updateCandidateScorecard` | Renders scored candidates table |
 | `updateSectorRotationHeatmap` | Renders sector rotation card grid |
 | `updateLearningInsightsDisplay` | Renders all analytics panels in Learning Insights |

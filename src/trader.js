@@ -5657,6 +5657,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const stockName = stockNames[symbol] || symbol;
                     const stockSector = stockSectors[symbol] || 'Unknown';
 
+                    // Thesis data (momentum, RS, sector flow at entry)
+                    const thesis = (portfolio.holdingTheses || {})[symbol];
+                    const entryMomentum = thesis?.entryMomentum;
+                    const entryRS = thesis?.entryRS;
+
                     // Conviction emoji
                     const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : conviction >= 5 ? '👍' : '';
 
@@ -5725,6 +5730,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     <span class="holding-card-footer-label">Current:</span> <span class="holding-card-footer-value">$${stockPrice.price.toFixed(2)}</span> <span class="stat-change ${changeClass}">${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}%</span>
                                 </div>
                                 <div>
+                                    <span class="holding-card-footer-label">Momentum:</span> <span class="holding-card-footer-value">${entryMomentum != null ? entryMomentum.toFixed(1) : '--'}</span>
+                                    <span class="holding-card-footer-label" style="margin-left:12px">RS:</span> <span class="holding-card-footer-value">${entryRS != null ? entryRS.toFixed(0) : '--'}</span>
+                                </div>
+                                <div>
                                     <span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${earliestDate ? earliestDate.toLocaleDateString() + ' ' + earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span>
                                 </div>
                             </div>
@@ -5761,8 +5770,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             updatePerformanceAnalytics();
             updateSectorAllocation(priceData); // Pass priceData to avoid re-fetching
 
-            // Update async analytics modules (need price data)
-            updateThesisTracker();
+            // (Thesis Tracker removed — momentum/RS now shown in holdings cards)
 
             } catch (error) {
                 console.error('Error updating UI:', error);
@@ -7479,56 +7487,6 @@ Current Portfolio:
         }
 
         // Module: Thesis Tracker
-        async function updateThesisTracker() {
-            const grid = document.getElementById('thesisGrid');
-            if (!grid) return;
-
-            const theses = portfolio.holdingTheses || {};
-            const holdingSymbols = Object.keys(portfolio.holdings);
-
-            // Only show theses for current holdings
-            const activeTheses = holdingSymbols.filter(sym => theses[sym]);
-            if (activeTheses.length === 0) {
-                grid.innerHTML = '<div class="empty-state">No position theses tracked yet</div>';
-                return;
-            }
-
-            const { total: totalValue, priceData } = await calculatePortfolioValue();
-
-            let html = '';
-            activeTheses.forEach(sym => {
-                const t = theses[sym];
-                const currentPrice = priceData[sym]?.price || 0;
-                const entryPrice = t.entryPrice || 0;
-                const pnlPct = entryPrice > 0 ? ((currentPrice - entryPrice) / entryPrice * 100) : 0;
-                const pnlColor = pnlPct >= 0 ? 'var(--green)' : 'var(--red)';
-
-                const conviction = t.entryConviction || 0;
-                const convClass = conviction >= 7 ? 'high' : conviction >= 5 ? 'mid' : 'low';
-
-                // Hold time
-                const entryDate = t.entryDate ? new Date(t.entryDate) : null;
-                const holdDays = entryDate ? Math.floor((Date.now() - entryDate.getTime()) / 86400000) : '--';
-
-                html += `<div class="thesis-card">
-                    <div class="thesis-card-header">
-                        <span class="thesis-card-symbol">${sym}</span>
-                        <span class="thesis-conviction-badge ${convClass}">${conviction}/10</span>
-                    </div>
-                    <div class="thesis-metrics">
-                        <div class="thesis-metric"><span class="thesis-metric-label">Entry</span><span class="thesis-metric-value">$${entryPrice.toFixed(2)}</span></div>
-                        <div class="thesis-metric"><span class="thesis-metric-label">Current</span><span class="thesis-metric-value" style="color:${pnlColor}">$${currentPrice.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)</span></div>
-                        <div class="thesis-metric"><span class="thesis-metric-label">Momentum</span><span class="thesis-metric-value">${t.entryMomentum != null ? t.entryMomentum.toFixed(1) : '--'}</span></div>
-                        <div class="thesis-metric"><span class="thesis-metric-label">RS</span><span class="thesis-metric-value">${t.entryRS != null ? t.entryRS.toFixed(0) : '--'}</span></div>
-                        <div class="thesis-metric"><span class="thesis-metric-label">Sector Flow</span><span class="thesis-metric-value">${t.entrySectorFlow || '--'}</span></div>
-                        <div class="thesis-metric"><span class="thesis-metric-label">Hold Time</span><span class="thesis-metric-value">${holdDays}d</span></div>
-                    </div>
-                </div>`;
-            });
-
-            grid.innerHTML = html;
-        }
-
         // Unified collapse/expand for all sections
         function toggleSection(sectionId) {
             const body = document.getElementById(sectionId + 'Body');
