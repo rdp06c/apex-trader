@@ -2297,6 +2297,304 @@
             background: var(--border-strong);
         }
 
+        /* ── Market Regime Banner ─────────────────────────── */
+        .regime-banner {
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .regime-banner-inner {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 14px 20px;
+            border-left: 4px solid var(--text-muted);
+        }
+
+        .regime-banner.bull .regime-banner-inner {
+            border-left-color: var(--green);
+            background: linear-gradient(90deg, rgba(52, 211, 153, 0.08) 0%, transparent 70%);
+        }
+
+        .regime-banner.bear .regime-banner-inner {
+            border-left-color: var(--red);
+            background: linear-gradient(90deg, rgba(248, 113, 113, 0.08) 0%, transparent 70%);
+        }
+
+        .regime-banner.choppy .regime-banner-inner {
+            border-left-color: var(--yellow);
+            background: linear-gradient(90deg, rgba(251, 191, 36, 0.08) 0%, transparent 70%);
+        }
+
+        .regime-label {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        .regime-banner.bull .regime-label { color: var(--green); }
+        .regime-banner.bear .regime-label { color: var(--red); }
+        .regime-banner.choppy .regime-label { color: var(--yellow); }
+
+        .regime-description {
+            font-size: 12px;
+            color: var(--text-secondary);
+            flex: 1;
+        }
+
+        .regime-timestamp {
+            font-size: 10px;
+            color: var(--text-faint);
+            flex-shrink: 0;
+        }
+
+        /* ── Thesis Tracker ──────────────────────────────── */
+        .thesis-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .thesis-card {
+            background: var(--bg-inset);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            transition: border-color var(--transition-fast);
+        }
+
+        .thesis-card:hover {
+            border-color: var(--border-medium);
+        }
+
+        .thesis-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .thesis-card-symbol {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.5px;
+        }
+
+        .thesis-conviction-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 10px;
+            border-radius: 12px;
+        }
+
+        .thesis-conviction-badge.high {
+            background: var(--green-dim);
+            color: var(--green);
+        }
+
+        .thesis-conviction-badge.mid {
+            background: var(--yellow-dim);
+            color: var(--yellow);
+        }
+
+        .thesis-conviction-badge.low {
+            background: var(--red-dim);
+            color: var(--red);
+        }
+
+        .thesis-catalyst {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            padding: 8px 10px;
+            background: var(--accent-dim);
+            border: 1px solid rgba(245, 158, 11, 0.15);
+            border-radius: var(--radius-sm);
+            margin-bottom: 10px;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+
+        .thesis-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        .thesis-metric {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            padding: 4px 0;
+        }
+
+        .thesis-metric-label {
+            color: var(--text-muted);
+        }
+
+        .thesis-metric-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* ── Candidate Scorecard ─────────────────────────── */
+        .scorecard-table-wrap {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .scorecard-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .scorecard-table th {
+            position: sticky;
+            top: 0;
+            background: var(--bg-surface);
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-medium);
+        }
+
+        .scorecard-table td {
+            padding: 7px 10px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+
+        .scorecard-table tr:hover td {
+            background: var(--bg-hover);
+        }
+
+        .scorecard-rank {
+            color: var(--text-faint);
+            font-weight: 600;
+            width: 30px;
+        }
+
+        .scorecard-symbol {
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .scorecard-held-badge {
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: var(--accent-dim);
+            color: var(--accent-light);
+            margin-left: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .scorecard-score-cell {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .scorecard-bar {
+            width: 60px;
+            height: 6px;
+            background: var(--bg-raised);
+            border-radius: 3px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .scorecard-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+        }
+
+        .scorecard-bar-fill.score-high { background: var(--green); }
+        .scorecard-bar-fill.score-mid { background: var(--yellow); }
+        .scorecard-bar-fill.score-low { background: var(--text-muted); }
+        .scorecard-bar-fill.score-poor { background: var(--red); }
+
+        .scorecard-score-num {
+            font-weight: 700;
+            min-width: 32px;
+        }
+
+        .scorecard-score-num.score-high { color: var(--green); }
+        .scorecard-score-num.score-mid { color: var(--yellow); }
+        .scorecard-score-num.score-low { color: var(--text-muted); }
+        .scorecard-score-num.score-poor { color: var(--red); }
+
+        .scorecard-table-wrap::-webkit-scrollbar { width: 5px; }
+        .scorecard-table-wrap::-webkit-scrollbar-track { background: transparent; }
+        .scorecard-table-wrap::-webkit-scrollbar-thumb { background: var(--border-medium); border-radius: 10px; }
+
+        /* ── Sector Rotation Heatmap ─────────────────────── */
+        .rotation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+        }
+
+        .rotation-card {
+            background: var(--bg-inset);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            border-top: 3px solid var(--text-faint);
+        }
+
+        .rotation-card.inflow { border-top-color: var(--green); }
+        .rotation-card.outflow { border-top-color: var(--red); }
+        .rotation-card.neutral { border-top-color: var(--text-muted); }
+
+        .rotation-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .rotation-card-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .rotation-flow-badge {
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .rotation-flow-badge.inflow { background: var(--green-dim); color: var(--green); }
+        .rotation-flow-badge.outflow { background: var(--red-dim); color: var(--red); }
+        .rotation-flow-badge.neutral { background: var(--bg-raised); color: var(--text-muted); }
+
+        .rotation-stats {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        .rotation-stat-value {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
         /* ── Responsive ────────────────────────────────────── */
         @media (max-width: 1024px) {
             .app-layout {
@@ -2348,8 +2646,13 @@
             .insights-grid,
             .stock-context-grid,
             .sector-insights-grid,
-            .holdings-detail-grid {
+            .holdings-detail-grid,
+            .thesis-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .rotation-grid {
+                grid-template-columns: 1fr 1fr;
             }
 
             .sidebar-header {

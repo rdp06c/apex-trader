@@ -9,7 +9,10 @@
             closedTrades: [], // Track completed buy/sell pairs for analytics
             holdingTheses: {}, // Thesis memory: per-holding catalyst, thesis, targets
             tradingStrategy: 'aggressive', // aggressive, balanced, or conservative
-            journalEntries: [] // Trading journal notes
+            journalEntries: [], // Trading journal notes
+            lastMarketRegime: null, // { regime, timestamp }
+            lastCandidateScores: null, // { timestamp, candidates: [...] }
+            lastSectorRotation: null // { timestamp, sectors: {...} }
         };
 
         // Anthropic API Configuration
@@ -2364,10 +2367,18 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     stocksBySector[sector].push({ symbol, ...data });
                 });
                 const sectorRotation = detectSectorRotation(marketData);
-                
+
+                // Persist sector rotation from dry run
+                portfolio.lastSectorRotation = { timestamp: new Date().toISOString(), sectors: sectorRotation };
+
                 let structureStats = { bullish: 0, bearish: 0, choch: 0, bos: 0, sweeps: 0, fvg: 0 };
+                const dryRunScored = [];
                 Object.keys(marketData).forEach(symbol => {
-                    const momentum = calculate5DayMomentum(marketData[symbol], symbol);
+                    const data = marketData[symbol];
+                    const sector = stockSectors[symbol] || 'Unknown';
+                    const sectorData = stocksBySector[sector] || [];
+                    const momentum = calculate5DayMomentum(data, symbol);
+                    const rs = calculateRelativeStrength(data, sectorData, symbol);
                     const struct = detectStructure(symbol);
                     if (struct.structure === 'bullish') structureStats.bullish++;
                     if (struct.structure === 'bearish') structureStats.bearish++;
@@ -2375,8 +2386,39 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     if (struct.bos) structureStats.bos++;
                     if (struct.sweep !== 'none') structureStats.sweeps++;
                     if (struct.fvg !== 'none') structureStats.fvg++;
+
+                    const momScore = momentum?.score || 0;
+                    const rsNorm = ((rs?.rsScore || 50) / 100) * 10;
+                    const flow = sectorRotation[sector]?.moneyFlow;
+                    const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
+                    const strBonus = (struct?.structureScore || 0) * 0.75;
+                    dryRunScored.push({ symbol, compositeScore: momScore + rsNorm + sBonus + strBonus, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: struct?.structureScore || 0, structure: struct?.structure || 'unknown' });
                 });
-                
+
+                // Persist candidate scores from dry run
+                dryRunScored.sort((a, b) => b.compositeScore - a.compositeScore);
+                portfolio.lastCandidateScores = {
+                    timestamp: new Date().toISOString(),
+                    candidates: dryRunScored.slice(0, 40)
+                };
+
+                // Backfill thesis entries missing momentum/RS/sectorFlow
+                if (portfolio.holdingTheses) {
+                    Object.keys(portfolio.holdings).forEach(symbol => {
+                        const thesis = portfolio.holdingTheses[symbol];
+                        if (thesis && marketData[symbol]) {
+                            const sector = stockSectors[symbol] || 'Unknown';
+                            const sectorData = stocksBySector[sector] || [];
+                            if (thesis.entryMomentum == null) thesis.entryMomentum = calculate5DayMomentum(marketData[symbol], symbol)?.score ?? null;
+                            if (thesis.entryRS == null) thesis.entryRS = calculateRelativeStrength(marketData[symbol], sectorData, symbol)?.rsScore ?? null;
+                            if (thesis.entrySectorFlow == null) thesis.entrySectorFlow = sectorRotation[sector]?.moneyFlow ?? null;
+                        }
+                    });
+                }
+
+                savePortfolio();
+                updatePerformanceAnalytics();
+
                 const endTime = performance.now();
                 const duration = ((endTime - startTime) / 1000).toFixed(2);
                 
@@ -2804,7 +2846,10 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 // 1. Calculate sector rotation patterns (now uses multi-day data)
                 const sectorRotation = detectSectorRotation(marketData);
                 console.log('📊 Sector Rotation Analysis:', sectorRotation);
-                
+
+                // Persist sector rotation for dashboard display
+                portfolio.lastSectorRotation = { timestamp: new Date().toISOString(), sectors: sectorRotation };
+
                 // 2. Group stocks by sector for relative strength calculations
                 const stocksBySector = {};
                 Object.entries(marketData).forEach(([symbol, data]) => {
@@ -2847,6 +2892,19 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                         marketData[symbol].sectorRotation = data.sectorRotation;
                     }
                 });
+
+                // Backfill thesis entries missing momentum/RS/sectorFlow (for holdings bought before tracking was added)
+                if (portfolio.holdingTheses) {
+                    Object.keys(portfolio.holdings).forEach(symbol => {
+                        const thesis = portfolio.holdingTheses[symbol];
+                        const emd = enhancedMarketData[symbol];
+                        if (thesis && emd) {
+                            if (thesis.entryMomentum == null) thesis.entryMomentum = emd.momentum?.score ?? null;
+                            if (thesis.entryRS == null) thesis.entryRS = emd.relativeStrength?.rsScore ?? null;
+                            if (thesis.entrySectorFlow == null) thesis.entrySectorFlow = emd.sectorRotation?.moneyFlow ?? null;
+                        }
+                    });
+                }
 
                 console.log('✅ Enhanced market data prepared with momentum, RS, rotation, and structure analysis');
 
@@ -2897,7 +2955,22 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 
                 // 2. Sort by composite score descending
                 scoredStocks.sort((a, b) => b.compositeScore - a.compositeScore);
-                
+
+                // Persist top candidate scores for dashboard display
+                portfolio.lastCandidateScores = {
+                    timestamp: new Date().toISOString(),
+                    candidates: scoredStocks.slice(0, 40).map(s => ({
+                        symbol: s.symbol,
+                        compositeScore: s.compositeScore,
+                        momentum: s.data.momentum?.score || 0,
+                        rs: s.data.relativeStrength?.rsScore || 0,
+                        sector: s.data.sector || 'Unknown',
+                        sectorBonus: s.data.sectorRotation?.moneyFlow === 'inflow' ? 2 : s.data.sectorRotation?.moneyFlow === 'modest-inflow' ? 1 : s.data.sectorRotation?.moneyFlow === 'outflow' ? -1 : 0,
+                        structureScore: s.data.marketStructure?.structureScore || 0,
+                        structure: s.data.marketStructure?.structure || 'unknown'
+                    }))
+                };
+
                 // 3. Build the candidate list
                 const TOP_N = 25;
                 const WILD_CARDS = 5;
@@ -3152,6 +3225,10 @@ Include a decision for EVERY holding.` }]
                                     });
                                     phase1Summary = parsed.holdings_summary || '';
                                     phase1Regime = parsed.market_regime || '';
+                                    // Persist market regime for dashboard display
+                                    if (phase1Regime) {
+                                        portfolio.lastMarketRegime = { regime: phase1Regime, timestamp: new Date().toISOString() };
+                                    }
                                     for (const sd of phase1SellDecisions) {
                                         sd.shares = Math.floor(sd.shares || 0);
                                         // Clamp to actual position size
@@ -4977,6 +5054,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         throw new Error('Invalid decision format - missing decisions array or action');
                     }
 
+                    // Save persisted analytics data (regime, scores, rotation) even if no trades executed
+                    savePortfolio();
+
             } catch (error) {
                 console.error('AI Analysis error:', error);
                 console.error('Full AI response:', aiResponse);
@@ -5681,7 +5761,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             await updatePerformanceChart();
             updatePerformanceAnalytics();
             updateSectorAllocation(priceData); // Pass priceData to avoid re-fetching
-            
+
+            // Update async analytics modules (need price data)
+            updateThesisTracker();
+
             } catch (error) {
                 console.error('Error updating UI:', error);
                 addActivity('⚠️ Error updating display - some data may be stale. Try refreshing the page.', 'error');
@@ -5736,6 +5819,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     console.log('Portfolio loaded from localStorage:', portfolio);
                     console.log(`Cash: $${portfolio.cash}, Holdings: ${Object.keys(portfolio.holdings).length}, Transactions: ${portfolio.transactions.length}`);
                     
+                    // MIGRATION: Ensure new analytics fields exist
+                    if (!portfolio.lastMarketRegime) portfolio.lastMarketRegime = null;
+                    if (!portfolio.lastCandidateScores) portfolio.lastCandidateScores = null;
+                    if (!portfolio.lastSectorRotation) portfolio.lastSectorRotation = null;
+
                     // MIGRATION: Reconstruct totalDeposits if missing or zero
                     // For portfolios created before totalDeposits tracking was added
                     if (!portfolio.totalDeposits && portfolio.initialBalance) {
@@ -6718,6 +6806,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Update Learning Insights Display
             updateLearningInsightsDisplay();
 
+            // Update new analytics modules (non-async, use persisted data)
+            updateRegimeBanner();
+            updateCandidateScorecard();
+            updateSectorRotationHeatmap();
+
             // Close any expanded analytics panels on data refresh
             ['winRate', 'bestTrade', 'worstTrade'].forEach(t => {
                 const p = document.getElementById(t + 'Expansion');
@@ -7520,6 +7613,187 @@ Current Portfolio:
             if (event.key === 'Enter') {
                 sendMessage();
             }
+        }
+
+        // ══════════════════════════════════════════════════════
+        // ═══ NEW ANALYTICS MODULES ═══════════════════════════
+        // ══════════════════════════════════════════════════════
+
+        // Module 1: Market Regime Indicator
+        function updateRegimeBanner() {
+            const banner = document.getElementById('regimeBanner');
+            if (!banner) return;
+
+            const data = portfolio.lastMarketRegime;
+            if (!data || !data.regime) {
+                banner.style.display = 'none';
+                return;
+            }
+
+            banner.style.display = '';
+            banner.className = 'regime-banner';
+
+            const regime = data.regime.toLowerCase();
+            const labelEl = document.getElementById('regimeLabel');
+            const descEl = document.getElementById('regimeDescription');
+            const timeEl = document.getElementById('regimeTimestamp');
+
+            if (regime.includes('bull')) {
+                banner.classList.add('bull');
+                labelEl.textContent = 'BULL MARKET';
+                descEl.textContent = 'Aggressive deployment — favor momentum, full sizing';
+            } else if (regime.includes('bear')) {
+                banner.classList.add('bear');
+                labelEl.textContent = 'BEAR MARKET';
+                descEl.textContent = 'Defensive posture — preserve cash, tight stops';
+            } else {
+                banner.classList.add('choppy');
+                labelEl.textContent = 'CHOPPY / MIXED';
+                descEl.textContent = 'Selective entries only — smaller positions';
+            }
+
+            if (data.timestamp) {
+                timeEl.textContent = 'Last detected: ' + new Date(data.timestamp).toLocaleString();
+            }
+        }
+
+        // Module 2: Candidate Scorecard
+        function updateCandidateScorecard() {
+            const container = document.getElementById('candidateScorecardContent');
+            if (!container) return;
+
+            const data = portfolio.lastCandidateScores;
+            if (!data || !data.candidates || data.candidates.length === 0) {
+                container.innerHTML = '<div class="empty-state">Run AI Analysis to see scored candidates</div>';
+                return;
+            }
+
+            const maxScore = Math.max(...data.candidates.map(c => c.compositeScore), 1);
+            const holdingSymbols = new Set(Object.keys(portfolio.holdings));
+
+            let html = '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
+                '<th>#</th><th>Symbol</th><th>Score</th><th>Mom</th><th>RS</th><th>Sector</th><th>Structure</th>' +
+                '</tr></thead><tbody>';
+
+            data.candidates.forEach((c, i) => {
+                const score = c.compositeScore;
+                const scoreClass = score >= 15 ? 'score-high' : score >= 10 ? 'score-mid' : score >= 5 ? 'score-low' : 'score-poor';
+                const pct = Math.max(0, Math.min(100, (score / maxScore) * 100));
+                const held = holdingSymbols.has(c.symbol);
+                const structLabel = (c.structure || 'unknown').replace(/_/g, ' ');
+
+                html += `<tr>
+                    <td class="scorecard-rank">${i + 1}</td>
+                    <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}</td>
+                    <td><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span></div></td>
+                    <td>${(c.momentum || 0).toFixed(1)}</td>
+                    <td>${(c.rs || 0).toFixed(0)}</td>
+                    <td>${c.sector || '--'}</td>
+                    <td style="font-size:10px;text-transform:capitalize">${structLabel}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table></div>';
+            html += `<div style="font-size:10px;color:var(--text-faint);margin-top:8px">Last scored: ${new Date(data.timestamp).toLocaleString()} — Top ${data.candidates.length} of ~300 screened</div>`;
+            container.innerHTML = html;
+        }
+
+        // Module 3: Sector Rotation Heatmap
+        function updateSectorRotationHeatmap() {
+            const container = document.getElementById('sectorRotationContent');
+            if (!container) return;
+
+            const data = portfolio.lastSectorRotation;
+            if (!data || !data.sectors) {
+                container.innerHTML = '<div class="empty-state">Run AI Analysis to see sector rotation data</div>';
+                return;
+            }
+
+            // Sort: inflow first, then by 5d return
+            const flowOrder = { 'inflow': 0, 'modest-inflow': 1, 'neutral': 2, 'modest-outflow': 3, 'outflow': 4 };
+            const sectors = Object.entries(data.sectors).sort((a, b) => {
+                const fa = flowOrder[a[1].moneyFlow] ?? 2;
+                const fb = flowOrder[b[1].moneyFlow] ?? 2;
+                if (fa !== fb) return fa - fb;
+                return (b[1].avgReturn5d || 0) - (a[1].avgReturn5d || 0);
+            });
+
+            let html = '<div class="rotation-grid">';
+            sectors.forEach(([name, s]) => {
+                const flow = s.moneyFlow || 'neutral';
+                const flowClass = flow.includes('inflow') ? 'inflow' : flow.includes('outflow') ? 'outflow' : 'neutral';
+                const flowLabel = flow.replace('-', ' ').toUpperCase();
+                const avg5d = s.avgReturn5d != null ? parseFloat(s.avgReturn5d).toFixed(2) : '--';
+                const avgToday = s.avgChange != null ? parseFloat(s.avgChange).toFixed(2) : '--';
+                const signal = s.rotationSignal || '--';
+
+                html += `<div class="rotation-card ${flowClass}">
+                    <div class="rotation-card-header">
+                        <span class="rotation-card-name">${name}</span>
+                        <span class="rotation-flow-badge ${flowClass}">${flowLabel}</span>
+                    </div>
+                    <div class="rotation-stats">
+                        5d Avg: <span class="rotation-stat-value" style="color:${parseFloat(avg5d) >= 0 ? 'var(--green)' : 'var(--red)'}">${avg5d}%</span><br>
+                        Today: <span class="rotation-stat-value" style="color:${parseFloat(avgToday) >= 0 ? 'var(--green)' : 'var(--red)'}">${avgToday}%</span><br>
+                        Stocks: <span class="rotation-stat-value">${s.total || 0}</span> (${s.leaders5d || 0} up / ${s.laggards5d || 0} dn)<br>
+                        Signal: <span class="rotation-stat-value">${signal}</span>
+                    </div>
+                </div>`;
+            });
+            html += '</div>';
+            html += `<div style="font-size:10px;color:var(--text-faint);margin-top:8px">Last updated: ${new Date(data.timestamp).toLocaleString()}</div>`;
+            container.innerHTML = html;
+        }
+
+        // Module: Thesis Tracker
+        async function updateThesisTracker() {
+            const grid = document.getElementById('thesisGrid');
+            if (!grid) return;
+
+            const theses = portfolio.holdingTheses || {};
+            const holdingSymbols = Object.keys(portfolio.holdings);
+
+            // Only show theses for current holdings
+            const activeTheses = holdingSymbols.filter(sym => theses[sym]);
+            if (activeTheses.length === 0) {
+                grid.innerHTML = '<div class="empty-state">No position theses tracked yet</div>';
+                return;
+            }
+
+            const { total: totalValue, priceData } = await calculatePortfolioValue();
+
+            let html = '';
+            activeTheses.forEach(sym => {
+                const t = theses[sym];
+                const currentPrice = priceData[sym]?.price || 0;
+                const entryPrice = t.entryPrice || 0;
+                const pnlPct = entryPrice > 0 ? ((currentPrice - entryPrice) / entryPrice * 100) : 0;
+                const pnlColor = pnlPct >= 0 ? 'var(--green)' : 'var(--red)';
+
+                const conviction = t.entryConviction || 0;
+                const convClass = conviction >= 7 ? 'high' : conviction >= 5 ? 'mid' : 'low';
+
+                // Hold time
+                const entryDate = t.entryDate ? new Date(t.entryDate) : null;
+                const holdDays = entryDate ? Math.floor((Date.now() - entryDate.getTime()) / 86400000) : '--';
+
+                html += `<div class="thesis-card">
+                    <div class="thesis-card-header">
+                        <span class="thesis-card-symbol">${sym}</span>
+                        <span class="thesis-conviction-badge ${convClass}">${conviction}/10</span>
+                    </div>
+                    <div class="thesis-metrics">
+                        <div class="thesis-metric"><span class="thesis-metric-label">Entry</span><span class="thesis-metric-value">$${entryPrice.toFixed(2)}</span></div>
+                        <div class="thesis-metric"><span class="thesis-metric-label">Current</span><span class="thesis-metric-value" style="color:${pnlColor}">$${currentPrice.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)</span></div>
+                        <div class="thesis-metric"><span class="thesis-metric-label">Momentum</span><span class="thesis-metric-value">${t.entryMomentum != null ? t.entryMomentum.toFixed(1) : '--'}</span></div>
+                        <div class="thesis-metric"><span class="thesis-metric-label">RS</span><span class="thesis-metric-value">${t.entryRS != null ? t.entryRS.toFixed(0) : '--'}</span></div>
+                        <div class="thesis-metric"><span class="thesis-metric-label">Sector Flow</span><span class="thesis-metric-value">${t.entrySectorFlow || '--'}</span></div>
+                        <div class="thesis-metric"><span class="thesis-metric-label">Hold Time</span><span class="thesis-metric-value">${holdDays}d</span></div>
+                    </div>
+                </div>`;
+            });
+
+            grid.innerHTML = html;
         }
 
         // Unified collapse/expand for all sections

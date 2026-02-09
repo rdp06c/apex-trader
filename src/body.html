@@ -261,6 +261,15 @@
                 </div>
             </div>
 
+            <!-- Market Regime Indicator -->
+            <div class="regime-banner" id="regimeBanner" style="display: none;">
+                <div class="regime-banner-inner">
+                    <div class="regime-label" id="regimeLabel">--</div>
+                    <div class="regime-description" id="regimeDescription">Run AI Analysis to detect market regime</div>
+                    <div class="regime-timestamp" id="regimeTimestamp"></div>
+                </div>
+            </div>
+
             <!-- Holdings Detail (collapsible) -->
             <div class="card collapsible-section" id="holdingsDetailSection">
                 <div class="section-header" onclick="toggleSection('holdingsDetail')">
@@ -279,6 +288,19 @@
                 </div>
             </div>
 
+            <!-- Thesis Tracker (collapsible) -->
+            <div class="card collapsible-section" id="thesisTrackerSection">
+                <div class="section-header" onclick="toggleSection('thesisTracker')">
+                    <h2 class="chart-title">Thesis Tracker</h2>
+                    <span class="toggle-icon" id="thesisTrackerToggle">&#9662;</span>
+                </div>
+                <div class="section-body" id="thesisTrackerBody">
+                    <div class="thesis-grid" id="thesisGrid">
+                        <div class="empty-state">No position theses tracked yet</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Decision Reasoning (collapsible) -->
             <div class="chart-card card collapsible-section" id="decisionReasoningSection">
                 <div class="section-header" onclick="toggleSection('decisionReasoning')">
@@ -290,6 +312,32 @@
                         <div class="empty-state">
                             No trades yet. Run AI Analysis to see APEX's reasoning!
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Candidate Scorecard (collapsible, collapsed by default) -->
+            <div class="card collapsible-section" id="candidateScorecardSection">
+                <div class="section-header" onclick="toggleSection('candidateScorecard')">
+                    <h2 class="chart-title">Candidate Scorecard</h2>
+                    <span class="toggle-icon collapsed" id="candidateScorecardToggle">&#9662;</span>
+                </div>
+                <div class="section-body collapsed" id="candidateScorecardBody">
+                    <div id="candidateScorecardContent">
+                        <div class="empty-state">Run AI Analysis to see scored candidates</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sector Rotation Heatmap (collapsible, collapsed by default) -->
+            <div class="card collapsible-section" id="sectorRotationSection">
+                <div class="section-header" onclick="toggleSection('sectorRotation')">
+                    <h2 class="chart-title">Sector Rotation Heatmap</h2>
+                    <span class="toggle-icon collapsed" id="sectorRotationToggle">&#9662;</span>
+                </div>
+                <div class="section-body collapsed" id="sectorRotationBody">
+                    <div id="sectorRotationContent">
+                        <div class="empty-state">Run AI Analysis to see sector rotation data</div>
                     </div>
                 </div>
             </div>
