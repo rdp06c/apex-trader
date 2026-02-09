@@ -796,9 +796,11 @@
             portfolio.totalDeposits += funding; // Track this deposit
             
             // Record the deposit in performance history so the chart can annotate it
+            const lastKnown = portfolio.performanceHistory.filter(e => e.value != null).slice(-1)[0];
+            const estimatedValue = (lastKnown ? lastKnown.value : portfolio.cash) + funding;
             portfolio.performanceHistory.push({
                 timestamp: new Date().toISOString(),
-                value: null, // Will be filled by next updateUI
+                value: estimatedValue,
                 deposit: funding
             });
             
@@ -969,49 +971,6 @@
             if (statusEl) {
                 statusEl.textContent = `API Calls: ${apiCallsToday} used today | Unlimited remaining ✅`;
                 statusEl.style.color = '#34d399'; // Always green for unlimited
-            }
-        }
-
-        // Fetch technical indicators from Polygon (SMA, RSI, MACD)
-        async function fetchTechnicalIndicators(symbol) {
-            try {
-                // Fetch 50-day and 200-day SMAs
-                const smaPromises = [
-                    fetch(`https://api.polygon.io/v1/indicators/sma/${symbol}?timespan=day&adjusted=true&window=50&series_type=close&order=desc&limit=1&apiKey=${POLYGON_API_KEY}`),
-                    fetch(`https://api.polygon.io/v1/indicators/sma/${symbol}?timespan=day&adjusted=true&window=200&series_type=close&order=desc&limit=1&apiKey=${POLYGON_API_KEY}`),
-                    fetch(`https://api.polygon.io/v1/indicators/rsi/${symbol}?timespan=day&adjusted=true&window=14&series_type=close&order=desc&limit=1&apiKey=${POLYGON_API_KEY}`),
-                    fetch(`https://api.polygon.io/v1/indicators/macd/${symbol}?timespan=day&adjusted=true&short_window=12&long_window=26&signal_window=9&series_type=close&order=desc&limit=1&apiKey=${POLYGON_API_KEY}`)
-                ];
-                
-                const responses = await Promise.all(smaPromises);
-                const [sma50Data, sma200Data, rsiData, macdData] = await Promise.all(responses.map(r => r.json()));
-                
-                const indicators = {};
-                
-                // Extract SMA 50
-                if (sma50Data.results && sma50Data.results.values && sma50Data.results.values.length > 0) {
-                    indicators.sma_50 = parseFloat(sma50Data.results.values[0].value.toFixed(2));
-                }
-                
-                // Extract SMA 200
-                if (sma200Data.results && sma200Data.results.values && sma200Data.results.values.length > 0) {
-                    indicators.sma_200 = parseFloat(sma200Data.results.values[0].value.toFixed(2));
-                }
-                
-                // Extract RSI
-                if (rsiData.results && rsiData.results.values && rsiData.results.values.length > 0) {
-                    indicators.rsi = parseFloat(rsiData.results.values[0].value.toFixed(1));
-                }
-                
-                // Extract MACD
-                if (macdData.results && macdData.results.values && macdData.results.values.length > 0) {
-                    indicators.macd = parseFloat(macdData.results.values[0].value.toFixed(2));
-                }
-                
-                return indicators;
-            } catch (error) {
-                console.warn(`Technical indicators unavailable for ${symbol}:`, error.message);
-                return null;
             }
         }
 
@@ -5113,7 +5072,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // ══════════════════════════════════════════════════════════════
             
             const sellDecisions = decisions.filter(d => d.action === 'SELL');
-            const buyDecisionsAll = decisions.filter(d => d.action === 'BUY');
+            let buyDecisionsAll = decisions.filter(d => d.action === 'BUY');
             const holdDecisions = decisions.filter(d => d.action === 'HOLD');
             let successCount = 0;
             let failCount = 0;
@@ -5753,10 +5712,26 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
 
             // Update chart
-            portfolio.performanceHistory.push({
-                timestamp: new Date().toISOString(),
-                value: totalValue
-            });
+            // Throttle performanceHistory: at most one entry per 15 minutes (unless deposit marker)
+            const now = new Date();
+            const lastEntry = portfolio.performanceHistory[portfolio.performanceHistory.length - 1];
+            const timeSinceLast = lastEntry ? (now - new Date(lastEntry.timestamp)) : Infinity;
+            if (timeSinceLast >= 15 * 60 * 1000 || !lastEntry || lastEntry.deposit) {
+                portfolio.performanceHistory.push({
+                    timestamp: now.toISOString(),
+                    value: totalValue
+                });
+            } else {
+                // Update the most recent entry's value instead of adding a new one
+                lastEntry.value = totalValue;
+                lastEntry.timestamp = now.toISOString();
+            }
+
+            // Hard cap: keep at most 3000 entries (prune oldest non-deposit entries)
+            if (portfolio.performanceHistory.length > 3000) {
+                const excess = portfolio.performanceHistory.length - 3000;
+                portfolio.performanceHistory.splice(0, excess);
+            }
 
             await updatePerformanceChart();
             updatePerformanceAnalytics();
@@ -5775,6 +5750,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // Add activity
+        // Escape HTML entities to prevent XSS from AI/user content
+        function escapeHtml(str) {
+            if (typeof str !== 'string') return str;
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
         function addActivity(text, type = 'general') {
             const feed = document.getElementById('activityFeed');
             const time = new Date().toLocaleString();
@@ -5783,7 +5764,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             item.className = `activity-item ${type}`;
             item.innerHTML = `
                 <div class="activity-time">${time}</div>
-                <div class="activity-description">${text}</div>
+                <div class="activity-description">${escapeHtml(text)}</div>
             `;
             
             if (feed.firstChild && feed.firstChild.textContent.includes('No activity')) {
@@ -5893,9 +5874,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 portfolio = {
                     cash: 0,
                     initialBalance: 0,
+                    totalDeposits: 0,
                     holdings: {},
                     transactions: [],
-                    performanceHistory: []
+                    performanceHistory: [],
+                    closedTrades: [],
+                    holdingTheses: {},
+                    tradingStrategy: 'aggressive',
+                    journalEntries: [],
+                    lastMarketRegime: null,
+                    lastCandidateScores: null,
+                    lastSectorRotation: null
                 };
                 localStorage.removeItem('aiTradingPortfolio');
                 document.getElementById('activityFeed').innerHTML = '<div class="empty-state">No activity yet</div>';
@@ -5913,11 +5902,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             initGdriveConfig(); // Initialize Google Drive config with stored keys
             initChart();
             loadPortfolio();
-            loadApiKey();
             loadApiUsage();
             updatePerformanceAnalytics();
             updateSectorAllocation();
-            loadJournalEntries();
             updateApiKeyStatus(); // Check API key configuration
 
             // Restore persisted decision history
@@ -6269,54 +6256,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('sectorLegend').innerHTML = legendHtml;
         }
 
-        // Trading Journal functions
-        function addJournalEntry() {
-            const entryText = document.getElementById('journalEntry').value.trim();
-            if (!entryText) return;
-
-            const entry = {
-                text: entryText,
-                timestamp: new Date().toISOString(),
-                portfolioValue: portfolio.performanceHistory.length > 0 
-                    ? portfolio.performanceHistory[portfolio.performanceHistory.length - 1].value 
-                    : portfolio.initialBalance
-            };
-
-            portfolio.journalEntries.push(entry);
-            document.getElementById('journalEntry').value = '';
-            savePortfolio();
-            loadJournalEntries();
-        }
-
-        function loadJournalEntries() {
-            const container = document.getElementById('journalEntries');
-            
-            // Element doesn't exist anymore (replaced with decision reasoning)
-            if (!container) {
-                console.log('Journal entries element not found - feature replaced with decision reasoning');
-                return;
-            }
-            
-            if (portfolio.journalEntries.length === 0) {
-                container.innerHTML = '<div class="empty-state">No journal entries yet</div>';
-                return;
-            }
-
-            const html = portfolio.journalEntries.slice().reverse().map(entry => {
-                const date = new Date(entry.timestamp);
-                return `
-                    <div class="journal-entry">
-                        <div class="journal-entry-time">
-                            ${date.toLocaleDateString()} ${date.toLocaleTimeString()} • Portfolio: $${entry.portfolioValue.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                        </div>
-                        <div class="journal-entry-text">${entry.text}</div>
-                    </div>
-                `;
-            }).join('');
-
-            container.innerHTML = html;
-        }
-
         // Add APEX decision reasoning to the panel
         // options: { restored: bool, timestamp: ISO string }
         function addDecisionReasoning(decision, marketData, options = {}) {
@@ -6364,7 +6303,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 </div>
                             </div>
                             <div class="decision-stock-reasoning">
-                                ${d.reasoning}
+                                ${escapeHtml(d.reasoning)}
                             </div>
                         </div>
                     `;
@@ -6390,7 +6329,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         </div>
                     </div>
                     ${decision.budgetWarning ? `
-                        <div class="budget-warning">${decision.budgetWarning}</div>
+                        <div class="budget-warning">${escapeHtml(decision.budgetWarning)}</div>
                     ` : ''}
                     ${stocksList}
                     ${decision.reasoning ? `
@@ -6399,7 +6338,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 <span>APEX's Thoughts</span>
                                 <span class="decision-expand-icon">&#9662;</span>
                             </div>
-                            <div class="decision-thoughts-text">${decision.reasoning}</div>
+                            <div class="decision-thoughts-text">${escapeHtml(decision.reasoning)}</div>
                         </div>
                     ` : ''}
                     ${decision.research_summary ? `
@@ -6408,7 +6347,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 <span>Research Summary</span>
                                 <span class="decision-expand-icon">&#9662;</span>
                             </div>
-                            <div class="research-summary-text">${decision.research_summary}</div>
+                            <div class="research-summary-text">${escapeHtml(decision.research_summary)}</div>
                         </div>
                     ` : ''}
                 `;
@@ -6555,7 +6494,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         // Upload decision text to Google Drive (silent — logs but never throws)
         async function uploadDecisionToDrive(content, filename) {
             try {
-                if (!GDRIVE_CONFIG.accessToken) {
+                if (!accessToken) {
                     console.log('Google Drive not connected, skipping auto-upload');
                     return;
                 }
@@ -6573,7 +6512,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                 const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                     method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + GDRIVE_CONFIG.accessToken },
+                    headers: { 'Authorization': 'Bearer ' + accessToken },
                     body: form
                 });
 
@@ -6618,7 +6557,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 addActivity('📄 Decision reasoning saved locally', 'success');
 
                 // Upload to Drive
-                if (GDRIVE_CONFIG.accessToken) {
+                if (accessToken) {
                     button.innerHTML = '☁️ Uploading...';
                     try {
                         await uploadDecisionToDrive(content, filename);
@@ -6650,7 +6589,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
                     {
                         headers: {
-                            'Authorization': 'Bearer ' + GDRIVE_CONFIG.accessToken
+                            'Authorization': 'Bearer ' + accessToken
                         }
                     }
                 );
@@ -6671,7 +6610,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
                     method: 'POST',
                     headers: {
-                        'Authorization': 'Bearer ' + GDRIVE_CONFIG.accessToken,
+                        'Authorization': 'Bearer ' + accessToken,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
@@ -7181,239 +7120,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             container.innerHTML = html;
         }
 
-        // API Key Management
-        function saveApiKey() {
-            console.log('saveApiKey function called');
-            const inputElement = document.getElementById('apiKeyInput');
-            console.log('Input element:', inputElement);
-            
-            if (!inputElement) {
-                console.error('API Key input not found!');
-                alert('Error: Could not find API key input field');
-                return;
-            }
-            
-            const apiKey = inputElement.value.trim();
-            console.log('Polygon API Key value:', apiKey);
-            
-            if (apiKey) {
-                POLYGON_API_KEY = apiKey;
-                localStorage.setItem('polygonApiKey', apiKey);
-                
-                const statusElement = document.getElementById('apiKeyStatus');
-                if (statusElement) {
-                    statusElement.textContent = '✓ Polygon API key saved! Real-time stock prices enabled.';
-                    statusElement.style.color = '#34d399';
-                }
-                
-                // Only add activity if feed exists
-                try {
-                    addActivity('✓ Alpha Vantage API key configured successfully', 'init');
-                } catch (e) {
-                    console.log('Activity feed not ready yet');
-                }
-                
-                // Update API usage display
-                try {
-                    updateApiUsageDisplay();
-                } catch (e) {
-                    console.log('API usage display not ready');
-                }
-                
-                console.log('API key saved successfully');
-                alert('✓ API key saved successfully!');
-            } else {
-                const statusElement = document.getElementById('apiKeyStatus');
-                if (statusElement) {
-                    statusElement.textContent = 'Please enter a valid API key (not "demo")';
-                    statusElement.style.color = '#f87171';
-                }
-                console.log('Invalid API key');
-            }
-        }
-
-        function loadApiKey() {
-            const saved = localStorage.getItem('polygonApiKey');
-            if (saved) {
-                POLYGON_API_KEY = saved;
-                document.getElementById('apiKeyInput').value = saved;
-                document.getElementById('apiKeyStatus').textContent = '✓ Polygon API key loaded';
-                document.getElementById('apiKeyStatus').style.color = '#34d399';
-            }
-        }
-
-        // Market indices tracking
-        async function updateMarketIndices() {
-            console.log('Starting market indices update...');
-            const indices = [
-                { symbol: '^GSPC', id: 'spx', name: 'S&P 500', etf: 'SPY' },
-                { symbol: '^IXIC', id: 'ndx', name: 'NASDAQ', etf: 'QQQ' },
-                { symbol: '^DJI', id: 'dji', name: 'Dow Jones', etf: 'DIA' },
-                { symbol: '^RUT', id: 'rut', name: 'Russell 2000', etf: 'IWM' }
-            ];
-            
-            const updateTime = new Date();
-            const timeString = updateTime.toLocaleTimeString();
-            
-            // Update overall market update time
-            document.getElementById('marketUpdateTime').textContent = timeString;
-            
-            let hasRealData = false;
-            let apiCallsUsed = 0;
-            
-            for (const index of indices) {
-                try {
-                    console.log(`Fetching ${index.symbol} (via ${index.etf})...`);
-                    // Get data using Alpha Vantage
-                    const data = await getIndexPrice(index.symbol, 0);
-                    
-                    if (data.error) {
-                        // Show error instead of fake data
-                        document.getElementById(`${index.id}Price`).textContent = 'API Error';
-                        document.getElementById(`${index.id}Change`).textContent = 'Check API key';
-                        document.getElementById(`${index.id}Time`).textContent = timeString;
-                        continue;
-                    }
-                    
-                    if (data.isReal) {
-                        hasRealData = true;
-                        apiCallsUsed++;
-                        console.log(`✓ Got real data for ${index.symbol} (via ${index.etf}): $${data.price.toFixed(2)}`);
-                    } else {
-                        console.log(`⚠ Could not get data for ${index.symbol}`);
-                    }
-                    
-                    // Update price
-                    document.getElementById(`${index.id}Price`).textContent = data.price > 0 
-                        ? data.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                        : '--';
-                    
-                    // Update change
-                    const changeEl = document.getElementById(`${index.id}Change`);
-                    if (data.price > 0) {
-                        const changeText = `${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%`;
-                        changeEl.textContent = changeText;
-                        changeEl.className = 'index-change ' + (data.changePercent >= 0 ? 'positive' : 'negative');
-                    } else {
-                        changeEl.textContent = '---%';
-                        changeEl.className = 'index-change';
-                    }
-                    
-                    // Update timestamp
-                    document.getElementById(`${index.id}Time`).textContent = timeString;
-                    
-                    // Update card border color
-                    const cardEl = document.getElementById(`${index.id}Card`);
-                    if (data.price > 0) {
-                        cardEl.className = 'index-card ' + (data.changePercent >= 0 ? 'positive' : 'negative');
-                    }
-                } catch (error) {
-                    console.error(`Error fetching ${index.symbol}:`, error);
-                    document.getElementById(`${index.id}Price`).textContent = 'Error';
-                    document.getElementById(`${index.id}Change`).textContent = 'Check console';
-                }
-            }
-            
-            // Update market status disclaimer
-            const disclaimer = document.querySelector('.market-status span:last-child');
-            if (disclaimer) {
-                if (hasRealData) {
-                    disclaimer.textContent = `✓ Real data via ETFs (used ${apiCallsUsed} API calls)`;
-                    disclaimer.style.color = '#34d399';
-                } else {
-                    disclaimer.textContent = '❌ No real data - Check Alpha Vantage API key';
-                    disclaimer.style.color = '#f87171';
-                }
-            }
-            
-            // Update market status
-            updateMarketStatus();
-            console.log('Market indices update complete');
-        }
-
-        // Get index price using Alpha Vantage (real data, uses API calls)
-        async function getIndexPrice(symbol, basePrice) {
-            // Map indices to their corresponding ETFs for tracking
-            const etfMapping = {
-                '^GSPC': 'SPY',   // S&P 500 ETF
-                '^IXIC': 'QQQ',   // NASDAQ ETF
-                '^DJI': 'DIA'     // Dow Jones ETF
-            };
-            
-            const etfSymbol = etfMapping[symbol];
-            
-            if (!etfSymbol) {
-                console.error('No ETF mapping for', symbol);
-                return { price: 0, changePercent: 0, change: 0, isReal: false, error: true };
-            }
-            
-            try {
-                // Get the ETF price data
-                const priceData = await getStockPrice(etfSymbol);
-                
-                if (!priceData || !priceData.isReal) {
-                    throw new Error('Failed to get real ETF data');
-                }
-                
-                // Return the ETF data directly - we'll normalize it in the chart
-                return {
-                    price: priceData.price,
-                    changePercent: priceData.changePercent || 0,
-                    change: priceData.change || 0,
-                    isReal: priceData.isReal,
-                    etfSymbol: etfSymbol
-                };
-            } catch (error) {
-                console.error(`Error fetching index ETF price for ${symbol} (${etfSymbol}):`, error);
-                
-                // Return error state
-                return {
-                    price: 0,
-                    changePercent: 0,
-                    change: 0,
-                    isReal: false,
-                    error: true
-                };
-            }
-        }
-
-        // Generate realistic mock index data (fallback only)
-        function updateMarketStatus() {
-            const now = new Date();
-            const day = now.getDay();
-            const hour = now.getHours();
-            const minute = now.getMinutes();
-            const currentTime = hour * 60 + minute;
-            
-            // Market hours: Mon-Fri, 9:30 AM - 4:00 PM EST (approximated)
-            const marketOpen = 9 * 60 + 30; // 9:30 AM
-            const marketClose = 16 * 60; // 4:00 PM
-            
-            const isWeekday = day >= 1 && day <= 5;
-            const isDuringMarketHours = currentTime >= marketOpen && currentTime < marketClose;
-            const isMarketOpen = isWeekday && isDuringMarketHours;
-            
-            const statusDot = document.getElementById('marketStatusDot');
-            const statusText = document.getElementById('marketStatusText');
-            
-            if (isMarketOpen) {
-                statusDot.className = 'market-status-dot open';
-                statusText.textContent = 'Markets are open';
-            } else if (isWeekday && currentTime < marketOpen) {
-                statusDot.className = 'market-status-dot closed';
-                const minutesUntilOpen = marketOpen - currentTime;
-                const hours = Math.floor(minutesUntilOpen / 60);
-                const mins = minutesUntilOpen % 60;
-                statusText.textContent = `Markets open in ${hours}h ${mins}m`;
-            } else if (isWeekday && currentTime >= marketClose) {
-                statusDot.className = 'market-status-dot closed';
-                statusText.textContent = 'Markets are closed';
-            } else {
-                statusDot.className = 'market-status-dot closed';
-                statusText.textContent = 'Markets closed (Weekend)';
-            }
-        }
-
         // Chat functionality
         function addChatMessage(text, sender = 'user') {
             const chatMessages = document.getElementById('chatMessages');
@@ -7423,10 +7129,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const avatar = sender === 'user' ? '👤' : '🤖';
             const name = sender === 'user' ? 'You' : 'APEX';
             
-            // Format APEX's text for readability
-            let formattedText = text;
+            // Format text for readability (escape first to prevent XSS)
+            let formattedText = escapeHtml(text);
             if (sender === 'agent') {
-                formattedText = text
+                formattedText = formattedText
                     // Add line breaks after **bold sections** (his headers)
                     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong><br>')
                     // Add spacing after sentences ending with periods (but not numbers like 1.5)

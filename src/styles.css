@@ -394,16 +394,11 @@
             gap: 20px;
         }
 
-        .chart-card { /* uses .card base */ }
-
         .chart-card canvas#performanceChart {
             max-height: 310px;
         }
 
         /* ── Collapsible Section Pattern ───────────────────── */
-        .collapsible-section {
-            /* no margin — handled by gap on parent */
-        }
 
         .section-header {
             display: flex;
@@ -470,24 +465,6 @@
 
         .holding-item:last-child {
             border-bottom: none;
-        }
-
-        .holding-symbol {
-            font-weight: 700;
-            font-size: 15px;
-            color: var(--text-primary);
-        }
-
-        .holding-shares {
-            font-size: 13px;
-            color: var(--text-muted);
-        }
-
-        .holding-value { text-align: right; }
-
-        .holding-price {
-            font-weight: 600;
-            color: var(--text-primary);
         }
 
         /* Holdings card (rich card in updateUI) */
@@ -587,7 +564,7 @@
             display: none;
             position: fixed;
             z-index: 200;
-            width: 520px;
+            width: min(520px, calc(100vw - 32px));
             max-height: 350px;
             overflow-y: auto;
             background: var(--bg-surface);
@@ -950,41 +927,7 @@
             opacity: 0.85;
         }
 
-        .name-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .name-option {
-            padding: 18px;
-            background: var(--bg-raised);
-            border: 1px solid var(--border-medium);
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            transition: all var(--transition-fast);
-        }
-
-        .name-option:hover {
-            border-color: var(--accent);
-            background: var(--accent-dim);
-        }
-
-        .name-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-        }
-
-        .name-subtitle {
-            font-size: 11px;
-            color: var(--text-muted);
-        }
-
         /* ── Chat Interface ────────────────────────────────── */
-        .chat-section { margin-top: 0; }
 
         .chat-gate {
             display: flex;
@@ -1202,36 +1145,6 @@
         .index-change {
             font-size: 13px;
             font-weight: 600;
-        }
-
-        .index-timestamp {
-            font-size: 10px;
-            color: var(--text-faint);
-            margin-top: 6px;
-        }
-
-        .market-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: var(--bg-inset);
-            border-radius: var(--radius-sm);
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-
-        .market-status-dot {
-            font-size: 10px;
-            animation: marketPulse 2s ease-in-out infinite;
-        }
-
-        .market-status-dot.open { color: var(--green); }
-        .market-status-dot.closed { color: var(--text-faint); }
-
-        @keyframes marketPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
         }
 
         /* ── Sub-Stats ─────────────────────────────────────── */
@@ -1802,11 +1715,6 @@
             margin-top: 4px;
         }
 
-        .rr-stat-sub {
-            font-size: 10px;
-            color: var(--text-faint);
-        }
-
         /* Hold Time bars */
         .hold-time-row {
             display: flex;
@@ -2082,27 +1990,6 @@
         .post-exit-after.good-exit { color: var(--green); }
         .post-exit-after.early-exit { color: var(--red); }
 
-        /* ── Journal Entries ───────────────────────────────── */
-        .journal-entry {
-            border-left: 2px solid var(--accent);
-            padding: 10px 12px;
-            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-            margin-bottom: 8px;
-            background: var(--bg-inset);
-        }
-
-        .journal-entry-time {
-            font-size: 10px;
-            color: var(--text-faint);
-            margin-bottom: 4px;
-        }
-
-        .journal-entry-text {
-            color: var(--text-secondary);
-            font-size: 12px;
-            line-height: 1.5;
-        }
-
         /* ── Empty State ───────────────────────────────────── */
         .empty-state {
             text-align: center;
@@ -2157,7 +2044,7 @@
             display: none;
             position: absolute;
             z-index: 100;
-            width: 400px;
+            width: min(400px, calc(100vw - 32px));
             max-height: 450px;
             overflow-y: auto;
             background: var(--bg-surface);
