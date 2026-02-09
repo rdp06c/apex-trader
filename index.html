@@ -2374,6 +2374,9 @@
             color: var(--text-secondary);
         }
 
+        .scorecard-table td.positive { color: var(--green); }
+        .scorecard-table td.negative { color: var(--red); }
+
         .scorecard-table tr:hover td {
             background: var(--bg-hover);
         }
@@ -3198,10 +3201,12 @@
             'KEY': 'Financial', 'FITB': 'Financial', 'CFG': 'Financial', 'HBAN': 'Financial',
             'MTB': 'Financial', 'STT': 'Financial', 'BK': 'Financial', 'NTRS': 'Financial',
             'STATE': 'Financial', 'CMA': 'Financial', 'ZION': 'Financial', 'FHN': 'Financial',
-            
+            'WRB': 'Financial', 'CB': 'Financial', 'TRV': 'Financial', 'ALL': 'Financial',
+            'PGR': 'Financial', 'AIG': 'Financial', 'MET': 'Financial', 'PRU': 'Financial',
+
             // Growth Tech/Consumer
             'DKNG': 'Technology', 'RBLX': 'Technology', 'U': 'Technology', 'PINS': 'Technology',
-            'SNAP': 'Technology', 'SPOT': 'Technology', 'ROKU': 'Technology', 'ABNB': 'Consumer',
+            'SNAP': 'Technology', 'SPOT': 'Technology', 'ABNB': 'Consumer',
             'LYFT': 'Technology', 'DASH': 'Consumer', 'UBER': 'Technology', 'CPNG': 'Consumer',
             'SHOP': 'Technology', 'SE': 'Consumer', 'BABA': 'Consumer', 'JD': 'Consumer',
             'PDD': 'Consumer', 'BKNG': 'Consumer', 'EXPE': 'Consumer', 'TCOM': 'Consumer', 'TRIP': 'Consumer',
@@ -3296,7 +3301,7 @@
             'AIN': 'Defense', 'GMS': 'Defense', 'MLI': 'Defense', 'B': 'Defense',
             'RUSHA': 'Defense', 'AMSWA': 'Defense', 'PLXS': 'Defense', 'NPAB': 'Defense',
             'VECO': 'Defense', 'POWI': 'Defense', 'VICR': 'Defense', 'MYRG': 'Defense',
-            'DY': 'Defense', 'APOG': 'Defense', 'HSII': 'Defense',
+            'DY': 'Defense', 'APOG': 'Defense', 'HSII': 'Defense', 'IMOS': 'Defense',
             
             // Index Funds (not tracked in portfolio)
             'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund'
@@ -5332,7 +5337,16 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     const flow = sectorRotation[sector]?.moneyFlow;
                     const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
                     const strBonus = (struct?.structureScore || 0) * 0.75;
-                    dryRunScored.push({ symbol, compositeScore: momScore + rsNorm + sBonus + strBonus, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: struct?.structureScore || 0, structure: struct?.structure || 'unknown' });
+                    // Use snapshot changePercent, but on weekends/closed (0%) fall back to last bar's return
+                    let dayChg = data.changePercent || 0;
+                    if (dayChg === 0) {
+                        const bars = multiDayCache[symbol];
+                        if (bars && bars.length >= 2) {
+                            const last = bars[bars.length - 1], prev = bars[bars.length - 2];
+                            dayChg = prev.c ? ((last.c - prev.c) / prev.c) * 100 : 0;
+                        }
+                    }
+                    dryRunScored.push({ symbol, compositeScore: momScore + rsNorm + sBonus + strBonus, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: struct?.structureScore || 0, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)) });
                 });
 
                 // Persist candidate scores from dry run
@@ -5899,16 +5913,28 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 // Persist top candidate scores for dashboard display
                 portfolio.lastCandidateScores = {
                     timestamp: new Date().toISOString(),
-                    candidates: scoredStocks.slice(0, 40).map(s => ({
-                        symbol: s.symbol,
-                        compositeScore: s.compositeScore,
-                        momentum: s.data.momentum?.score || 0,
-                        rs: s.data.relativeStrength?.rsScore || 0,
-                        sector: s.data.sector || 'Unknown',
-                        sectorBonus: s.data.sectorRotation?.moneyFlow === 'inflow' ? 2 : s.data.sectorRotation?.moneyFlow === 'modest-inflow' ? 1 : s.data.sectorRotation?.moneyFlow === 'outflow' ? -1 : 0,
-                        structureScore: s.data.marketStructure?.structureScore || 0,
-                        structure: s.data.marketStructure?.structure || 'unknown'
-                    }))
+                    candidates: scoredStocks.slice(0, 40).map(s => {
+                        // Use snapshot changePercent, but on weekends/closed market (0%) fall back to last bar's return
+                        let dayChg = s.data.changePercent || 0;
+                        if (dayChg === 0) {
+                            const bars = multiDayCache[s.symbol];
+                            if (bars && bars.length >= 2) {
+                                const last = bars[bars.length - 1], prev = bars[bars.length - 2];
+                                dayChg = prev.c ? ((last.c - prev.c) / prev.c) * 100 : 0;
+                            }
+                        }
+                        return {
+                            symbol: s.symbol,
+                            compositeScore: s.compositeScore,
+                            momentum: s.data.momentum?.score || 0,
+                            rs: s.data.relativeStrength?.rsScore || 0,
+                            sector: s.data.sector || 'Unknown',
+                            sectorBonus: s.data.sectorRotation?.moneyFlow === 'inflow' ? 2 : s.data.sectorRotation?.moneyFlow === 'modest-inflow' ? 1 : s.data.sectorRotation?.moneyFlow === 'outflow' ? -1 : 0,
+                            structureScore: s.data.marketStructure?.structureScore || 0,
+                            structure: s.data.marketStructure?.structure || 'unknown',
+                            dayChange: parseFloat(dayChg.toFixed(2))
+                        };
+                    })
                 };
 
                 // 3. Build the candidate list
@@ -6042,7 +6068,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            model: 'claude-sonnet-4-20250514',
+                            model: 'claude-sonnet-4-5-20250929',
                             max_tokens: 4000,
                             tools: [{ type: "web_search_20250305", name: "web_search" }],
                             messages: [{ role: 'user', content: `You are APEX, an AI trading agent. PHASE 1: HOLDINGS REVIEW ONLY.
@@ -6243,7 +6269,7 @@ Include a decision for EVERY holding.` }]
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: 'claude-sonnet-4-5-20250929',
                         max_tokens: 8000,
                         tools: [{
                             type: "web_search_20250305",
@@ -10215,7 +10241,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: 'claude-sonnet-4-5-20250929',
                         max_tokens: 1500,
                         system: `You are APEX (Autonomous Portfolio EXpert), an AI trading agent created by ARC Investments. Confident but self-aware trader, patient teacher who explains the "why" behind decisions, light humor to keep it engaging. Aggressive swing-trading strategy — calculated risks, let winners run, cut losers fast.
 
@@ -10359,7 +10385,7 @@ Current Portfolio:
             const holdingSymbols = new Set(Object.keys(portfolio.holdings));
 
             let html = '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
-                '<th>#</th><th>Symbol</th><th>Score</th><th>Mom</th><th>RS</th><th>Sector</th><th>Structure</th>' +
+                '<th>#</th><th>Symbol</th><th>Score</th><th>Day</th><th>Mom</th><th>RS</th><th>Sector</th><th>Structure</th>' +
                 '</tr></thead><tbody>';
 
             data.candidates.forEach((c, i) => {
@@ -10368,11 +10394,14 @@ Current Portfolio:
                 const pct = Math.max(0, Math.min(100, (score / maxScore) * 100));
                 const held = holdingSymbols.has(c.symbol);
                 const structLabel = (c.structure || 'unknown').replace(/_/g, ' ');
+                const dayChg = c.dayChange || 0;
+                const dayClass = dayChg > 0 ? 'positive' : dayChg < 0 ? 'negative' : '';
 
                 html += `<tr>
                     <td class="scorecard-rank">${i + 1}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}</td>
                     <td><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span></div></td>
+                    <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td>${(c.momentum || 0).toFixed(1)}</td>
                     <td>${(c.rs || 0).toFixed(0)}</td>
                     <td>${c.sector || '--'}</td>

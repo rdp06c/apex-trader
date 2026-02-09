@@ -2361,6 +2361,9 @@
             color: var(--text-secondary);
         }
 
+        .scorecard-table td.positive { color: var(--green); }
+        .scorecard-table td.negative { color: var(--red); }
+
         .scorecard-table tr:hover td {
             background: var(--bg-hover);
         }
