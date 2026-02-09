@@ -171,8 +171,8 @@ The Anthropic API is not called directly from the browser. All Claude API calls 
 ### API Cost Consciousness
 - Polygon Stocks Starter plan – unlimited API calls, but the app still uses caching (4hr TTL for individual prices, 60s for bulk snapshots) to avoid unnecessary requests and keep responses fast
 - Claude API calls are expensive – freshness checks prevent wasting analysis on stale data
-- Phase 1 uses `claude-sonnet-4-20250514` with `max_tokens: 4000`
-- Phase 2 uses `claude-sonnet-4-20250514` with `max_tokens: 8000`
+- Phase 1 uses `claude-sonnet-4-5-20250929` with `max_tokens: 4000`
+- Phase 2 uses `claude-sonnet-4-5-20250929` with `max_tokens: 8000`
 - Chat uses `max_tokens: 1500`
 
 ### Anti-Whipsaw Protections (5 layers)
