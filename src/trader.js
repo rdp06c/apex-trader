@@ -1203,6 +1203,367 @@
             } catch (e) { console.warn('Could not persist 5-day cache:', e.message); }
         }
         
+        // Store raw bulk snapshot data (with day OHLCV) for synthetic today bar in grouped daily
+        let bulkSnapshotRaw = {};
+
+        // === GROUPED DAILY BARS: Fetch OHLCV for all stocks via per-date grouped endpoint ===
+        // Replaces per-ticker fetching with ~40 date-based API calls (one per trading day)
+        async function fetchGroupedDailyBars(symbolSet) {
+            // Restore from localStorage cache if fresh enough
+            try {
+                const cached = localStorage.getItem('multiDayCache');
+                const ts = parseInt(localStorage.getItem('multiDayCacheTs') || '0');
+                if (cached && Date.now() - ts < MULTIDAY_CACHE_TTL) {
+                    multiDayCache = JSON.parse(cached);
+                    const hitCount = [...symbolSet].filter(s => multiDayCache[s]).length;
+                    console.log(`📦 Restored ${hitCount}/${symbolSet.size} stocks from grouped daily cache (${Math.round((Date.now() - ts) / 60000)}min old)`);
+                    if (hitCount >= symbolSet.size * 0.8) return; // Good enough cache hit
+                }
+            } catch { /* ignore cache errors */ }
+
+            multiDayCache = {};
+
+            // Compute 40 most recent weekdays (skip Sat/Sun)
+            const tradingDates = [];
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            while (tradingDates.length < 40) {
+                d.setDate(d.getDate() - 1);
+                const dow = d.getDay();
+                if (dow !== 0 && dow !== 6) { // Skip Sunday (0) and Saturday (6)
+                    const yyyy = d.getFullYear();
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    tradingDates.push(`${yyyy}-${mm}-${dd}`);
+                }
+            }
+            tradingDates.reverse(); // Oldest first
+
+            console.log(`📊 Fetching grouped daily bars for ${tradingDates.length} trading days...`);
+
+            const BATCH = 5, DELAY = 100;
+            let fetchedDates = 0, skippedDates = 0;
+
+            for (let i = 0; i < tradingDates.length; i += BATCH) {
+                const batch = tradingDates.slice(i, i + BATCH);
+                const results = await Promise.all(batch.map(async (dateStr) => {
+                    try {
+                        const response = await fetch(
+                            `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${dateStr}?adjusted=true&apiKey=${POLYGON_API_KEY}`
+                        );
+                        if (!response.ok) return { dateStr, results: [] };
+                        const data = await response.json();
+                        if (data.resultsCount === 0 || !data.results) {
+                            return { dateStr, results: [] }; // Holiday or no data
+                        }
+                        return { dateStr, results: data.results };
+                    } catch (err) {
+                        console.warn(`Grouped daily fetch failed for ${dateStr}:`, err.message);
+                        return { dateStr, results: [] };
+                    }
+                }));
+
+                for (const { dateStr, results } of results) {
+                    if (results.length === 0) { skippedDates++; continue; }
+                    fetchedDates++;
+                    for (const bar of results) {
+                        if (!symbolSet.has(bar.T)) continue; // Filter to our universe
+                        if (!multiDayCache[bar.T]) multiDayCache[bar.T] = [];
+                        multiDayCache[bar.T].push({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v, t: bar.t });
+                    }
+                }
+
+                if (i + BATCH < tradingDates.length) await new Promise(r => setTimeout(r, DELAY));
+            }
+
+            // Sort each ticker's bars by timestamp ascending
+            for (const sym of Object.keys(multiDayCache)) {
+                multiDayCache[sym].sort((a, b) => a.t - b.t);
+            }
+
+            // Append synthetic bar for today from bulk snapshot's day data
+            // (bulk snapshot is already fetched at this point)
+            if (Object.keys(bulkSnapshotRaw).length > 0) {
+                for (const sym of symbolSet) {
+                    const raw = bulkSnapshotRaw[sym];
+                    if (raw && raw.day && raw.day.o) {
+                        if (!multiDayCache[sym]) multiDayCache[sym] = [];
+                        const todayBar = { o: raw.day.o, h: raw.day.h, l: raw.day.l, c: raw.day.c, v: raw.day.v, t: Date.now() };
+                        // Only append if last bar isn't already today
+                        const lastBar = multiDayCache[sym][multiDayCache[sym].length - 1];
+                        if (!lastBar || new Date(lastBar.t).toDateString() !== new Date().toDateString()) {
+                            multiDayCache[sym].push(todayBar);
+                        }
+                    }
+                }
+            }
+
+            const totalSymbols = Object.keys(multiDayCache).length;
+            console.log(`✅ Grouped daily bars: ${totalSymbols} stocks, ${fetchedDates} dates fetched, ${skippedDates} holidays skipped`);
+
+            // Persist to localStorage
+            try {
+                localStorage.setItem('multiDayCache', JSON.stringify(multiDayCache));
+                localStorage.setItem('multiDayCacheTs', String(Date.now()));
+            } catch (e) { console.warn('Could not persist grouped daily cache:', e.message); }
+        }
+
+        // === TECHNICAL INDICATORS (Client-Side from 40-bar data) ===
+
+        // RSI (Relative Strength Index) using Wilder's smoothing
+        function calculateRSI(bars, period = 14) {
+            if (!bars || bars.length < period + 1) return null;
+            let gainSum = 0, lossSum = 0;
+            for (let i = 1; i <= period; i++) {
+                const change = bars[i].c - bars[i - 1].c;
+                if (change > 0) gainSum += change;
+                else lossSum += Math.abs(change);
+            }
+            let avgGain = gainSum / period;
+            let avgLoss = lossSum / period;
+            for (let i = period + 1; i < bars.length; i++) {
+                const change = bars[i].c - bars[i - 1].c;
+                avgGain = (avgGain * (period - 1) + (change > 0 ? change : 0)) / period;
+                avgLoss = (avgLoss * (period - 1) + (change < 0 ? Math.abs(change) : 0)) / period;
+            }
+            if (avgLoss === 0) return 100;
+            const rs = avgGain / avgLoss;
+            return Math.round((100 - 100 / (1 + rs)) * 10) / 10;
+        }
+
+        // Simple Moving Average
+        function calculateSMA(bars, period = 20) {
+            if (!bars || bars.length < period) return null;
+            const slice = bars.slice(-period);
+            return Math.round(slice.reduce((sum, b) => sum + b.c, 0) / period * 100) / 100;
+        }
+
+        // Exponential Moving Average (returns array of EMA values for signal line calculation)
+        function calculateEMAArray(closes, period) {
+            if (closes.length < period) return [];
+            const multiplier = 2 / (period + 1);
+            const emaValues = [];
+            // SMA seed
+            let ema = closes.slice(0, period).reduce((s, c) => s + c, 0) / period;
+            emaValues.push(ema);
+            for (let i = period; i < closes.length; i++) {
+                ema = (closes[i] - ema) * multiplier + ema;
+                emaValues.push(ema);
+            }
+            return emaValues;
+        }
+
+        // MACD (12, 26, 9) — returns current values + crossover signal
+        function calculateMACD(bars) {
+            if (!bars || bars.length < 35) return null;
+            const closes = bars.map(b => b.c);
+            const ema12 = calculateEMAArray(closes, 12);
+            const ema26 = calculateEMAArray(closes, 26);
+            // Align: ema12 starts at index 12, ema26 starts at index 26
+            // MACD line starts when both are available (index 26 onward)
+            const offset = 26 - 12; // 14 — ema12 has 14 more values than ema26
+            const macdLine = [];
+            for (let i = 0; i < ema26.length; i++) {
+                macdLine.push(ema12[i + offset] - ema26[i]);
+            }
+            // Signal line = EMA(9) of MACD line
+            const signalLine = calculateEMAArray(macdLine, 9);
+            if (signalLine.length < 2) return null;
+            const signalOffset = macdLine.length - signalLine.length;
+            const currentMACD = macdLine[macdLine.length - 1];
+            const currentSignal = signalLine[signalLine.length - 1];
+            const prevMACD = macdLine[macdLine.length - 2];
+            const prevSignal = signalLine.length >= 2 ? signalLine[signalLine.length - 2] : currentSignal;
+            const histogram = currentMACD - currentSignal;
+            let crossover = 'none';
+            if (prevMACD <= prevSignal && currentMACD > currentSignal) crossover = 'bullish';
+            else if (prevMACD >= prevSignal && currentMACD < currentSignal) crossover = 'bearish';
+            return {
+                macd: Math.round(currentMACD * 1000) / 1000,
+                signal: Math.round(currentSignal * 1000) / 1000,
+                histogram: Math.round(histogram * 1000) / 1000,
+                crossover
+            };
+        }
+
+        // === TICKER DETAILS: Market Cap + SIC Description ===
+        let tickerDetailsCache = {};
+        const TICKER_DETAILS_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+        async function fetchTickerDetails(symbols) {
+            // Restore from localStorage
+            try {
+                const cached = localStorage.getItem('tickerDetailsCache');
+                const ts = parseInt(localStorage.getItem('tickerDetailsCacheTs') || '0');
+                if (cached && Date.now() - ts < TICKER_DETAILS_TTL) {
+                    tickerDetailsCache = JSON.parse(cached);
+                }
+            } catch { tickerDetailsCache = {}; }
+
+            const uncached = symbols.filter(s => !tickerDetailsCache[s]);
+            if (uncached.length === 0) {
+                console.log(`📦 Ticker details: all ${symbols.length} from cache`);
+                return;
+            }
+
+            console.log(`📋 Fetching ticker details for ${uncached.length} stocks...`);
+            const BATCH = 20, DELAY = 100;
+            let fetched = 0;
+            for (let i = 0; i < uncached.length; i += BATCH) {
+                const batch = uncached.slice(i, i + BATCH);
+                await Promise.all(batch.map(async (symbol) => {
+                    try {
+                        const response = await fetch(
+                            `https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`
+                        );
+                        if (!response.ok) return;
+                        const data = await response.json();
+                        if (data.results) {
+                            tickerDetailsCache[symbol] = {
+                                marketCap: data.results.market_cap || null,
+                                sicDescription: data.results.sic_description || null,
+                                name: data.results.name || null,
+                                sharesOutstanding: data.results.share_class_shares_outstanding || null
+                            };
+                            fetched++;
+                        }
+                    } catch (err) {
+                        console.warn(`Ticker details failed for ${symbol}:`, err.message);
+                    }
+                }));
+                if (i + BATCH < uncached.length) await new Promise(r => setTimeout(r, DELAY));
+            }
+
+            console.log(`✅ Ticker details: ${fetched} new, ${symbols.length - uncached.length} cached`);
+            try {
+                localStorage.setItem('tickerDetailsCache', JSON.stringify(tickerDetailsCache));
+                localStorage.setItem('tickerDetailsCacheTs', String(Date.now()));
+            } catch (e) { console.warn('Could not persist ticker details cache:', e.message); }
+        }
+
+        // === SHORT INTEREST ===
+        let shortInterestCache = {};
+        const SHORT_INTEREST_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+        async function fetchShortInterest(symbols) {
+            // Restore from localStorage
+            try {
+                const cached = localStorage.getItem('shortInterestCache');
+                const ts = parseInt(localStorage.getItem('shortInterestCacheTs') || '0');
+                if (cached && Date.now() - ts < SHORT_INTEREST_TTL) {
+                    shortInterestCache = JSON.parse(cached);
+                    const hitCount = symbols.filter(s => shortInterestCache[s]).length;
+                    if (hitCount > 0) {
+                        console.log(`📦 Short interest: ${hitCount}/${symbols.length} from cache`);
+                        if (hitCount >= symbols.length * 0.8) return;
+                    }
+                }
+            } catch { shortInterestCache = {}; }
+
+            console.log(`📉 Fetching short interest data...`);
+            const uncached = symbols.filter(s => !shortInterestCache[s]);
+            // Batch fetch using ticker.any_of parameter (up to 250 tickers per request)
+            const BATCH = 250;
+            for (let i = 0; i < uncached.length; i += BATCH) {
+                const batch = uncached.slice(i, i + BATCH);
+                try {
+                    const tickerParam = batch.join(',');
+                    const response = await fetch(
+                        `https://api.polygon.io/stocks/v1/short-interest?ticker.any_of=${tickerParam}&order=desc&limit=1000&sort=settlement_date&apiKey=${POLYGON_API_KEY}`
+                    );
+                    if (!response.ok) {
+                        console.warn(`Short interest fetch HTTP ${response.status}`);
+                        continue;
+                    }
+                    const data = await response.json();
+                    if (data.results) {
+                        // Keep only the most recent entry per ticker
+                        for (const entry of data.results) {
+                            const sym = entry.ticker;
+                            if (!shortInterestCache[sym]) {
+                                shortInterestCache[sym] = {
+                                    shortInterest: entry.short_volume || entry.current_short_position || 0,
+                                    daysToCover: entry.days_to_cover || 0,
+                                    avgDailyVolume: entry.avg_daily_volume || 0,
+                                    settlementDate: entry.settlement_date || null
+                                };
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Short interest fetch error:', err.message);
+                }
+            }
+
+            const totalCached = Object.keys(shortInterestCache).length;
+            console.log(`✅ Short interest: ${totalCached} stocks total`);
+            try {
+                localStorage.setItem('shortInterestCache', JSON.stringify(shortInterestCache));
+                localStorage.setItem('shortInterestCacheTs', String(Date.now()));
+            } catch (e) { console.warn('Could not persist short interest cache:', e.message); }
+        }
+
+        // === NEWS + SENTIMENT ===
+        let newsCache = {};
+        const NEWS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+        async function fetchNewsForStocks(symbols) {
+            // Restore from localStorage
+            try {
+                const cached = localStorage.getItem('newsCache');
+                const ts = parseInt(localStorage.getItem('newsCacheTs') || '0');
+                if (cached && Date.now() - ts < NEWS_CACHE_TTL) {
+                    newsCache = JSON.parse(cached);
+                }
+            } catch { newsCache = {}; }
+
+            const uncached = symbols.filter(s => !newsCache[s]);
+            if (uncached.length === 0) {
+                console.log(`📦 News: all ${symbols.length} from cache`);
+                return;
+            }
+
+            console.log(`📰 Fetching news for ${uncached.length} stocks...`);
+            const BATCH = 10, DELAY = 100;
+            let fetched = 0;
+            for (let i = 0; i < uncached.length; i += BATCH) {
+                const batch = uncached.slice(i, i + BATCH);
+                await Promise.all(batch.map(async (symbol) => {
+                    try {
+                        const response = await fetch(
+                            `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=3&order=desc&sort=published_utc&apiKey=${POLYGON_API_KEY}`
+                        );
+                        if (!response.ok) return;
+                        const data = await response.json();
+                        if (data.results && data.results.length > 0) {
+                            newsCache[symbol] = data.results.map(article => {
+                                // Find sentiment for this specific ticker from insights array
+                                const insight = (article.insights || []).find(ins => ins.ticker === symbol);
+                                return {
+                                    title: article.title,
+                                    publishedUtc: article.published_utc,
+                                    sentiment: insight?.sentiment || null,
+                                    sentimentReasoning: insight?.sentiment_reasoning || null
+                                };
+                            });
+                            fetched++;
+                        } else {
+                            newsCache[symbol] = []; // Mark as fetched (no news)
+                        }
+                    } catch (err) {
+                        console.warn(`News fetch failed for ${symbol}:`, err.message);
+                    }
+                }));
+                if (i + BATCH < uncached.length) await new Promise(r => setTimeout(r, DELAY));
+            }
+
+            console.log(`✅ News: ${fetched} new, ${symbols.length - uncached.length} cached`);
+            try {
+                localStorage.setItem('newsCache', JSON.stringify(newsCache));
+                localStorage.setItem('newsCacheTs', String(Date.now()));
+            } catch (e) { console.warn('Could not persist news cache:', e.message); }
+        }
+
         // Calculate REAL 5-day momentum score (uses last 5 bars from 20-day cache)
         function calculate5DayMomentum(priceData, symbol) {
             const allBars = multiDayCache[symbol];
@@ -1541,7 +1902,12 @@
                     apiCallsToday++;
                     saveApiUsage();
                     updateApiUsageDisplay();
-                    
+
+                    // Store raw ticker data for synthetic today bar in grouped daily bars
+                    data.tickers.forEach(ticker => {
+                        bulkSnapshotRaw[ticker.ticker] = ticker;
+                    });
+
                     console.log(`✅ Bulk snapshot: ${Object.keys(result).length}/${symbols.length} tickers in 1 API call`);
                     return result;
                 }
@@ -2707,12 +3073,21 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 const snapshotTime = performance.now();
                 console.log(`⏱️ Snapshot phase: ${((snapshotTime - startTime) / 1000).toFixed(2)}s`);
                 
-                // Step 2: Fetch 20-day history for all symbols
-                thinkingDetail.textContent = `🧪 Fetching 20-day price history...`;
-                await fetchAll5DayHistories(symbols);
+                // Step 2: Fetch 40-day grouped daily bars + ticker details + short interest
+                thinkingDetail.textContent = `🧪 Fetching 40-day grouped daily bars + details...`;
+                try {
+                    await Promise.all([
+                        fetchGroupedDailyBars(new Set(symbols)),
+                        fetchTickerDetails(symbols),
+                        fetchShortInterest(symbols)
+                    ]);
+                } catch (groupedErr) {
+                    console.warn('Grouped daily bars failed, falling back to per-ticker:', groupedErr.message);
+                    await fetchAll5DayHistories(symbols);
+                }
                 const historyTime = performance.now();
                 console.log(`⏱️ History phase: ${((historyTime - snapshotTime) / 1000).toFixed(2)}s`);
-                console.log(`✅ 20-day history cached for ${Object.keys(multiDayCache).length}/${symbols.length} stocks`);
+                console.log(`✅ 40-day history cached for ${Object.keys(multiDayCache).length}/${symbols.length} stocks`);
                 
                 // Step 3: Run enhanced analysis (momentum, RS, structure)
                 thinkingDetail.textContent = `🧪 Running momentum, RS, and structure analysis...`;
@@ -2748,20 +3123,35 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     const flow = sectorRotation[sector]?.moneyFlow;
                     const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
                     const strBonus = (struct?.structureScore || 0) * 0.75;
+                    // Technical indicators
+                    const drBars = multiDayCache[symbol];
+                    const drRsi = calculateRSI(drBars);
+                    const drMacd = calculateMACD(drBars);
+                    const drRsiBonus = drRsi != null ? (drRsi < 30 ? 1.5 : drRsi > 70 ? -1.0 : 0) : 0;
+                    const drMacdBonus = drMacd?.crossover === 'bullish' ? 1.0 : drMacd?.crossover === 'bearish' ? -1.0 : 0;
+                    const drDtc = shortInterestCache[symbol]?.daysToCover || 0;
+                    const drStructScore = struct?.structureScore || 0;
+                    const drSqueezeBonus = (drDtc > 5 && drStructScore >= 1 && flow !== 'outflow') ? 1.5 : (drDtc > 3 && drStructScore >= 1) ? 0.75 : 0;
                     // Use snapshot changePercent, but on weekends/closed (0%) fall back to last bar's return
                     let dayChg = data.changePercent || 0;
                     if (dayChg === 0) {
-                        const bars = multiDayCache[symbol];
-                        if (bars && bars.length >= 2) {
-                            const last = bars[bars.length - 1], prev = bars[bars.length - 2];
+                        if (drBars && drBars.length >= 2) {
+                            const last = drBars[drBars.length - 1], prev = drBars[drBars.length - 2];
                             dayChg = prev.c ? ((last.c - prev.c) / prev.c) * 100 : 0;
                         }
                     }
-                    dryRunScored.push({ symbol, compositeScore: momScore + rsNorm + sBonus + strBonus, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: struct?.structureScore || 0, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)) });
+                    dryRunScored.push({ symbol, compositeScore: momScore + rsNorm + sBonus + strBonus + drRsiBonus + drMacdBonus + drSqueezeBonus, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null });
                 });
 
-                // Persist candidate scores from dry run
+                // Fetch news for top candidates + holdings
                 dryRunScored.sort((a, b) => b.compositeScore - a.compositeScore);
+                const drNewsSymbols = [...new Set([
+                    ...dryRunScored.slice(0, 25).map(s => s.symbol),
+                    ...Object.keys(portfolio.holdings)
+                ])];
+                await fetchNewsForStocks(drNewsSymbols);
+
+                // Persist candidate scores from dry run
                 portfolio.lastCandidateScores = {
                     timestamp: new Date().toISOString(),
                     candidates: dryRunScored.slice(0, 40)
@@ -2826,7 +3216,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 
                 showResultModal('Dry Run Complete', [
                     { label: 'Prices Fetched', value: `${Object.keys(marketData).length} / ${symbols.length}`, cls: 'success' },
-                    { label: 'Price Histories', value: `${Object.keys(multiDayCache).length} (20-day bars)` },
+                    { label: 'Price Histories', value: `${Object.keys(multiDayCache).length} (40-day bars)` },
                     { label: 'Bullish', value: structureStats.bullish, cls: 'success' },
                     { label: 'Bearish', value: structureStats.bearish, cls: 'error' },
                     { label: 'CHoCH Signals', value: structureStats.choch },
@@ -3200,12 +3590,22 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 }
 
                 // === ENHANCED MARKET ANALYSIS ===
-                thinkingDetail.textContent = 'Fetching 5-day price histories for real momentum...';
+                thinkingDetail.textContent = 'Fetching 40-day grouped daily bars + ticker details + short interest...';
                 console.log('🧠 Running enhanced market analysis...');
-                
-                // 0. Fetch 5-day price history for all stocks
+
+                // 0. Fetch data in parallel: grouped daily bars, ticker details, short interest
                 const allSymbolsFetched = Object.keys(marketData);
-                await fetchAll5DayHistories(allSymbolsFetched);
+                const allSymbolSet = new Set(allSymbolsFetched);
+                try {
+                    await Promise.all([
+                        fetchGroupedDailyBars(allSymbolSet),
+                        fetchTickerDetails(allSymbolsFetched),
+                        fetchShortInterest(allSymbolsFetched)
+                    ]);
+                } catch (groupedErr) {
+                    console.warn('Grouped daily bars failed, falling back to per-ticker fetch:', groupedErr.message);
+                    await fetchAll5DayHistories(allSymbolsFetched);
+                }
                 
                 // 1. Calculate sector rotation patterns (now uses multi-day data)
                 const sectorRotation = detectSectorRotation(marketData);
@@ -3236,7 +3636,13 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     
                     // Detect market structure (CHoCH, BOS, sweeps, FVG)
                     const marketStructure = detectStructure(symbol);
-                    
+
+                    // Technical indicators (RSI, SMA, MACD) from 40-bar data
+                    const bars = multiDayCache[symbol];
+                    const rsi = calculateRSI(bars);
+                    const sma20 = calculateSMA(bars, 20);
+                    const macd = calculateMACD(bars);
+
                     // Combine all data
                     enhancedMarketData[symbol] = {
                         ...data,
@@ -3244,7 +3650,13 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                         momentum: momentum,
                         relativeStrength: relativeStrength,
                         sectorRotation: sectorRotation[sector],
-                        marketStructure: marketStructure
+                        marketStructure: marketStructure,
+                        rsi: rsi,
+                        sma20: sma20,
+                        macd: macd,
+                        marketCap: tickerDetailsCache[symbol]?.marketCap || null,
+                        shortInterest: shortInterestCache[symbol] || null,
+                        recentNews: newsCache[symbol] || null
                     };
                 });
 
@@ -3320,7 +3732,22 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                         && data.sectorRotation?.moneyFlow !== 'outflow') ? 1
                         : 0;
 
-                    const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus + bigMoverBonus + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty;
+                    // RSI bonus/penalty: oversold = opportunity, overbought = caution
+                    const stockRsi = data.rsi;
+                    const rsiBonusPenalty = stockRsi != null ? (stockRsi < 30 ? 1.5 : stockRsi > 70 ? -1.0 : 0) : 0;
+
+                    // MACD bonus: bullish crossover = momentum shifting positive
+                    const macdCross = data.macd?.crossover;
+                    const macdBonus = macdCross === 'bullish' ? 1.0 : macdCross === 'bearish' ? -1.0 : 0;
+
+                    // Squeeze bonus: high short interest + bullish structure = squeeze potential
+                    const dtc = data.shortInterest?.daysToCover || 0;
+                    const structScore = data.marketStructure?.structureScore ?? 0;
+                    const squeezeBonus = (dtc > 5 && structScore >= 1 && data.sectorRotation?.moneyFlow !== 'outflow') ? 1.5
+                        : (dtc > 3 && structScore >= 1) ? 0.75
+                        : 0;
+
+                    const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus + bigMoverBonus + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + rsiBonusPenalty + macdBonus + squeezeBonus;
                     
                     return { symbol, compositeScore, data };
                 });
@@ -3350,7 +3777,12 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                             sectorBonus: s.data.sectorRotation?.moneyFlow === 'inflow' ? 2 : s.data.sectorRotation?.moneyFlow === 'modest-inflow' ? 1 : s.data.sectorRotation?.moneyFlow === 'outflow' ? -1 : 0,
                             structureScore: s.data.marketStructure?.structureScore || 0,
                             structure: s.data.marketStructure?.structure || 'unknown',
-                            dayChange: parseFloat(dayChg.toFixed(2))
+                            dayChange: parseFloat(dayChg.toFixed(2)),
+                            rsi: s.data.rsi,
+                            macdCrossover: s.data.macd?.crossover || 'none',
+                            marketCap: s.data.marketCap,
+                            daysToCover: s.data.shortInterest?.daysToCover || 0,
+                            name: tickerDetailsCache[s.symbol]?.name || null
                         };
                     })
                 };
@@ -3447,6 +3879,21 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 console.log(`📊 Includes: Top ${TOP_N} by score, ${holdingSymbols.length} current holdings, ${wildCardsAdded} wild cards, ${reversalsAdded} reversal candidates`);
                 console.log(`📈 Candidates:`, [...topCandidates]);
 
+                // Fetch news for top candidates + holdings (limited set, not all 300)
+                const newsSymbols = [...new Set([
+                    ...scoredStocks.slice(0, 25).map(s => s.symbol),
+                    ...Object.keys(portfolio.holdings)
+                ])];
+                thinkingDetail.textContent = `Fetching news for ${newsSymbols.length} stocks...`;
+                await fetchNewsForStocks(newsSymbols);
+
+                // Inject news into enhancedMarketData (and filteredMarketData, which references same objects)
+                newsSymbols.forEach(symbol => {
+                    if (enhancedMarketData[symbol]) {
+                        enhancedMarketData[symbol].recentNews = newsCache[symbol] || null;
+                    }
+                });
+
                 // Build TOP BUY OPPORTUNITIES summary for Phase 1 (opportunity cost awareness)
                 // Phase 1 only sees holdings — without this, it can't weigh "hold mediocre position" vs "sell and buy something better"
                 const topBuyOpportunities = scoredStocks
@@ -3529,7 +3976,11 @@ Holdings: ${(() => {
                     bos: holdingsData[sym]?.marketStructure?.bos ?? null,
                     liquiditySweep: holdingsData[sym]?.marketStructure?.liquiditySweep ?? false,
                     fvgCount: holdingsData[sym]?.marketStructure?.fvgs?.length ?? 0
-                }
+                },
+                rsi: holdingsData[sym]?.rsi ?? null,
+                macdSignal: holdingsData[sym]?.macd?.crossover ?? 'none',
+                shortInterest: holdingsData[sym]?.shortInterest ? { daysToCover: holdingsData[sym].shortInterest.daysToCover } : null,
+                recentNews: (holdingsData[sym]?.recentNews || []).slice(0, 2).map(n => ({ title: n.title, sentiment: n.sentiment }))
             } };
         if (hh < 24) eh[sym].WARNING = 'RECENTLY PURCHASED - only sell on negative catalyst';
     });
@@ -3733,6 +4184,8 @@ CRITICAL RESEARCH REQUIREMENTS:
 You have web_search tool available. Use it STRATEGICALLY to find CATALYSTS that will drive future moves.
 
 SEARCH PHILOSOPHY - Find What Will Move Stocks TOMORROW, Not What Moved Them TODAY:
+• You have PRE-LOADED recent headlines + machine sentiment for each candidate (in recentNews)
+• Use pre-loaded news as CATALYST CLUES — deep dive the most promising ones with web search
 • Focus on CATALYSTS (earnings beats, contracts, launches, upgrades)
 • Look for UPCOMING events (guidance, product releases, regulatory decisions)
 • Identify SECTOR tailwinds (industry trends, macro factors)
@@ -3892,6 +4345,12 @@ Search and verify:
 ✅ Profitability and margins (improving = good)
 ✅ Market position (leader vs challenger)
 ✅ Competitive advantages (moat strength)
+✅ Market cap context (provided in data — large cap = more liquid, small cap = more volatile)
+
+Short Interest Consideration:
+• daysToCover >5 + bullish structure + catalyst = potential SHORT SQUEEZE play
+• High short interest adds upside convexity — shorts forced to cover amplifies moves
+• daysToCover >3 with bullish catalyst = heightened squeeze probability
 
 ────────────────────────────────────────────────────────────────
 
@@ -3902,6 +4361,8 @@ Use enhanced market data:
 • momentum.score (0-10)
 • relativeStrength.rsScore (0-100)
 • momentum.trend (building/fading/neutral)
+• rsi (0-100): RSI >70 + extended = overbought, wait for pullback. RSI <30 + bullish structure = oversold bounce setup
+• macd.crossover: 'bullish' = momentum shifting positive (confirmation signal), 'bearish' = momentum fading (caution)
 
 **EXTENDED — AVOID UNLESS EXCEPTIONAL (rsScore >85 AND momentum 8+):**
 Stocks in this zone have already moved significantly.
@@ -4677,7 +5138,7 @@ A stock flat today but up 8% over 5 days → HIGH momentum.
 A stock up 5% today but down over 5 days → MODERATE momentum (spike, weak trend).
 
 • marketStructure: { structure, structureSignal, structureScore, choch, chochType, bos, bosType, sweep, fvg, lastSwingHigh, lastSwingLow }
-  → Based on 20-day price bars. Detects swing highs/lows and structural shifts.
+  → Based on 40-day price bars. Detects swing highs/lows and structural shifts.
   → structure: 'bullish' (HH+HL), 'bearish' (LH+LL), 'ranging', 'contracting'
   → choch: true if Change of Character detected (trend reversal starting)
     • chochType 'bearish' = was bullish, now broke structure down. EXIT SIGNAL for longs.
@@ -4695,6 +5156,35 @@ HOW TO USE STRUCTURE DATA:
 - Bullish CHoCH + low-swept = potential reversal entry (smart money accumulated)
 - Bearish structure + sweep of highs = avoid (likely distribution)
 - FVG = price may return to fill the gap; use as entry zone for confirmed setups
+
+• rsi: 0-100 (RSI-14, Wilder's smoothing from 40-day bars)
+  → <30 = oversold (potential bounce setup if structure bullish)
+  → 30-70 = neutral zone
+  → >70 = overbought (caution — wait for pullback unless fresh catalyst)
+  → RSI + structure together: RSI <30 + bullish CHoCH = high-probability reversal
+
+• sma20: 20-day simple moving average price level
+  → Price above SMA20 = uptrend intact
+  → Price below SMA20 = trend weakening
+
+• macd: { macd, signal, histogram, crossover: 'bullish'|'bearish'|'none' }
+  → MACD(12,26,9) momentum oscillator
+  → crossover 'bullish' = MACD crossed above signal (momentum shifting positive)
+  → crossover 'bearish' = MACD crossed below signal (momentum fading)
+  → Use with structure: bullish MACD crossover + bullish BOS = strong confirmation
+
+• marketCap: company market capitalization in dollars (null if unavailable)
+  → Use for position sizing context (large cap = more liquid, small cap = more volatile)
+
+• shortInterest: { shortInterest, daysToCover, avgDailyVolume, settlementDate }
+  → daysToCover >5 + bullish structure = potential short squeeze candidate
+  → daysToCover >3 + catalyst = heightened squeeze potential
+  → High short interest adds upside convexity if catalyst triggers covering
+
+• recentNews: [{ title, publishedUtc, sentiment, sentimentReasoning }] (up to 3 recent articles)
+  → Machine-scored sentiment from Polygon (positive/negative/neutral)
+  → Use as catalyst CLUES — verify important headlines with web search
+  → Pre-loaded headlines save you search time; deep dive on the most promising ones
 
 CRITICAL REMINDERS:
 • Catalyst is the gate - without it (8+/10), don't trade

@@ -38,7 +38,7 @@ The build assembles `src/template.html` + `src/styles.css` + `src/body.html` + `
 ```
 Browser (index.html)
   ├── Cloudflare Worker proxy → Anthropic API (Claude Sonnet)
-  ├── Polygon.io API → Market data (snapshots, price history)
+  ├── Polygon.io API → Market data (snapshots, grouped daily bars, ticker details, short interest, news)
   ├── Google Drive API → Portfolio backup/restore, encrypted API key sync
   └── localStorage → Portfolio state, price cache, API keys
 ```
@@ -46,19 +46,28 @@ Browser (index.html)
 ### Core Data Flow: AI Analysis Cycle
 
 1. **Stock Screening** (`screenStocks`) – Builds a universe of ~300 stocks across 12 sectors
-2. **Bulk Snapshot** (`fetchBulkSnapshot`) – Fetches prices for all stocks via Polygon `/v2/snapshot` endpoint (single API call, cached 15s)
-3. **5-Day History** (`fetchAll5DayHistories`) – Gets 20-day OHLCV bars for top candidates via Polygon `/v2/aggs`
-4. **Technical Analysis** (client-side):
-   - `detectStructure` – Swing high/low detection, CHoCH, BOS, liquidity sweeps, FVGs
+2. **Parallel Data Fetching** (runs simultaneously):
+   - `fetchBulkSnapshot` – Prices for all stocks via Polygon `/v2/snapshot` (single API call, cached 15s)
+   - `fetchGroupedDailyBars` – 40-day OHLCV bars via Polygon `/v2/aggs/grouped` (~40 API calls per date, cached 1hr). Falls back to `fetchAll5DayHistories` (per-ticker) on failure.
+   - `fetchTickerDetails` – Market cap + SIC description via `/v3/reference/tickers` (cached 7 days)
+   - `fetchShortInterest` – Short interest + days-to-cover via `/stocks/v1/short-interest` (cached 24hr)
+3. **Technical Analysis** (client-side):
+   - `detectStructure` – Swing high/low detection, CHoCH, BOS, liquidity sweeps, FVGs (uses 40-day bars)
    - `calculate5DayMomentum` – Price momentum scoring
    - `calculateRelativeStrength` – Stock vs sector performance
    - `detectSectorRotation` – Money flow between sectors
-5. **Candidate Scoring & Selection** (~line 2750 in `trader.js`):
-   - Composite score = momentum (0-10) + RS normalized (0-10) + sector bonus (-1 to +2) + acceleration bonus (0/1.5) + consistency bonus (0/1) + structure bonus (-2.25 to +2.25) + extension penalty (0 to -3) + pullback bonus (0 to +2)
+   - `calculateRSI` – RSI(14) from 40-day bars (client-side Wilder's smoothing)
+   - `calculateMACD` – MACD(12,26,9) with crossover detection from 40-day bars
+4. **Candidate Scoring & Selection**:
+   - Composite score = momentum (0-10) + RS normalized (0-10) + sector bonus (-1 to +2) + acceleration bonus (0/1.5) + consistency bonus (0/1) + structure bonus (-2.25 to +2.25) + extension penalty (0 to -3) + pullback bonus (0 to +2) + RSI bonus/penalty (-1 to +1.5) + MACD bonus (-1 to +1) + squeeze bonus (0 to +1.5)
    - `bigMoverBonus` is disabled (was rewarding stocks already up >5% today — chasing)
-   - **Extension penalty**: Graduated dampening when BOTH momentum AND RS are very high (9+/85+ → -3, 8+/80+ → -2, 7.5+/75+ → -1). Prevents runners from monopolizing top slots.
+   - **RSI bonus/penalty**: RSI < 30 (oversold) → +1.5, RSI > 70 (overbought) → -1.0
+   - **MACD bonus**: Bullish crossover → +1.0, bearish crossover → -1.0
+   - **Squeeze bonus**: Days-to-cover > 5 + bullish structure + non-outflow sector → +1.5
+   - **Extension penalty**: Graduated dampening when momentum OR RS very high. Prevents runners from monopolizing top slots.
    - **Pullback bonus**: Stocks down 2-8% over 5 days with bullish structure + non-outflow sector get +2. Mild pullbacks (0 to -5%) with intact structure get +1. Helps quality dips compete with runners.
    - Final candidate pool: top 25 by score + all current holdings + 5 sector wildcards + up to 10 reversal candidates (bullish CHoCH, low-swept, bullish BOS)
+5. **News Fetching** (`fetchNewsForStocks`) – After scoring, fetches recent headlines + machine sentiment for top 25 candidates + holdings (cached 1hr)
 6. **Two-Phase AI Decision**:
    - **Phase 1** (`runAIAnalysis`, first API call) – Reviews existing holdings → SELL or HOLD decisions. Claude gets holdings data, theses, P&L, current technical indicators, and web search capability.
    - Between phases: Sell proceeds are projected into `updatedCash`. Sold symbols are removed from Phase 2 candidates.
@@ -94,7 +103,7 @@ Persisted to `localStorage` on every change. Backed up to Google Drive as `Apex_
 ## Key Subsystems
 
 ### Market Structure Detection (`detectStructure` in `src/trader.js`)
-Implements ICT/SMC-style analysis on 20-day bars:
+Implements ICT/SMC-style analysis on 40-day bars:
 - Swing high/low identification
 - Structure classification: bullish (HH+HL), bearish (LH+LL), ranging, contracting
 - CHoCH (Change of Character) – trend reversal detection
@@ -167,7 +176,7 @@ The build produces a single `index.html` file. This is intentional for portabili
 The Anthropic API is not called directly from the browser. All Claude API calls go through a Cloudflare Worker that injects the API key server-side. The `ANTHROPIC_API_URL` points to this worker. The worker injects `stream: true` into every request and pipes the SSE stream straight through to the browser — this keeps the connection alive and avoids Cloudflare's free-plan 100s timeout. On the client side, `fetchAnthropicStreaming()` reads the SSE events and reconstructs the same message object shape as the non-streaming API, so all downstream code (JSON parsing, text extraction) works unchanged.
 
 ### API Cost Consciousness
-- Polygon Stocks Advanced plan – real-time data, unlimited API calls. Caching (4hr TTL for individual prices, 15s for bulk snapshots) avoids redundant requests and keeps responses fast
+- Polygon Stocks Advanced plan – real-time data, unlimited API calls. Endpoints used: bulk snapshot (`/v2/snapshot`), grouped daily bars (`/v2/aggs/grouped`), ticker details (`/v3/reference/tickers`), short interest (`/stocks/v1/short-interest`), news (`/v2/reference/news`), and per-ticker OHLCV bars as fallback (`/v2/aggs/ticker`). Caching (4hr TTL for individual prices, 15s for bulk snapshots, 1hr for grouped bars + news, 24hr for short interest, 7 days for ticker details) avoids redundant requests and keeps responses fast
 - Claude API calls are expensive – freshness checks prevent wasting analysis on stale data
 - Phase 1 uses `claude-sonnet-4-5-20250929` with `max_tokens: 4000`
 - Phase 2 uses `claude-sonnet-4-5-20250929` with `max_tokens: 8000`
@@ -197,6 +206,8 @@ Splitting sell/buy into separate API calls solves information asymmetry: Phase 1
 - **No hard cap on candidate count**: With many holdings, candidate list can exceed 50+. Could degrade Phase 2 decision quality.
 - **Keyboard accessibility**: Collapsible section headers and expandable cards use `<div onclick>` — not keyboard-navigable. Should migrate to `<button>` or add `role="button"` + `tabindex="0"`.
 - **`bigMoverBonus` dead code**: Always set to 0 in scoring formula. Intentionally disabled but still present in the code.
+- **Technical indicators are client-side approximations**: RSI(14) and MACD(12,26,9) are computed from 40-day bars. RSI warm-up (25+ smoothed values) is good but not as accurate as server-computed from full price history. Sufficient for screening purposes.
+- **Short interest data availability**: The `/stocks/v1/short-interest` endpoint returns bi-monthly settlement data. Coverage may be incomplete for smaller stocks.
 
 ## Function Reference (Key Functions)
 
@@ -207,7 +218,15 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `screenStocks` | Builds 300-stock universe across 12 sectors |
 | `fetchAnthropicStreaming` | SSE streaming fetch — reconstructs Messages API response shape |
 | `fetchBulkSnapshot` | Single API call for all ticker prices |
-| `fetchAll5DayHistories` | 20-day OHLCV bars for candidates |
+| `fetchGroupedDailyBars` | 40-day OHLCV bars via grouped daily endpoint (~40 API calls) |
+| `fetchAll5DayHistories` | Per-ticker OHLCV bars (fallback for grouped daily) |
+| `fetchTickerDetails` | Market cap + SIC description (7-day cache) |
+| `fetchShortInterest` | Short interest + days-to-cover (24hr cache) |
+| `fetchNewsForStocks` | Recent headlines + machine sentiment (1hr cache) |
+| `calculateRSI` | RSI(14) from bar data (Wilder's smoothing) |
+| `calculateSMA` | Simple Moving Average from bar data |
+| `calculateEMAArray` | EMA helper (returns array for MACD signal line) |
+| `calculateMACD` | MACD(12,26,9) with crossover detection |
 | `detectStructure` | ICT/SMC market structure analysis |
 | `runAIAnalysis` | Main entry point: orchestrates both phases |
 | `executeMultipleTrades` | Budget validation + trade execution |
