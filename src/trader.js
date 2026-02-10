@@ -1216,8 +1216,11 @@
                 if (cached && Date.now() - ts < MULTIDAY_CACHE_TTL) {
                     multiDayCache = JSON.parse(cached);
                     const hitCount = [...symbolSet].filter(s => multiDayCache[s]).length;
-                    console.log(`📦 Restored ${hitCount}/${symbolSet.size} stocks from grouped daily cache (${Math.round((Date.now() - ts) / 60000)}min old)`);
-                    if (hitCount >= symbolSet.size * 0.8) return; // Good enough cache hit
+                    // Also verify bar depth — need 35+ for MACD. Old 5-day fallback data has ~20 bars.
+                    const sampleSyms = [...symbolSet].filter(s => multiDayCache[s]).slice(0, 5);
+                    const avgBars = sampleSyms.length > 0 ? sampleSyms.reduce((sum, s) => sum + (multiDayCache[s]?.length || 0), 0) / sampleSyms.length : 0;
+                    console.log(`📦 Restored ${hitCount}/${symbolSet.size} stocks from grouped daily cache (${Math.round((Date.now() - ts) / 60000)}min old, avg ${Math.round(avgBars)} bars)`);
+                    if (hitCount >= symbolSet.size * 0.8 && avgBars >= 35) return; // Good coverage AND depth
                 }
             } catch { /* ignore cache errors */ }
 
@@ -6703,7 +6706,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             ${(() => {
                                 const articles = newsCache[symbol];
                                 if (!articles || articles.length === 0) return '';
-                                const top2 = articles.slice(0, 2);
+                                const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+                                const recent = articles.filter(a => new Date(a.published_utc || a.publishedUtc).getTime() > sevenDaysAgo);
+                                if (recent.length === 0) return '';
+                                const top2 = recent.slice(0, 2);
                                 return '<div class="holding-card-news">' + top2.map(a => {
                                     const title = escapeHtml((a.title || '').length > 90 ? a.title.substring(0, 87) + '...' : a.title || '');
                                     const sent = (a.sentiment || 'neutral').toLowerCase();
@@ -8463,7 +8469,12 @@ Current Portfolio:
                 const rsiVal = c.rsi;
                 const rsiClass = rsiVal != null ? (rsiVal < 30 ? 'rsi-oversold' : rsiVal > 70 ? 'rsi-overbought' : '') : '';
                 const macdCross = c.macdCrossover || 'none';
-                const macdHist = c.macdHistogram;
+                let macdHist = c.macdHistogram;
+                // Fallback: compute from cached bars if histogram wasn't persisted (old data)
+                if (macdHist == null && multiDayCache[c.symbol]) {
+                    const liveMACD = calculateMACD(multiDayCache[c.symbol]);
+                    if (liveMACD) { macdHist = liveMACD.histogram; }
+                }
                 let macdArrow, macdClass;
                 if (macdCross === 'bullish') { macdArrow = '▲ Cross'; macdClass = 'macd-bullish'; }
                 else if (macdCross === 'bearish') { macdArrow = '▼ Cross'; macdClass = 'macd-bearish'; }
