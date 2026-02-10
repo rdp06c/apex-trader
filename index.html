@@ -6077,7 +6077,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                             dayChg = prev.c ? ((last.c - prev.c) / prev.c) * 100 : 0;
                         }
                     }
-                    dryRunScored.push({ symbol, compositeScore: momScore + rsNorm + sBonus + strBonus + drRsiBonus + drMacdBonus + drSqueezeBonus, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null });
+                    dryRunScored.push({ symbol, compositeScore: momScore + rsNorm + sBonus + strBonus + drRsiBonus + drMacdBonus + drSqueezeBonus, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null });
                 });
 
                 // Fetch news for top candidates + holdings
@@ -6724,6 +6724,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                             dayChange: parseFloat(dayChg.toFixed(2)),
                             rsi: s.data.rsi,
                             macdCrossover: s.data.macd?.crossover || 'none',
+                            macdHistogram: s.data.macd?.histogram ?? null,
                             marketCap: s.data.marketCap,
                             daysToCover: s.data.shortInterest?.daysToCover || 0,
                             name: tickerDetailsCache[s.symbol]?.name || null
@@ -9610,8 +9611,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                         }
                                         const macdResult = calculateMACD(bars);
                                         if (macdResult) {
-                                            const mc = macdResult.crossover === 'bullish' ? 'macd-bullish' : macdResult.crossover === 'bearish' ? 'macd-bearish' : 'macd-neutral';
-                                            const arrow = macdResult.crossover === 'bullish' ? '▲' : macdResult.crossover === 'bearish' ? '▼' : '—';
+                                            let mc, arrow;
+                                            if (macdResult.crossover === 'bullish') { mc = 'macd-bullish'; arrow = '▲ Cross'; }
+                                            else if (macdResult.crossover === 'bearish') { mc = 'macd-bearish'; arrow = '▼ Cross'; }
+                                            else { mc = macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish'; arrow = macdResult.histogram >= 0 ? '▲' : '▼'; }
                                             macdStr = ` · MACD: <strong class="${mc}">${arrow}</strong>`;
                                         }
                                     }
@@ -9814,6 +9817,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         savePortfolio();
                     }
                     
+                    // Restore data caches so holdings cards show indicators + news on page load
+                    try {
+                        const mdCache = localStorage.getItem('multiDayCache');
+                        const mdTs = parseInt(localStorage.getItem('multiDayCacheTs') || '0');
+                        if (mdCache && Date.now() - mdTs < 60 * 60 * 1000) multiDayCache = JSON.parse(mdCache);
+                    } catch {}
+                    try {
+                        const siCache = localStorage.getItem('shortInterestCache');
+                        const siTs = parseInt(localStorage.getItem('shortInterestCacheTs') || '0');
+                        if (siCache && Date.now() - siTs < 24 * 60 * 60 * 1000) shortInterestCache = JSON.parse(siCache);
+                    } catch {}
+                    try {
+                        const nCache = localStorage.getItem('newsCache');
+                        const nTs = parseInt(localStorage.getItem('newsCacheTs') || '0');
+                        if (nCache && Date.now() - nTs < 60 * 60 * 1000) newsCache = JSON.parse(nCache);
+                    } catch {}
+
                     updateUI();
                     addActivity(`Portfolio loaded from localStorage - $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions`, 'init');
                 } catch (error) {
@@ -11380,8 +11400,12 @@ Current Portfolio:
                 const rsiVal = c.rsi;
                 const rsiClass = rsiVal != null ? (rsiVal < 30 ? 'rsi-oversold' : rsiVal > 70 ? 'rsi-overbought' : '') : '';
                 const macdCross = c.macdCrossover || 'none';
-                const macdArrow = macdCross === 'bullish' ? '▲' : macdCross === 'bearish' ? '▼' : '—';
-                const macdClass = macdCross === 'bullish' ? 'macd-bullish' : macdCross === 'bearish' ? 'macd-bearish' : 'macd-neutral';
+                const macdHist = c.macdHistogram;
+                let macdArrow, macdClass;
+                if (macdCross === 'bullish') { macdArrow = '▲ Cross'; macdClass = 'macd-bullish'; }
+                else if (macdCross === 'bearish') { macdArrow = '▼ Cross'; macdClass = 'macd-bearish'; }
+                else if (macdHist != null) { macdArrow = macdHist >= 0 ? '▲' : '▼'; macdClass = macdHist >= 0 ? 'macd-bullish' : 'macd-bearish'; }
+                else { macdArrow = '--'; macdClass = 'macd-neutral'; }
                 const dtcVal = c.daysToCover || 0;
                 const dtcClass = dtcVal > 5 ? 'dtc-squeeze' : dtcVal > 3 ? 'dtc-elevated' : '';
 
