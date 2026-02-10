@@ -126,9 +126,9 @@ Four modules provide visibility into APEX's analysis data and portfolio state. U
 1. Performance Analytics (existing)
 2. Charts (existing — perf chart + sector pie)
 3. **Market Regime Indicator** — non-collapsible banner
-4. Current Holdings (existing collapsible) — includes sector, entry momentum, and RS
+4. Current Holdings (existing collapsible) — includes sector, entry momentum, RS, live RSI/MACD/DTC indicators, and up to 2 recent news headlines with sentiment badges
 5. Decision Reasoning (existing collapsible) — individual cards are also collapsible (click header); restored cards start collapsed
-6. **Candidate Scorecard** — collapsible, collapsed by default
+6. **Candidate Scorecard** — collapsible, collapsed by default. Columns: #, Symbol, Score, Day, Mom, RS, RSI (color-coded), MACD (arrow), Sector, Structure, DTC (squeeze highlight), MCap
 7. **Sector Rotation Heatmap** — collapsible, collapsed by default
 8. Learning Insights (existing collapsible)
 9. Recent Activity (existing collapsible)
@@ -181,6 +181,7 @@ The Anthropic API is not called directly from the browser. All Claude API calls 
 - Phase 1 uses `claude-sonnet-4-5-20250929` with `max_tokens: 4000`
 - Phase 2 uses `claude-sonnet-4-5-20250929` with `max_tokens: 8000`
 - Chat uses `max_tokens: 1500`
+- **Search token optimization**: Pre-loaded `recentNews` (headlines + machine sentiment from Polygon) is injected into both Phase 1 and Phase 2 prompts. Phase 1 uses 1-2 web searches max (regime + alarming headline verification). Phase 2 uses 2-3 focused searches (catalyst verification, sector rotation, deep dive) instead of 3-5 broad discovery searches. Saves ~2,000-4,000 tokens per analysis cycle.
 
 ### After-Hours Price Handling
 Polygon's `lastTrade.p` reflects extended-hours trading, which differs from the regular-session closing price most sites display. The `isMarketOpen()` helper checks Eastern Time (9:30 AM – 4:00 PM ET, weekdays). When market is closed, price priority is `day.c > lastTrade.p > day.l`; when open, it's `lastTrade.p > day.c > day.l`. Change calculations are also recomputed from scratch when market is closed (Polygon's pre-computed `todaysChange`/`todaysChangePerc` include extended-hours movement). This applies to both `fetchBulkSnapshot` and individual `getStockPrice` calls.
@@ -239,6 +240,8 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `calculatePortfolioValue` | Current total value calculation |
 | `updateUI` | Refreshes all dashboard elements |
 | `escapeHtml` | Sanitizes strings for safe innerHTML insertion |
+| `formatMarketCap` | Formats market cap as $1.2T / $45B / $800M |
+| `formatTimeAgo` | Formats ISO date as relative time (2h, 1d, 3d) |
 | `addDecisionReasoning` | Renders decision cards in UI |
 | `sendMessage` | Chat interface message handling (with rate limiting) |
 | `activateChat` | Unlocks chat UI for the session |

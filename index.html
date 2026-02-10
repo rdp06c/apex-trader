@@ -2445,6 +2445,26 @@
             color: var(--text-primary);
         }
 
+        /* ── Scorecard Indicator Colors ───────────────────── */
+        .rsi-oversold { color: var(--green); }
+        .rsi-overbought { color: var(--red); }
+        .macd-bullish { color: var(--green); }
+        .macd-bearish { color: var(--red); }
+        .macd-neutral { color: var(--text-faint); }
+        .dtc-squeeze { color: var(--accent); font-weight: 700; }
+        .dtc-elevated { color: var(--yellow); }
+        .mcap-cell { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+
+        /* ── Holdings News Headlines ─────────────────────── */
+        .holding-card-news { border-top: 1px solid var(--border-subtle); margin-top: 8px; padding-top: 8px; }
+        .news-item { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; font-size: 11px; }
+        .news-time { color: var(--text-faint); font-size: 10px; white-space: nowrap; min-width: 28px; }
+        .news-title { color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .news-sentiment { font-size: 9px; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+        .news-sentiment.positive { background: var(--green-dim); color: var(--green); }
+        .news-sentiment.negative { background: var(--red-dim); color: var(--red); }
+        .news-sentiment.neutral { background: var(--bg-raised); color: var(--text-muted); }
+
         /* ── Responsive ────────────────────────────────────── */
         @media (max-width: 1024px) {
             .app-layout {
@@ -6864,7 +6884,11 @@ For each holding, compare ORIGINAL_THESIS vs CURRENT_INDICATORS:
 6. Time elapsed vs expected catalyst timeframe
 7. Would you buy TODAY at current price with current indicators?
 
-SEARCH: Check news for each holding + one market regime search.
+SEARCH STRATEGY: You have pre-loaded recentNews with recent headlines + machine sentiment for each holding.
+Scan those FIRST — only use web search for:
+1. One market regime search (required)
+2. Deep dive on a holding ONLY if recentNews shows a potentially alarming headline that needs verification
+Do NOT search for each holding individually — the pre-loaded headlines already cover recent news.
 
 Portfolio Cash: $${portfolio.cash.toFixed(2)}
 Holdings: ${(() => {
@@ -7108,38 +7132,41 @@ SEARCH PHILOSOPHY - Find What Will Move Stocks TOMORROW, Not What Moved Them TOD
 • Identify SECTOR tailwinds (industry trends, macro factors)
 • Don't just search what's up today - find what's ABOUT to move
 
-REQUIRED SEARCHES (do 3-5 catalyst-focused searches):
+PRE-LOADED NEWS: Each candidate includes recentNews with up to 3 recent headlines + machine sentiment.
+This REPLACES the need for broad catalyst discovery searches. Focus your web searches on:
+- VERIFYING the most promising headlines (are they real? how big is the impact?)
+- QUANTIFYING catalysts (revenue impact, contract value, guidance numbers)
+- Sector-level macro context (rotation, policy, trends)
+Do 2-3 searches total (not 3-5). Quality over quantity.
 
-1. **Catalyst Discovery** (MOST IMPORTANT): Search for recent fundamental events
+REQUIRED SEARCHES (do 2-3 focused searches):
+
+1. **Catalyst Verification** (MOST IMPORTANT): Scan recentNews headlines across your candidates FIRST.
+   If headlines reveal promising catalysts, search to VERIFY and QUANTIFY them.
+   If recentNews is sparse or uninformative, do a broad catalyst discovery search.
    Examples:
-   • "tech sector earnings beats Q1 2026 guidance raised" → Find catalyst stocks
-   • "semiconductor companies major contract wins February 2026" → Find growth drivers
-   • "AI infrastructure spending analyst upgrades this week" → Find momentum plays
-   • "defense stocks government contract awards 2026" → Find catalyst events
-   
-   Goal: Find stocks with NEWS/EVENTS that will drive future moves
+   • "NVDA Q1 2026 earnings beat guidance raised data center revenue" → Verify + quantify headline
+   • "semiconductor companies major contract wins February 2026" → Broad discovery if needed
+
+   Goal: Verify promising headlines or discover catalysts if pre-loaded news is thin
 
 2. **Sector Rotation Analysis**: Search for which sectors have tailwinds
    Examples:
    • "tech vs energy sector rotation February 2026" → Where is money flowing?
    • "semiconductor AI chip demand outlook 2026" → Sector-wide catalyst?
-   • "renewable energy policy impact stocks 2026" → Macro tailwind?
-   
+
    Goal: Identify sectors with sustained momentum, not just today's leaders
 
-3. **Stock-Specific Deep Dive**: Search ONLY for stocks you're seriously considering after seeing momentum/RS data
+3. **Stock-Specific Deep Dive**: Use recentNews as your starting point.
+   Search to deep-dive the 1-2 most promising catalyst headlines you see, not to discover catalysts from scratch.
    Examples:
-   • "NVDA Q1 2026 earnings surprise guidance analyst targets" → Verify catalyst
-   • "PLTR Army contract details revenue impact 2026" → Quantify catalyst
+   • "PLTR Army contract details revenue impact 2026" → Quantify catalyst from headline
    • "AMD data center revenue growth forecast vs Intel" → Competitive position
-   
-   Goal: Verify and quantify catalysts for your top candidates
 
-OPTIONAL 4-5th SEARCHES (only if needed for high-conviction plays):
-4. **Competitive Positioning**: Compare similar stocks if choosing between them
-   Example: "NVDA vs AMD AI chip market share 2026 data center revenue"
-   
-5. **Risk Assessment**: Check for headwinds if considering a volatile stock
+   Goal: Quantify and verify catalysts for your top candidates
+
+OPTIONAL additional search (only if needed for high-conviction plays):
+4. **Risk Assessment**: Check for headwinds if considering a volatile stock
    Example: "semiconductor chip export restrictions impact 2026"
 
 SEARCH STRATEGY - Be Specific and Efficient:
@@ -9565,7 +9592,29 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     : daysRemaining > 0 ?
                                     `<span class="text-muted">(${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining)</span>`
                                     : ''}
-                                <span class="text-muted" style="margin-left:8px">| Mtm: <strong>${entryMomentum != null ? entryMomentum.toFixed(1) : '--'}</strong> · RS: <strong>${entryRS != null ? entryRS.toFixed(0) : '--'}</strong></span>
+                                <span class="text-muted" style="margin-left:8px">| Mtm: <strong>${entryMomentum != null ? entryMomentum.toFixed(1) : '--'}</strong> · RS: <strong>${entryRS != null ? entryRS.toFixed(0) : '--'}</strong>${(() => {
+                                    const bars = multiDayCache[symbol];
+                                    let rsiStr = '', macdStr = '', dtcStr = '';
+                                    if (bars && bars.length >= 14) {
+                                        const rsiVal = calculateRSI(bars);
+                                        if (rsiVal != null) {
+                                            const rc = rsiVal < 30 ? 'rsi-oversold' : rsiVal > 70 ? 'rsi-overbought' : '';
+                                            rsiStr = ` · RSI: <strong class="${rc}">${Math.round(rsiVal)}</strong>`;
+                                        }
+                                        const macdResult = calculateMACD(bars);
+                                        if (macdResult) {
+                                            const mc = macdResult.crossover === 'bullish' ? 'macd-bullish' : macdResult.crossover === 'bearish' ? 'macd-bearish' : 'macd-neutral';
+                                            const arrow = macdResult.crossover === 'bullish' ? '▲' : macdResult.crossover === 'bearish' ? '▼' : '—';
+                                            macdStr = ` · MACD: <strong class="${mc}">${arrow}</strong>`;
+                                        }
+                                    }
+                                    const dtcVal = shortInterestCache[symbol]?.daysToCover;
+                                    if (dtcVal && dtcVal > 0) {
+                                        const dc = dtcVal > 5 ? 'dtc-squeeze' : dtcVal > 3 ? 'dtc-elevated' : '';
+                                        dtcStr = ` · DTC: <strong class="${dc}">${dtcVal.toFixed(1)}</strong>`;
+                                    }
+                                    return rsiStr + macdStr + dtcStr;
+                                })()}</span>
                             </div>
                             <div class="holding-card-footer">
                                 <div>
@@ -9578,6 +9627,18 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     <span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${earliestDate ? earliestDate.toLocaleDateString() + ' ' + earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span>
                                 </div>
                             </div>
+                            ${(() => {
+                                const articles = newsCache[symbol];
+                                if (!articles || articles.length === 0) return '';
+                                const top2 = articles.slice(0, 2);
+                                return '<div class="holding-card-news">' + top2.map(a => {
+                                    const title = escapeHtml((a.title || '').length > 90 ? a.title.substring(0, 87) + '...' : a.title || '');
+                                    const sent = (a.sentiment || 'neutral').toLowerCase();
+                                    const sentClass = sent === 'positive' ? 'positive' : sent === 'negative' ? 'negative' : 'neutral';
+                                    const timeAgo = formatTimeAgo(a.published_utc || a.publishedUtc);
+                                    return `<div class="news-item"><span class="news-time">${timeAgo}</span><span class="news-title">${title}</span><span class="news-sentiment ${sentClass}">${sent}</span></div>`;
+                                }).join('') + '</div>';
+                            })()}
                         </div>
                     `;
                 }
@@ -9623,6 +9684,26 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // Add activity
+        // Format market cap as human-readable string
+        function formatMarketCap(value) {
+            if (value == null || value === 0) return '--';
+            if (value >= 1e12) return '$' + (value / 1e12).toFixed(1) + 'T';
+            if (value >= 1e9) return '$' + (value / 1e9).toFixed(0) + 'B';
+            if (value >= 1e6) return '$' + (value / 1e6).toFixed(0) + 'M';
+            return '$' + value.toLocaleString();
+        }
+
+        // Format ISO date as relative time ago
+        function formatTimeAgo(isoDate) {
+            if (!isoDate) return '';
+            const diff = Date.now() - new Date(isoDate).getTime();
+            const hours = Math.floor(diff / 3600000);
+            if (hours < 1) return '<1h';
+            if (hours < 24) return hours + 'h';
+            const days = Math.floor(hours / 24);
+            return days + 'd';
+        }
+
         // Escape HTML entities to prevent XSS from AI/user content
         function escapeHtml(str) {
             if (typeof str !== 'string') return str;
@@ -11276,7 +11357,7 @@ Current Portfolio:
             const holdingSymbols = new Set(Object.keys(portfolio.holdings));
 
             let html = '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
-                '<th>#</th><th>Symbol</th><th>Score</th><th>Day</th><th>Mom</th><th>RS</th><th>Sector</th><th>Structure</th>' +
+                '<th>#</th><th>Symbol</th><th>Score</th><th>Day</th><th>Mom</th><th>RS</th><th>RSI</th><th>MACD</th><th>Sector</th><th>Structure</th><th>DTC</th><th>MCap</th>' +
                 '</tr></thead><tbody>';
 
             data.candidates.forEach((c, i) => {
@@ -11289,6 +11370,14 @@ Current Portfolio:
                 const dayClass = dayChg > 0 ? 'positive' : dayChg < 0 ? 'negative' : '';
 
                 const name = stockNames[c.symbol] || '';
+                const rsiVal = c.rsi;
+                const rsiClass = rsiVal != null ? (rsiVal < 30 ? 'rsi-oversold' : rsiVal > 70 ? 'rsi-overbought' : '') : '';
+                const macdCross = c.macdCrossover || 'none';
+                const macdArrow = macdCross === 'bullish' ? '▲' : macdCross === 'bearish' ? '▼' : '—';
+                const macdClass = macdCross === 'bullish' ? 'macd-bullish' : macdCross === 'bearish' ? 'macd-bearish' : 'macd-neutral';
+                const dtcVal = c.daysToCover || 0;
+                const dtcClass = dtcVal > 5 ? 'dtc-squeeze' : dtcVal > 3 ? 'dtc-elevated' : '';
+
                 html += `<tr>
                     <td class="scorecard-rank">${i + 1}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
@@ -11296,8 +11385,12 @@ Current Portfolio:
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td>${(c.momentum || 0).toFixed(1)}</td>
                     <td>${(c.rs || 0).toFixed(0)}</td>
+                    <td class="${rsiClass}">${rsiVal != null ? Math.round(rsiVal) : '--'}</td>
+                    <td class="${macdClass}">${macdArrow}</td>
                     <td>${c.sector || '--'}</td>
                     <td style="font-size:10px;text-transform:capitalize">${structLabel}</td>
+                    <td class="${dtcClass}">${dtcVal > 0 ? dtcVal.toFixed(1) : '--'}</td>
+                    <td class="mcap-cell">${formatMarketCap(c.marketCap)}</td>
                 </tr>`;
             });
 

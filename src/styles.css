@@ -2432,6 +2432,26 @@
             color: var(--text-primary);
         }
 
+        /* ── Scorecard Indicator Colors ───────────────────── */
+        .rsi-oversold { color: var(--green); }
+        .rsi-overbought { color: var(--red); }
+        .macd-bullish { color: var(--green); }
+        .macd-bearish { color: var(--red); }
+        .macd-neutral { color: var(--text-faint); }
+        .dtc-squeeze { color: var(--accent); font-weight: 700; }
+        .dtc-elevated { color: var(--yellow); }
+        .mcap-cell { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+
+        /* ── Holdings News Headlines ─────────────────────── */
+        .holding-card-news { border-top: 1px solid var(--border-subtle); margin-top: 8px; padding-top: 8px; }
+        .news-item { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; font-size: 11px; }
+        .news-time { color: var(--text-faint); font-size: 10px; white-space: nowrap; min-width: 28px; }
+        .news-title { color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .news-sentiment { font-size: 9px; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+        .news-sentiment.positive { background: var(--green-dim); color: var(--green); }
+        .news-sentiment.negative { background: var(--red-dim); color: var(--red); }
+        .news-sentiment.neutral { background: var(--bg-raised); color: var(--text-muted); }
+
         /* ── Responsive ────────────────────────────────────── */
         @media (max-width: 1024px) {
             .app-layout {
