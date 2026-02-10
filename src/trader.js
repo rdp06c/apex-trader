@@ -4056,7 +4056,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                                 type: "web_search_20250305",
                                 name: "web_search",
                                 max_uses: 3,
-                                allowed_domains: ["investing.com", "reuters.com", "marketwatch.com", "bloomberg.com", "cnbc.com", "finance.yahoo.com", "seekingalpha.com", "barrons.com", "wsj.com"]
+                                allowed_domains: ["investing.com", "bloomberg.com", "cnbc.com", "finance.yahoo.com", "seekingalpha.com", "benzinga.com", "tradingview.com"]
                             }],
                             messages: [{ role: 'user', content: `You are APEX, an AI trading agent. PHASE 1: HOLDINGS REVIEW ONLY.
 Today: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
@@ -4292,7 +4292,7 @@ Include a decision for EVERY holding.` }]
                             type: "web_search_20250305",
                             name: "web_search",
                             max_uses: 4,
-                            allowed_domains: ["investing.com", "reuters.com", "marketwatch.com", "bloomberg.com", "cnbc.com", "finance.yahoo.com", "seekingalpha.com", "barrons.com", "wsj.com"]
+                            allowed_domains: ["investing.com", "bloomberg.com", "cnbc.com", "finance.yahoo.com", "seekingalpha.com", "benzinga.com", "tradingview.com"]
                         }],
                         messages: [{
                             role: 'user',
