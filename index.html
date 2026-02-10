@@ -7093,8 +7093,7 @@ Include a decision for EVERY holding.` }]
                                 let ps = pj.substring(si, ei + 1);
                                 ps = ps.replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '');
                                 ps = ps.replace(/,(\s*[}\]])/g, '$1');
-                                ps = ps.replace(/\r\n/g, '\\n').replace(/\r/g, '\\n').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
-                                ps = ps.replace(/(\\n){3,}/g, '\\n\\n');
+                                ps = escapeNewlinesInJsonStrings(ps);
                                 // Fix single quotes around property names and string values
                                 ps = ps.replace(/'([^']+)':/g, '"$1":');
                                 ps = ps.replace(/:\s*'([^']*)'/g, ': "$1"');
@@ -7110,7 +7109,7 @@ Include a decision for EVERY holding.` }]
                                     const decisionsMatch = p1Text.match(/"decisions"\s*:\s*(\[[\s\S]*?\])\s*(?:,\s*"|\s*})/);
                                     if (decisionsMatch) {
                                         try {
-                                            let dStr = decisionsMatch[1].replace(/\r?\n/g, '\\n').replace(/\t/g, '\\t');
+                                            let dStr = escapeNewlinesInJsonStrings(decisionsMatch[1]);
                                             dStr = dStr.replace(/'([^']+)':/g, '"$1":').replace(/:\s*'([^']*)'/g, ': "$1"');
                                             dStr = dStr.replace(/,(\s*[}\]])/g, '$1');
                                             parsed.decisions = JSON.parse(dStr);
@@ -8928,15 +8927,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 // 2. Fix trailing commas before closing braces/brackets (invalid JSON)
                 jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
                 
-                // 3. Replace literal newlines/tabs/carriage returns with escaped versions
-                // This is the #1 cause of JSON parse failures from Claude
-                jsonString = jsonString.replace(/\r\n/g, '\\n');  // Windows newlines
-                jsonString = jsonString.replace(/\r/g, '\\n');     // Old Mac newlines
-                jsonString = jsonString.replace(/\n/g, '\\n');     // Unix newlines
-                jsonString = jsonString.replace(/\t/g, '\\t');     // Tabs
-                
-                // 4. Collapse excessive escaped newlines (\\n\\n\\n → \\n)
-                jsonString = jsonString.replace(/(\\n){3,}/g, '\\n\\n');
+                // 3. Escape newlines/tabs only inside JSON string values (not between tokens)
+                jsonString = escapeNewlinesInJsonStrings(jsonString);
                 
                 // 5. Fix single quotes around property names (should be double quotes)
                 jsonString = jsonString.replace(/'([^']+)':/g, '"$1":');
@@ -9869,6 +9861,25 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (hours < 24) return hours + 'h';
             const days = Math.floor(hours / 24);
             return days + 'd';
+        }
+
+        // Escape newlines/tabs inside JSON string values only (not between tokens)
+        // Newlines between tokens are valid JSON whitespace and must be preserved.
+        function escapeNewlinesInJsonStrings(str) {
+            let out = '', inStr = false, esc = false;
+            for (let i = 0; i < str.length; i++) {
+                const ch = str[i];
+                if (esc) { out += ch; esc = false; continue; }
+                if (ch === '\\' && inStr) { out += ch; esc = true; continue; }
+                if (ch === '"') { inStr = !inStr; out += ch; continue; }
+                if (inStr) {
+                    if (ch === '\n') { out += '\\n'; continue; }
+                    if (ch === '\r') { out += '\\r'; continue; }
+                    if (ch === '\t') { out += '\\t'; continue; }
+                }
+                out += ch;
+            }
+            return out;
         }
 
         // Escape HTML entities to prevent XSS from AI/user content
