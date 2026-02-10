@@ -9652,8 +9652,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         conviction = buyTransactions[0].conviction || null;
                         reasoning = buyTransactions[0].reasoning || '';
 
-                        // Calculate days held
-                        daysHeld = Math.floor((new Date() - earliestDate) / (1000 * 60 * 60 * 24));
+                        // Calculate calendar days held (not elapsed time)
+                        const nowDate = new Date();
+                        const todayStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+                        const buyDayStart = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), earliestDate.getDate());
+                        daysHeld = Math.round((todayStart - buyDayStart) / (1000 * 60 * 60 * 24));
                     }
 
                     const gainLoss = currentValue - (avgPurchasePrice * shares);
