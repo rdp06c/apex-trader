@@ -1252,6 +1252,29 @@
             justify-content: space-between;
             align-items: start;
             margin-bottom: 14px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .decision-card.collapsed .decision-card-header {
+            margin-bottom: 0;
+        }
+
+        .decision-card.collapsed > .decision-card-header .decision-expand-icon {
+            transform: rotate(-90deg);
+        }
+
+        .decision-card-body {
+            overflow: hidden;
+            transition: max-height var(--transition-med), opacity var(--transition-fast);
+            max-height: 5000px;
+            opacity: 1;
+        }
+
+        .decision-card-body.collapsed,
+        .decision-card.collapsed .decision-card-body {
+            max-height: 0;
+            opacity: 0;
         }
 
         .decision-card-title {
@@ -1393,7 +1416,7 @@
             line-height: 1.6;
             overflow: hidden;
             transition: max-height 0.2s ease, opacity 0.15s;
-            max-height: 1000px;
+            max-height: 5000px;
         }
 
         .decision-thoughts.collapsed .decision-thoughts-text {
@@ -1431,7 +1454,7 @@
             line-height: 1.6;
             overflow: hidden;
             transition: max-height 0.2s ease, opacity 0.15s;
-            max-height: 1000px;
+            max-height: 5000px;
         }
 
         .research-summary.collapsed .research-summary-text {
@@ -3007,7 +3030,10 @@
             'TEAM': 'Atlassian', 'WDAY': 'Workday', 'VEEV': 'Veeva', 'ESTC': 'Elastic',
             'DDOG': 'Datadog', 'NET': 'Cloudflare', 'MDB': 'MongoDB', 'CRWD': 'CrowdStrike',
             'PANW': 'Palo Alto Networks', 'ZS': 'Zscaler', 'OKTA': 'Okta', 'CFLT': 'Confluent',
-            
+            'GTLB': 'GitLab', 'FROG': 'JFrog', 'BILL': 'Bill Holdings', 'DOCN': 'DigitalOcean',
+            'ZI': 'ZoomInfo', 'MNDY': 'monday.com', 'PCOR': 'Procore', 'APP': 'AppLovin',
+            'INTU': 'Intuit', 'IONQ': 'IonQ',
+
             // Tech - Hardware/Semiconductors
             'AAPL': 'Apple', 'QCOM': 'Qualcomm', 'INTC': 'Intel', 'MU': 'Micron Technology',
             'ARM': 'Arm Holdings', 'AVGO': 'Broadcom', 'TXN': 'Texas Instruments', 'ADI': 'Analog Devices',
@@ -3015,53 +3041,137 @@
             'SNPS': 'Synopsys', 'CDNS': 'Cadence Design', 'ON': 'ON Semiconductor', 'MPWR': 'Monolithic Power',
             'SWKS': 'Skyworks Solutions', 'QRVO': 'Qorvo', 'DELL': 'Dell Technologies', 'HPQ': 'HP Inc.',
             'AMAT': 'Applied Materials', 'LRCX': 'Lam Research', 'MRVL': 'Marvell Technology', 'SMCI': 'Super Micro Computer',
-            
+            'ENTG': 'Entegris', 'FORM': 'FormFactor', 'MKSI': 'MKS Instruments', 'COHR': 'Coherent',
+            'IPGP': 'IPG Photonics', 'LITE': 'Lumentum', 'AMBA': 'Ambarella', 'SLAB': 'Silicon Labs',
+            'CRUS': 'Cirrus Logic', 'SYNA': 'Synaptics', 'MCHP': 'Microchip Technology',
+            'WDC': 'Western Digital', 'STX': 'Seagate', 'PSTG': 'Pure Storage', 'NTAP': 'NetApp', 'CHKP': 'Check Point',
+
             // EV/Automotive
             'TSLA': 'Tesla', 'RIVN': 'Rivian', 'LCID': 'Lucid Group', 'NIO': 'NIO Inc.',
             'XPEV': 'XPeng', 'LI': 'Li Auto', 'F': 'Ford', 'GM': 'General Motors',
             'STLA': 'Stellantis', 'TM': 'Toyota', 'HMC': 'Honda', 'RACE': 'Ferrari',
-            
+            'VWAGY': 'Volkswagen', 'PSNY': 'Polestar', 'NSANY': 'Nissan', 'MBGYY': 'Mercedes-Benz',
+            'POAHY': 'Porsche', 'FUJHY': 'Subaru', 'BLNK': 'Blink Charging', 'CHPT': 'ChargePoint',
+            'EVGO': 'EVgo', 'PAG': 'Penske Auto', 'WOLF': 'Wolfspeed', 'TPIC': 'TPI Composites',
+            'QS': 'QuantumScape', 'PTRA': 'Proterra', 'WKHS': 'Workhorse', 'ALV': 'Autoliv',
+            'HYLN': 'Hyliion', 'GEV': 'GE Vernova', 'JZXN': 'Jiuzi Holdings', 'VRM': 'Vroom',
+            'SFT': 'Shift Technologies', 'CVNA': 'Carvana', 'KMX': 'CarMax', 'APTV': 'Aptiv',
+            'LAZR': 'Luminar', 'OUST': 'Ouster', 'AN': 'AutoNation', 'LAD': 'Lithia Motors',
+
             // Finance
             'JPM': 'JPMorgan Chase', 'BAC': 'Bank of America', 'V': 'Visa', 'MA': 'Mastercard',
             'COIN': 'Coinbase', 'SOFI': 'SoFi', 'PYPL': 'PayPal', 'SQ': 'Block (Square)',
             'WFC': 'Wells Fargo', 'GS': 'Goldman Sachs', 'MS': 'Morgan Stanley', 'C': 'Citigroup',
             'BLK': 'BlackRock', 'SCHW': 'Charles Schwab', 'AFRM': 'Affirm', 'UPST': 'Upstart',
             'NU': 'Nu Holdings', 'MELI': 'MercadoLibre', 'HOOD': 'Robinhood',
-            
+            'GPN': 'Global Payments', 'LC': 'LendingClub', 'AXP': 'American Express',
+            'FIS': 'Fidelity National', 'COF': 'Capital One', 'ALLY': 'Ally Financial',
+            'USB': 'U.S. Bancorp', 'PNC': 'PNC Financial', 'TFC': 'Truist Financial',
+            'RF': 'Regions Financial', 'KEY': 'KeyCorp', 'FITB': 'Fifth Third', 'CFG': 'Citizens Financial',
+            'HBAN': 'Huntington Bancshares', 'MTB': 'M&T Bank', 'STT': 'State Street', 'BK': 'Bank of New York',
+            'NTRS': 'Northern Trust', 'CMA': 'Comerica', 'ZION': 'Zions Bancorp', 'FHN': 'First Horizon',
+            'WRB': 'Berkley', 'CB': 'Chubb', 'TRV': 'Travelers', 'ALL': 'Allstate',
+            'PGR': 'Progressive', 'AIG': 'AIG', 'MET': 'MetLife', 'PRU': 'Prudential',
+            'RKT': 'Rocket Companies',
+
             // Growth
             'DKNG': 'DraftKings', 'RBLX': 'Roblox', 'U': 'Unity Software', 'PINS': 'Pinterest',
             'SNAP': 'Snap Inc.', 'SPOT': 'Spotify', 'ROKU': 'Roku', 'ABNB': 'Airbnb',
             'LYFT': 'Lyft', 'DASH': 'DoorDash', 'UBER': 'Uber', 'SHOP': 'Shopify',
-            
+            'SE': 'Sea Limited', 'BABA': 'Alibaba', 'JD': 'JD.com', 'PDD': 'Pinduoduo',
+            'CPNG': 'Coupang', 'BKNG': 'Booking Holdings', 'EXPE': 'Expedia', 'TCOM': 'Trip.com',
+            'TRIP': 'TripAdvisor', 'PTON': 'Peloton', 'OPEN': 'Opendoor', 'COMP': 'Compass',
+            'CWAN': 'Clearwater Analytics', 'DUOL': 'Duolingo', 'BROS': 'Dutch Bros', 'CAVA': 'CAVA Group',
+
             // Healthcare
             'JNJ': 'Johnson & Johnson', 'UNH': 'UnitedHealth', 'LLY': 'Eli Lilly', 'PFE': 'Pfizer',
             'MRNA': 'Moderna', 'ABBV': 'AbbVie', 'VRTX': 'Vertex Pharma', 'REGN': 'Regeneron',
             'BMY': 'Bristol Myers Squibb', 'GILD': 'Gilead Sciences', 'AMGN': 'Amgen', 'CVS': 'CVS Health',
             'ISRG': 'Intuitive Surgical', 'TMO': 'Thermo Fisher', 'DHR': 'Danaher', 'ABT': 'Abbott Labs',
-            
+            'CI': 'Cigna', 'HUM': 'Humana', 'SYK': 'Stryker', 'BSX': 'Boston Scientific',
+            'MDT': 'Medtronic', 'BDX': 'Becton Dickinson', 'BAX': 'Baxter', 'ZBH': 'Zimmer Biomet',
+            'HCA': 'HCA Healthcare', 'DVA': 'DaVita', 'CANO': 'Cano Health',
+            'EXAS': 'Exact Sciences', 'ILMN': 'Illumina', 'BIIB': 'Biogen', 'ALNY': 'Alnylam',
+            'INCY': 'Incyte', 'NBIX': 'Neurocrine Bio', 'UTHR': 'United Therapeutics', 'JAZZ': 'Jazz Pharma',
+            'SRPT': 'Sarepta', 'BMRN': 'BioMarin', 'IONS': 'Ionis Pharma', 'RGEN': 'Repligen',
+
             // Consumer
             'AMZN': 'Amazon', 'WMT': 'Walmart', 'COST': 'Costco', 'TGT': 'Target',
             'HD': 'Home Depot', 'LOW': "Lowe's", 'SBUX': 'Starbucks', 'MCD': "McDonald's",
             'NKE': 'Nike', 'LULU': 'Lululemon', 'DIS': 'Disney', 'NFLX': 'Netflix',
             'KO': 'Coca-Cola', 'PEP': 'PepsiCo',
-            
+            'CMG': 'Chipotle', 'YUM': 'Yum! Brands', 'ETSY': 'Etsy', 'W': 'Wayfair', 'CHWY': 'Chewy',
+            'WBD': 'Warner Bros Discovery', 'FOXA': 'Fox Corp', 'CMCSA': 'Comcast',
+            'T': 'AT&T', 'VZ': 'Verizon', 'TMUS': 'T-Mobile',
+            'PM': 'Philip Morris', 'MO': 'Altria', 'BUD': 'AB InBev', 'TAP': 'Molson Coors',
+            'STZ': 'Constellation Brands', 'MNST': 'Monster Beverage', 'CELH': 'Celsius', 'KDP': 'Keurig Dr Pepper',
+            'ULTA': 'Ulta Beauty', 'ELF': 'e.l.f. Beauty', 'RH': 'RH (Restoration Hardware)',
+            'DECK': 'Deckers Outdoor', 'CROX': 'Crocs', 'LEVI': "Levi Strauss", 'UAA': 'Under Armour',
+            'ORLY': "O'Reilly Auto", 'AZO': 'AutoZone', 'AAP': 'Advance Auto Parts',
+            'GPC': 'Genuine Parts', 'TSCO': 'Tractor Supply', 'DG': 'Dollar General', 'DLTR': 'Dollar Tree',
+            'ROST': 'Ross Stores', 'TJX': 'TJX Companies', 'BBY': 'Best Buy',
+
             // Energy
             'XOM': 'ExxonMobil', 'CVX': 'Chevron', 'COP': 'ConocoPhillips', 'SLB': 'Schlumberger',
             'NEE': 'NextEra Energy', 'ENPH': 'Enphase', 'FSLR': 'First Solar', 'PLUG': 'Plug Power',
-            
+            'EOG': 'EOG Resources', 'OXY': 'Occidental Petroleum', 'MPC': 'Marathon Petroleum', 'PSX': 'Phillips 66',
+            'VLO': 'Valero Energy', 'TRGP': 'Targa Resources', 'DVN': 'Devon Energy', 'FANG': 'Diamondback Energy',
+            'WMB': 'Williams Companies', 'APA': 'APA Corporation', 'HAL': 'Halliburton', 'BKR': 'Baker Hughes',
+            'NOV': 'NOV Inc.', 'FTI': 'TechnipFMC', 'DUK': 'Duke Energy', 'SO': 'Southern Company',
+            'D': 'Dominion Energy', 'AEP': 'American Electric Power', 'EXC': 'Exelon', 'OKE': 'ONEOK',
+            'SEDG': 'SolarEdge', 'RUN': 'Sunrun', 'NOVA': 'Sunnova', 'PBF': 'PBF Energy', 'DK': 'Delek US',
+            'CTRA': 'Coterra Energy', 'OVV': 'Ovintiv', 'PR': 'Permian Resources', 'SM': 'SM Energy',
+            'MGY': 'Magnolia Oil', 'MTDR': 'Matador Resources', 'CHRD': 'Chord Energy', 'VNOM': 'Viper Energy',
+            'EQT': 'EQT Corporation',
+
             // Industrials
             'BA': 'Boeing', 'CAT': 'Caterpillar', 'DE': 'Deere & Co.', 'GE': 'General Electric',
             'HON': 'Honeywell', 'UPS': 'United Parcel Service', 'FDX': 'FedEx',
-            
+            'MMM': '3M', 'UNP': 'Union Pacific', 'NSC': 'Norfolk Southern', 'CSX': 'CSX Corporation',
+            'CHRW': 'C.H. Robinson', 'CMI': 'Cummins', 'EMR': 'Emerson Electric', 'ETN': 'Eaton',
+            'PH': 'Parker Hannifin', 'ROK': 'Rockwell Automation', 'AME': 'Ametek', 'DOV': 'Dover', 'ITW': 'Illinois Tool Works',
+            'DHI': 'D.R. Horton', 'LEN': 'Lennar', 'NVR': 'NVR Inc.', 'PHM': 'PulteGroup',
+            'TOL': 'Toll Brothers', 'BLD': 'TopBuild', 'BLDR': 'Builders FirstSource',
+            'JBHT': 'J.B. Hunt', 'KNX': 'Knight-Swift', 'ODFL': 'Old Dominion Freight', 'XPO': 'XPO Logistics',
+            'IR': 'Ingersoll Rand', 'WM': 'Waste Management', 'RSG': 'Republic Services',
+            'PCAR': 'Paccar', 'PWR': 'Quanta Services', 'JCI': 'Johnson Controls',
+            'AOS': 'A.O. Smith', 'ROP': 'Roper Technologies', 'CARR': 'Carrier Global', 'VLTO': 'Veralto',
+
             // Real Estate
             'AMT': 'American Tower', 'PLD': 'Prologis', 'EQIX': 'Equinix', 'O': 'Realty Income',
-            
+            'CCI': 'Crown Castle', 'PSA': 'Public Storage', 'DLR': 'Digital Realty', 'WELL': 'Welltower',
+            'VICI': 'VICI Properties', 'SPG': 'Simon Property', 'AVB': 'AvalonBay', 'EQR': 'Equity Residential',
+            'MAA': 'Mid-America Apartment', 'UDR': 'UDR Inc.', 'CPT': 'Camden Property', 'ESS': 'Essex Property',
+            'AIV': 'Aimco', 'ELS': 'Equity LifeStyle', 'SUI': 'Sun Communities', 'NXRT': 'NexPoint Residential',
+            'VTR': 'Ventas', 'STWD': 'Starwood Property', 'DOC': 'Healthpeak', 'OHI': 'Omega Healthcare',
+            'SBRA': 'Sabra Healthcare', 'LTC': 'LTC Properties', 'HR': 'Healthcare Realty', 'MPW': 'Medical Properties',
+            'NHI': 'National Health Investors', 'CTRE': 'CareTrust REIT', 'IRM': 'Iron Mountain', 'CUBE': 'CubeSmart',
+            'LSI': 'Life Storage', 'NSA': 'National Storage', 'REXR': 'Rexford Industrial', 'PSB': 'PS Business Parks',
+            'TRNO': 'Terreno Realty', 'SELF': 'Global Self Storage', 'STOR': 'STORE Capital', 'SAFE': 'Safehold',
+
             // Materials
             'NEM': 'Newmont', 'FCX': 'Freeport-McMoRan', 'NUE': 'Nucor', 'DOW': 'Dow Inc.',
             'USAR': 'USA Rare Earth', 'UUUU': 'Energy Fuels', 'NB': 'NioCorp Developments', 'MP': 'MP Materials',
-            
+            'GOLD': 'Barrick Gold', 'AU': 'AngloGold Ashanti', 'AEM': 'Agnico Eagle', 'WPM': 'Wheaton Precious Metals',
+            'FNV': 'Franco-Nevada', 'RGLD': 'Royal Gold', 'KGC': 'Kinross Gold', 'HL': 'Hecla Mining',
+            'STLD': 'Steel Dynamics', 'RS': 'Reliance Steel', 'CLF': 'Cleveland-Cliffs', 'MT': 'ArcelorMittal',
+            'TX': 'Ternium', 'CMC': 'Commercial Metals', 'ATI': 'ATI Inc.',
+            'LYB': 'LyondellBasell', 'EMN': 'Eastman Chemical', 'CE': 'Celanese', 'DD': 'DuPont',
+            'APD': 'Air Products', 'LIN': 'Linde', 'ECL': 'Ecolab',
+            'SHW': 'Sherwin-Williams', 'PPG': 'PPG Industries', 'RPM': 'RPM International', 'AXTA': 'Axalta Coating',
+            'ALB': 'Albemarle', 'SQM': 'SQM', 'LAC': 'Lithium Americas', 'AA': 'Alcoa',
+            'FUL': 'H.B. Fuller', 'NEU': 'NewMarket',
+
             // Defense
-            'LMT': 'Lockheed Martin', 'RTX': 'RTX Corporation', 'NOC': 'Northrop Grumman', 'GD': 'General Dynamics'
+            'LMT': 'Lockheed Martin', 'RTX': 'RTX Corporation', 'NOC': 'Northrop Grumman', 'GD': 'General Dynamics',
+            'LHX': 'L3Harris', 'HII': 'Huntington Ingalls', 'TXT': 'Textron', 'HWM': 'Howmet Aerospace',
+            'AXON': 'Axon Enterprise', 'KTOS': 'Kratos Defense', 'AVAV': 'AeroVironment', 'AIR': 'AAR Corp',
+            'SAIC': 'SAIC', 'LDOS': 'Leidos', 'CACI': 'CACI International', 'BAH': 'Booz Allen Hamilton',
+            'BWXT': 'BWX Technologies', 'WWD': 'Woodward', 'TDG': 'TransDigm', 'HEI': 'HEICO',
+            'CW': 'Curtiss-Wright',
+
+            // Index Funds
+            'SPY': 'S&P 500 ETF', 'QQQ': 'Nasdaq 100 ETF', 'IWM': 'Russell 2000 ETF', 'VOO': 'Vanguard S&P 500'
         };
 
         const stockSectors = {
@@ -3242,6 +3352,20 @@
             return true;
         }
         
+        // Check if US stock market is currently open (9:30 AM - 4:00 PM ET, weekdays)
+        function isMarketOpen() {
+            const now = new Date();
+            // Convert to Eastern Time
+            const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            const day = et.getDay(); // 0=Sun, 6=Sat
+            if (day === 0 || day === 6) return false;
+            const hours = et.getHours();
+            const minutes = et.getMinutes();
+            const timeMinutes = hours * 60 + minutes;
+            // Market open: 9:30 (570 min) to 16:00 (960 min)
+            return timeMinutes >= 570 && timeMinutes < 960;
+        }
+
         // Price cache to store real data and prevent mock data usage
         let priceCache = {};
         let apiCallsToday = 0;  // Consolidated - removed duplicate apiCallCount
@@ -3493,6 +3617,7 @@
                     scales: {
                         y: {
                             beginAtZero: false,
+                            grace: '5%',
                             border: {
                                 display: false
                             },
@@ -3736,20 +3861,30 @@
         }
 
         // Add weekly funding
-        function addWeeklyFunding() {
+        async function addWeeklyFunding() {
             const funding = parseFloat(document.getElementById('weeklyFunding').value);
+
+            // Calculate current portfolio value BEFORE adding the deposit
+            let currentValue;
+            try {
+                currentValue = await calculatePortfolioValue();
+            } catch (e) {
+                // Fallback: sum cash + estimate holdings from last known data
+                const lastKnown = portfolio.performanceHistory.filter(e => e.value != null).slice(-1)[0];
+                currentValue = lastKnown ? lastKnown.value : portfolio.cash;
+                console.warn('Could not calculate live portfolio value for deposit, using fallback:', e.message);
+            }
+
             portfolio.cash += funding;
             portfolio.totalDeposits += funding; // Track this deposit
-            
-            // Record the deposit in performance history so the chart can annotate it
-            const lastKnown = portfolio.performanceHistory.filter(e => e.value != null).slice(-1)[0];
-            const estimatedValue = (lastKnown ? lastKnown.value : portfolio.cash) + funding;
+
+            // Record the deposit with accurate pre-deposit value + funding amount
             portfolio.performanceHistory.push({
                 timestamp: new Date().toISOString(),
-                value: estimatedValue,
+                value: currentValue + funding,
                 deposit: funding
             });
-            
+
             addActivity('Weekly funding added: $' + funding.toLocaleString(), 'funding');
             updateUI();
             savePortfolio();
@@ -4288,15 +4423,28 @@
                         
                         if (!day || !prevDay) return;
 
-                        // Prefer real-time lastTrade price, fall back to daily aggregate
-                        let currentPrice = (ticker.lastTrade && ticker.lastTrade.p) || day.c || day.l;
+                        // When market is closed, prefer regular session close (day.c)
+                        // over lastTrade which reflects extended-hours trading
+                        const marketOpen = isMarketOpen();
+                        let currentPrice;
+                        if (marketOpen) {
+                            currentPrice = (ticker.lastTrade && ticker.lastTrade.p) || day.c || day.l;
+                        } else {
+                            currentPrice = day.c || (ticker.lastTrade && ticker.lastTrade.p) || day.l;
+                        }
                         const prevClose = prevDay.c;
                         if (!currentPrice || currentPrice === 0) currentPrice = prevClose;
                         if (!currentPrice || !prevClose) return;
 
-                        // Use pre-computed change fields when available
-                        const change = ticker.todaysChange != null ? ticker.todaysChange : (currentPrice - prevClose);
-                        const changePercent = ticker.todaysChangePerc != null ? ticker.todaysChangePerc : ((currentPrice - prevClose) / prevClose * 100);
+                        // Use pre-computed change fields when available (only reliable during market hours)
+                        let change, changePercent;
+                        if (marketOpen && ticker.todaysChange != null) {
+                            change = ticker.todaysChange;
+                            changePercent = ticker.todaysChangePerc;
+                        } else {
+                            change = currentPrice - prevClose;
+                            changePercent = (currentPrice - prevClose) / prevClose * 100;
+                        }
 
                         result[symbol] = {
                             price: parseFloat(currentPrice),
@@ -4304,7 +4452,7 @@
                             changePercent: parseFloat(changePercent),
                             timestamp: new Date().toISOString(),
                             isReal: true,
-                            note: currentPrice === prevClose ? 'Market closed' : 'Real-time'
+                            note: marketOpen ? 'Real-time' : 'Market closed'
                         };
                         
                         // Also update the regular price cache
@@ -4409,8 +4557,15 @@
                         throw new Error('Missing price data in response');
                     }
                     
-                    // Prefer real-time lastTrade price, fall back to daily aggregate
-                    let currentPrice = (ticker.lastTrade && ticker.lastTrade.p) || day.c || day.l;
+                    // When market is closed, prefer regular session close (day.c)
+                    // over lastTrade which reflects extended-hours trading
+                    const marketOpen = isMarketOpen();
+                    let currentPrice;
+                    if (marketOpen) {
+                        currentPrice = (ticker.lastTrade && ticker.lastTrade.p) || day.c || day.l;
+                    } else {
+                        currentPrice = day.c || (ticker.lastTrade && ticker.lastTrade.p) || day.l;
+                    }
                     const prevClose = prevDay.c;
 
                     // If currentPrice is still 0 or null, use prevClose (market closed/weekend)
@@ -4424,9 +4579,15 @@
                         throw new Error('Missing price values');
                     }
 
-                    // Use pre-computed change fields when available
-                    const change = ticker.todaysChange != null ? ticker.todaysChange : (currentPrice - prevClose);
-                    const changePercent = ticker.todaysChangePerc != null ? ticker.todaysChangePerc : ((currentPrice - prevClose) / prevClose * 100);
+                    // Use pre-computed change fields when available (only reliable during market hours)
+                    let change, changePercent;
+                    if (marketOpen && ticker.todaysChange != null) {
+                        change = ticker.todaysChange;
+                        changePercent = ticker.todaysChangePerc;
+                    } else {
+                        change = currentPrice - prevClose;
+                        changePercent = (currentPrice - prevClose) / prevClose * 100;
+                    }
 
                     const priceData = {
                         price: parseFloat(currentPrice),
@@ -4434,7 +4595,7 @@
                         changePercent: parseFloat(changePercent),
                         timestamp: new Date().toISOString(),
                         isReal: true,
-                        note: currentPrice === prevClose ? 'Market closed' : 'Real-time'
+                        note: marketOpen ? 'Real-time' : 'Market closed'
                     };
                     
                     // Cache the data
@@ -6322,6 +6483,7 @@ Include a decision for EVERY holding.` }]
                         if (p1Data.content) for (const b of p1Data.content) { if (b.type === 'text') p1Text += b.text; }
                         
                         try {
+                            console.log('Phase 1 raw text (first 500):', p1Text.substring(0, 500));
                             let pj = p1Text;
                             if (pj.includes('```json')) pj = (pj.match(/```json\s*([\s\S]*?)\s*```/) || [null, pj])[1];
                             else if (pj.includes('```')) pj = (pj.match(/```\s*([\s\S]*?)\s*```/) || [null, pj])[1];
@@ -6338,8 +6500,36 @@ Include a decision for EVERY holding.` }]
                                 ps = ps.replace(/,(\s*[}\]])/g, '$1');
                                 ps = ps.replace(/\r\n/g, '\\n').replace(/\r/g, '\\n').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
                                 ps = ps.replace(/(\\n){3,}/g, '\\n\\n');
+                                // Fix single quotes around property names and string values
+                                ps = ps.replace(/'([^']+)':/g, '"$1":');
+                                ps = ps.replace(/:\s*'([^']*)'/g, ': "$1"');
                                 ps = ps.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-                                const parsed = JSON.parse(ps);
+                                let parsed;
+                                try {
+                                    parsed = JSON.parse(ps);
+                                } catch (innerParseErr) {
+                                    // Fallback: structural extraction for Phase 1 fields
+                                    console.warn('Phase 1 JSON.parse failed, trying structural extraction:', innerParseErr.message);
+                                    parsed = {};
+                                    // Extract decisions array
+                                    const decisionsMatch = p1Text.match(/"decisions"\s*:\s*(\[[\s\S]*?\])\s*(?:,\s*"|\s*})/);
+                                    if (decisionsMatch) {
+                                        try {
+                                            let dStr = decisionsMatch[1].replace(/\r?\n/g, '\\n').replace(/\t/g, '\\t');
+                                            dStr = dStr.replace(/'([^']+)':/g, '"$1":').replace(/:\s*'([^']*)'/g, ': "$1"');
+                                            dStr = dStr.replace(/,(\s*[}\]])/g, '$1');
+                                            parsed.decisions = JSON.parse(dStr);
+                                        } catch (e2) { console.warn('Structural decisions parse failed:', e2.message); }
+                                    }
+                                    // Extract holdings_summary
+                                    const summaryMatch = p1Text.match(/"holdings_summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                                    if (summaryMatch) parsed.holdings_summary = summaryMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                                    // Extract market_regime
+                                    const regimeMatch = p1Text.match(/"market_regime"\s*:\s*"(bull|bear|choppy)"/i);
+                                    if (regimeMatch) parsed.market_regime = regimeMatch[1].toLowerCase();
+                                    if (!parsed.decisions) throw innerParseErr; // Give up if no decisions found
+                                    console.log('✅ Phase 1 structural extraction recovered', parsed.decisions.length, 'decisions');
+                                }
                                 if (parsed.decisions) {
                                     phase1SellDecisions = parsed.decisions.filter(d => {
                                         if (d.action !== 'SELL' || !d.shares || d.shares <= 0) return false;
@@ -9527,23 +9717,26 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 if (sellCount > 0) picksSummary.push(`<span class="negative">${sellCount} sell${sellCount > 1 ? 's' : ''}</span>`);
                 if (holdCount > 0) picksSummary.push(`<span style="color: #60a5fa;">${holdCount} hold${holdCount > 1 ? 's' : ''}</span>`);
 
+                const cardCollapsed = options.restored ? ' collapsed' : '';
                 reasoningCard.innerHTML = `
-                    <div class="decision-card-header">
+                    <div class="decision-card-header" onclick="this.parentElement.classList.toggle('collapsed')">
                         <div>
                             <div class="decision-card-title">APEX's Analysis</div>
                             <div class="decision-card-summary">${picksSummary.join(' · ')}</div>
                         </div>
                         <div class="decision-card-actions">
                             <div class="decision-card-time">${timestamp.toLocaleTimeString()}</div>
-                            <button class="decision-save-btn" onclick="saveDecisionReasoning(this)">Save</button>
+                            <span class="decision-expand-icon" style="font-size:14px;margin-left:8px;">&#9662;</span>
+                            <button class="decision-save-btn" onclick="event.stopPropagation();saveDecisionReasoning(this)">Save</button>
                         </div>
                     </div>
+                    <div class="decision-card-body${cardCollapsed}">
                     ${decision.budgetWarning ? `
                         <div class="budget-warning">${escapeHtml(decision.budgetWarning)}</div>
                     ` : ''}
                     ${stocksList}
                     ${decision.reasoning ? `
-                        <div class="decision-thoughts" onclick="this.classList.toggle('collapsed')">
+                        <div class="decision-thoughts collapsed" onclick="this.classList.toggle('collapsed')">
                             <div class="decision-thoughts-label">
                                 <span>APEX's Thoughts</span>
                                 <span class="decision-expand-icon">&#9662;</span>
@@ -9552,7 +9745,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         </div>
                     ` : ''}
                     ${decision.research_summary ? `
-                        <div class="research-summary" onclick="this.classList.toggle('collapsed')">
+                        <div class="research-summary collapsed" onclick="this.classList.toggle('collapsed')">
                             <div class="research-summary-label">
                                 <span>Research Summary</span>
                                 <span class="decision-expand-icon">&#9662;</span>
@@ -9560,6 +9753,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             <div class="research-summary-text">${formatDecisionText(decision.research_summary)}</div>
                         </div>
                     ` : ''}
+                    </div>
                 `;
             } else {
                 // Handle single-stock format (fallback)
