@@ -3214,9 +3214,16 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 thinking.classList.remove('active');
                 addActivity(`✅ DRY RUN: ${Object.keys(marketData).length} prices + ${Object.keys(multiDayCache).length} histories in ${duration}s. Structure: ${structureStats.choch} CHoCH, ${structureStats.bos} BOS. Console for details!`, 'success');
                 
+                const detailsCount = Object.keys(tickerDetailsCache).length;
+                const shortIntCount = Object.values(shortInterestCache).filter(v => v && v.daysToCover > 0).length;
+                const newsCount = Object.values(newsCache).filter(v => v && v.length > 0).length;
+
                 showResultModal('Dry Run Complete', [
                     { label: 'Prices Fetched', value: `${Object.keys(marketData).length} / ${symbols.length}`, cls: 'success' },
                     { label: 'Price Histories', value: `${Object.keys(multiDayCache).length} (40-day bars)` },
+                    { label: 'Ticker Details', value: `${detailsCount} (market cap)` },
+                    { label: 'Short Interest', value: `${shortIntCount} with DTC` },
+                    { label: 'News Headlines', value: `${newsCount} stocks` },
                     { label: 'Bullish', value: structureStats.bullish, cls: 'success' },
                     { label: 'Bearish', value: structureStats.bearish, cls: 'error' },
                     { label: 'CHoCH Signals', value: structureStats.choch },
