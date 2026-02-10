@@ -4186,27 +4186,27 @@
 
             for (let i = 0; i < tradingDates.length; i += BATCH) {
                 const batch = tradingDates.slice(i, i + BATCH);
-                const results = await Promise.all(batch.map(async (dateStr) => {
+                const batchResults = await Promise.all(batch.map(async (dateStr) => {
                     try {
                         const response = await fetch(
                             `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${dateStr}?adjusted=true&apiKey=${POLYGON_API_KEY}`
                         );
-                        if (!response.ok) return { dateStr, results: [] };
+                        if (!response.ok) return { dateStr, bars: [] };
                         const data = await response.json();
                         if (data.resultsCount === 0 || !data.results) {
-                            return { dateStr, results: [] }; // Holiday or no data
+                            return { dateStr, bars: [] }; // Holiday or no data
                         }
-                        return { dateStr, results: data.results };
+                        return { dateStr, bars: data.results };
                     } catch (err) {
                         console.warn(`Grouped daily fetch failed for ${dateStr}:`, err.message);
-                        return { dateStr, results: [] };
+                        return { dateStr, bars: [] };
                     }
                 }));
 
-                for (const { dateStr, results } of results) {
-                    if (results.length === 0) { skippedDates++; continue; }
+                for (const { dateStr, bars } of batchResults) {
+                    if (bars.length === 0) { skippedDates++; continue; }
                     fetchedDates++;
-                    for (const bar of results) {
+                    for (const bar of bars) {
                         if (!symbolSet.has(bar.T)) continue; // Filter to our universe
                         if (!multiDayCache[bar.T]) multiDayCache[bar.T] = [];
                         multiDayCache[bar.T].push({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v, t: bar.t });
@@ -9643,8 +9643,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             ${(() => {
                                 const articles = newsCache[symbol];
                                 if (!articles || articles.length === 0) return '';
-                                const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-                                const recent = articles.filter(a => new Date(a.published_utc || a.publishedUtc).getTime() > sevenDaysAgo);
+                                const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+                                const recent = articles.filter(a => new Date(a.published_utc || a.publishedUtc).getTime() > fourteenDaysAgo);
                                 if (recent.length === 0) return '';
                                 const top2 = recent.slice(0, 2);
                                 return '<div class="holding-card-news">' + top2.map(a => {
