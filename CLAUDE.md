@@ -73,6 +73,7 @@ Browser (index.html)
    - Between phases: Sell proceeds are projected into `updatedCash`. Sold symbols are removed from Phase 2 candidates.
    - **Phase 2** (second API call) – Evaluates buy candidates using `updatedCash` as available budget. Gets market data, structure analysis, Phase 1 results, learning insights, market regime context. Entry quality guidance prioritizes pullback setups over extended stocks.
 7. **Budget Validation & Execution** (`executeMultipleTrades`):
+   - Receives `enhancedMarketData` (with all technical indicators, company details, short interest) — used by `executeSingleTrade` to populate `entryTechnicals`, `holdingTheses`, and `exitTechnicals`
    - Sells execute first (freeing up actual cash)
    - Buy budget validates against real post-sell `portfolio.cash`
    - Buys execute in conviction-priority order
@@ -88,8 +89,8 @@ Browser (index.html)
   holdings: { SYMBOL: shares },
   transactions: [...],       // Full trade log (BUY/SELL entries)
   performanceHistory: [...], // Time-series for chart (value + deposit markers)
-  closedTrades: [...],       // Completed round-trip trades with learning data
-  holdingTheses: { SYMBOL: { originalCatalyst, entryConviction, entryPrice, entryMomentum, entryRS, entrySectorFlow, ... } },
+  closedTrades: [...],       // Completed round-trip trades with learning data (includes entryTechnicals + exitTechnicals with RSI, MACD, structure, DTC)
+  holdingTheses: { SYMBOL: { originalCatalyst, entryConviction, entryPrice, entryMomentum, entryRS, entrySectorFlow, entryRSI, entryMACDCrossover, entryStructure, entryDTC, entryCompositeScore, ... } },
   lastMarketRegime: { regime, timestamp },           // Persisted from Phase 1 AI response
   lastCandidateScores: { timestamp, candidates: [] }, // Top 40 scored candidates
   lastSectorRotation: { timestamp, sectors: {} },     // All sectors with money flow data

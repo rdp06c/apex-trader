@@ -3665,18 +3665,11 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                         sma20: sma20,
                         macd: macd,
                         marketCap: tickerDetailsCache[symbol]?.marketCap || null,
+                        companyName: tickerDetailsCache[symbol]?.name || null,
+                        sicDescription: tickerDetailsCache[symbol]?.sicDescription || null,
                         shortInterest: shortInterestCache[symbol] || null,
                         recentNews: newsCache[symbol] || null
                     };
-                });
-
-                // Write computed indicators back to marketData so trade execution can record them
-                Object.entries(enhancedMarketData).forEach(([symbol, data]) => {
-                    if (marketData[symbol]) {
-                        marketData[symbol].momentum = data.momentum;
-                        marketData[symbol].relativeStrength = data.relativeStrength;
-                        marketData[symbol].sectorRotation = data.sectorRotation;
-                    }
                 });
 
                 // Backfill thesis entries missing momentum/RS/sectorFlow (for holdings bought before tracking was added)
@@ -5145,6 +5138,7 @@ Each stock includes:
   → Based on REAL 5-day price history. score uses: 5-day return + consistency + acceleration
   → isAccelerating: true if recent half outperformed first half (momentum building)
   → totalReturn5d: actual 5-day cumulative return. basis: '5-day-real' or '1-day-fallback'
+  → volumeTrend: ratio of recent volume to early volume. >1.2 = rising (confirms momentum), <0.8 = declining (fragile)
 • relativeStrength: { rsScore: 0-100, strength, stockReturn5d, sectorAvg5d, relativePerformance }
   → Based on 5-day returns vs sector 5-day average (not single-day!)
   → 70+ = outperforming sector over 5 days, 30- = underperforming
@@ -5173,7 +5167,8 @@ HOW TO USE STRUCTURE DATA:
 - Bearish CHoCH on a holding = SELL SIGNAL (structure breaking down)
 - Bullish CHoCH + low-swept = potential reversal entry (smart money accumulated)
 - Bearish structure + sweep of highs = avoid (likely distribution)
-- FVG = price may return to fill the gap; use as entry zone for confirmed setups
+- fvg: 'bullish' (gap up = potential support zone on pullback) or 'bearish' (gap down = potential resistance)
+- Bullish FVG on pullback = potential entry zone. Use as timing refinement, not primary signal.
 
 • rsi: 0-100 (RSI-14, Wilder's smoothing from 40-day bars)
   → <30 = oversold (potential bounce setup if structure bullish)
@@ -5189,6 +5184,9 @@ HOW TO USE STRUCTURE DATA:
   → MACD(12,26,9) momentum oscillator
   → crossover 'bullish' = MACD crossed above signal (momentum shifting positive)
   → crossover 'bearish' = MACD crossed below signal (momentum fading)
+  → histogram: MACD minus signal. Positive = bullish momentum, negative = bearish.
+  → Histogram growing = momentum accelerating, shrinking = momentum fading.
+  → Even without a crossover, histogram direction tells you momentum trajectory.
   → Use with structure: bullish MACD crossover + bullish BOS = strong confirmation
 
 • marketCap: company market capitalization in dollars (null if unavailable)
@@ -5935,7 +5933,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         }
                         
                         // Execute all trades (sells from Phase 1 + buys from Phase 2)
-                        await executeMultipleTrades(decision, marketData);
+                        await executeMultipleTrades(decision, enhancedMarketData);
                         
                         setTimeout(() => {
                             thinking.classList.remove('active');
@@ -5952,7 +5950,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         await executeMultipleTrades({
                             decisions: [decision],
                             overall_reasoning: decision.reasoning || ''
-                        }, marketData);
+                        }, enhancedMarketData);
                         setTimeout(() => {
                             thinking.classList.remove('active');
                         }, 3000);
@@ -6228,7 +6226,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             chochType: marketData[symbol].marketStructure?.chochType || null,
                             bos: marketData[symbol].marketStructure?.bos || null,
                             bosType: marketData[symbol].marketStructure?.bosType || null,
-                            sweep: marketData[symbol].marketStructure?.sweep || null
+                            sweep: marketData[symbol].marketStructure?.sweep || null,
+                            rsi: marketData[symbol].rsi ?? null,
+                            macdCrossover: marketData[symbol].macd?.crossover || null,
+                            macdHistogram: marketData[symbol].macd?.histogram ?? null,
+                            daysToCover: marketData[symbol].shortInterest?.daysToCover ?? null,
+                            marketCap: marketData[symbol].marketCap ?? null
                         },
 
                         // Market context at entry
@@ -6253,8 +6256,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             entryDate: new Date().toISOString(),
                             entryMomentum: marketData[symbol].momentum?.score || null,
                             entryRS: marketData[symbol].relativeStrength?.rsScore || null,
-                            entrySectorFlow: marketData[symbol].sectorRotation?.moneyFlow || null
+                            entrySectorFlow: marketData[symbol].sectorRotation?.moneyFlow || null,
+                            entryRSI: marketData[symbol].rsi ?? null,
+                            entryMACDCrossover: marketData[symbol].macd?.crossover || null,
+                            entryStructure: marketData[symbol].marketStructure?.structure || null,
+                            entryDTC: marketData[symbol].shortInterest?.daysToCover ?? null,
+                            entryCompositeScore: null
                         };
+                        const candidateEntry = (portfolio.lastCandidateScores?.candidates || []).find(c => c.symbol === symbol);
+                        if (candidateEntry) portfolio.holdingTheses[symbol].entryCompositeScore = candidateEntry.compositeScore;
                     } else {
                         portfolio.holdingTheses[symbol].lastAddDate = new Date().toISOString();
                         portfolio.holdingTheses[symbol].lastAddPrice = price;
@@ -6334,6 +6344,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             exitConviction: decision.conviction || null,
                             exitMarketRegime: portfolio.lastMarketRegime?.regime || null,
                             exitHoldingsCount: Object.keys(portfolio.holdings).length,
+
+                            // 4. Technical Indicators at Exit
+                            exitTechnicals: {
+                                rsi: marketData[symbol]?.rsi ?? null,
+                                macdCrossover: marketData[symbol]?.macd?.crossover || null,
+                                macdHistogram: marketData[symbol]?.macd?.histogram ?? null,
+                                structure: marketData[symbol]?.marketStructure?.structure || null,
+                                structureScore: marketData[symbol]?.marketStructure?.structureScore ?? null,
+                                daysToCover: marketData[symbol]?.shortInterest?.daysToCover ?? null,
+                            },
 
                             // Position context
                             positionSizePercent: originalBuyTx.positionSizePercent || null,
