@@ -3901,7 +3901,7 @@
             });
 
             addActivity('Weekly funding added: $' + funding.toLocaleString(), 'funding');
-            updateUI();
+            await updateUI();
             savePortfolio();
         }
         
@@ -9974,6 +9974,34 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         savePortfolio();
                     }
                     
+                    // MIGRATION: Fix corrupted performanceHistory values from deposit bug
+                    // addWeeklyFunding() previously stored object + number = "[object Object]NNN" as value
+                    if (portfolio.performanceHistory && portfolio.performanceHistory.length > 0) {
+                        let fixed = 0;
+                        for (let i = 0; i < portfolio.performanceHistory.length; i++) {
+                            const entry = portfolio.performanceHistory[i];
+                            if (typeof entry.value !== 'number' || isNaN(entry.value)) {
+                                // Interpolate from nearest valid neighbors
+                                const prev = portfolio.performanceHistory.slice(0, i).reverse().find(e => typeof e.value === 'number' && !isNaN(e.value));
+                                const next = portfolio.performanceHistory.slice(i + 1).find(e => typeof e.value === 'number' && !isNaN(e.value));
+                                if (prev && next) {
+                                    entry.value = (prev.value + next.value) / 2;
+                                } else if (prev) {
+                                    entry.value = prev.value + (entry.deposit || 0);
+                                } else if (next) {
+                                    entry.value = next.value;
+                                } else {
+                                    entry.value = portfolio.cash;
+                                }
+                                fixed++;
+                            }
+                        }
+                        if (fixed > 0) {
+                            console.log(`📊 MIGRATION: Fixed ${fixed} corrupted performanceHistory entries`);
+                            savePortfolio();
+                        }
+                    }
+
                     // Restore data caches so holdings cards show indicators + news on page load
                     try {
                         const mdCache = localStorage.getItem('multiDayCache');
