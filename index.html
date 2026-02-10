@@ -5755,7 +5755,31 @@
                 const losingStats = calcGroupStats(losingTrades);
                 const winningStats = calcGroupStats(winningTrades);
 
-                if (!losingStats || !winningStats) continue;
+                // Show all patterns — even ones without enough data yet
+                if (!losingStats && !winningStats) {
+                    rules.push({
+                        id: pdef.id, label: pdef.label, type: 'neutral', enforcement: 'observe',
+                        winRate: 0, avgReturn: 0, trades: 0,
+                        compareWinRate: 0, compareTrades: 0, compareAvgReturn: 0,
+                        needsData: true,
+                        description: `No data yet — need trades with ${pdef.label.toLowerCase()} conditions`
+                    });
+                    continue;
+                }
+
+                if (!losingStats || !winningStats) {
+                    // One side has data, show what we have
+                    const hasStats = losingStats || winningStats;
+                    const side = losingStats ? 'losing' : 'winning';
+                    rules.push({
+                        id: pdef.id, label: pdef.label, type: 'neutral', enforcement: 'observe',
+                        winRate: hasStats.winRate, avgReturn: hasStats.avgReturn, trades: hasStats.count,
+                        compareWinRate: 0, compareTrades: 0, compareAvgReturn: 0,
+                        needsData: true,
+                        description: `Only ${hasStats.count} trades on ${side} side — need both sides to compare`
+                    });
+                    continue;
+                }
 
                 const winRateDiff = winningStats.winRate - losingStats.winRate;
                 const losingCount = losingStats.count;
@@ -11151,18 +11175,28 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 for (const r of observeRules) {
-                    html += `<div class="rule-card rule-observe">
-                        <div class="rule-card-header">
-                            <span class="rule-card-label">${escapeHtml(r.label)}</span>
-                            <span class="rule-enforcement-badge rule-badge-observe">WATCHING</span>
-                        </div>
-                        <div class="rule-card-stats">
-                            <span class="rule-stat">${r.winRate.toFixed(0)}% win rate</span>
-                            <span class="rule-stat">${r.trades} trades</span>
-                            <span class="rule-stat">${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg</span>
-                        </div>
-                        <div class="rule-card-compare">vs ${r.compareWinRate.toFixed(0)}% for opposite (${r.compareTrades} trades)</div>
-                    </div>`;
+                    if (r.needsData) {
+                        html += `<div class="rule-card rule-observe">
+                            <div class="rule-card-header">
+                                <span class="rule-card-label">${escapeHtml(r.label)}</span>
+                                <span class="rule-enforcement-badge rule-badge-observe">NEED DATA</span>
+                            </div>
+                            <div class="rule-card-compare">${escapeHtml(r.description)}</div>
+                        </div>`;
+                    } else {
+                        html += `<div class="rule-card rule-observe">
+                            <div class="rule-card-header">
+                                <span class="rule-card-label">${escapeHtml(r.label)}</span>
+                                <span class="rule-enforcement-badge rule-badge-observe">WATCHING</span>
+                            </div>
+                            <div class="rule-card-stats">
+                                <span class="rule-stat">${r.winRate.toFixed(0)}% win rate</span>
+                                <span class="rule-stat">${r.trades} trades</span>
+                                <span class="rule-stat">${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg</span>
+                            </div>
+                            <div class="rule-card-compare">vs ${r.compareWinRate.toFixed(0)}% for opposite (${r.compareTrades} trades)</div>
+                        </div>`;
+                    }
                 }
 
                 html += `</div></div>`;
