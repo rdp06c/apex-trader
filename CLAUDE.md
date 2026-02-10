@@ -89,7 +89,7 @@ Browser (index.html)
   holdings: { SYMBOL: shares },
   transactions: [...],       // Full trade log (BUY/SELL entries)
   performanceHistory: [...], // Time-series for chart (value + deposit markers)
-  closedTrades: [...],       // Completed round-trip trades with learning data (includes entryTechnicals + exitTechnicals with RSI, MACD, structure, DTC)
+  closedTrades: [...],       // Completed round-trip trades with learning data (includes entryTechnicals + exitTechnicals with RSI, MACD, structure, DTC, compositeScore)
   holdingTheses: { SYMBOL: { originalCatalyst, entryConviction, entryPrice, entryMomentum, entryRS, entrySectorFlow, entryRSI, entryMACDCrossover, entryStructure, entryDTC, entryCompositeScore, ... } },
   lastMarketRegime: { regime, timestamp },           // Persisted from Phase 1 AI response
   lastCandidateScores: { timestamp, candidates: [] }, // Top 40 scored candidates
@@ -115,7 +115,7 @@ Implements ICT/SMC-style analysis on 40-day bars:
 ### Machine Learning / Self-Improvement (in `src/trader.js`)
 Tracks performance patterns from `closedTrades`:
 - **Conviction Accuracy** (`analyzeConvictionAccuracy`) – Do high-conviction trades actually outperform?
-- **Technical Indicator Accuracy** (`analyzeTechnicalAccuracy`) – Which signals (structure, momentum, RS) correlate with wins?
+- **Technical Indicator Accuracy** (`analyzeTechnicalAccuracy`) – Which signals correlate with wins? Analyzes: momentum score, RS, sector rotation, runner entries, market structure (CHoCH/BOS), acceleration, regime, concentration, position sizing, RSI zones (oversold/neutral/overbought), MACD crossover (bullish/bearish/none), squeeze potential (DTC buckets), and composite score calibration (high/medium/low)
 - **Exit Timing Analysis** (`analyzeExitTiming`) – Post-exit price tracking to evaluate sell decisions
 - **Behavioral Patterns** – Detects tendency to sell winners too early, hold losers too long, etc.
 

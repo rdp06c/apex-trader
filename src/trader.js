@@ -2369,6 +2369,30 @@
             const bigPositions = withSizing.filter(t => t.positionSizePercent >= 15);
             const smallPositions = withSizing.filter(t => t.positionSizePercent < 15);
 
+            // Analyze RSI at entry
+            const withRSI = tradesWithTechnicals.filter(t => t.entryTechnicals.rsi != null);
+            const rsiOversold = withRSI.filter(t => t.entryTechnicals.rsi < 30);
+            const rsiNeutral = withRSI.filter(t => t.entryTechnicals.rsi >= 30 && t.entryTechnicals.rsi <= 70);
+            const rsiOverbought = withRSI.filter(t => t.entryTechnicals.rsi > 70);
+
+            // Analyze MACD crossover at entry
+            const withMACD = tradesWithTechnicals.filter(t => t.entryTechnicals.macdCrossover != null);
+            const macdBullish = withMACD.filter(t => t.entryTechnicals.macdCrossover === 'bullish');
+            const macdBearish = withMACD.filter(t => t.entryTechnicals.macdCrossover === 'bearish');
+            const macdNone = withMACD.filter(t => t.entryTechnicals.macdCrossover === 'none');
+
+            // Analyze short squeeze potential at entry
+            const withDTC = tradesWithTechnicals.filter(t => t.entryTechnicals.daysToCover != null);
+            const highSqueeze = withDTC.filter(t => t.entryTechnicals.daysToCover > 5);
+            const moderateSqueeze = withDTC.filter(t => t.entryTechnicals.daysToCover >= 3 && t.entryTechnicals.daysToCover <= 5);
+            const lowSqueeze = withDTC.filter(t => t.entryTechnicals.daysToCover < 3);
+
+            // Analyze composite score calibration
+            const withScore = tradesWithTechnicals.filter(t => t.entryTechnicals.compositeScore != null);
+            const scoreHigh = withScore.filter(t => t.entryTechnicals.compositeScore >= 15);
+            const scoreMedium = withScore.filter(t => t.entryTechnicals.compositeScore >= 10 && t.entryTechnicals.compositeScore < 15);
+            const scoreLow = withScore.filter(t => t.entryTechnicals.compositeScore < 10);
+
             const calcStats = (trades) => {
                 if (trades.length === 0) return null;
                 const wins = trades.filter(t => t.profitLoss > 0).length;
@@ -2427,6 +2451,30 @@
                     hasData: withSizing.length >= 3,
                     big: calcStats(bigPositions),
                     small: calcStats(smallPositions)
+                },
+                rsi: {
+                    hasData: withRSI.length >= 3,
+                    oversold: calcStats(rsiOversold),
+                    neutral: calcStats(rsiNeutral),
+                    overbought: calcStats(rsiOverbought)
+                },
+                macd: {
+                    hasData: withMACD.length >= 3,
+                    bullish: calcStats(macdBullish),
+                    bearish: calcStats(macdBearish),
+                    none: calcStats(macdNone)
+                },
+                squeeze: {
+                    hasData: withDTC.length >= 3,
+                    high: calcStats(highSqueeze),
+                    moderate: calcStats(moderateSqueeze),
+                    low: calcStats(lowSqueeze)
+                },
+                compositeScore: {
+                    hasData: withScore.length >= 3,
+                    high: calcStats(scoreHigh),
+                    medium: calcStats(scoreMedium),
+                    low: calcStats(scoreLow)
                 }
             };
         }
@@ -2728,6 +2776,72 @@
                         insights += `  → Large positions outperform — conviction sizing is working!\n`;
                     } else if (sizeDiff < -10) {
                         insights += `  ⚠️ Large positions underperform — reduce position sizes or improve conviction accuracy\n`;
+                    }
+                    insights += '\n';
+                }
+
+                if (technicalAnalysis.rsi?.hasData) {
+                    insights += `RSI at Entry:\n`;
+                    if (technicalAnalysis.rsi.oversold) insights += `  • Oversold (<30): ${technicalAnalysis.rsi.oversold.winRate.toFixed(1)}% win rate, ${technicalAnalysis.rsi.oversold.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.rsi.oversold.avgReturn.toFixed(1)}% avg (${technicalAnalysis.rsi.oversold.count} trades)\n`;
+                    if (technicalAnalysis.rsi.neutral) insights += `  • Neutral (30-70): ${technicalAnalysis.rsi.neutral.winRate.toFixed(1)}% win rate, ${technicalAnalysis.rsi.neutral.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.rsi.neutral.avgReturn.toFixed(1)}% avg (${technicalAnalysis.rsi.neutral.count} trades)\n`;
+                    if (technicalAnalysis.rsi.overbought) insights += `  • Overbought (>70): ${technicalAnalysis.rsi.overbought.winRate.toFixed(1)}% win rate, ${technicalAnalysis.rsi.overbought.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.rsi.overbought.avgReturn.toFixed(1)}% avg (${technicalAnalysis.rsi.overbought.count} trades)\n`;
+                    if (technicalAnalysis.rsi.oversold && technicalAnalysis.rsi.overbought) {
+                        const rsiDiff = technicalAnalysis.rsi.oversold.winRate - technicalAnalysis.rsi.overbought.winRate;
+                        if (rsiDiff > 10) {
+                            insights += `  → Oversold entries outperform by ${rsiDiff.toFixed(0)}% — contrarian RSI is working!\n`;
+                        } else if (rsiDiff < -10) {
+                            insights += `  → Overbought entries outperform by ${Math.abs(rsiDiff).toFixed(0)}% — momentum RSI works better\n`;
+                        }
+                    }
+                    insights += '\n';
+                }
+
+                if (technicalAnalysis.macd?.hasData) {
+                    insights += `MACD Crossover at Entry:\n`;
+                    if (technicalAnalysis.macd.bullish) insights += `  • Bullish crossover: ${technicalAnalysis.macd.bullish.winRate.toFixed(1)}% win rate, ${technicalAnalysis.macd.bullish.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.macd.bullish.avgReturn.toFixed(1)}% avg (${technicalAnalysis.macd.bullish.count} trades)\n`;
+                    if (technicalAnalysis.macd.bearish) insights += `  • Bearish crossover: ${technicalAnalysis.macd.bearish.winRate.toFixed(1)}% win rate, ${technicalAnalysis.macd.bearish.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.macd.bearish.avgReturn.toFixed(1)}% avg (${technicalAnalysis.macd.bearish.count} trades)\n`;
+                    if (technicalAnalysis.macd.none) insights += `  • No crossover: ${technicalAnalysis.macd.none.winRate.toFixed(1)}% win rate, ${technicalAnalysis.macd.none.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.macd.none.avgReturn.toFixed(1)}% avg (${technicalAnalysis.macd.none.count} trades)\n`;
+                    if (technicalAnalysis.macd.bullish && technicalAnalysis.macd.bearish) {
+                        const macdDiff = technicalAnalysis.macd.bullish.winRate - technicalAnalysis.macd.bearish.winRate;
+                        if (macdDiff > 10) {
+                            insights += `  → Bullish MACD IS predictive (+${macdDiff.toFixed(0)}%) — trust the crossover signal\n`;
+                        } else if (macdDiff < -10) {
+                            insights += `  ⚠️ Bearish MACD entries outperform by ${Math.abs(macdDiff).toFixed(0)}% — contrarian MACD working\n`;
+                        }
+                    }
+                    insights += '\n';
+                }
+
+                if (technicalAnalysis.squeeze?.hasData) {
+                    insights += `Short Squeeze Potential (Days-to-Cover):\n`;
+                    if (technicalAnalysis.squeeze.high) insights += `  • High DTC (>5): ${technicalAnalysis.squeeze.high.winRate.toFixed(1)}% win rate, ${technicalAnalysis.squeeze.high.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.squeeze.high.avgReturn.toFixed(1)}% avg (${technicalAnalysis.squeeze.high.count} trades)\n`;
+                    if (technicalAnalysis.squeeze.moderate) insights += `  • Moderate DTC (3-5): ${technicalAnalysis.squeeze.moderate.winRate.toFixed(1)}% win rate, ${technicalAnalysis.squeeze.moderate.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.squeeze.moderate.avgReturn.toFixed(1)}% avg (${technicalAnalysis.squeeze.moderate.count} trades)\n`;
+                    if (technicalAnalysis.squeeze.low) insights += `  • Low DTC (<3): ${technicalAnalysis.squeeze.low.winRate.toFixed(1)}% win rate, ${technicalAnalysis.squeeze.low.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.squeeze.low.avgReturn.toFixed(1)}% avg (${technicalAnalysis.squeeze.low.count} trades)\n`;
+                    if (technicalAnalysis.squeeze.high && technicalAnalysis.squeeze.low) {
+                        const squeezeDiff = technicalAnalysis.squeeze.high.winRate - technicalAnalysis.squeeze.low.winRate;
+                        if (squeezeDiff > 10) {
+                            insights += `  → High short interest IS predictive (+${squeezeDiff.toFixed(0)}%) — squeeze setups working!\n`;
+                        } else if (squeezeDiff < -10) {
+                            insights += `  → Low short interest entries outperform by ${Math.abs(squeezeDiff).toFixed(0)}% — squeeze isn't adding value\n`;
+                        }
+                    }
+                    insights += '\n';
+                }
+
+                if (technicalAnalysis.compositeScore?.hasData) {
+                    insights += `Composite Score Calibration:\n`;
+                    if (technicalAnalysis.compositeScore.high) insights += `  • High (15+): ${technicalAnalysis.compositeScore.high.winRate.toFixed(1)}% win rate, ${technicalAnalysis.compositeScore.high.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.compositeScore.high.avgReturn.toFixed(1)}% avg (${technicalAnalysis.compositeScore.high.count} trades)\n`;
+                    if (technicalAnalysis.compositeScore.medium) insights += `  • Medium (10-14): ${technicalAnalysis.compositeScore.medium.winRate.toFixed(1)}% win rate, ${technicalAnalysis.compositeScore.medium.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.compositeScore.medium.avgReturn.toFixed(1)}% avg (${technicalAnalysis.compositeScore.medium.count} trades)\n`;
+                    if (technicalAnalysis.compositeScore.low) insights += `  • Low (<10): ${technicalAnalysis.compositeScore.low.winRate.toFixed(1)}% win rate, ${technicalAnalysis.compositeScore.low.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.compositeScore.low.avgReturn.toFixed(1)}% avg (${technicalAnalysis.compositeScore.low.count} trades)\n`;
+                    if (technicalAnalysis.compositeScore.high && technicalAnalysis.compositeScore.low) {
+                        const scoreDiff = technicalAnalysis.compositeScore.high.winRate - technicalAnalysis.compositeScore.low.winRate;
+                        if (scoreDiff > 10) {
+                            insights += `  → High composite scores ARE predictive (+${scoreDiff.toFixed(0)}%) — scoring system is working!\n`;
+                        } else if (scoreDiff < -10) {
+                            insights += `  ⚠️ Low scores outperform by ${Math.abs(scoreDiff).toFixed(0)}% — scoring system needs calibration\n`;
+                        } else {
+                            insights += `  → Composite score has weak correlation — all tiers performing similarly\n`;
+                        }
                     }
                     insights += '\n';
                 }
@@ -6231,7 +6345,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             macdCrossover: marketData[symbol].macd?.crossover || null,
                             macdHistogram: marketData[symbol].macd?.histogram ?? null,
                             daysToCover: marketData[symbol].shortInterest?.daysToCover ?? null,
-                            marketCap: marketData[symbol].marketCap ?? null
+                            marketCap: marketData[symbol].marketCap ?? null,
+                            compositeScore: null // populated below from lastCandidateScores
                         },
 
                         // Market context at entry
@@ -6242,7 +6357,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         positionSizePercent: positionSizePercent,
                         portfolioValueAtEntry: totalPortfolioValue
                     });
-                    
+
+                    // Populate compositeScore from lastCandidateScores
+                    const txForScore = portfolio.transactions[portfolio.transactions.length - 1];
+                    const candidateForTx = (portfolio.lastCandidateScores?.candidates || []).find(c => c.symbol === symbol);
+                    if (candidateForTx && txForScore.entryTechnicals) txForScore.entryTechnicals.compositeScore = candidateForTx.compositeScore;
+
                     const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : '';
                     addActivity(`${convictionEmoji} APEX BOUGHT ${shares} shares of ${symbol} at $${price.toFixed(2)} (Conviction: ${conviction}/10) – "${decision.reasoning}"`, 'buy');
                     
@@ -8043,6 +8163,18 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
                 if (signalData.sizing?.hasData) {
                     signals.push({ name: 'Position Size', highLabel: 'Large (15%+)', lowLabel: 'Small', high: signalData.sizing.big, low: signalData.sizing.small });
+                }
+                if (signalData.rsi?.hasData && signalData.rsi.oversold && signalData.rsi.overbought) {
+                    signals.push({ name: 'RSI', highLabel: 'Oversold (&lt;30)', lowLabel: 'Overbought (&gt;70)', high: signalData.rsi.oversold, low: signalData.rsi.overbought });
+                }
+                if (signalData.macd?.hasData && signalData.macd.bullish && signalData.macd.bearish) {
+                    signals.push({ name: 'MACD', highLabel: 'Bullish xover', lowLabel: 'Bearish xover', high: signalData.macd.bullish, low: signalData.macd.bearish });
+                }
+                if (signalData.squeeze?.hasData && signalData.squeeze.high && signalData.squeeze.low) {
+                    signals.push({ name: 'Squeeze', highLabel: 'DTC &gt;5', lowLabel: 'DTC &lt;3', high: signalData.squeeze.high, low: signalData.squeeze.low });
+                }
+                if (signalData.compositeScore?.hasData && signalData.compositeScore.high && signalData.compositeScore.low) {
+                    signals.push({ name: 'Composite', highLabel: 'Score 15+', lowLabel: 'Score &lt;10', high: signalData.compositeScore.high, low: signalData.compositeScore.low });
                 }
                 signals.forEach(sig => {
                     if (sig.high && sig.low) {
