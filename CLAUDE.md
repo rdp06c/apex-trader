@@ -118,7 +118,7 @@ Four modules provide visibility into APEX's analysis data and portfolio state. U
 2. Charts (existing — perf chart + sector pie)
 3. **Market Regime Indicator** — non-collapsible banner
 4. Current Holdings (existing collapsible) — includes sector, entry momentum, and RS
-5. Decision Reasoning (existing collapsible)
+5. Decision Reasoning (existing collapsible) — individual cards are also collapsible (click header); restored cards start collapsed
 6. **Candidate Scorecard** — collapsible, collapsed by default
 7. **Sector Rotation Heatmap** — collapsible, collapsed by default
 8. Learning Insights (existing collapsible)
@@ -173,6 +173,9 @@ The Anthropic API is not called directly from the browser. All Claude API calls 
 - Phase 2 uses `claude-sonnet-4-5-20250929` with `max_tokens: 8000`
 - Chat uses `max_tokens: 1500`
 
+### After-Hours Price Handling
+Polygon's `lastTrade.p` reflects extended-hours trading, which differs from the regular-session closing price most sites display. The `isMarketOpen()` helper checks Eastern Time (9:30 AM – 4:00 PM ET, weekdays). When market is closed, price priority is `day.c > lastTrade.p > day.l`; when open, it's `lastTrade.p > day.c > day.l`. Change calculations are also recomputed from scratch when market is closed (Polygon's pre-computed `todaysChange`/`todaysChangePerc` include extended-hours movement). This applies to both `fetchBulkSnapshot` and individual `getStockPrice` calls.
+
 ### Anti-Whipsaw Protections (5 layers)
 1. **24-hour sell block** (code-enforced): `executeSingleTrade` rejects sells on holdings < 24 hours old regardless of AI recommendation
 2. **5-day re-buy cooldown** (code-enforced): `executeMultipleTrades` filters out symbols sold within 5 days from buy candidates
@@ -187,7 +190,7 @@ Splitting sell/buy into separate API calls solves information asymmetry: Phase 1
 ## Known Issues / Areas of Ongoing Work
 
 - **Runner bias** (mitigated): Extension penalty + pullback bonus + doubled reversal slots + stronger prompt guidance. Runners still score well (momentum matters), but no longer monopolize top 25.
-- **JSON parsing fragility**: AI responses sometimes include markdown, citations, or malformed JSON. Multiple fallback parsers handle this (regex extraction, brace matching, citation stripping).
+- **JSON parsing fragility** (largely mitigated): Both Phase 1 and Phase 2 now have single-quote fixes, citation stripping, brace matching, and structural fallback extractors. Phase 1 fallback regex-extracts `decisions`, `holdings_summary`, and `market_regime` individually when `JSON.parse` fails.
 - **Post-exit tracking** (`updatePostExitTracking`): Checks prices 1 week / 1 month after sells to evaluate exit quality. Depends on Polygon API availability.
 - **Volume trend unused**: `calculate5DayMomentum` computes `volumeTrend` but it's never used in composite scoring. Could confirm momentum quality.
 - **FVG detection unused**: `detectStructure` detects Fair Value Gaps but they're not used in scoring or reversal filtering. Scaffolding for potential future use.
@@ -224,6 +227,7 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `updateCandidateScorecard` | Renders scored candidates table |
 | `updateSectorRotationHeatmap` | Renders sector rotation card grid |
 | `updateLearningInsightsDisplay` | Renders all analytics panels in Learning Insights |
+| `isMarketOpen` | Checks if US market is open (ET timezone, weekday 9:30-16:00) |
 | `savePortfolio` / `loadPortfolio` | localStorage persistence |
 | `savePortfolioToDrive` | Google Drive backup |
 | `initChart` | Chart.js performance chart setup |
