@@ -3881,7 +3881,8 @@
             // Calculate current portfolio value BEFORE adding the deposit
             let currentValue;
             try {
-                currentValue = await calculatePortfolioValue();
+                const result = await calculatePortfolioValue();
+                currentValue = result.total;
             } catch (e) {
                 // Fallback: sum cash + estimate holdings from last known data
                 const lastKnown = portfolio.performanceHistory.filter(e => e.value != null).slice(-1)[0];
