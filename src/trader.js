@@ -4038,6 +4038,7 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                 const holdingSymbolsList = Object.keys(portfolio.holdings);
                 const hasHoldings = holdingSymbolsList.length > 0;
                 let phase1SellDecisions = [];
+                let phase1HoldDecisions = [];
                 let phase1Summary = '';
                 let phase1Regime = '';
                 let updatedCash = portfolio.cash;
@@ -4210,6 +4211,7 @@ Include a decision for EVERY holding.` }]
                                         }
                                         return true;
                                     });
+                                    phase1HoldDecisions = parsed.decisions.filter(d => d.action === 'HOLD');
                                     phase1Summary = parsed.holdings_summary || '';
                                     phase1Regime = parsed.market_regime || '';
                                     // Persist market regime for dashboard display
@@ -6041,9 +6043,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         
                         thinkingDetail.textContent = `AI analyzed ${decision.decisions.length} opportunity(ies)...`;
                         
-                        // Prepend Phase 1 sell decisions to the decision list
-                        if (phase1SellDecisions && phase1SellDecisions.length > 0) {
-                            decision.decisions = [...phase1SellDecisions, ...decision.decisions];
+                        // Prepend Phase 1 sell + hold decisions to the decision list
+                        if (phase1SellDecisions.length > 0 || phase1HoldDecisions.length > 0) {
+                            decision.decisions = [...phase1SellDecisions, ...phase1HoldDecisions, ...decision.decisions];
                             if (decision.overall_reasoning) {
                                 decision.overall_reasoning = '**Phase 1 - Holdings Review:**\n' + phase1Summary + '\n\n**Phase 2 - New Opportunities:**\n' + decision.overall_reasoning;
                             }
@@ -7541,7 +7543,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         <div class="decision-stock-item ${actionClass}" onclick="this.classList.toggle('expanded')">
                             <div class="decision-stock-item-header">
                                 <span class="decision-stock-item-title" style="color: ${actionColor};">
-                                    ${actionIcon} ${d.shares} ${d.symbol} @ ${price}
+                                    ${actionIcon} ${d.shares ? d.shares + ' ' : ''}${d.symbol}${price ? ' @ ' + price : ''}
                                 </span>
                                 <div class="decision-stock-item-badges">
                                     <span class="decision-action-badge" style="color: ${actionColor}; background: ${actionClass === 'sell' ? 'rgba(239,68,68,0.12)' : actionClass === 'buy' ? 'rgba(52,211,153,0.08)' : 'rgba(96,165,250,0.08)'}; border: 1px solid ${actionColor};">
