@@ -593,6 +593,7 @@
                             borderWidth: 2.5,
                             tension: 0.35,
                             fill: true,
+                            pointStyle: 'line',
                             pointRadius: 0,
                             pointHoverRadius: 5,
                             pointHoverBackgroundColor: '#f59e0b',
@@ -608,6 +609,7 @@
                             borderDash: [6, 3],
                             tension: 0.35,
                             fill: false,
+                            pointStyle: 'dash',
                             pointRadius: 0,
                             pointHoverRadius: 4,
                             pointHoverBackgroundColor: '#34d399',
@@ -653,9 +655,9 @@
                                     size: 11,
                                     weight: '500'
                                 },
-                                boxWidth: 12,
-                                boxHeight: 3,
-                                usePointStyle: false,
+                                usePointStyle: true,
+                                pointStyleWidth: 18,
+                                boxHeight: 7,
                                 padding: 16
                             }
                         },
