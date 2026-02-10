@@ -2548,393 +2548,310 @@
             };
         }
 
-        // Format performance insights for Claude's prompt - CONTEXTUAL, NOT RIGID
-        function formatPerformanceInsights() {
-            const analysis = analyzePerformanceHistory();
-            
-            if (!analysis.hasData) {
-                return `\n📊 LEARNING STATUS: ${analysis.message}\n`;
+        // Derive actionable trading rules from closed trade history
+        // Returns { rules: [...], summary: {...} } with enforcement levels: block, warn, observe
+        function deriveTradingRules() {
+            const closedTrades = portfolio.closedTrades || [];
+            const tradesWithTechnicals = closedTrades.filter(t => t.entryTechnicals && Object.keys(t.entryTechnicals).length > 0);
+
+            if (closedTrades.length < 3) {
+                return { rules: [], summary: { totalTrades: closedTrades.length, insufficientData: true } };
             }
-            
-            const { overall, stockPerformance, sectorPerformance, behaviorPatterns, recent } = analysis;
-            
-            let insights = `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📚 HISTORICAL CONTEXT - Learn from these insights, don't follow blindly
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📊 YOUR PERFORMANCE SUMMARY:
-• Total Trades: ${overall.totalTrades}
-• Record: ${overall.wins}W - ${overall.losses}L (${overall.winRate.toFixed(1)}% win rate)
-• Average Winner: +${overall.avgWinReturn.toFixed(2)}% over ${overall.avgWinHoldTime.toFixed(1)} days
-• Average Loser: ${overall.avgLossReturn.toFixed(2)}% over ${overall.avgLossHoldTime.toFixed(1)} days
+            const totalWins = closedTrades.filter(t => t.profitLoss > 0).length;
+            const totalLosses = closedTrades.length - totalWins;
+            const overallWinRate = (totalWins / closedTrades.length) * 100;
+            const winners = closedTrades.filter(t => t.profitLoss > 0);
+            const losers = closedTrades.filter(t => t.profitLoss <= 0);
+            const avgWin = winners.length > 0 ? winners.reduce((s, t) => s + t.returnPercent, 0) / winners.length : 0;
+            const avgLoss = losers.length > 0 ? losers.reduce((s, t) => s + t.returnPercent, 0) / losers.length : 0;
+            const avgWinDays = winners.length > 0 ? winners.reduce((s, t) => s + (t.holdTime || 0), 0) / winners.length / 86400000 : 0;
+            const avgLossDays = losers.length > 0 ? losers.reduce((s, t) => s + (t.holdTime || 0), 0) / losers.length / 86400000 : 0;
 
-📈 RECENT TREND (Last ${recent.trades} trades):
-• Record: ${recent.wins}W - ${recent.trades - recent.wins}L (${recent.winRate.toFixed(1)}% win rate)
-`;
-            
-            if (recent.trend.improving) {
-                insights += `• 🔥 IMPROVING! Recent win rate (${recent.winRate.toFixed(1)}%) > overall (${overall.winRate.toFixed(1)}%)\n`;
-                insights += `• Keep doing what you're doing - your strategy is working better\n`;
-            } else if (recent.trend.declining) {
-                insights += `• ⚠️ DECLINING! Recent win rate (${recent.winRate.toFixed(1)}%) < overall (${overall.winRate.toFixed(1)}%)\n`;
-                insights += `• Review recent decisions - something has changed\n`;
-            }
-            insights += '\n';
+            // Recent trend (last 10 trades)
+            const recentN = Math.min(10, closedTrades.length);
+            const recentTrades = closedTrades.slice(-recentN);
+            const recentWins = recentTrades.filter(t => t.profitLoss > 0).length;
+            const recentLosses = recentN - recentWins;
 
-            // Stock-specific context (not avoid/favor lists!)
-            const stocksWithMultipleTrades = Object.entries(stockPerformance)
-                .filter(([_, perf]) => perf.trades.length >= 2)
-                .sort((a, b) => b[1].trades.length - a[1].trades.length)
-                .slice(0, 5);
-            
-            if (stocksWithMultipleTrades.length > 0) {
-                insights += `📊 STOCK PERFORMANCE CONTEXT (Use this to inform decisions, not as rules):\n\n`;
-                stocksWithMultipleTrades.forEach(([symbol, perf]) => {
-                    insights += `${symbol}: ${perf.wins}-${perf.losses} record (${perf.avgReturn.toFixed(1)}% avg return)\n`;
-                    insights += `  • Entry prices: $${Math.min(...perf.entryPrices).toFixed(2)} - $${Math.max(...perf.entryPrices).toFixed(2)} (avg: $${perf.avgEntryPrice.toFixed(2)})\n`;
-                    insights += `  • Exit prices: $${Math.min(...perf.exitPrices).toFixed(2)} - $${Math.max(...perf.exitPrices).toFixed(2)} (avg: $${perf.avgExitPrice.toFixed(2)})\n`;
-                    
-                    if (perf.patterns.length > 0) {
-                        perf.patterns.forEach(pattern => {
-                            insights += `  • Pattern: ${pattern}\n`;
-                        });
-                    }
-                    
-                    // Context, not commands
-                    if (perf.losses > perf.wins) {
-                        insights += `  → Context: This stock hasn't worked well for you, but consider WHY (timing? conditions?)\n`;
-                        insights += `  → If conditions are different now (better price, better setup), it might work this time\n`;
-                    } else if (perf.wins > perf.losses) {
-                        insights += `  → Context: This stock has worked well for you in the past\n`;
-                        insights += `  → If setup is similar to previous wins, it could work again\n`;
-                    }
-                    insights += '\n';
+            const calcGroupStats = (trades) => {
+                if (!trades || trades.length === 0) return null;
+                const wins = trades.filter(t => t.profitLoss > 0).length;
+                return {
+                    count: trades.length,
+                    winRate: (wins / trades.length) * 100,
+                    avgReturn: trades.reduce((s, t) => s + t.returnPercent, 0) / trades.length
+                };
+            };
+
+            // Define pattern dimensions to evaluate
+            const patternDefs = [
+                {
+                    id: 'runner_entry',
+                    label: 'Runner Entries (up 5%+ today)',
+                    losingFilter: t => t.entryTechnicals && t.entryTechnicals.todayChange != null && t.entryTechnicals.todayChange >= 5,
+                    winningFilter: t => t.entryTechnicals && t.entryTechnicals.todayChange != null && t.entryTechnicals.todayChange < 5,
+                    descTemplate: (ls, ws) => `Stocks up 5%+ on the day of purchase: ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for non-runners`
+                },
+                {
+                    id: 'overbought_rsi',
+                    label: 'Overbought RSI (>70)',
+                    losingFilter: t => t.entryTechnicals && t.entryTechnicals.rsi != null && t.entryTechnicals.rsi > 70,
+                    winningFilter: t => t.entryTechnicals && t.entryTechnicals.rsi != null && t.entryTechnicals.rsi <= 70,
+                    descTemplate: (ls, ws) => `RSI > 70 at entry: ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for non-overbought`
+                },
+                {
+                    id: 'bearish_structure',
+                    label: 'Bearish Structure Entries',
+                    losingFilter: t => t.entryTechnicals && t.entryTechnicals.structure === 'bearish',
+                    winningFilter: t => t.entryTechnicals && t.entryTechnicals.structure === 'bullish',
+                    descTemplate: (ls, ws) => `Bearish structure at entry: ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for bullish`
+                },
+                {
+                    id: 'bearish_macd',
+                    label: 'Bearish MACD Crossover',
+                    losingFilter: t => t.entryTechnicals && t.entryTechnicals.macdCrossover === 'bearish',
+                    winningFilter: t => t.entryTechnicals && t.entryTechnicals.macdCrossover === 'bullish',
+                    descTemplate: (ls, ws) => `Bearish MACD at entry: ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for bullish crossover`
+                },
+                {
+                    id: 'outflow_sector',
+                    label: 'Outflow Sector Entries',
+                    losingFilter: t => t.entryTechnicals && (t.entryTechnicals.sectorRotation === 'avoid' || t.entryTechnicals.sectorRotation === 'caution'),
+                    winningFilter: t => t.entryTechnicals && (t.entryTechnicals.sectorRotation === 'accumulate' || t.entryTechnicals.sectorRotation === 'favorable'),
+                    descTemplate: (ls, ws) => `Outflow sector entries: ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for inflow sectors`
+                },
+                {
+                    id: 'high_momentum',
+                    label: 'Extended Momentum (9+)',
+                    losingFilter: t => t.entryTechnicals && t.entryTechnicals.momentumScore != null && t.entryTechnicals.momentumScore >= 9,
+                    winningFilter: t => t.entryTechnicals && t.entryTechnicals.momentumScore != null && t.entryTechnicals.momentumScore < 7,
+                    descTemplate: (ls, ws) => `Momentum 9+ at entry: ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for momentum <7`
+                },
+                {
+                    id: 'large_position',
+                    label: 'Large Positions (15%+)',
+                    losingFilter: t => t.positionSizePercent != null && t.positionSizePercent >= 15,
+                    winningFilter: t => t.positionSizePercent != null && t.positionSizePercent > 0 && t.positionSizePercent < 15,
+                    descTemplate: (ls, ws) => `Large positions (15%+): ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for smaller positions`
+                },
+                {
+                    id: 'low_composite',
+                    label: 'Low Composite Score (<10)',
+                    losingFilter: t => t.entryTechnicals && t.entryTechnicals.compositeScore != null && t.entryTechnicals.compositeScore < 10,
+                    winningFilter: t => t.entryTechnicals && t.entryTechnicals.compositeScore != null && t.entryTechnicals.compositeScore >= 15,
+                    descTemplate: (ls, ws) => `Low composite score (<10): ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for high scores (15+)`
+                },
+                {
+                    id: 'overconfident_conviction',
+                    label: 'Max Conviction (9-10)',
+                    losingFilter: t => t.entryConviction != null && t.entryConviction >= 9,
+                    winningFilter: t => t.entryConviction != null && t.entryConviction >= 5 && t.entryConviction <= 6,
+                    descTemplate: (ls, ws) => `9-10 conviction trades: ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for moderate (5-6) conviction`
+                }
+            ];
+
+            const rules = [];
+            for (const pdef of patternDefs) {
+                const losingTrades = closedTrades.filter(pdef.losingFilter);
+                const winningTrades = closedTrades.filter(pdef.winningFilter);
+                const losingStats = calcGroupStats(losingTrades);
+                const winningStats = calcGroupStats(winningTrades);
+
+                if (!losingStats || !winningStats) continue;
+
+                const winRateDiff = winningStats.winRate - losingStats.winRate;
+                const losingCount = losingStats.count;
+
+                // Determine enforcement level
+                let enforcement = 'observe';
+                let type = 'neutral';
+                if (losingCount >= 10 && losingStats.winRate < 40 && winRateDiff > 15) {
+                    enforcement = 'block';
+                    type = 'avoid';
+                } else if (losingCount >= 8 && winRateDiff > 15) {
+                    enforcement = 'warn';
+                    type = 'avoid';
+                } else if (losingCount >= 5 && winRateDiff > 10) {
+                    enforcement = 'warn';
+                    type = 'avoid';
+                }
+
+                rules.push({
+                    id: pdef.id,
+                    label: pdef.label,
+                    type,
+                    enforcement,
+                    winRate: losingStats.winRate,
+                    avgReturn: losingStats.avgReturn,
+                    trades: losingStats.count,
+                    compareWinRate: winningStats.winRate,
+                    compareTrades: winningStats.count,
+                    compareAvgReturn: winningStats.avgReturn,
+                    description: pdef.descTemplate(losingStats, winningStats)
                 });
             }
-            
-            // Sector insights
-            const sortedSectors = Object.entries(sectorPerformance)
-                .filter(([_, perf]) => perf.count >= 1)
-                .sort((a, b) => b[1].avgReturn - a[1].avgReturn);
-            
-            if (sortedSectors.length > 0) {
-                insights += `🎯 SECTOR PERFORMANCE INSIGHTS:\n\n`;
-                sortedSectors.forEach(([sector, perf]) => {
-                    const icon = perf.avgReturn > 5 ? '✅' : perf.avgReturn > 0 ? '➖' : '⚠️';
-                    insights += `${icon} ${sector}: ${perf.wins}-${perf.losses} (${perf.winRate.toFixed(0)}% win rate, ${perf.avgReturn >= 0 ? '+' : ''}${perf.avgReturn.toFixed(1)}% avg)\n`;
-                    if (perf.insight) {
-                        insights += `   ${perf.insight}\n`;
-                    }
-                });
-                insights += '\n';
-            }
-            
-            // Behavioral patterns - the most important insights!
-            if (behaviorPatterns.length > 0) {
-                insights += `🔍 YOUR TRADING BEHAVIOR PATTERNS:\n\n`;
-                behaviorPatterns.forEach(bp => {
-                    insights += `Pattern: ${bp.pattern}\n`;
-                    insights += `  • ${bp.insight}\n`;
-                    insights += `  • Action: ${bp.action}\n\n`;
-                });
-            }
-            
-            // PHASE 1 LEARNING: Add conviction, technical, and exit timing insights
-            const convictionAnalysis = analyzeConvictionAccuracy();
-            const technicalAnalysis = analyzeTechnicalAccuracy();
-            const exitAnalysis = analyzeExitTiming();
-            
-            // Conviction Accuracy
-            if (convictionAnalysis.hasData) {
-                insights += `🎯 CONVICTION ACCURACY (Phase 1 Learning):\n\n`;
-                Object.keys(convictionAnalysis.analysis).forEach(level => {
-                    const data = convictionAnalysis.analysis[level];
-                    insights += `${level}/10 Convictions (${data.count} trades):\n`;
-                    insights += `  • Win Rate: ${data.winRate.toFixed(1)}% | Avg Return: ${data.avgReturn >= 0 ? '+' : ''}${data.avgReturn.toFixed(1)}%\n`;
-                    insights += `  • Calibration: ${data.calibration}\n`;
-                    if (data.calibration === 'overconfident') {
-                        insights += `  → Your ${level} convictions are underperforming - be more selective or size smaller\n`;
-                    } else {
-                        insights += `  → Your ${level} convictions are well-calibrated - trust this confidence level\n`;
-                    }
-                    insights += '\n';
-                });
-            }
-            
-            // Technical Indicator Accuracy
-            if (technicalAnalysis.hasData) {
-                insights += `📊 TECHNICAL INDICATOR ACCURACY (Phase 1 Learning):\n\n`;
-                
-                if (technicalAnalysis.momentum.high && technicalAnalysis.momentum.low) {
-                    insights += `Momentum Score:\n`;
-                    insights += `  • High (7+): ${technicalAnalysis.momentum.high.winRate.toFixed(1)}% win rate, ${technicalAnalysis.momentum.high.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.momentum.high.avgReturn.toFixed(1)}% avg (${technicalAnalysis.momentum.high.count} trades)\n`;
-                    insights += `  • Low (<7): ${technicalAnalysis.momentum.low.winRate.toFixed(1)}% win rate, ${technicalAnalysis.momentum.low.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.momentum.low.avgReturn.toFixed(1)}% avg (${technicalAnalysis.momentum.low.count} trades)\n`;
-                    const diff = technicalAnalysis.momentum.high.winRate - technicalAnalysis.momentum.low.winRate;
-                    if (diff > 10) {
-                        insights += `  → High momentum IS predictive (+${diff.toFixed(0)}% win rate) - weight it heavily!\n`;
-                    } else {
-                        insights += `  → Momentum score has minimal impact - don't overweight it\n`;
-                    }
-                    insights += '\n';
-                }
-                
-                if (technicalAnalysis.relativeStrength.high && technicalAnalysis.relativeStrength.low) {
-                    insights += `Relative Strength (rsScore):\n`;
-                    insights += `  • High (70+): ${technicalAnalysis.relativeStrength.high.winRate.toFixed(1)}% win rate (${technicalAnalysis.relativeStrength.high.count} trades)\n`;
-                    insights += `  • Low (<70): ${technicalAnalysis.relativeStrength.low.winRate.toFixed(1)}% win rate (${technicalAnalysis.relativeStrength.low.count} trades)\n`;
-                    const diff = technicalAnalysis.relativeStrength.high.winRate - technicalAnalysis.relativeStrength.low.winRate;
-                    if (diff > 10) {
-                        insights += `  → High rsScore IS predictive - confirms strong setups\n`;
-                    }
-                    insights += '\n';
-                }
-                
-                if (technicalAnalysis.sectorRotation.inflow && technicalAnalysis.sectorRotation.outflow) {
-                    insights += `Sector Rotation:\n`;
-                    insights += `  • Inflow: ${technicalAnalysis.sectorRotation.inflow.winRate.toFixed(1)}% win rate (${technicalAnalysis.sectorRotation.inflow.count} trades)\n`;
-                    insights += `  • Outflow: ${technicalAnalysis.sectorRotation.outflow.winRate.toFixed(1)}% win rate (${technicalAnalysis.sectorRotation.outflow.count} trades)\n`;
-                    const diff = technicalAnalysis.sectorRotation.inflow.winRate - technicalAnalysis.sectorRotation.outflow.winRate;
-                    if (diff > 10) {
-                        insights += `  → Sector rotation IS predictive - avoid 'outflow' sectors\n`;
-                    }
-                    insights += '\n';
-                }
 
-                if (technicalAnalysis.runners?.hasData && technicalAnalysis.runners.runners && technicalAnalysis.runners.nonRunners) {
-                    insights += `Runner Entry Analysis (intraday % at purchase):\n`;
-                    insights += `  • Runners (up 5%+ day of buy): ${technicalAnalysis.runners.runners.winRate.toFixed(1)}% win rate, ${technicalAnalysis.runners.runners.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.runners.runners.avgReturn.toFixed(1)}% avg (${technicalAnalysis.runners.runners.count} trades)\n`;
-                    if (technicalAnalysis.runners.bigRunners && technicalAnalysis.runners.bigRunners.count > 0) {
-                        insights += `  • Big runners (up 10%+): ${technicalAnalysis.runners.bigRunners.winRate.toFixed(1)}% win rate, ${technicalAnalysis.runners.bigRunners.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.runners.bigRunners.avgReturn.toFixed(1)}% avg (${technicalAnalysis.runners.bigRunners.count} trades)\n`;
-                    }
-                    insights += `  • Non-runners (<5%): ${technicalAnalysis.runners.nonRunners.winRate.toFixed(1)}% win rate, ${technicalAnalysis.runners.nonRunners.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.runners.nonRunners.avgReturn.toFixed(1)}% avg (${technicalAnalysis.runners.nonRunners.count} trades)\n`;
-                    const runnerDiff = technicalAnalysis.runners.nonRunners.winRate - technicalAnalysis.runners.runners.winRate;
-                    if (runnerDiff > 10) {
-                        insights += `  ⚠️ RUNNERS UNDERPERFORM by ${runnerDiff.toFixed(0)}% win rate — avoid chasing stocks already up big today!\n`;
-                    } else if (runnerDiff > 0) {
-                        insights += `  → Non-runners slightly outperform — prefer calmer entries when possible\n`;
-                    } else {
-                        insights += `  → Runners holding up well so far — but monitor as data grows\n`;
-                    }
-                    insights += '\n';
+            // Also derive "prefer" rules — patterns that work well
+            const preferDefs = [
+                {
+                    id: 'pullback_entry',
+                    label: 'Pullback Entries (-2% to -8% 5d)',
+                    filter: t => t.entryTechnicals && t.entryTechnicals.momentumScore != null && t.entryTechnicals.momentumScore >= -8 && t.entryTechnicals.momentumScore <= -2,
+                    altFilter: t => t.entryTechnicals && t.entryTechnicals.todayChange != null && t.entryTechnicals.todayChange < 0 && t.entryTechnicals.structure === 'bullish'
+                },
+                {
+                    id: 'bullish_structure_entry',
+                    label: 'Bullish Structure Entries',
+                    filter: t => t.entryTechnicals && t.entryTechnicals.structure === 'bullish'
+                },
+                {
+                    id: 'oversold_rsi',
+                    label: 'Oversold RSI (<30)',
+                    filter: t => t.entryTechnicals && t.entryTechnicals.rsi != null && t.entryTechnicals.rsi < 30
+                },
+                {
+                    id: 'bullish_macd_entry',
+                    label: 'Bullish MACD Crossover',
+                    filter: t => t.entryTechnicals && t.entryTechnicals.macdCrossover === 'bullish'
+                },
+                {
+                    id: 'inflow_sector_entry',
+                    label: 'Inflow Sector Entries',
+                    filter: t => t.entryTechnicals && (t.entryTechnicals.sectorRotation === 'accumulate' || t.entryTechnicals.sectorRotation === 'favorable')
                 }
+            ];
 
-                if (technicalAnalysis.structure?.hasData && technicalAnalysis.structure.bullish && technicalAnalysis.structure.bearish) {
-                    insights += `Market Structure at Entry:\n`;
-                    insights += `  • Bullish: ${technicalAnalysis.structure.bullish.winRate.toFixed(1)}% win rate, ${technicalAnalysis.structure.bullish.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.structure.bullish.avgReturn.toFixed(1)}% avg (${technicalAnalysis.structure.bullish.count} trades)\n`;
-                    insights += `  • Bearish: ${technicalAnalysis.structure.bearish.winRate.toFixed(1)}% win rate, ${technicalAnalysis.structure.bearish.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.structure.bearish.avgReturn.toFixed(1)}% avg (${technicalAnalysis.structure.bearish.count} trades)\n`;
-                    if (technicalAnalysis.structure.choch) {
-                        insights += `  • CHoCH entries: ${technicalAnalysis.structure.choch.winRate.toFixed(1)}% win rate (${technicalAnalysis.structure.choch.count} trades)\n`;
-                    }
-                    if (technicalAnalysis.structure.bos) {
-                        insights += `  • BOS entries: ${technicalAnalysis.structure.bos.winRate.toFixed(1)}% win rate (${technicalAnalysis.structure.bos.count} trades)\n`;
-                    }
-                    const structDiff = technicalAnalysis.structure.bullish.winRate - technicalAnalysis.structure.bearish.winRate;
-                    if (structDiff > 15) {
-                        insights += `  → Bullish structure IS predictive (+${structDiff.toFixed(0)}%) — respect the trend!\n`;
-                    } else if (structDiff < -15) {
-                        insights += `  ⚠️ Bearish structure entries outperform — contrarian setups working better\n`;
-                    }
-                    insights += '\n';
-                }
+            for (const pdef of preferDefs) {
+                // Skip if already covered by an avoid rule's winning side
+                if (rules.find(r => r.id === pdef.id)) continue;
 
-                if (technicalAnalysis.acceleration?.hasData && technicalAnalysis.acceleration.accelerating && technicalAnalysis.acceleration.decelerating) {
-                    insights += `Momentum Acceleration:\n`;
-                    insights += `  • Accelerating: ${technicalAnalysis.acceleration.accelerating.winRate.toFixed(1)}% win rate (${technicalAnalysis.acceleration.accelerating.count} trades)\n`;
-                    insights += `  • Decelerating: ${technicalAnalysis.acceleration.decelerating.winRate.toFixed(1)}% win rate (${technicalAnalysis.acceleration.decelerating.count} trades)\n`;
-                    const accelDiff = technicalAnalysis.acceleration.accelerating.winRate - technicalAnalysis.acceleration.decelerating.winRate;
-                    if (accelDiff > 10) {
-                        insights += `  → Acceleration IS predictive — building momentum matters\n`;
-                    } else if (accelDiff < -10) {
-                        insights += `  ⚠️ Decelerating entries outperform — consider fading momentum\n`;
-                    }
-                    insights += '\n';
-                }
+                const matchingTrades = closedTrades.filter(pdef.filter || (() => false));
+                const stats = calcGroupStats(matchingTrades);
+                if (!stats || stats.count < 5) continue;
 
-                if (technicalAnalysis.regime?.hasData) {
-                    insights += `Market Regime at Entry:\n`;
-                    if (technicalAnalysis.regime.bull) insights += `  • Bull: ${technicalAnalysis.regime.bull.winRate.toFixed(1)}% win rate, ${technicalAnalysis.regime.bull.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.regime.bull.avgReturn.toFixed(1)}% avg (${technicalAnalysis.regime.bull.count} trades)\n`;
-                    if (technicalAnalysis.regime.bear) insights += `  • Bear: ${technicalAnalysis.regime.bear.winRate.toFixed(1)}% win rate, ${technicalAnalysis.regime.bear.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.regime.bear.avgReturn.toFixed(1)}% avg (${technicalAnalysis.regime.bear.count} trades)\n`;
-                    if (technicalAnalysis.regime.choppy) insights += `  • Choppy: ${technicalAnalysis.regime.choppy.winRate.toFixed(1)}% win rate, ${technicalAnalysis.regime.choppy.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.regime.choppy.avgReturn.toFixed(1)}% avg (${technicalAnalysis.regime.choppy.count} trades)\n`;
-                    insights += '\n';
-                }
-
-                if (technicalAnalysis.concentration?.hasData && technicalAnalysis.concentration.concentrated && technicalAnalysis.concentration.diversified) {
-                    insights += `Portfolio Concentration at Entry:\n`;
-                    insights += `  • Concentrated (1-3 holdings): ${technicalAnalysis.concentration.concentrated.winRate.toFixed(1)}% win rate (${technicalAnalysis.concentration.concentrated.count} trades)\n`;
-                    insights += `  • Diversified (4+ holdings): ${technicalAnalysis.concentration.diversified.winRate.toFixed(1)}% win rate (${technicalAnalysis.concentration.diversified.count} trades)\n`;
-                    const concDiff = technicalAnalysis.concentration.concentrated.winRate - technicalAnalysis.concentration.diversified.winRate;
-                    if (Math.abs(concDiff) > 10) {
-                        insights += `  → ${concDiff > 0 ? 'Concentrated' : 'Diversified'} portfolios outperform by ${Math.abs(concDiff).toFixed(0)}%\n`;
-                    }
-                    insights += '\n';
-                }
-
-                if (technicalAnalysis.sizing?.hasData && technicalAnalysis.sizing.big && technicalAnalysis.sizing.small) {
-                    insights += `Position Sizing:\n`;
-                    insights += `  • Large (15%+): ${technicalAnalysis.sizing.big.winRate.toFixed(1)}% win rate, ${technicalAnalysis.sizing.big.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.sizing.big.avgReturn.toFixed(1)}% avg (${technicalAnalysis.sizing.big.count} trades)\n`;
-                    insights += `  • Small (<15%): ${technicalAnalysis.sizing.small.winRate.toFixed(1)}% win rate, ${technicalAnalysis.sizing.small.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.sizing.small.avgReturn.toFixed(1)}% avg (${technicalAnalysis.sizing.small.count} trades)\n`;
-                    const sizeDiff = technicalAnalysis.sizing.big.winRate - technicalAnalysis.sizing.small.winRate;
-                    if (sizeDiff > 10) {
-                        insights += `  → Large positions outperform — conviction sizing is working!\n`;
-                    } else if (sizeDiff < -10) {
-                        insights += `  ⚠️ Large positions underperform — reduce position sizes or improve conviction accuracy\n`;
-                    }
-                    insights += '\n';
-                }
-
-                if (technicalAnalysis.rsi?.hasData) {
-                    insights += `RSI at Entry:\n`;
-                    if (technicalAnalysis.rsi.oversold) insights += `  • Oversold (<30): ${technicalAnalysis.rsi.oversold.winRate.toFixed(1)}% win rate, ${technicalAnalysis.rsi.oversold.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.rsi.oversold.avgReturn.toFixed(1)}% avg (${technicalAnalysis.rsi.oversold.count} trades)\n`;
-                    if (technicalAnalysis.rsi.neutral) insights += `  • Neutral (30-70): ${technicalAnalysis.rsi.neutral.winRate.toFixed(1)}% win rate, ${technicalAnalysis.rsi.neutral.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.rsi.neutral.avgReturn.toFixed(1)}% avg (${technicalAnalysis.rsi.neutral.count} trades)\n`;
-                    if (technicalAnalysis.rsi.overbought) insights += `  • Overbought (>70): ${technicalAnalysis.rsi.overbought.winRate.toFixed(1)}% win rate, ${technicalAnalysis.rsi.overbought.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.rsi.overbought.avgReturn.toFixed(1)}% avg (${technicalAnalysis.rsi.overbought.count} trades)\n`;
-                    if (technicalAnalysis.rsi.oversold && technicalAnalysis.rsi.overbought) {
-                        const rsiDiff = technicalAnalysis.rsi.oversold.winRate - technicalAnalysis.rsi.overbought.winRate;
-                        if (rsiDiff > 10) {
-                            insights += `  → Oversold entries outperform by ${rsiDiff.toFixed(0)}% — contrarian RSI is working!\n`;
-                        } else if (rsiDiff < -10) {
-                            insights += `  → Overbought entries outperform by ${Math.abs(rsiDiff).toFixed(0)}% — momentum RSI works better\n`;
-                        }
-                    }
-                    insights += '\n';
-                }
-
-                if (technicalAnalysis.macd?.hasData) {
-                    insights += `MACD Crossover at Entry:\n`;
-                    if (technicalAnalysis.macd.bullish) insights += `  • Bullish crossover: ${technicalAnalysis.macd.bullish.winRate.toFixed(1)}% win rate, ${technicalAnalysis.macd.bullish.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.macd.bullish.avgReturn.toFixed(1)}% avg (${technicalAnalysis.macd.bullish.count} trades)\n`;
-                    if (technicalAnalysis.macd.bearish) insights += `  • Bearish crossover: ${technicalAnalysis.macd.bearish.winRate.toFixed(1)}% win rate, ${technicalAnalysis.macd.bearish.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.macd.bearish.avgReturn.toFixed(1)}% avg (${technicalAnalysis.macd.bearish.count} trades)\n`;
-                    if (technicalAnalysis.macd.none) insights += `  • No crossover: ${technicalAnalysis.macd.none.winRate.toFixed(1)}% win rate, ${technicalAnalysis.macd.none.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.macd.none.avgReturn.toFixed(1)}% avg (${technicalAnalysis.macd.none.count} trades)\n`;
-                    if (technicalAnalysis.macd.bullish && technicalAnalysis.macd.bearish) {
-                        const macdDiff = technicalAnalysis.macd.bullish.winRate - technicalAnalysis.macd.bearish.winRate;
-                        if (macdDiff > 10) {
-                            insights += `  → Bullish MACD IS predictive (+${macdDiff.toFixed(0)}%) — trust the crossover signal\n`;
-                        } else if (macdDiff < -10) {
-                            insights += `  ⚠️ Bearish MACD entries outperform by ${Math.abs(macdDiff).toFixed(0)}% — contrarian MACD working\n`;
-                        }
-                    }
-                    insights += '\n';
-                }
-
-                if (technicalAnalysis.squeeze?.hasData) {
-                    insights += `Short Squeeze Potential (Days-to-Cover):\n`;
-                    if (technicalAnalysis.squeeze.high) insights += `  • High DTC (>5): ${technicalAnalysis.squeeze.high.winRate.toFixed(1)}% win rate, ${technicalAnalysis.squeeze.high.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.squeeze.high.avgReturn.toFixed(1)}% avg (${technicalAnalysis.squeeze.high.count} trades)\n`;
-                    if (technicalAnalysis.squeeze.moderate) insights += `  • Moderate DTC (3-5): ${technicalAnalysis.squeeze.moderate.winRate.toFixed(1)}% win rate, ${technicalAnalysis.squeeze.moderate.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.squeeze.moderate.avgReturn.toFixed(1)}% avg (${technicalAnalysis.squeeze.moderate.count} trades)\n`;
-                    if (technicalAnalysis.squeeze.low) insights += `  • Low DTC (<3): ${technicalAnalysis.squeeze.low.winRate.toFixed(1)}% win rate, ${technicalAnalysis.squeeze.low.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.squeeze.low.avgReturn.toFixed(1)}% avg (${technicalAnalysis.squeeze.low.count} trades)\n`;
-                    if (technicalAnalysis.squeeze.high && technicalAnalysis.squeeze.low) {
-                        const squeezeDiff = technicalAnalysis.squeeze.high.winRate - technicalAnalysis.squeeze.low.winRate;
-                        if (squeezeDiff > 10) {
-                            insights += `  → High short interest IS predictive (+${squeezeDiff.toFixed(0)}%) — squeeze setups working!\n`;
-                        } else if (squeezeDiff < -10) {
-                            insights += `  → Low short interest entries outperform by ${Math.abs(squeezeDiff).toFixed(0)}% — squeeze isn't adding value\n`;
-                        }
-                    }
-                    insights += '\n';
-                }
-
-                if (technicalAnalysis.compositeScore?.hasData) {
-                    insights += `Composite Score Calibration:\n`;
-                    if (technicalAnalysis.compositeScore.high) insights += `  • High (15+): ${technicalAnalysis.compositeScore.high.winRate.toFixed(1)}% win rate, ${technicalAnalysis.compositeScore.high.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.compositeScore.high.avgReturn.toFixed(1)}% avg (${technicalAnalysis.compositeScore.high.count} trades)\n`;
-                    if (technicalAnalysis.compositeScore.medium) insights += `  • Medium (10-14): ${technicalAnalysis.compositeScore.medium.winRate.toFixed(1)}% win rate, ${technicalAnalysis.compositeScore.medium.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.compositeScore.medium.avgReturn.toFixed(1)}% avg (${technicalAnalysis.compositeScore.medium.count} trades)\n`;
-                    if (technicalAnalysis.compositeScore.low) insights += `  • Low (<10): ${technicalAnalysis.compositeScore.low.winRate.toFixed(1)}% win rate, ${technicalAnalysis.compositeScore.low.avgReturn >= 0 ? '+' : ''}${technicalAnalysis.compositeScore.low.avgReturn.toFixed(1)}% avg (${technicalAnalysis.compositeScore.low.count} trades)\n`;
-                    if (technicalAnalysis.compositeScore.high && technicalAnalysis.compositeScore.low) {
-                        const scoreDiff = technicalAnalysis.compositeScore.high.winRate - technicalAnalysis.compositeScore.low.winRate;
-                        if (scoreDiff > 10) {
-                            insights += `  → High composite scores ARE predictive (+${scoreDiff.toFixed(0)}%) — scoring system is working!\n`;
-                        } else if (scoreDiff < -10) {
-                            insights += `  ⚠️ Low scores outperform by ${Math.abs(scoreDiff).toFixed(0)}% — scoring system needs calibration\n`;
-                        } else {
-                            insights += `  → Composite score has weak correlation — all tiers performing similarly\n`;
-                        }
-                    }
-                    insights += '\n';
-                }
-            }
-
-            // Hold Time Analysis
-            if (exitAnalysis.hasData && exitAnalysis.holdBuckets && Object.keys(exitAnalysis.holdBuckets).length >= 2) {
-                insights += `⏱️ HOLD TIME ANALYSIS:\n\n`;
-                const bucketOrder = ['0-1d', '2-3d', '4-7d', '1-2w', '2w+'];
-                let bestBucket = null, bestWinRate = -1;
-                bucketOrder.forEach(b => {
-                    const data = exitAnalysis.holdBuckets[b];
-                    if (data && data.count >= 1) {
-                        insights += `  • ${b}: ${data.winRate.toFixed(0)}% win rate, ${data.avgReturn >= 0 ? '+' : ''}${data.avgReturn.toFixed(1)}% avg (${data.count} trades)\n`;
-                        if (data.count >= 2 && data.winRate > bestWinRate) { bestWinRate = data.winRate; bestBucket = b; }
-                    }
-                });
-                if (bestBucket) {
-                    insights += `  → Best hold period: ${bestBucket} (${bestWinRate.toFixed(0)}% win rate)\n`;
-                }
-                insights += '\n';
-            }
-
-            // Exit Timing Analysis
-            if (exitAnalysis.hasData) {
-                insights += `⏰ EXIT TIMING ANALYSIS (Phase 1 Learning):\n\n`;
-                
-                if (exitAnalysis.insight) {
-                    insights += `⚠️ ${exitAnalysis.insight}\n\n`;
-                }
-                
-                insights += `Exit Reasons:\n`;
-                Object.keys(exitAnalysis.byReason).forEach(reason => {
-                    const data = exitAnalysis.byReason[reason];
-                    const reasonLabel = reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    insights += `  • ${reasonLabel}: ${data.count} exits, ${data.avgReturn >= 0 ? '+' : ''}${data.avgReturn.toFixed(1)}% avg\n`;
-                });
-                
-                if (exitAnalysis.profitTargetCount >= 3 && exitAnalysis.avgWinnerReturn < 20) {
-                    insights += `\n  → You're taking profits quickly (avg winner: ${exitAnalysis.avgWinnerReturn.toFixed(1)}%)\n`;
-                    insights += `  → Consider: Let winners run longer when catalyst is still strong\n`;
-                } else if (exitAnalysis.avgWinnerReturn > 30) {
-                    insights += `\n  → Great! You're holding winners (avg: ${exitAnalysis.avgWinnerReturn.toFixed(1)}%)\n`;
-                }
-                insights += '\n';
-            }
-            
-            // POST-EXIT TRACKING INSIGHTS
-            const trackedExits = (portfolio.closedTrades || []).filter(t => t.tracking && (t.tracking.priceAfter1Week !== null || t.tracking.priceAfter1Month !== null));
-            if (trackedExits.length >= 3) {
-                const earlyExits = trackedExits.filter(t => {
-                    const weekReturn = t.tracking.priceAfter1Week ? ((t.tracking.priceAfter1Week - t.sellPrice) / t.sellPrice * 100) : null;
-                    return weekReturn !== null && weekReturn > 5; // Stock went up 5%+ after you sold
-                });
-                const goodExits = trackedExits.filter(t => {
-                    const weekReturn = t.tracking.priceAfter1Week ? ((t.tracking.priceAfter1Week - t.sellPrice) / t.sellPrice * 100) : null;
-                    return weekReturn !== null && weekReturn < -2; // Stock dropped after you sold
-                });
-                
-                insights += `📊 POST-EXIT TRACKING (Did you sell at the right time?):\n`;
-                insights += `  Tracked exits: ${trackedExits.length}\n`;
-                if (earlyExits.length > 0) {
-                    insights += `  ⚠️ Sold too early ${earlyExits.length}x — stock rose 5%+ within a week after exit\n`;
-                    earlyExits.slice(0, 3).forEach(t => {
-                        insights += `    • ${t.symbol}: Sold $${t.sellPrice.toFixed(2)} → $${t.tracking.priceAfter1Week.toFixed(2)} one week later (${t.tracking.weekReturnVsSell})\n`;
+                // Only mark as "prefer" if win rate is notably above overall
+                if (stats.winRate > overallWinRate + 5) {
+                    rules.push({
+                        id: pdef.id,
+                        label: pdef.label,
+                        type: 'prefer',
+                        enforcement: 'observe',
+                        winRate: stats.winRate,
+                        avgReturn: stats.avgReturn,
+                        trades: stats.count,
+                        compareWinRate: overallWinRate,
+                        compareTrades: closedTrades.length,
+                        compareAvgReturn: closedTrades.reduce((s, t) => s + t.returnPercent, 0) / closedTrades.length,
+                        description: `${pdef.label}: ${stats.winRate.toFixed(0)}% win rate (${stats.count} trades) vs ${overallWinRate.toFixed(0)}% overall`
                     });
                 }
-                if (goodExits.length > 0) {
-                    insights += `  ✅ Good exits ${goodExits.length}x — stock fell 2%+ after you sold\n`;
+            }
+
+            // Sort: block first, then warn, then prefer, then observe
+            const enfOrder = { block: 0, warn: 1, observe: 2 };
+            const typeOrder = { avoid: 0, prefer: 1, neutral: 2 };
+            rules.sort((a, b) => {
+                const eDiff = (enfOrder[a.enforcement] ?? 3) - (enfOrder[b.enforcement] ?? 3);
+                if (eDiff !== 0) return eDiff;
+                return (typeOrder[a.type] ?? 3) - (typeOrder[b.type] ?? 3);
+            });
+
+            const result = {
+                rules,
+                summary: {
+                    totalTrades: closedTrades.length,
+                    wins: totalWins,
+                    losses: totalLosses,
+                    winRate: overallWinRate,
+                    avgWin,
+                    avgLoss,
+                    avgWinDays,
+                    avgLossDays,
+                    recentWins,
+                    recentLosses,
+                    recentTrend: recentWins > recentLosses ? 'improving' : recentWins < recentLosses ? 'declining' : 'steady'
                 }
-                const earlyRate = (earlyExits.length / trackedExits.length * 100).toFixed(0);
-                if (parseInt(earlyRate) > 50) {
-                    insights += `  → Pattern: You sell too early ${earlyRate}% of the time. Consider holding longer or using trailing stops.\n`;
-                } else if (parseInt(earlyRate) < 25) {
-                    insights += `  → Pattern: Your exit timing is good — you rarely leave money on the table.\n`;
+            };
+
+            // Persist to portfolio for cross-refresh availability
+            portfolio.tradingRules = result;
+
+            return result;
+        }
+
+        // Check if a trade's market data matches a specific rule pattern
+        function matchesPattern(ruleId, data) {
+            if (!data) return false;
+            switch (ruleId) {
+                case 'runner_entry':
+                    return data.momentum?.todayChange >= 5 || data.todayChange >= 5;
+                case 'overbought_rsi':
+                    return data.rsi > 70;
+                case 'bearish_structure':
+                    return data.marketStructure?.structure === 'bearish';
+                case 'bearish_macd':
+                    return data.macdCrossover === 'bearish' || data.macd?.crossover === 'bearish';
+                case 'outflow_sector':
+                    return data.sectorRotation?.moneyFlow === 'outflow' || data.sectorFlow === 'avoid' || data.sectorFlow === 'caution';
+                case 'high_momentum':
+                    return data.momentum?.score >= 9;
+                case 'low_composite':
+                    return data.compositeScore != null && data.compositeScore < 10;
+                case 'overconfident_conviction':
+                    return false; // Can't block by conviction — Claude decides this
+                case 'large_position':
+                    return false; // Position sizing is handled separately
+                default:
+                    return false;
+            }
+        }
+
+        // Format performance insights for Claude's prompt — concise rules, not statistics
+        function formatPerformanceInsights() {
+            const rulesData = deriveTradingRules();
+
+            if (rulesData.rules.length === 0) {
+                if (rulesData.summary.insufficientData) {
+                    return `\nTRADING RULES: Need more trade history (${rulesData.summary.totalTrades} trades so far, need 3+).\n`;
+                }
+                return `\nTRADING RULES: No clear patterns yet from ${rulesData.summary.totalTrades} trades.\n`;
+            }
+
+            const s = rulesData.summary;
+            const blockRules = rulesData.rules.filter(r => r.enforcement === 'block');
+            const warnRules = rulesData.rules.filter(r => r.enforcement === 'warn' && r.type === 'avoid');
+            const preferRules = rulesData.rules.filter(r => r.type === 'prefer');
+
+            let insights = `\nTRADING RULES (derived from your ${s.totalTrades}-trade history):\n\n`;
+
+            if (blockRules.length > 0) {
+                insights += `ENFORCED (code-blocked — these trades will not execute):\n`;
+                for (const r of blockRules) {
+                    insights += `- ${r.label}: ${r.winRate.toFixed(0)}% win rate, ${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg over ${r.trades} trades [BLOCKED]\n`;
                 }
                 insights += '\n';
             }
-            
-            insights += `💡 HOW TO USE THIS DATA:
-• This is CONTEXT, not commandments - markets change, conditions evolve
-• If a stock failed before due to poor entry timing, a better entry now might work
-• If you tend to sell winners too early, consciously hold longer this time
-• If a sector is underperforming, analyze WHY before avoiding it entirely
-• Learn from patterns in your BEHAVIOR (hold times, entry timing) more than from specific stocks
-• Your goal: Understand what makes YOUR trades succeed or fail, then apply those lessons
 
-REMEMBER: Past performance helps inform decisions, but always evaluate current conditions!
+            if (warnRules.length > 0) {
+                insights += `STRONG GUIDANCE (data says avoid):\n`;
+                for (const r of warnRules) {
+                    insights += `- ${r.label}: ${r.winRate.toFixed(0)}% win rate over ${r.trades} trades vs ${r.compareWinRate.toFixed(0)}% baseline — skip unless catalyst is extraordinary\n`;
+                }
+                insights += '\n';
+            }
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-            
+            if (preferRules.length > 0) {
+                insights += `WHAT'S WORKING:\n`;
+                for (const r of preferRules) {
+                    insights += `- ${r.label}: ${r.winRate.toFixed(0)}% win rate, ${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg over ${r.trades} trades\n`;
+                }
+                insights += '\n';
+            }
+
+            insights += `PERFORMANCE: ${s.wins}W-${s.losses}L (${s.winRate.toFixed(0)}%), Avg winner: +${s.avgWin.toFixed(1)}% (${s.avgWinDays.toFixed(1)}d), Avg loser: ${s.avgLoss.toFixed(1)}% (${s.avgLossDays.toFixed(1)}d)\n`;
+            insights += `RECENT: ${s.recentWins}W-${s.recentLosses}L — ${s.recentTrend}\n\n`;
+
             return insights;
         }
 
@@ -6175,6 +6092,36 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 return true;
             });
 
+            // Step 2b: Enforce learned trading rules
+            const tradingRules = deriveTradingRules();
+            const blockRules = tradingRules.rules.filter(r => r.enforcement === 'block');
+            if (blockRules.length > 0) {
+                buyDecisionsAll = buyDecisionsAll.filter(d => {
+                    const data = marketData[d.symbol];
+                    for (const rule of blockRules) {
+                        if (matchesPattern(rule.id, data)) {
+                            const msg = `BLOCKED: ${d.symbol} — ${rule.label} (${rule.winRate.toFixed(0)}% win rate, ${rule.trades} trades)`;
+                            console.warn(msg);
+                            addActivity(msg, 'warning');
+                            // Record blocked trade
+                            if (!portfolio.blockedTrades) portfolio.blockedTrades = [];
+                            portfolio.blockedTrades.push({
+                                symbol: d.symbol,
+                                timestamp: new Date().toISOString(),
+                                ruleId: rule.id,
+                                ruleLabel: rule.label,
+                                winRate: rule.winRate,
+                                price: data?.price || 0
+                            });
+                            // Cap at 50 entries
+                            while (portfolio.blockedTrades.length > 50) portfolio.blockedTrades.shift();
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+            }
+
             // Step 3: Now validate BUY budget against ACTUAL post-sell cash
             let totalCost = 0;
             let budgetWarning = '';
@@ -7015,6 +6962,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (!portfolio.lastMarketRegime) portfolio.lastMarketRegime = null;
                     if (!portfolio.lastCandidateScores) portfolio.lastCandidateScores = null;
                     if (!portfolio.lastSectorRotation) portfolio.lastSectorRotation = null;
+                    if (!portfolio.blockedTrades) portfolio.blockedTrades = [];
+                    if (!portfolio.tradingRules) portfolio.tradingRules = null;
 
                     // MIGRATION: Reconstruct totalDeposits if missing or zero
                     // For portfolios created before totalDeposits tracking was added
@@ -7530,6 +7479,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const sortedDecisions = [...decision.decisions].sort((a, b) =>
                     (actionOrder[a.action] ?? 3) - (actionOrder[b.action] ?? 3)
                 );
+                // Get warn-level rules for badge display
+                const warnRulesForBadges = deriveTradingRules().rules.filter(r => r.enforcement === 'warn' && r.type === 'avoid');
+
                 sortedDecisions.forEach(d => {
                     const isSell = d.action === 'SELL';
                     const isBuy = d.action === 'BUY';
@@ -7542,6 +7494,18 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const convictionColor = d.conviction >= 9 ? '#34d399' : d.conviction >= 7 ? '#60a5fa' : '#a8a8a0';
                     const convictionEmoji = d.conviction >= 9 ? '🔥' : d.conviction >= 7 ? '💪' : '';
                     const price = marketData[d.symbol] ? `$${marketData[d.symbol].price.toFixed(2)}` : '';
+
+                    // Check for warn-level pattern matches on BUY decisions
+                    let warningBadge = '';
+                    if (isBuy && marketData[d.symbol]) {
+                        for (const wr of warnRulesForBadges) {
+                            if (matchesPattern(wr.id, marketData[d.symbol])) {
+                                warningBadge = `<div class="pattern-warning">Matches losing pattern: ${escapeHtml(wr.label)} (${wr.winRate.toFixed(0)}% win rate)</div>`;
+                                break;
+                            }
+                        }
+                    }
+
                     stocksList += `
                         <div class="decision-stock-item ${actionClass}" onclick="this.classList.toggle('expanded')">
                             <div class="decision-stock-item-header">
@@ -7558,6 +7522,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     <span class="decision-expand-icon">&#9656;</span>
                                 </div>
                             </div>
+                            ${warningBadge}
                             <div class="decision-stock-reasoning">
                                 ${formatDecisionText(d.reasoning)}
                             </div>
@@ -8021,392 +7986,151 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         
         // Update Learning Insights Display
         function updateLearningInsightsDisplay() {
-            const analysis = analyzePerformanceHistory();
             const container = document.getElementById('learningInsights');
-            
-            if (!analysis.hasData) {
-                container.innerHTML = `<div class="empty-state">${analysis.message}</div>`;
+            const rulesData = deriveTradingRules();
+
+            if (rulesData.rules.length === 0 && (rulesData.summary.insufficientData || rulesData.summary.totalTrades < 3)) {
+                container.innerHTML = `<div class="empty-state">Need more trade history to derive rules (${rulesData.summary.totalTrades || 0} trades so far)</div>`;
                 return;
             }
-            
-            const { overall, sectorPerformance, stockPerformance, behaviorPatterns, recent } = analysis;
-            
-            let html = '<div class="insights-grid">';
 
-            // Overall Performance
-            html += `
-                <div class="insight-panel">
-                    <div class="insight-panel-title">Overall Performance</div>
-                    <div class="insight-panel-body">
-                        <div>Record: ${overall.wins}W - ${overall.losses}L (${overall.winRate.toFixed(1)}%)</div>
-                        <div>Avg Winner: <span class="positive">+${overall.avgWinReturn.toFixed(1)}%</span> (${overall.avgWinHoldTime.toFixed(1)} days)</div>
-                        <div>Avg Loser: <span class="negative">${overall.avgLossReturn.toFixed(1)}%</span> (${overall.avgLossHoldTime.toFixed(1)} days)</div>
-                    </div>
-                </div>
-            `;
-            
-            // Recent Trend
-            const trendIcon = recent.trend.improving ? '🔥' : 
-                             recent.trend.declining ? '⚠️' : '➖';
-            const trendText = recent.trend.improving ? 'IMPROVING!' : 
-                             recent.trend.declining ? 'DECLINING' : 'STEADY';
-            const trendColor = recent.trend.improving ? '#34d399' : 
-                              recent.trend.declining ? '#f87171' : '#a8a8a0';
-            
-            html += `
-                <div class="insight-panel">
-                    <div class="insight-panel-title">Recent Trend</div>
-                    <div class="insight-panel-body">
-                        <div>Last ${recent.trades} trades: ${recent.wins}W - ${recent.trades - recent.wins}L</div>
-                        <div>Win Rate: ${recent.winRate.toFixed(1)}%</div>
-                        <div style="color: ${trendColor}; font-weight: 600; margin-top: 5px;">${trendIcon} ${trendText}</div>
-                    </div>
-                </div>
-            `;
-            
-            html += '</div>'; // Close grid
+            let html = '';
+            const s = rulesData.summary;
 
-            const closedTradesAll = portfolio.closedTrades || [];
+            // ── Section A: Trading Rules ──
+            const blockRules = rulesData.rules.filter(r => r.enforcement === 'block');
+            const warnRules = rulesData.rules.filter(r => r.enforcement === 'warn' && r.type === 'avoid');
+            const preferRules = rulesData.rules.filter(r => r.type === 'prefer');
+            const observeRules = rulesData.rules.filter(r => r.enforcement === 'observe' && r.type !== 'prefer');
 
-            // Risk/Reward Profile Panel
-            if (overall.wins > 0 && overall.losses > 0) {
-                const totalGains = closedTradesAll.filter(t => t.profitLoss > 0).reduce((s, t) => s + t.profitLoss, 0);
-                const totalLosses = Math.abs(closedTradesAll.filter(t => t.profitLoss <= 0).reduce((s, t) => s + t.profitLoss, 0));
+            if (rulesData.rules.length > 0) {
+                html += `<div class="rules-section">
+                    <div class="rules-section-title">What APEX Has Learned</div>
+                    <div class="rules-grid">`;
+
+                for (const r of blockRules) {
+                    html += `<div class="rule-card rule-block">
+                        <div class="rule-card-header">
+                            <span class="rule-card-label">${escapeHtml(r.label)}</span>
+                            <span class="rule-enforcement-badge rule-badge-block">BLOCKED</span>
+                        </div>
+                        <div class="rule-card-stats">
+                            <span class="rule-stat negative">${r.winRate.toFixed(0)}% win rate</span>
+                            <span class="rule-stat">${r.trades} trades</span>
+                            <span class="rule-stat">${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg</span>
+                        </div>
+                        <div class="rule-card-compare">vs ${r.compareWinRate.toFixed(0)}% win rate for opposite (${r.compareTrades} trades)</div>
+                    </div>`;
+                }
+
+                for (const r of warnRules) {
+                    html += `<div class="rule-card rule-warn">
+                        <div class="rule-card-header">
+                            <span class="rule-card-label">${escapeHtml(r.label)}</span>
+                            <span class="rule-enforcement-badge rule-badge-warn">AVOID</span>
+                        </div>
+                        <div class="rule-card-stats">
+                            <span class="rule-stat negative">${r.winRate.toFixed(0)}% win rate</span>
+                            <span class="rule-stat">${r.trades} trades</span>
+                            <span class="rule-stat">${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg</span>
+                        </div>
+                        <div class="rule-card-compare">vs ${r.compareWinRate.toFixed(0)}% win rate for opposite (${r.compareTrades} trades)</div>
+                    </div>`;
+                }
+
+                for (const r of preferRules) {
+                    html += `<div class="rule-card rule-prefer">
+                        <div class="rule-card-header">
+                            <span class="rule-card-label">${escapeHtml(r.label)}</span>
+                            <span class="rule-enforcement-badge rule-badge-prefer">WORKING</span>
+                        </div>
+                        <div class="rule-card-stats">
+                            <span class="rule-stat positive">${r.winRate.toFixed(0)}% win rate</span>
+                            <span class="rule-stat">${r.trades} trades</span>
+                            <span class="rule-stat">${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg</span>
+                        </div>
+                        <div class="rule-card-compare">vs ${r.compareWinRate.toFixed(0)}% overall (${r.compareTrades} trades)</div>
+                    </div>`;
+                }
+
+                for (const r of observeRules) {
+                    html += `<div class="rule-card rule-observe">
+                        <div class="rule-card-header">
+                            <span class="rule-card-label">${escapeHtml(r.label)}</span>
+                            <span class="rule-enforcement-badge rule-badge-observe">WATCHING</span>
+                        </div>
+                        <div class="rule-card-stats">
+                            <span class="rule-stat">${r.winRate.toFixed(0)}% win rate</span>
+                            <span class="rule-stat">${r.trades} trades</span>
+                            <span class="rule-stat">${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg</span>
+                        </div>
+                        <div class="rule-card-compare">vs ${r.compareWinRate.toFixed(0)}% for opposite (${r.compareTrades} trades)</div>
+                    </div>`;
+                }
+
+                html += `</div></div>`;
+            }
+
+            // ── Section B: Performance Summary ──
+            if (s.totalTrades >= 3) {
+                const closedTradesAll = portfolio.closedTrades || [];
+                const totalGains = closedTradesAll.filter(t => t.profitLoss > 0).reduce((sum, t) => sum + t.profitLoss, 0);
+                const totalLosses = Math.abs(closedTradesAll.filter(t => t.profitLoss <= 0).reduce((sum, t) => sum + t.profitLoss, 0));
                 const profitFactor = totalLosses > 0 ? totalGains / totalLosses : totalGains > 0 ? Infinity : 0;
-                const winLossRatio = overall.avgLossReturn !== 0 ? Math.abs(overall.avgWinReturn / overall.avgLossReturn) : 0;
-                const expectedValue = (overall.winRate / 100 * overall.avgWinReturn) + ((1 - overall.winRate / 100) * overall.avgLossReturn);
                 const pfColor = profitFactor >= 2 ? 'var(--green)' : profitFactor >= 1 ? 'var(--accent-light)' : 'var(--red)';
-                const wlColor = winLossRatio >= 2 ? 'var(--green)' : winLossRatio >= 1 ? 'var(--accent-light)' : 'var(--red)';
-                const evColor = expectedValue >= 0 ? 'var(--green)' : 'var(--red)';
+                const trendLabel = s.recentTrend === 'improving' ? 'Improving' : s.recentTrend === 'declining' ? 'Declining' : 'Steady';
+                const trendColor = s.recentTrend === 'improving' ? 'var(--green)' : s.recentTrend === 'declining' ? 'var(--red)' : 'var(--text-muted)';
+
                 html += `<div class="analytics-panel">
-                    <div class="analytics-panel-title">Risk / Reward Profile</div>
+                    <div class="analytics-panel-title">Performance Summary</div>
                     <div class="insight-panel-body">
                         <div class="rr-stats-row">
+                            <div class="rr-stat">
+                                <div class="rr-stat-value">${s.wins}W-${s.losses}L</div>
+                                <div class="rr-stat-label">Record (${s.winRate.toFixed(0)}%)</div>
+                            </div>
+                            <div class="rr-stat">
+                                <div class="rr-stat-value positive">+${s.avgWin.toFixed(1)}%</div>
+                                <div class="rr-stat-label">Avg Win (${s.avgWinDays.toFixed(1)}d)</div>
+                            </div>
+                            <div class="rr-stat">
+                                <div class="rr-stat-value negative">${s.avgLoss.toFixed(1)}%</div>
+                                <div class="rr-stat-label">Avg Loss (${s.avgLossDays.toFixed(1)}d)</div>
+                            </div>
                             <div class="rr-stat">
                                 <div class="rr-stat-value" style="color: ${pfColor};">${profitFactor === Infinity ? '∞' : profitFactor.toFixed(2)}</div>
                                 <div class="rr-stat-label">Profit Factor</div>
                             </div>
                             <div class="rr-stat">
-                                <div class="rr-stat-value" style="color: ${wlColor};">${winLossRatio.toFixed(2)}x</div>
-                                <div class="rr-stat-label">Win/Loss Ratio</div>
-                            </div>
-                            <div class="rr-stat">
-                                <div class="rr-stat-value" style="color: ${evColor};">${expectedValue >= 0 ? '+' : ''}${expectedValue.toFixed(2)}%</div>
-                                <div class="rr-stat-label">Expected Value</div>
+                                <div class="rr-stat-value" style="color: ${trendColor};">${s.recentWins}W-${s.recentLosses}L</div>
+                                <div class="rr-stat-label">Recent (${trendLabel})</div>
                             </div>
                         </div>
                     </div>
                 </div>`;
             }
 
-            // Hold Time Comparison Panel
-            if (overall.wins > 0 && overall.losses > 0) {
-                const maxHold = Math.max(overall.avgWinHoldTime, overall.avgLossHoldTime, 1);
-                const winBarPct = (overall.avgWinHoldTime / maxHold * 100).toFixed(0);
-                const lossBarPct = (overall.avgLossHoldTime / maxHold * 100).toFixed(0);
-                const holdingLosers = overall.avgLossHoldTime > overall.avgWinHoldTime * 1.3;
+            // ── Section C: Blocked Trades ──
+            const blockedTrades = portfolio.blockedTrades || [];
+            if (blockedTrades.length > 0) {
                 html += `<div class="analytics-panel">
-                    <div class="analytics-panel-title">Hold Time Comparison</div>
+                    <div class="analytics-panel-title">Blocked Trades</div>
                     <div class="insight-panel-body">
-                        <div class="hold-time-row">
-                            <span class="hold-time-label">Winners</span>
-                            <div class="hold-time-bar-track">
-                                <div class="hold-time-bar-fill" style="width: ${winBarPct}%; background: var(--green);"></div>
-                            </div>
-                            <span class="hold-time-value">${overall.avgWinHoldTime.toFixed(1)} days</span>
-                        </div>
-                        <div class="hold-time-row">
-                            <span class="hold-time-label">Losers</span>
-                            <div class="hold-time-bar-track">
-                                <div class="hold-time-bar-fill" style="width: ${lossBarPct}%; background: var(--red);"></div>
-                            </div>
-                            <span class="hold-time-value">${overall.avgLossHoldTime.toFixed(1)} days</span>
-                        </div>
-                        ${holdingLosers ? '<div class="exit-insight-callout">Losers held longer than winners — consider tighter stop-losses</div>' : ''}
-                    </div>
-                </div>`;
-            }
-
-            // Win/Loss Streaks Panel
-            if (closedTradesAll.length >= 5) {
-                let currentStreak = 0, currentType = '', bestWin = 0, worstLoss = 0, tempStreak = 0, tempType = '';
-                const sorted = [...closedTradesAll].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
-                sorted.forEach(t => {
-                    const type = t.profitLoss > 0 ? 'W' : 'L';
-                    if (type === tempType) { tempStreak++; }
-                    else { tempStreak = 1; tempType = type; }
-                    if (type === 'W' && tempStreak > bestWin) bestWin = tempStreak;
-                    if (type === 'L' && tempStreak > worstLoss) worstLoss = tempStreak;
-                });
-                currentStreak = tempStreak;
-                currentType = tempType;
-                const streakColor = currentType === 'W' ? 'var(--green)' : 'var(--red)';
-                const streakLabel = currentType === 'W' ? 'Win' : 'Loss';
-                html += `<div class="analytics-panel">
-                    <div class="analytics-panel-title">Streaks</div>
-                    <div class="insight-panel-body">
-                        <div class="rr-stats-row">
-                            <div class="rr-stat">
-                                <div class="rr-stat-value" style="color: ${streakColor};">${currentStreak} ${streakLabel}${currentStreak !== 1 ? 's' : ''}</div>
-                                <div class="rr-stat-label">Current</div>
-                            </div>
-                            <div class="rr-stat">
-                                <div class="rr-stat-value" style="color: var(--green);">${bestWin}</div>
-                                <div class="rr-stat-label">Best Win Streak</div>
-                            </div>
-                            <div class="rr-stat">
-                                <div class="rr-stat-value" style="color: var(--red);">${worstLoss}</div>
-                                <div class="rr-stat-label">Worst Loss Streak</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-            }
-
-            // Conviction Accuracy Panel
-            const convictionData = analyzeConvictionAccuracy();
-            if (convictionData.hasData) {
-                html += `<div class="analytics-panel">
-                    <div class="analytics-panel-title">Conviction Accuracy</div>
-                    <div class="insight-panel-body">`;
-                const levels = ['9-10', '7-8', '5-6'];
-                levels.forEach(level => {
-                    const d = convictionData.analysis[level];
-                    if (d) {
-                        const barColor = d.calibration === 'well-calibrated' ? 'var(--green)' : 'var(--accent)';
-                        const calClass = d.calibration === 'well-calibrated' ? 'well-calibrated' : 'overconfident';
-                        const calLabel = d.calibration === 'well-calibrated' ? 'Well-calibrated' : 'Overconfident';
-                        html += `
-                        <div class="conviction-bar-row">
-                            <span class="conviction-level">${level}</span>
-                            <div class="conviction-bar-track">
-                                <div class="conviction-bar-fill" style="width: ${Math.min(d.winRate, 100)}%; background: ${barColor};"></div>
-                            </div>
-                            <span class="conviction-stats">${d.winRate.toFixed(0)}% win &middot; ${d.avgReturn >= 0 ? '+' : ''}${d.avgReturn.toFixed(1)}% avg &middot; ${d.count} trades</span>
-                            <span class="conviction-calibration ${calClass}">${calLabel}</span>
-                        </div>`;
-                    }
-                });
-                html += '</div></div>';
-            }
-
-            // Signal Accuracy Panel
-            const signalData = analyzeTechnicalAccuracy();
-            if (signalData.hasData) {
-                html += `<div class="analytics-panel">
-                    <div class="analytics-panel-title">Signal Accuracy</div>
-                    <div class="insight-panel-body">`;
-                const signals = [
-                    { name: 'Momentum', highLabel: 'High (7+)', lowLabel: 'Low (&lt;7)', high: signalData.momentum.high, low: signalData.momentum.low },
-                    { name: 'RS', highLabel: 'High (70+)', lowLabel: 'Low (&lt;70)', high: signalData.relativeStrength.high, low: signalData.relativeStrength.low },
-                    { name: 'Sector Flow', highLabel: 'Inflow', lowLabel: 'Outflow', high: signalData.sectorRotation.inflow, low: signalData.sectorRotation.outflow }
-                ];
-                if (signalData.runners?.hasData) {
-                    signals.push({ name: 'Runner Entry', highLabel: 'Runner (5%+)', lowLabel: 'Non-runner', high: signalData.runners.runners, low: signalData.runners.nonRunners });
-                }
-                if (signalData.structure?.hasData) {
-                    signals.push({ name: 'Structure', highLabel: 'Bullish', lowLabel: 'Bearish', high: signalData.structure.bullish, low: signalData.structure.bearish });
-                }
-                if (signalData.acceleration?.hasData) {
-                    signals.push({ name: 'Acceleration', highLabel: 'Accel', lowLabel: 'Decel', high: signalData.acceleration.accelerating, low: signalData.acceleration.decelerating });
-                }
-                if (signalData.regime?.hasData && signalData.regime.bull && signalData.regime.bear) {
-                    signals.push({ name: 'Regime', highLabel: 'Bull', lowLabel: 'Bear', high: signalData.regime.bull, low: signalData.regime.bear });
-                }
-                if (signalData.concentration?.hasData) {
-                    signals.push({ name: 'Concentration', highLabel: '1-3 holdings', lowLabel: '4+', high: signalData.concentration.concentrated, low: signalData.concentration.diversified });
-                }
-                if (signalData.sizing?.hasData) {
-                    signals.push({ name: 'Position Size', highLabel: 'Large (15%+)', lowLabel: 'Small', high: signalData.sizing.big, low: signalData.sizing.small });
-                }
-                if (signalData.rsi?.hasData && signalData.rsi.oversold && signalData.rsi.overbought) {
-                    signals.push({ name: 'RSI', highLabel: 'Oversold (&lt;30)', lowLabel: 'Overbought (&gt;70)', high: signalData.rsi.oversold, low: signalData.rsi.overbought });
-                }
-                if (signalData.macd?.hasData && signalData.macd.bullish && signalData.macd.bearish) {
-                    signals.push({ name: 'MACD', highLabel: 'Bullish xover', lowLabel: 'Bearish xover', high: signalData.macd.bullish, low: signalData.macd.bearish });
-                }
-                if (signalData.squeeze?.hasData && signalData.squeeze.high && signalData.squeeze.low) {
-                    signals.push({ name: 'Squeeze', highLabel: 'DTC &gt;5', lowLabel: 'DTC &lt;3', high: signalData.squeeze.high, low: signalData.squeeze.low });
-                }
-                if (signalData.compositeScore?.hasData && signalData.compositeScore.high && signalData.compositeScore.low) {
-                    signals.push({ name: 'Composite', highLabel: 'Score 15+', lowLabel: 'Score &lt;10', high: signalData.compositeScore.high, low: signalData.compositeScore.low });
-                }
-                signals.forEach(sig => {
-                    if (sig.high && sig.low) {
-                        const highWins = sig.high.winRate > sig.low.winRate;
-                        const diff = Math.abs(sig.high.winRate - sig.low.winRate);
-                        const verdict = diff > 15 ? (highWins ? 'predictive' : 'contrarian') : 'weak';
-                        const verdictLabel = diff > 15 ? (highWins ? 'Predictive' : 'Contrarian') : 'Weak signal';
-                        html += `
-                        <div class="signal-comparison-row">
-                            <span class="signal-name">${sig.name}</span>
-                            <div class="signal-side ${highWins ? 'winning' : ''}">
-                                <div class="signal-side-label">${sig.highLabel}</div>
-                                <div class="signal-side-stats">${sig.high.winRate.toFixed(0)}% win &middot; ${sig.high.avgReturn >= 0 ? '+' : ''}${sig.high.avgReturn.toFixed(1)}%</div>
-                                <div class="signal-side-count">${sig.high.count} trades</div>
-                            </div>
-                            <span class="signal-vs">vs</span>
-                            <div class="signal-side ${!highWins ? 'winning' : ''}">
-                                <div class="signal-side-label">${sig.lowLabel}</div>
-                                <div class="signal-side-stats">${sig.low.winRate.toFixed(0)}% win &middot; ${sig.low.avgReturn >= 0 ? '+' : ''}${sig.low.avgReturn.toFixed(1)}%</div>
-                                <div class="signal-side-count">${sig.low.count} trades</div>
-                            </div>
-                            <span class="signal-verdict ${verdict}">${verdictLabel}</span>
-                        </div>`;
-                    }
-                });
-                html += '</div></div>';
-            }
-
-            // Exit Analysis Panel
-            const exitData = analyzeExitTiming();
-            if (exitData.hasData) {
-                const reasonLabels = {
-                    profit_target: { label: 'Profit Target', cls: 'profit' },
-                    stop_loss: { label: 'Stop Loss', cls: 'stop' },
-                    catalyst_failure: { label: 'Catalyst Failed', cls: 'catalyst' },
-                    opportunity_cost: { label: 'Opportunity Cost', cls: 'opportunity' },
-                    manual: { label: 'Manual', cls: 'manual' }
-                };
-                html += `<div class="analytics-panel">
-                    <div class="analytics-panel-title">Exit Analysis</div>
-                    <div class="insight-panel-body">`;
-                Object.entries(exitData.byReason).forEach(([reason, d]) => {
-                    const meta = reasonLabels[reason] || { label: reason, cls: 'manual' };
-                    const retClass = d.avgReturn >= 0 ? 'positive' : 'negative';
-                    html += `
-                    <div class="exit-reason-row">
-                        <span class="exit-reason-badge ${meta.cls}">${meta.label}</span>
-                        <span class="exit-reason-count">${d.count} trades</span>
-                        <span class="exit-reason-winrate">${d.winRate.toFixed(0)}% win</span>
-                        <span class="exit-reason-return ${retClass}">${d.avgReturn >= 0 ? '+' : ''}${d.avgReturn.toFixed(1)}%</span>
+                        <div class="blocked-trades-list">`;
+                // Show most recent first, up to 10
+                const recentBlocked = blockedTrades.slice(-10).reverse();
+                for (const bt of recentBlocked) {
+                    const timeAgo = formatTimeAgo(bt.timestamp);
+                    html += `<div class="blocked-trade-row">
+                        <span class="blocked-trade-symbol">${escapeHtml(bt.symbol)}</span>
+                        <span class="blocked-trade-rule">${escapeHtml(bt.ruleLabel)}</span>
+                        <span class="blocked-trade-stat">${bt.winRate.toFixed(0)}% win rate</span>
+                        <span class="blocked-trade-time">${timeAgo}</span>
                     </div>`;
-                });
-                if (exitData.insight) {
-                    html += `<div class="exit-insight-callout">${exitData.insight}</div>`;
                 }
-                html += '</div></div>';
+                html += `</div></div></div>`;
             }
 
-            // Post-Exit Tracking Panel
-            const trackedTrades = closedTradesAll.filter(t => t.tracking && (t.tracking.priceAfter1Week !== null || t.tracking.priceAfter1Month !== null));
-            if (trackedTrades.length >= 3) {
-                const goodExits = trackedTrades.filter(t => {
-                    const weekReturn = t.tracking.priceAfter1Week ? (t.tracking.priceAfter1Week - t.sellPrice) / t.sellPrice : 0;
-                    const monthReturn = t.tracking.priceAfter1Month ? (t.tracking.priceAfter1Month - t.sellPrice) / t.sellPrice : 0;
-                    return (t.tracking.priceAfter1Month !== null ? monthReturn : weekReturn) <= 0;
-                });
-                const earlyExits = trackedTrades.filter(t => {
-                    const ref = t.tracking.priceAfter1Month !== null ? t.tracking.priceAfter1Month : t.tracking.priceAfter1Week;
-                    return ref && ((ref - t.sellPrice) / t.sellPrice) >= 0.05;
-                });
-                html += `<div class="analytics-panel">
-                    <div class="analytics-panel-title">Post-Exit Tracking</div>
-                    <div class="insight-panel-body">
-                        <div class="post-exit-summary">
-                            <span class="post-exit-stat good">${goodExits.length} Good Exits</span>
-                            <span class="post-exit-stat early">${earlyExits.length} Early Exits</span>
-                        </div>`;
-                trackedTrades.slice(-8).forEach(t => {
-                    let weekHtml = '';
-                    let monthHtml = '';
-                    if (t.tracking.priceAfter1Week !== null) {
-                        const weekPct = ((t.tracking.priceAfter1Week - t.sellPrice) / t.sellPrice * 100);
-                        const weekCls = weekPct <= 0 ? 'good-exit' : 'early-exit';
-                        weekHtml = `<span class="post-exit-after ${weekCls}">1wk: ${weekPct >= 0 ? '+' : ''}${weekPct.toFixed(1)}%</span>`;
-                    }
-                    if (t.tracking.priceAfter1Month !== null) {
-                        const monthPct = ((t.tracking.priceAfter1Month - t.sellPrice) / t.sellPrice * 100);
-                        const monthCls = monthPct <= 0 ? 'good-exit' : 'early-exit';
-                        monthHtml = `<span class="post-exit-after ${monthCls}">1mo: ${monthPct >= 0 ? '+' : ''}${monthPct.toFixed(1)}%</span>`;
-                    }
-                    html += `
-                    <div class="post-exit-row">
-                        <span class="post-exit-symbol">${t.symbol}</span>
-                        <span class="post-exit-sell">Sold $${t.sellPrice.toFixed(0)}</span>
-                        ${weekHtml}
-                        ${monthHtml}
-                    </div>`;
-                });
-                html += '</div></div>';
-            }
-
-            // Behavioral Patterns - Most important!
-            if (behaviorPatterns.length > 0) {
-                html += `
-                    <div class="behavior-section">
-                        <div class="behavior-section-title">APEX's Trading Behavior</div>
-                        <div class="behavior-list">
-                `;
-                behaviorPatterns.forEach(bp => {
-                    html += `
-                        <div class="behavior-item">
-                            <div class="behavior-item-pattern">${bp.pattern}</div>
-                            <div class="behavior-item-insight">${bp.insight}</div>
-                            <div class="behavior-item-action">→ ${bp.action}</div>
-                        </div>
-                    `;
-                });
-                html += '</div></div>';
-            }
-            
-            // Stock Context (not avoid/favor lists!)
-            const stocksWithContext = Object.entries(stockPerformance)
-                .filter(([_, perf]) => perf.trades.length >= 2)
-                .sort((a, b) => b[1].trades.length - a[1].trades.length)
-                .slice(0, 6);
-            
-            if (stocksWithContext.length > 0) {
-                html += `
-                    <div class="stock-context-section">
-                        <div class="stock-context-title">Stock Performance Context</div>
-                        <div class="stock-context-grid">
-                `;
-                stocksWithContext.forEach(([symbol, perf]) => {
-                    const color = perf.avgReturn > 5 ? '#34d399' : perf.avgReturn > 0 ? '#a8a8a0' : '#f87171';
-                    const interpretation = perf.losses > perf.wins ?
-                        'Review entry timing' :
-                        perf.wins > perf.losses ? 'Working well' : 'Mixed results';
-
-                    html += `
-                        <div class="stock-context-item">
-                            <div class="stock-context-item-symbol">${symbol}</div>
-                            <div class="stock-context-item-record">${perf.wins}-${perf.losses} (${perf.winRate.toFixed(0)}%)</div>
-                            <div class="stock-context-item-return" style="color: ${color};">${perf.avgReturn >= 0 ? '+' : ''}${perf.avgReturn.toFixed(1)}%</div>
-                            <div class="stock-context-item-note">${interpretation}</div>
-                        </div>
-                    `;
-                });
-                html += '</div></div>';
-            }
-            
-            // Sector Insights
-            const sortedSectors = Object.entries(sectorPerformance)
-                .filter(([_, perf]) => perf.count >= 1)
-                .sort((a, b) => b[1].avgReturn - a[1].avgReturn)
-                .slice(0, 6);
-            
-            if (sortedSectors.length > 0) {
-                html += `
-                    <div class="sector-insights-section">
-                        <div class="sector-insights-title">Sector Performance</div>
-                        <div class="sector-insights-grid">
-                `;
-                sortedSectors.forEach(([sector, perf]) => {
-                    const icon = perf.avgReturn > 5 ? '✅' : perf.avgReturn > 0 ? '➖' : '⚠️';
-                    const color = perf.avgReturn > 5 ? '#34d399' : perf.avgReturn > 0 ? '#a8a8a0' : '#f87171';
-                    html += `
-                        <div class="sector-insights-item">
-                            <div class="sector-insights-item-name">${icon} ${sector}</div>
-                            <div class="sector-insights-item-record">${perf.wins}-${perf.losses} (${perf.winRate.toFixed(0)}%)</div>
-                            <div class="sector-insights-item-return" style="color: ${color};">${perf.avgReturn >= 0 ? '+' : ''}${perf.avgReturn.toFixed(1)}%</div>
-                            ${perf.insight ? `<div class="sector-insights-item-note">${perf.insight}</div>` : ''}
-                        </div>
-                    `;
-                });
-                html += '</div></div>';
-            }
-            
             container.innerHTML = html;
         }
 

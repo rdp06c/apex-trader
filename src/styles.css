@@ -2029,6 +2029,166 @@
         .post-exit-after.good-exit { color: var(--green); }
         .post-exit-after.early-exit { color: var(--red); }
 
+        /* ── Trading Rules Cards ──────────────────────────── */
+        .rules-section {
+            margin-bottom: 12px;
+        }
+
+        .rules-section-title {
+            font-weight: 600;
+            font-size: 12px;
+            margin-bottom: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .rules-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .rule-card {
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .rule-card.rule-block {
+            background: rgba(239, 68, 68, 0.06);
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+
+        .rule-card.rule-warn {
+            background: rgba(245, 158, 11, 0.06);
+            border-color: rgba(245, 158, 11, 0.25);
+        }
+
+        .rule-card.rule-prefer {
+            background: rgba(52, 211, 153, 0.06);
+            border-color: rgba(52, 211, 153, 0.25);
+        }
+
+        .rule-card.rule-observe {
+            background: var(--bg-inset);
+            border-color: var(--border-subtle);
+        }
+
+        .rule-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .rule-card-label {
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--text-primary);
+        }
+
+        .rule-enforcement-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 3px;
+            letter-spacing: 0.5px;
+        }
+
+        .rule-badge-block {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .rule-badge-warn {
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .rule-badge-prefer {
+            color: #34d399;
+            background: rgba(52, 211, 153, 0.1);
+            border: 1px solid rgba(52, 211, 153, 0.3);
+        }
+
+        .rule-badge-observe {
+            color: var(--text-muted);
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .rule-card-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .rule-stat.positive { color: var(--green); }
+        .rule-stat.negative { color: var(--red); }
+
+        .rule-card-compare {
+            font-size: 10px;
+            color: var(--text-faint);
+        }
+
+        /* ── Blocked Trades List ──────────────────────────── */
+        .blocked-trades-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .blocked-trade-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            font-size: 11px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .blocked-trade-row:last-child {
+            border-bottom: none;
+        }
+
+        .blocked-trade-symbol {
+            font-weight: 700;
+            color: var(--text-primary);
+            min-width: 50px;
+        }
+
+        .blocked-trade-rule {
+            color: var(--red);
+            flex: 1;
+        }
+
+        .blocked-trade-stat {
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .blocked-trade-time {
+            color: var(--text-faint);
+            font-size: 10px;
+            white-space: nowrap;
+        }
+
+        /* ── Pattern Warning Badge (Decision Cards) ───────── */
+        .pattern-warning {
+            font-size: 10px;
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            border-radius: 3px;
+            padding: 3px 8px;
+            margin: 4px 12px 0 12px;
+        }
+
         /* ── Empty State ───────────────────────────────────── */
         .empty-state {
             text-align: center;
