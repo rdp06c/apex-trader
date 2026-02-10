@@ -3758,6 +3758,7 @@
             // P&L = value - cumulativeDeposits  (starts at $0, shows pure trading gains/losses)
 
             const initialBal = portfolio.initialBalance || 0;
+            const totalDeps = portfolio.totalDeposits || initialBal;
 
             // Build deposit timeline from flagged entries
             const depositTimeline = []; // [{index, amount}]
@@ -3766,6 +3767,39 @@
                     depositTimeline.push({ index: i, amount: h.deposit, flagged: true });
                 }
             });
+
+            // Check if flagged deposits account for all known deposits
+            const flaggedTotal = depositTimeline.reduce((s, d) => s + d.amount, 0);
+            const unaccounted = totalDeps - initialBal - flaggedTotal;
+
+            // If deposits are missing flags (added before tracking), detect them as value jumps
+            if (unaccounted > 50) {
+                console.log(`📊 ${unaccounted.toFixed(0)} in deposits missing flags — scanning for value jumps`);
+                let remaining = unaccounted;
+                for (let i = 1; i < rawValues.length && remaining > 50; i++) {
+                    // Skip points that already have a flagged deposit
+                    if (depositTimeline.find(d => d.index === i)) continue;
+                    const prev = rawValues[i - 1];
+                    const curr = rawValues[i];
+                    if (prev && curr && prev > 0) {
+                        const jump = curr - prev;
+                        // A deposit looks like a sudden jump > $50 and > 5% of previous value
+                        if (jump > 50 && (jump / prev) > 0.05) {
+                            const amount = Math.min(jump, remaining);
+                            depositTimeline.push({ index: i, amount, detected: true });
+                            remaining -= amount;
+                            console.log(`📊 Detected unflagged deposit at point ${i}: +$${amount.toFixed(2)}`);
+                            // Backfill the flag so future renders don't need detection
+                            portfolio.performanceHistory[i].deposit = amount;
+                        }
+                    }
+                }
+                if (remaining > 50) {
+                    console.log(`📊 Still $${remaining.toFixed(0)} unaccounted — may be spread across small increments`);
+                }
+                // Sort by index after adding detected deposits
+                depositTimeline.sort((a, b) => a.index - b.index);
+            }
 
             // Build cumulative deposits at each point
             // Start with initialBalance (the first deposit), then add flagged deposits
