@@ -10798,9 +10798,10 @@ Current Portfolio:
                 const dayChg = c.dayChange || 0;
                 const dayClass = dayChg > 0 ? 'positive' : dayChg < 0 ? 'negative' : '';
 
+                const name = stockNames[c.symbol] || '';
                 html += `<tr>
                     <td class="scorecard-rank">${i + 1}</td>
-                    <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}</td>
+                    <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
                     <td><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span></div></td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td>${(c.momentum || 0).toFixed(1)}</td>
