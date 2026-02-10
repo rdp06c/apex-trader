@@ -1533,8 +1533,9 @@
                 const batch = uncached.slice(i, i + BATCH);
                 await Promise.all(batch.map(async (symbol) => {
                     try {
+                        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
                         const response = await fetch(
-                            `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=3&order=desc&sort=published_utc&apiKey=${POLYGON_API_KEY}`
+                            `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=3&order=desc&sort=published_utc&published_utc.gte=${sevenDaysAgo}&apiKey=${POLYGON_API_KEY}`
                         );
                         if (!response.ok) return;
                         const data = await response.json();
@@ -6853,8 +6854,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             ${(() => {
                                 const articles = newsCache[symbol];
                                 if (!articles || articles.length === 0) return '';
-                                const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
-                                const recent = articles.filter(a => new Date(a.published_utc || a.publishedUtc).getTime() > fourteenDaysAgo);
+                                const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+                                const recent = articles.filter(a => new Date(a.published_utc || a.publishedUtc).getTime() > sevenDaysAgo);
                                 if (recent.length === 0) return '';
                                 const top2 = recent.slice(0, 2);
                                 return '<div class="holding-card-news">' + top2.map(a => {
