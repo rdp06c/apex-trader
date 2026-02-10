@@ -4074,7 +4074,7 @@
         
         // Cache for 5-day price history (fetched once per analysis run)
         let multiDayCache = {};
-        const MULTIDAY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+        const MULTIDAY_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
         
         // Fetch 5-day price history from Polygon aggregate bars
         async function fetch5DayHistory(symbol) {
@@ -9977,7 +9977,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     try {
                         const mdCache = localStorage.getItem('multiDayCache');
                         const mdTs = parseInt(localStorage.getItem('multiDayCacheTs') || '0');
-                        if (mdCache && Date.now() - mdTs < 60 * 60 * 1000) multiDayCache = JSON.parse(mdCache);
+                        if (mdCache && Date.now() - mdTs < MULTIDAY_CACHE_TTL) multiDayCache = JSON.parse(mdCache);
                     } catch {}
                     try {
                         const siCache = localStorage.getItem('shortInterestCache');
