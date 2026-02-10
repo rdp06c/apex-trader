@@ -4113,7 +4113,7 @@ Holdings: ${(() => {
             } };
         if (hh < 24) eh[sym].WARNING = 'RECENTLY PURCHASED - only sell on negative catalyst';
     });
-    return JSON.stringify(eh, null, 2);
+    return JSON.stringify(eh);
 })()}
 
 Recent Transactions: ${(() => {
@@ -4289,7 +4289,9 @@ Include a decision for EVERY holding.` }]
                         max_tokens: 8000,
                         tools: [{
                             type: "web_search_20250305",
-                            name: "web_search"
+                            name: "web_search",
+                            max_uses: 4,
+                            allowed_domains: ["investing.com", "reuters.com", "marketwatch.com", "bloomberg.com", "cnbc.com", "finance.yahoo.com", "seekingalpha.com", "barrons.com", "wsj.com"]
                         }],
                         messages: [{
                             role: 'user',
@@ -5201,7 +5203,7 @@ Current Portfolio:
             delete enrichedHoldings[symbol].WARNING;
         }
     });
-    return JSON.stringify(enrichedHoldings, null, 2);
+    return JSON.stringify(enrichedHoldings);
 })()}
 - Total Portfolio Value: $${totalValue.toFixed(2)}
 - Strategy: CATALYST-FIRST AGGRESSIVE SWING TRADING
@@ -5240,10 +5242,10 @@ Use this to evaluate: "Has the original thesis played out, strengthened, or brok
 - Don't guess — reference the recorded ORIGINAL_THESIS
 
 Current Market Data (PRE-SCREENED TOP ${candidateCount} CANDIDATES with Momentum, RS & Sector Rotation):
-${JSON.stringify(filteredMarketData, null, 2)}
+${JSON.stringify(filteredMarketData)}
 
 SECTOR SUMMARY (from all 300 stocks analyzed - full market context):
-${JSON.stringify(sectorSummary, null, 2)}
+${JSON.stringify(sectorSummary)}
 
 UNDERSTANDING THE DATA:
 These ${candidateCount} stocks were pre-screened from 300+ by composite score (momentum + relative strength + sector flow).
