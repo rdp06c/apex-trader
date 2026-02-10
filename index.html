@@ -1265,15 +1265,12 @@
         }
 
         .decision-card-body {
-            overflow: hidden;
             transition: max-height var(--transition-med), opacity var(--transition-fast);
-            max-height: 5000px;
-            opacity: 1;
         }
 
-        .decision-card-body.collapsed,
         .decision-card.collapsed .decision-card-body {
             max-height: 0;
+            overflow: hidden;
             opacity: 0;
         }
 
@@ -3754,73 +3751,34 @@
             const rawValues = portfolio.performanceHistory.map(h => h.value);
             performanceChart.data.datasets[0].data = rawValues;
             
-            // Dataset 2: Trading P&L (value minus deposits)
-            // Simple approach: total deposits we know about, spread across the timeline
-            // by detecting which history points had deposits (flagged or detected via jumps)
-            
+            // Dataset 2: Trading P&L (value minus cumulative deposits at each point)
+            // Walk the history and track how much cash has been deposited up to each point.
+            // The first entry is always the initial balance (a deposit itself).
+            // Subsequent entries flagged with {deposit: amount} add to the running total.
+            // P&L = value - cumulativeDeposits  (starts at $0, shows pure trading gains/losses)
+
             const initialBal = portfolio.initialBalance || 0;
-            const totalDeps = portfolio.totalDeposits || initialBal;
-            const extraDeposits = totalDeps - initialBal; // Total added beyond initial
-            
-            console.log(`📊 Chart debug: initialBal=$${initialBal}, totalDeps=$${totalDeps}, extraDeposits=$${extraDeposits}`);
-            
-            // Build deposit timeline: check for flagged deposits AND detect jumps
-            // A "deposit" entry has {deposit: amount} in performanceHistory
-            // A "detected deposit" is a point where value jumped but no trading explains it
+
+            // Build deposit timeline from flagged entries
             const depositTimeline = []; // [{index, amount}]
-            
-            // Pass 1: Find explicitly flagged deposits
             portfolio.performanceHistory.forEach((h, i) => {
                 if (h.deposit) {
                     depositTimeline.push({ index: i, amount: h.deposit, flagged: true });
                 }
             });
-            
-            // Pass 2: If no flagged deposits found but we know extra deposits happened,
-            // detect them as value jumps that exceed what trading could produce
-            if (depositTimeline.length === 0 && extraDeposits > 0) {
-                for (let i = 1; i < rawValues.length; i++) {
-                    const prev = rawValues[i - 1];
-                    const curr = rawValues[i];
-                    if (prev && curr && prev > 0) {
-                        const jump = curr - prev;
-                        // Consider it a deposit if the jump is both:
-                        // - More than $50 absolute
-                        // - More than 10% of previous value
-                        if (jump > 50 && (jump / prev) > 0.10) {
-                            depositTimeline.push({ index: i, amount: jump, detected: true });
-                            console.log(`📊 Detected deposit at point ${i}: +$${jump.toFixed(2)} (${(jump/prev*100).toFixed(1)}% jump)`);
-                        }
-                    }
-                }
-            }
-            
-            // Build cumulative deposit amount at each point
-            let cumDeposit = 0;
+
+            // Build cumulative deposits at each point
+            // Start with initialBalance (the first deposit), then add flagged deposits
+            let cumDeposits = initialBal;
             const adjustedValues = rawValues.map((val, i) => {
                 const depositAtPoint = depositTimeline.find(d => d.index === i);
                 if (depositAtPoint) {
-                    cumDeposit += depositAtPoint.amount;
+                    cumDeposits += depositAtPoint.amount;
                 }
-                // Adjusted = raw value minus all deposits that happened up to this point
-                const adjusted = val - cumDeposit;
-                return adjusted;
+                return val - cumDeposits;
             });
-            
-            // If we still haven't accounted for deposits (neither flagged nor detected),
-            // just subtract total extra deposits from all points after the first
-            if (depositTimeline.length === 0 && extraDeposits > 0) {
-                console.log(`📊 No deposits detected in history, using flat subtraction of $${extraDeposits}`);
-                for (let i = 0; i < adjustedValues.length; i++) {
-                    // For the first point, don't subtract (it's the initial balance)
-                    // For all others, subtract extra deposits
-                    if (i > 0) {
-                        adjustedValues[i] = rawValues[i] - extraDeposits;
-                    }
-                }
-            }
-            
-            console.log(`📊 Chart: raw last=$${rawValues[rawValues.length-1]?.toFixed(2)}, adjusted last=$${adjustedValues[adjustedValues.length-1]?.toFixed(2)}, deposits found=${depositTimeline.length}`);
+
+            console.log(`📊 Chart: raw last=$${rawValues[rawValues.length-1]?.toFixed(2)}, P&L last=$${adjustedValues[adjustedValues.length-1]?.toFixed(2)}, deposits found=${depositTimeline.length}, totalDeposits=$${cumDeposits}`);
             
             performanceChart.data.datasets[1].data = adjustedValues;
             
@@ -9717,7 +9675,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 if (sellCount > 0) picksSummary.push(`<span class="negative">${sellCount} sell${sellCount > 1 ? 's' : ''}</span>`);
                 if (holdCount > 0) picksSummary.push(`<span style="color: #60a5fa;">${holdCount} hold${holdCount > 1 ? 's' : ''}</span>`);
 
-                const cardCollapsed = options.restored ? ' collapsed' : '';
+                if (options.restored) reasoningCard.classList.add('collapsed');
                 reasoningCard.innerHTML = `
                     <div class="decision-card-header" onclick="this.parentElement.classList.toggle('collapsed')">
                         <div>
@@ -9730,7 +9688,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             <button class="decision-save-btn" onclick="event.stopPropagation();saveDecisionReasoning(this)">Save</button>
                         </div>
                     </div>
-                    <div class="decision-card-body${cardCollapsed}">
+                    <div class="decision-card-body">
                     ${decision.budgetWarning ? `
                         <div class="budget-warning">${escapeHtml(decision.budgetWarning)}</div>
                     ` : ''}

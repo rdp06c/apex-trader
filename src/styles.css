@@ -1252,15 +1252,12 @@
         }
 
         .decision-card-body {
-            overflow: hidden;
             transition: max-height var(--transition-med), opacity var(--transition-fast);
-            max-height: 5000px;
-            opacity: 1;
         }
 
-        .decision-card-body.collapsed,
         .decision-card.collapsed .decision-card-body {
             max-height: 0;
+            overflow: hidden;
             opacity: 0;
         }
 
