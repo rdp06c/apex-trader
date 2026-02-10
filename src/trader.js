@@ -4050,7 +4050,12 @@ REMEMBER: Past performance helps inform decisions, but always evaluate current c
                     const p1Data = await fetchAnthropicStreaming({
                             model: 'claude-sonnet-4-5-20250929',
                             max_tokens: 4000,
-                            tools: [{ type: "web_search_20250305", name: "web_search" }],
+                            tools: [{
+                                type: "web_search_20250305",
+                                name: "web_search",
+                                max_uses: 3,
+                                allowed_domains: ["investing.com", "reuters.com", "marketwatch.com", "bloomberg.com", "cnbc.com", "finance.yahoo.com", "seekingalpha.com", "barrons.com", "wsj.com"]
+                            }],
                             messages: [{ role: 'user', content: `You are APEX, an AI trading agent. PHASE 1: HOLDINGS REVIEW ONLY.
 Today: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
 
@@ -4066,10 +4071,11 @@ For each holding, compare ORIGINAL_THESIS vs CURRENT_INDICATORS:
 7. Would you buy TODAY at current price with current indicators?
 
 SEARCH STRATEGY: You have pre-loaded recentNews with recent headlines + machine sentiment for each holding.
-Scan those FIRST — only use web search for:
+Scan those FIRST, then use web search for:
 1. One market regime search (required)
-2. Deep dive on a holding ONLY if recentNews shows a potentially alarming headline that needs verification
-Do NOT search for each holding individually — the pre-loaded headlines already cover recent news.
+2. If ANY holding has EMPTY or STALE recentNews (no articles, or all articles older than 7 days), search for recent news on those holdings — news gaps are blind spots that could hide sell signals. Search: "SYMBOL stock news this week site:investing.com OR site:reuters.com OR site:marketwatch.com"
+3. Deep dive on a holding if recentNews shows a potentially alarming headline that needs verification
+Pre-loaded news coverage varies by ticker — do NOT assume silence means safety.
 
 Portfolio Cash: $${portfolio.cash.toFixed(2)}
 Holdings: ${(() => {
@@ -4351,6 +4357,7 @@ OPTIONAL additional search (only if needed for high-conviction plays):
    Example: "semiconductor chip export restrictions impact 2026"
 
 SEARCH STRATEGY - Be Specific and Efficient:
+PREFERRED NEWS SOURCES: When searching for stock news or catalysts, prefer results from investing.com, reuters.com, marketwatch.com, bloomberg.com, cnbc.com, seekingalpha.com. These have the best ticker-specific coverage. Add "site:investing.com OR site:reuters.com" to searches when looking for specific stock news.
 ✅ DO: "NVDA Q1 2026 earnings beat guidance raised data center revenue analyst price targets"
    → Gets earnings + guidance + catalyst + analyst views in ONE search
    
