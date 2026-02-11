@@ -254,7 +254,7 @@
             'AXON': 'Axon Enterprise', 'KTOS': 'Kratos Defense', 'AVAV': 'AeroVironment', 'AIR': 'AAR Corp',
             'SAIC': 'SAIC', 'LDOS': 'Leidos', 'CACI': 'CACI International', 'BAH': 'Booz Allen Hamilton',
             'BWXT': 'BWX Technologies', 'WWD': 'Woodward', 'TDG': 'TransDigm', 'HEI': 'HEICO',
-            'CW': 'Curtiss-Wright', 'LGTY': 'Logility',
+            'CW': 'Curtiss-Wright',
 
             // Index Funds
             'SPY': 'S&P 500 ETF', 'QQQ': 'Nasdaq 100 ETF', 'IWM': 'Russell 2000 ETF', 'VOO': 'Vanguard S&P 500'
@@ -412,7 +412,7 @@
             'BWXT': 'Defense', 'WWD': 'Defense', 'MOG.A': 'Defense', 'TDG': 'Defense',
             'HEI': 'Defense', 'ROCK': 'Defense', 'EQT': 'Energy', 'CW': 'Defense',
             'AIN': 'Defense', 'MLI': 'Defense', 'B': 'Defense',
-            'RUSHA': 'Defense', 'LGTY': 'Defense', 'PLXS': 'Defense',
+            'RUSHA': 'Defense', 'PLXS': 'Defense',
             'VECO': 'Defense', 'POWI': 'Defense', 'VICR': 'Defense', 'MYRG': 'Defense',
             'DY': 'Defense', 'APOG': 'Defense', 'IMOS': 'Defense',
             
@@ -3428,7 +3428,7 @@
                 defense: ['LMT', 'RTX', 'NOC', 'GD', 'BA', 'LHX', 'HII', 'TXT', 'HWM', 'AXON',
                           'KTOS', 'AVAV', 'AIR', 'SAIC', 'LDOS', 'CACI', 'BAH', 'BWXT', 'WWD', 'MOG.A',
                           'TDG', 'HEI', 'ROCK', 'IMOS', 'CW', 'AIN', 'MLI', 'B', 'RUSHA',
-                          'LGTY', 'PLXS', 'VECO', 'POWI', 'VICR', 'MYRG', 'DY', 'APOG']
+                          'PLXS', 'VECO', 'POWI', 'VICR', 'MYRG', 'DY', 'APOG']
             };
             
             // Use all stocks from every sector for maximum coverage
