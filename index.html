@@ -7774,11 +7774,15 @@ Include a decision for EVERY holding.` }]
                     }
                 });
                 
-                // ── LOW-CASH SKIP: If cash can't buy 1 share of any candidate, skip Phase 2 ──
-                const candidatePrices = Object.values(filteredMarketData)
-                    .map(d => d.price)
+                // ── LOW-CASH SKIP: If cash can't buy 1 share of any top-25 candidate, skip Phase 2 ──
+                // Use top-25 scored candidates (real buy targets), not wildcards/reversals/penny stocks
+                const holdingSymbols = new Set(Object.keys(portfolio.holdings));
+                const top25Prices = scoredStocks
+                    .filter(s => !holdingSymbols.has(s.symbol))
+                    .slice(0, 25)
+                    .map(s => s.data.price)
                     .filter(p => p > 0);
-                const cheapestCandidate = candidatePrices.length > 0 ? Math.min(...candidatePrices) : Infinity;
+                const cheapestCandidate = top25Prices.length > 0 ? Math.min(...top25Prices) : Infinity;
 
                 if (updatedCash < cheapestCandidate) {
                     console.log(`💰 Low cash skip: $${updatedCash.toFixed(2)} < cheapest candidate $${cheapestCandidate.toFixed(2)} — skipping Phase 2`);
@@ -8462,307 +8466,24 @@ Be flexible - exit early on wins or problems,
 but patient when thesis needs time to play out.
 
 ════════════════════════════════════════════════════════════════
-📋 POSITION REVIEW FRAMEWORK - Before Making New Trades
+📋 CURRENT HOLDINGS (Already reviewed in Phase 1 — DO NOT re-analyze)
 ════════════════════════════════════════════════════════════════
 
-CRITICAL: Before buying new positions, REVIEW existing holdings!
-Ask: "Are current holdings still top conviction, or should I swap?"
+Phase 1 already reviewed all holdings and made HOLD/SELL decisions.
+DO NOT output HOLD or SELL decisions — only output BUY decisions.
+Do NOT re-analyze these stocks. Focus ALL your tokens on buy candidates.
 
-────────────────────────────────────────────────────────────────
-
-FOR EACH CURRENT HOLDING - Re-Evaluate Today:
-────────────────────────────────────────────────────────────────
-
-**STEP 1: Catalyst Status Check**
-────────────────────────────────────────────────────────────────
-Q: How is the original catalyst doing NOW?
-
-STRENGTHENING (Score 9-10 today):
-  • New catalysts emerging
-  • Thesis getting stronger
-  • More positive developments
-  → UPGRADE conviction, keep or add
-
-STILL WORKING (Score 7-8 today):
-  • Original catalyst still valid
-  • Playing out as expected
-  • No major changes
-  → MAINTAIN conviction, keep holding
-
-PLAYED OUT (Score 5-6 today):
-  • Catalyst fully priced in
-  • No new developments
-  • Market has moved on
-  → DOWNGRADE conviction, consider exit
-
-DEAD (Score 1-4 today):
-  • Catalyst failed or reversed
-  • Negative developments
-  • Thesis broken
-  → EXIT, don't wait
-
-────────────────────────────────────────────────────────────────
-
-**STEP 2: Technical Status Check**
-────────────────────────────────────────────────────────────────
-Q: How is price action NOW?
-
-Look at current data:
-• momentum.score (0-10)
-• relativeStrength.rsScore (0-100)
-• momentum.trend (building/fading/neutral)
-
-STRENGTHENING:
-  • momentum 7+, rsScore 70+, trend 'building'
-  → Technical confirming thesis
-
-STEADY:
-  • momentum 5-7, rsScore 50-70
-  → Technical neutral, okay
-
-FADING:
-  • momentum <5, rsScore <50, trend 'fading'
-  → Technical concerning, yellow flag
-
-BROKEN:
-  • momentum <3, rsScore <30, breaking support
-  → Technical very weak, consider exit
-
-────────────────────────────────────────────────────────────────
-
-**STEP 3: Time Elapsed Check**
-────────────────────────────────────────────────────────────────
-Q: Has catalyst had enough time to work?
-
-Check purchase date from transactions:
-• Earnings catalyst: 1-2 weeks
-• Contract catalyst: 2-3 weeks
-• Upgrade catalyst: 3-5 days
-
-IF within timeframe:
-  → Give it time, be patient
-  
-IF past timeframe + flat/down:
-  → Catalyst didn't work, consider exit
-  
-IF past timeframe + working:
-  → Great! Thesis playing out
-
-────────────────────────────────────────────────────────────────
-
-**STEP 4: Current Conviction Re-Score**
-────────────────────────────────────────────────────────────────
-Based on TODAY's data, what would conviction be if buying NOW?
-
-Re-score catalyst (current status, not original):
-Re-check technical (current rsScore, momentum):
-Re-check fundamental (any changes?):
-Re-check sector (current rotation signal):
-
-CURRENT CONVICTION:
-• 9-10: Still top conviction, definitely keep
-• 7-8: Still good, keep holding
-• 5-6: Mediocre, watch closely or exit if better opportunity
-• <5: Weak, should exit
-
-────────────────────────────────────────────────────────────────
-
-**STEP 5: Comparative Analysis**
-────────────────────────────────────────────────────────────────
-Compare ALL holdings + new opportunities:
-
-Rank by CURRENT conviction (not original):
-1. Stock A: Current conviction 9/10
-2. Stock B: Current conviction 8/10
-3. New opportunity: Potential conviction 10/10
-4. Stock C: Current conviction 6/10
-
-DECISION LOGIC:
-• If new opportunity > lowest current holding:
-  → Sell lowest, buy new (portfolio upgrade)
-  
-• If new opportunity < all current holdings:
-  → Pass, portfolio already optimal
-  
-• If new opportunity = current holdings:
-  → Judgment call on diversification
-
-────────────────────────────────────────────────────────────────
-
-POSITION REVIEW EXAMPLE:
-────────────────────────────────────────────────────────────────
-
-**PLTR Review (Bought 3 weeks ago):**
-
-ORIGINAL (Entry):
-• Catalyst: $480M contract (9/10)
-• Technical: rsScore 85 (8/10)
-• Entry Conviction: 9/10
-
-CURRENT (Today):
-• Catalyst Status: Contract news is old, no new developments (6/10)
-• Technical: rsScore 65, momentum 5, trend 'neutral' (6/10)
-• Time: 3 weeks (past contract timeframe of 2-3 weeks)
-• Price: +12% from entry (decent but not amazing)
-• Fundamental: Still solid, no changes (7/10)
-• CURRENT CONVICTION: 6/10 (downgraded from 9)
-
-**NEW OPPORTUNITY (Today):**
-• NVDA: Earnings beat + raised guidance just announced
-• Catalyst: 10/10 (major event)
-• Technical: rsScore 75, momentum 8 (8/10)
-• POTENTIAL CONVICTION: 9-10/10
-
-**DECISION:**
-Sell PLTR (conviction downgraded to 6/10, catalyst played out)
-Buy NVDA (conviction 10/10, fresh catalyst)
-→ Portfolio upgrade!
-
-────────────────────────────────────────────────────────────────
-
-WHEN TO REVIEW POSITIONS:
-────────────────────────────────────────────────────────────────
-
-MANDATORY REVIEW:
-✅ Before every new trade (compare new vs existing)
-✅ Weekly (quick check on all holdings)
-✅ When position hits -10% (re-evaluate thesis)
-✅ When position hits +20% (check if extended)
-✅ When new catalyst emerges for existing holding
-
-QUICK REVIEW QUESTIONS:
-1. Catalyst status: Still working, played out, or strengthening?
-2. Technical status: Strong, neutral, or fading?
-3. Time elapsed: Past expected timeframe?
-4. Current conviction: Still 7+/10?
-5. Better opportunities available?
-
-IF conviction dropped below 7/10:
-  → Consider exit, especially if better opportunity exists
-
-────────────────────────────────────────────────────────────────
-
-CRITICAL BENEFITS:
-────────────────────────────────────────────────────────────────
-✅ Portfolio always has highest conviction positions
-✅ Don't hold stale positions out of inertia
-✅ Upgrade portfolio continuously (sell 6s, buy 9s)
-✅ Catch when catalysts play out or fail
-✅ Prevent "set it and forget it" holding losers
-
-❌ WITHOUT REVIEW:
-- Hold stocks where catalyst already played out
-- Miss better opportunities (cash tied up in 6/10s)
-- Conviction drift (was 9/10, now 5/10, still holding)
-
-════════════════════════════════════════════════════════════════
+Currently holding: ${Object.entries(portfolio.holdings).map(([s, sh]) => s + ' (' + sh + ' shares)').join(', ') || 'None'}
 
 ${formatPerformanceInsights()}
 Current Portfolio:
 - Cash Available: $${updatedCash.toFixed(2)} ← THIS IS YOUR BUYING POWER (includes cash from any Phase 1 sells)
-- Holdings: ${(() => {
-    // Build enriched holdings with avg cost, P&L, and hold duration
-    const enrichedHoldings = {};
-    Object.entries(portfolio.holdings).forEach(([symbol, shares]) => {
-        // Calculate average cost from CURRENT position buys only (excludes prior closed positions)
-        const buys = getCurrentPositionBuys(symbol);
-        const sells = (portfolio.transactions || []).filter(t => t.type === 'SELL' && t.symbol === symbol);
-        
-        // Weighted average cost across current position buys
-        let totalSharesBought = 0;
-        let totalCost = 0;
-        buys.forEach(t => {
-            totalSharesBought += t.shares;
-            totalCost += (t.price * t.shares);
-        });
-        // Subtract sold shares from the oldest buys (FIFO approximation for avg cost)
-        const avgCost = totalSharesBought > 0 ? (totalCost / totalSharesBought) : 0;
-        
-        // Current price and P&L
-        const currentPrice = filteredMarketData[symbol]?.price || enhancedMarketData[symbol]?.price || 0;
-        const unrealizedPL = currentPrice > 0 ? ((currentPrice - avgCost) / avgCost * 100) : 0;
-        
-        // Hold duration (from first buy that's still part of current position)
-        const firstBuy = buys.length > 0 ? buys[0] : null;
-        const lastBuy = buys.length > 0 ? buys[buys.length - 1] : null;
-        const holdDays = firstBuy ? Math.floor((Date.now() - new Date(firstBuy.timestamp).getTime()) / 86400000) : 0;
-        const holdHours = firstBuy ? Math.floor((Date.now() - new Date(firstBuy.timestamp).getTime()) / 3600000) : 0;
-        const holdDisplay = holdDays >= 1 ? holdDays + ' days' : holdHours + ' hours';
-        
-        // Last transaction info
-        const lastTx = [...buys, ...sells].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
-        
-        enrichedHoldings[symbol] = {
-            shares: shares,
-            avgCostPerShare: '$' + avgCost.toFixed(2),
-            currentPrice: '$' + currentPrice.toFixed(2),
-            unrealizedPL: unrealizedPL.toFixed(1) + '%',
-            totalCostBasis: '$' + (avgCost * shares).toFixed(2),
-            currentValue: '$' + (currentPrice * shares).toFixed(2),
-            holdDuration: holdDisplay,
-            firstPurchase: firstBuy ? firstBuy.timestamp.split('T')[0] : 'unknown',
-            lastTransaction: lastTx ? lastTx.type + ' ' + lastTx.shares + ' shares @ $' + lastTx.price.toFixed(2) + ' on ' + lastTx.timestamp.split('T')[0] : 'unknown',
-            purchaseCount: buys.length,
-            ORIGINAL_THESIS: (() => {
-                const thesis = (portfolio.holdingTheses || {})[symbol] || null;
-                if (!thesis) return 'No thesis recorded (pre-thesis-memory position)';
-                return {
-                    catalyst: thesis.originalCatalyst,
-                    entryConviction: thesis.entryConviction + '/10',
-                    entryPrice: '$' + thesis.entryPrice.toFixed(2),
-                    entryDate: thesis.entryDate.split('T')[0],
-                    entryMomentum: thesis.entryMomentum,
-                    entryRS: thesis.entryRS,
-                    entrySectorFlow: thesis.entrySectorFlow,
-                    addedTo: thesis.lastAddDate ? 'Yes, last added ' + thesis.lastAddDate.split('T')[0] : 'No'
-                };
-            })(),
-            WARNING: holdHours < 24 ? '⚠️ RECENTLY PURCHASED (< 24hrs ago) - Do NOT sell unless a genuinely NEGATIVE catalyst has emerged. Normal price fluctuations and catalyst being priced in are NOT valid sell reasons within 24 hours.' : null
-        };
-        
-        // Remove null WARNING field
-        if (!enrichedHoldings[symbol].WARNING) {
-            delete enrichedHoldings[symbol].WARNING;
-        }
-    });
-    return JSON.stringify(enrichedHoldings);
-})()}
 - Total Portfolio Value: $${totalValue.toFixed(2)}
 - Strategy: CATALYST-FIRST AGGRESSIVE SWING TRADING
-
-RECENT TRANSACTIONS (last 10):
-${(() => {
-    const recentTx = (portfolio.transactions || []).slice(-10).reverse();
-    if (recentTx.length === 0) return 'No transactions yet.';
-    return recentTx.map(t => {
-        const date = new Date(t.timestamp).toLocaleString();
-        return '- ' + t.type + ' ' + t.shares + ' ' + t.symbol + ' @ $' + t.price.toFixed(2) + ' on ' + date + (t.conviction ? ' (conviction: ' + t.conviction + '/10)' : '');
-    }).join('\\n');
-})()}
-
-⚠️ CRITICAL SELL DISCIPLINE:
-- Check each holding's avgCostPerShare and unrealizedPL BEFORE recommending sells
-- Holdings purchased less than 24 hours ago should almost NEVER be sold (marked with WARNING)
-- When selling, reference the ACTUAL average cost, not just the most recent purchase price
-- If you bought in multiple lots, acknowledge the full cost basis
-
-⚠️ ANTI-WHIPSAW RULES:
-- Review RECENT TRANSACTIONS above. Do NOT contradict decisions you made in the last 24 hours.
-- If you just recommended BUY on a stock, do NOT recommend SELL on the next run unless a genuinely NEW NEGATIVE catalyst has emerged (not just "catalyst priced in" — that takes days/weeks, not hours).
-- If you just recommended HOLD, maintain that HOLD unless material new information appeared.
-- "The stock went up too fast" is NOT a sell reason within 24 hours of buying. That's the catalyst WORKING.
-- Consistency builds trust. Flip-flopping destroys portfolios through transaction costs and missed moves.
-
-⚠️ BEFORE TRADING: Review existing holdings! Re-score their current conviction.
-If new opportunity has higher conviction than existing holdings, consider swap.
-
-⚠️ THESIS MEMORY: Each holding includes ORIGINAL_THESIS with the catalyst, conviction, and conditions at entry.
-Use this to evaluate: "Has the original thesis played out, strengthened, or broken?"
-- Compare entry conditions (momentum, RS, sector flow) to current conditions
-- If original catalyst was weeks ago with no new developments → thesis played out
-- If new catalysts keep emerging → thesis strengthening
-- Don't guess — reference the recorded ORIGINAL_THESIS
-
+${recentlySoldWarnings ? `
+🚫 RECENTLY SOLD — RE-BUY REQUIRES NEW CATALYST:
+${recentlySoldWarnings}Do NOT re-buy these stocks unless you can cite a specific NEW development that was NOT known when the sell decision was made.
+` : ''}
 Current Market Data (PRE-SCREENED TOP ${candidateCount} CANDIDATES with Momentum, RS & Sector Rotation):
 ${JSON.stringify(filteredMarketData)}
 
@@ -8771,12 +8492,8 @@ ${JSON.stringify(sectorSummary)}
 
 UNDERSTANDING THE DATA:
 These ${candidateCount} stocks were pre-screened from 300+ by composite score (momentum + relative strength + sector flow).
-All current holdings are included regardless of score so you can evaluate sell decisions.
 The sector summary covers ALL 300 stocks so you have full market context.
-${recentlySoldWarnings ? `
-🚫 RECENTLY SOLD — RE-BUY REQUIRES NEW CATALYST:
-${recentlySoldWarnings}Do NOT re-buy these stocks unless you can cite a specific NEW development (earnings, contract, upgrade, policy change) that was NOT known when the sell decision was made. The original exit reason is listed above — your new thesis must directly address why that reason no longer applies.
-` : ''}
+Holdings are EXCLUDED from candidates — Phase 1 already reviewed them.
 
 Each stock includes:
 • price, change, changePercent - Current price data (today vs prev close)
@@ -8810,7 +8527,7 @@ A stock up 5% today but down over 5 days → MODERATE momentum (spike, weak tren
 
 HOW TO USE STRUCTURE DATA:
 - Bullish BOS (structureScore +3) + high momentum = STRONG BUY setup
-- Bearish CHoCH on a holding = SELL SIGNAL (structure breaking down)
+- Bearish CHoCH = structure breaking down, AVOID for new buys
 - Bullish CHoCH + low-swept = potential reversal entry (smart money accumulated)
 - Bearish structure + sweep of highs = avoid (likely distribution)
 - fvg: 'bullish' (gap up = potential support zone on pullback) or 'bearish' (gap down = potential resistance)
@@ -8853,7 +8570,7 @@ CRITICAL REMINDERS:
 • Stock down today WITH strong catalyst = buying opportunity!
 • Stock up big today WITHOUT catalyst = probably late
 • Balance all factors, but catalyst leads the decision
-• Exit intelligently - negative catalyst, profit target, or catalyst failure
+• Phase 1 handles exits — focus on BUY candidates only
 
 CRITICAL CASH MANAGEMENT:
 ⚠️ YOU ONLY HAVE $${updatedCash.toFixed(2)} TO SPEND - DO NOT EXCEED THIS!
