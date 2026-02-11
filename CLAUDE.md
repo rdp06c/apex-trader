@@ -226,7 +226,7 @@ Splitting sell/buy into separate API calls solves information asymmetry: Phase 1
 - **No hard cap on candidate count**: With many holdings, candidate list can exceed 50+. Could degrade Phase 2 decision quality.
 - **Keyboard accessibility**: Collapsible section headers and expandable cards use `<div onclick>` — not keyboard-navigable. Should migrate to `<button>` or add `role="button"` + `tabindex="0"`.
 - **`bigMoverBonus` dead code**: Always set to 0 in scoring formula. Intentionally disabled but still present in the code.
-- **`analyzeTechnicalAccuracy` / `analyzeConvictionAccuracy` dead code**: Both functions are defined but never called. They compute detailed signal-vs-outcome breakdowns (including VIX zones) but nothing invokes them — neither `formatPerformanceInsights` (prompt) nor `updateLearningInsightsDisplay` (UI). Data is still being recorded in `entryTechnicals` for when these get wired up.
+- **`analyzeTechnicalAccuracy` / `analyzeConvictionAccuracy`**: Both wired into `formatPerformanceInsights()` (feeds signal accuracy + conviction calibration into Phase 2 prompt) and `updateLearningInsightsDisplay()` (renders Conviction Calibration + Signal Accuracy panels in Learning Insights UI). Requires 5+ closed trades with `entryConviction` / `entryTechnicals` to activate.
 - **Technical indicators are client-side approximations**: RSI(14) and MACD(12,26,9) are computed from 40-day bars. RSI warm-up (25+ smoothed values) is good but not as accurate as server-computed from full price history. Sufficient for screening purposes.
 - **Short interest data availability**: The `/stocks/v1/short-interest` endpoint returns bi-monthly settlement data. Coverage may be incomplete for smaller stocks.
 

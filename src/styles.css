@@ -1754,6 +1754,34 @@
             margin-top: 4px;
         }
 
+        /* Signal Accuracy table */
+        .signal-accuracy-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .signal-accuracy-table th {
+            text-align: left;
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .signal-accuracy-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .signal-accuracy-table tr:last-child td {
+            border-bottom: none;
+        }
+        .signal-accuracy-table td:first-child {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
         /* Hold Time bars */
         .hold-time-row {
             display: flex;

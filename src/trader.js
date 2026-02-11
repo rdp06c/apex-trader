@@ -3017,6 +3017,56 @@
                 insights += '\n';
             }
 
+            // Conviction calibration insights
+            const convictionData = analyzeConvictionAccuracy();
+            if (convictionData.hasData) {
+                insights += `CONVICTION CALIBRATION:\n`;
+                for (const [level, stats] of Object.entries(convictionData.analysis)) {
+                    insights += `- Conviction ${level}: ${stats.winRate.toFixed(0)}% win rate, ${stats.avgReturn >= 0 ? '+' : ''}${stats.avgReturn.toFixed(1)}% avg return (${stats.count} trades) — ${stats.calibration}\n`;
+                }
+                insights += '\n';
+            }
+
+            // Technical signal accuracy insights
+            const techData = analyzeTechnicalAccuracy();
+            if (techData.hasData) {
+                insights += `SIGNAL ACCURACY (which entry conditions predict wins):\n`;
+                const formatSignal = (label, good, bad, goodLabel, badLabel) => {
+                    if (!good && !bad) return '';
+                    let line = `- ${label}: `;
+                    if (good) line += `${goodLabel} ${good.winRate.toFixed(0)}% WR (${good.count})`;
+                    if (good && bad) line += ` vs `;
+                    if (bad) line += `${badLabel} ${bad.winRate.toFixed(0)}% WR (${bad.count})`;
+                    return line + '\n';
+                };
+                insights += formatSignal('Momentum', techData.momentum.high, techData.momentum.low, 'High:', 'Low:');
+                insights += formatSignal('RS', techData.relativeStrength.high, techData.relativeStrength.low, 'High:', 'Low:');
+                insights += formatSignal('Sector flow', techData.sectorRotation.inflow, techData.sectorRotation.outflow, 'Inflow:', 'Outflow:');
+                if (techData.rsi.hasData) insights += formatSignal('RSI zone', techData.rsi.oversold, techData.rsi.overbought, 'Oversold:', 'Overbought:');
+                if (techData.macd.hasData) insights += formatSignal('MACD', techData.macd.bullish, techData.macd.bearish, 'Bullish:', 'Bearish:');
+                if (techData.structure.hasData) insights += formatSignal('Structure', techData.structure.bullish, techData.structure.bearish, 'Bullish:', 'Bearish:');
+                if (techData.runners.hasData) insights += formatSignal('Entry type', techData.runners.nonRunners, techData.runners.runners, 'Non-runners:', 'Runners (>5%):');
+                if (techData.squeeze.hasData) insights += formatSignal('Short squeeze', techData.squeeze.high, techData.squeeze.low, 'High DTC:', 'Low DTC:');
+                if (techData.regime.hasData) {
+                    let regimeLine = '- Regime at entry: ';
+                    const parts = [];
+                    if (techData.regime.bull) parts.push(`Bull ${techData.regime.bull.winRate.toFixed(0)}% WR (${techData.regime.bull.count})`);
+                    if (techData.regime.bear) parts.push(`Bear ${techData.regime.bear.winRate.toFixed(0)}% WR (${techData.regime.bear.count})`);
+                    if (techData.regime.choppy) parts.push(`Choppy ${techData.regime.choppy.winRate.toFixed(0)}% WR (${techData.regime.choppy.count})`);
+                    if (parts.length > 0) insights += regimeLine + parts.join(', ') + '\n';
+                }
+                if (techData.vix.hasData) {
+                    let vixLine = '- VIX at entry: ';
+                    const parts = [];
+                    if (techData.vix.complacent) parts.push(`Complacent ${techData.vix.complacent.winRate.toFixed(0)}% (${techData.vix.complacent.count})`);
+                    if (techData.vix.normal) parts.push(`Normal ${techData.vix.normal.winRate.toFixed(0)}% (${techData.vix.normal.count})`);
+                    if (techData.vix.elevated) parts.push(`Elevated ${techData.vix.elevated.winRate.toFixed(0)}% (${techData.vix.elevated.count})`);
+                    if (techData.vix.panic) parts.push(`Panic ${techData.vix.panic.winRate.toFixed(0)}% (${techData.vix.panic.count})`);
+                    if (parts.length > 0) insights += vixLine + parts.join(', ') + '\n';
+                }
+                insights += '\n';
+            }
+
             return insights;
         }
 
@@ -8445,6 +8495,110 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 html += `</div></div>`;
+            }
+
+            // ── Section F: Conviction Accuracy ──
+            const convictionData = analyzeConvictionAccuracy();
+            if (convictionData.hasData) {
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Conviction Calibration</div>
+                    <div class="insight-panel-body">
+                        <div class="rr-stats-row">`;
+                for (const [level, stats] of Object.entries(convictionData.analysis)) {
+                    const wrColor = stats.winRate >= 60 ? 'var(--green)' : stats.winRate >= 40 ? 'var(--yellow)' : 'var(--red)';
+                    const calLabel = stats.calibration === 'well-calibrated' ? 'Calibrated' : 'Overconfident';
+                    const calColor = stats.calibration === 'well-calibrated' ? 'var(--green)' : 'var(--red)';
+                    html += `<div class="rr-stat">
+                            <div class="rr-stat-value" style="color: ${wrColor};">${stats.winRate.toFixed(0)}%</div>
+                            <div class="rr-stat-label">Conv ${level} (${stats.count})</div>
+                            <div class="rr-stat-label" style="color: ${calColor}; font-size: 10px;">${calLabel} · ${stats.avgReturn >= 0 ? '+' : ''}${stats.avgReturn.toFixed(1)}%</div>
+                        </div>`;
+                }
+                html += `</div></div></div>`;
+            }
+
+            // ── Section G: Signal Accuracy ──
+            const techData = analyzeTechnicalAccuracy();
+            if (techData.hasData) {
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Signal Accuracy</div>
+                    <div class="insight-panel-body">
+                        <table class="signal-accuracy-table">
+                            <thead><tr>
+                                <th>Signal</th><th>Condition</th><th>Win Rate</th><th>Avg Return</th><th>Trades</th>
+                            </tr></thead><tbody>`;
+
+                const addRow = (signal, label, stats) => {
+                    if (!stats) return;
+                    const wrColor = stats.winRate >= 60 ? 'var(--green)' : stats.winRate >= 40 ? 'var(--yellow)' : 'var(--red)';
+                    const retColor = stats.avgReturn >= 0 ? 'var(--green)' : 'var(--red)';
+                    html += `<tr>
+                        <td>${signal}</td>
+                        <td>${label}</td>
+                        <td style="color: ${wrColor}; font-weight: 600;">${stats.winRate.toFixed(0)}%</td>
+                        <td style="color: ${retColor};">${stats.avgReturn >= 0 ? '+' : ''}${stats.avgReturn.toFixed(1)}%</td>
+                        <td>${stats.count}</td>
+                    </tr>`;
+                };
+
+                addRow('Momentum', 'High (≥7)', techData.momentum.high);
+                addRow('Momentum', 'Low (<7)', techData.momentum.low);
+                addRow('Rel. Strength', 'High (≥70)', techData.relativeStrength.high);
+                addRow('Rel. Strength', 'Low (<70)', techData.relativeStrength.low);
+                addRow('Sector Flow', 'Inflow', techData.sectorRotation.inflow);
+                addRow('Sector Flow', 'Outflow', techData.sectorRotation.outflow);
+                if (techData.rsi.hasData) {
+                    addRow('RSI', 'Oversold (<30)', techData.rsi.oversold);
+                    addRow('RSI', 'Neutral', techData.rsi.neutral);
+                    addRow('RSI', 'Overbought (>70)', techData.rsi.overbought);
+                }
+                if (techData.macd.hasData) {
+                    addRow('MACD', 'Bullish cross', techData.macd.bullish);
+                    addRow('MACD', 'Bearish cross', techData.macd.bearish);
+                    addRow('MACD', 'No cross', techData.macd.none);
+                }
+                if (techData.structure.hasData) {
+                    addRow('Structure', 'Bullish', techData.structure.bullish);
+                    addRow('Structure', 'Bearish', techData.structure.bearish);
+                    addRow('Structure', 'CHoCH', techData.structure.choch);
+                    addRow('Structure', 'BOS', techData.structure.bos);
+                }
+                if (techData.runners.hasData) {
+                    addRow('Entry Type', 'Non-runner (<5%)', techData.runners.nonRunners);
+                    addRow('Entry Type', 'Runner (≥5%)', techData.runners.runners);
+                    addRow('Entry Type', 'Big runner (≥10%)', techData.runners.bigRunners);
+                }
+                if (techData.squeeze.hasData) {
+                    addRow('Short Squeeze', 'High DTC (>5)', techData.squeeze.high);
+                    addRow('Short Squeeze', 'Moderate (3-5)', techData.squeeze.moderate);
+                    addRow('Short Squeeze', 'Low DTC (<3)', techData.squeeze.low);
+                }
+                if (techData.compositeScore.hasData) {
+                    addRow('Composite', 'High (≥15)', techData.compositeScore.high);
+                    addRow('Composite', 'Medium (10-15)', techData.compositeScore.medium);
+                    addRow('Composite', 'Low (<10)', techData.compositeScore.low);
+                }
+                if (techData.regime.hasData) {
+                    addRow('Regime', 'Bull', techData.regime.bull);
+                    addRow('Regime', 'Bear', techData.regime.bear);
+                    addRow('Regime', 'Choppy', techData.regime.choppy);
+                }
+                if (techData.sizing.hasData) {
+                    addRow('Position Size', 'Large (≥15%)', techData.sizing.big);
+                    addRow('Position Size', 'Small (<15%)', techData.sizing.small);
+                }
+                if (techData.concentration.hasData) {
+                    addRow('Portfolio', 'Concentrated (≤3)', techData.concentration.concentrated);
+                    addRow('Portfolio', 'Diversified (>3)', techData.concentration.diversified);
+                }
+                if (techData.vix.hasData) {
+                    addRow('VIX', 'Complacent (<15)', techData.vix.complacent);
+                    addRow('VIX', 'Normal (15-20)', techData.vix.normal);
+                    addRow('VIX', 'Elevated (20-30)', techData.vix.elevated);
+                    addRow('VIX', 'Panic (>30)', techData.vix.panic);
+                }
+
+                html += `</tbody></table></div></div>`;
             }
 
             container.innerHTML = html;
