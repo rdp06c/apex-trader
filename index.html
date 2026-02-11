@@ -4751,7 +4751,7 @@
                 console.log(`📊 Fetching VIX data (${from} to ${to})...`);
 
                 const response = await fetch(
-                    `https://api.polygon.io/v2/aggs/ticker/I:VIX/range/1/day/${from}/${to}?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`
+                    `https://api.massive.com/v2/aggs/ticker/I:VIX/range/1/day/${from}/${to}?sort=asc&apiKey=${POLYGON_API_KEY}`
                 );
                 if (!response.ok) {
                     console.warn(`VIX fetch failed: HTTP ${response.status}`);
@@ -7524,9 +7524,8 @@ For each holding, compare ORIGINAL_THESIS vs CURRENT_INDICATORS:
 7. Would you buy TODAY at current price with current indicators?
 
 SEARCH STRATEGY: You have pre-loaded recentNews with recent headlines + machine sentiment for each holding.
-VIX level is pre-loaded below — no need to search for it.
-Scan recentNews FIRST, then use web search for:
-1. One market regime search — broader context beyond VIX (e.g. SPY trend, macro headlines)
+${vixCache ? 'VIX level is pre-loaded below — no need to search for it.\n' : ''}Scan recentNews FIRST, then use web search for:
+1. One market regime search${vixCache ? ' — broader context beyond VIX (e.g. SPY trend, macro headlines)' : ' (required — include VIX level, SPY trend, macro headlines)'}
 2. If ANY holding has EMPTY or STALE recentNews (no articles, or all articles older than 7 days), search for recent news on those holdings — news gaps are blind spots that could hide sell signals. Search: "SYMBOL stock news this week site:investing.com OR site:reuters.com OR site:marketwatch.com"
 3. Deep dive on a holding if recentNews shows a potentially alarming headline that needs verification
 Pre-loaded news coverage varies by ticker — do NOT assume silence means safety.
@@ -9139,7 +9138,7 @@ Quickly assess market regime by checking:
    • 8+ sectors outflow = Broad bear
    • 5-7 mixed = Choppy
 
-3. **Volatility Context** (VIX level pre-loaded above — no search needed)
+3. **Volatility Context** (${vixCache ? 'VIX level pre-loaded above — no search needed' : 'Search: "VIX level today"'})
    • VIX <15 = Complacent
    • VIX 15-20 = Normal
    • VIX 20-30 = Elevated (fear)
