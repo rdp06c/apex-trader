@@ -2489,6 +2489,13 @@
             const scoreMedium = withScore.filter(t => t.entryTechnicals.compositeScore >= 10 && t.entryTechnicals.compositeScore < 15);
             const scoreLow = withScore.filter(t => t.entryTechnicals.compositeScore < 10);
 
+            // Analyze VIX level at entry
+            const withVIX = tradesWithTechnicals.filter(t => t.entryTechnicals.vixLevel != null);
+            const vixComplacent = withVIX.filter(t => t.entryTechnicals.vixLevel < 15);
+            const vixNormal = withVIX.filter(t => t.entryTechnicals.vixLevel >= 15 && t.entryTechnicals.vixLevel <= 20);
+            const vixElevated = withVIX.filter(t => t.entryTechnicals.vixLevel > 20 && t.entryTechnicals.vixLevel <= 30);
+            const vixPanic = withVIX.filter(t => t.entryTechnicals.vixLevel > 30);
+
             const calcStats = (trades) => {
                 if (trades.length === 0) return null;
                 const wins = trades.filter(t => t.profitLoss > 0).length;
@@ -2571,6 +2578,13 @@
                     high: calcStats(scoreHigh),
                     medium: calcStats(scoreMedium),
                     low: calcStats(scoreLow)
+                },
+                vix: {
+                    hasData: withVIX.length >= 3,
+                    complacent: calcStats(vixComplacent),
+                    normal: calcStats(vixNormal),
+                    elevated: calcStats(vixElevated),
+                    panic: calcStats(vixPanic)
                 }
             };
         }
@@ -3112,7 +3126,9 @@
                         rsi: emd.rsi ?? null,
                         macdCrossover: emd.macd?.crossover || null,
                         structure: emd.marketStructure?.structure || null,
-                        dtc: emd.shortInterest?.daysToCover ?? null
+                        dtc: emd.shortInterest?.daysToCover ?? null,
+                        vixLevel: vixCache?.level ?? null,
+                        vixInterpretation: vixCache?.interpretation ?? null
                     },
                     regime: normalizedRegime,
                     nextPrice: null,
@@ -6695,7 +6711,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             macdHistogram: marketData[symbol].macd?.histogram ?? null,
                             daysToCover: marketData[symbol].shortInterest?.daysToCover ?? null,
                             marketCap: marketData[symbol].marketCap ?? null,
-                            compositeScore: null // populated below from lastCandidateScores
+                            compositeScore: null, // populated below from lastCandidateScores
+                            vixLevel: vixCache?.level ?? null,
+                            vixInterpretation: vixCache?.interpretation ?? null
                         },
 
                         // Market context at entry
@@ -6730,7 +6748,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             entryMACDCrossover: marketData[symbol].macd?.crossover || null,
                             entryStructure: marketData[symbol].marketStructure?.structure || null,
                             entryDTC: marketData[symbol].shortInterest?.daysToCover ?? null,
-                            entryCompositeScore: null
+                            entryCompositeScore: null,
+                            entryVIX: vixCache?.level ?? null,
+                            entryVIXInterpretation: vixCache?.interpretation ?? null
                         };
                         const candidateEntry = (portfolio.lastCandidateScores?.candidates || []).find(c => c.symbol === symbol);
                         if (candidateEntry) portfolio.holdingTheses[symbol].entryCompositeScore = candidateEntry.compositeScore;
@@ -6822,6 +6842,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 structure: marketData[symbol]?.marketStructure?.structure || null,
                                 structureScore: marketData[symbol]?.marketStructure?.structureScore ?? null,
                                 daysToCover: marketData[symbol]?.shortInterest?.daysToCover ?? null,
+                                vixLevel: vixCache?.level ?? null,
+                                vixInterpretation: vixCache?.interpretation ?? null,
                             },
 
                             // Position context
