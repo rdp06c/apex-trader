@@ -7809,13 +7809,13 @@ Include a decision for EVERY holding.` }]
                 }
                 
                 // ── PHASE 2: BUY DECISIONS ──
-                // Hard guard: Remove ALL held symbols from Phase 2 candidate pool
-                // Phase 1 already reviewed holdings — Phase 2 should only see new candidates
+                // Flag held symbols in Phase 2 candidate data so Claude knows they're current holdings
+                // Phase 1 already reviewed them for HOLD/SELL — Phase 2 can ADD shares but not re-analyze
                 const heldSymbols = Object.keys(portfolio.holdings);
                 heldSymbols.forEach(sym => {
                     if (filteredMarketData[sym]) {
-                        delete filteredMarketData[sym];
-                        console.log(`🚫 Removed ${sym} from Phase 2 candidates (current holding, reviewed in Phase 1)`);
+                        filteredMarketData[sym].currentlyHeld = true;
+                        filteredMarketData[sym].sharesHeld = portfolio.holdings[sym];
                     }
                 });
                 // Also remove Phase 1 sell symbols (in case they weren't in holdings anymore)
@@ -7829,9 +7829,10 @@ Include a decision for EVERY holding.` }]
                     });
                 }
                 
-                // Update candidate count to reflect removals
+                // Update candidate count (holdings flagged but not removed — eligible for add-to-position)
                 const phase2CandidateCount = Object.keys(filteredMarketData).length;
-                console.log(`📊 Phase 2 candidates: ${phase2CandidateCount} (after removing ${candidateCount - phase2CandidateCount} held/sold symbols)`);
+                const heldInCandidates = heldSymbols.filter(s => filteredMarketData[s]).length;
+                console.log(`📊 Phase 2 candidates: ${phase2CandidateCount} (${heldInCandidates} current holdings eligible for add-to-position, ${phase1SellDecisions.length} sold symbols removed)`);
 
                 // Flag recently-sold stocks in candidate data (sold within last 5 trading days)
                 // Forces Claude to justify re-buying with a NEW catalyst, not just "price dropped more"
@@ -8562,7 +8563,7 @@ but patient when thesis needs time to play out.
 
 Phase 1 already reviewed all holdings and made HOLD/SELL decisions.
 DO NOT output HOLD or SELL decisions — only output BUY decisions.
-Do NOT re-analyze these stocks. Focus ALL your tokens on buy candidates.
+You MAY output a BUY to ADD shares to an existing holding if the setup is exceptional (strong catalyst + ideal entry point), but this should be rare. Do NOT re-analyze holdings for hold/sell — that's done.
 
 Currently holding: ${Object.entries(portfolio.holdings).map(([s, sh]) => s + ' (' + sh + ' shares)').join(', ') || 'None'}
 
@@ -8575,7 +8576,7 @@ ${recentlySoldWarnings ? `
 🚫 RECENTLY SOLD — RE-BUY REQUIRES NEW CATALYST:
 ${recentlySoldWarnings}Do NOT re-buy these stocks unless you can cite a specific NEW development that was NOT known when the sell decision was made.
 ` : ''}
-Current Market Data (PRE-SCREENED TOP ${phase2CandidateCount} BUY CANDIDATES — holdings excluded):
+Current Market Data (PRE-SCREENED TOP ${phase2CandidateCount} BUY CANDIDATES):
 ${JSON.stringify(filteredMarketData)}
 
 SECTOR SUMMARY (from all 300 stocks analyzed - full market context):
@@ -8583,7 +8584,7 @@ ${JSON.stringify(sectorSummary)}
 
 UNDERSTANDING THE DATA:
 These ${phase2CandidateCount} stocks were pre-screened from 300+ by composite score (momentum + relative strength + sector flow).
-Current holdings have been REMOVED from this data — Phase 1 already reviewed them. Only evaluate NEW positions.
+Current holdings are flagged with "currentlyHeld":true — Phase 1 already reviewed them for HOLD/SELL. You may ADD shares to a holding if the setup is exceptional, but focus primarily on NEW positions.
 The sector summary covers ALL 300 stocks so you have full market context.
 
 Each stock includes:
@@ -9369,7 +9370,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         decision.decisions.forEach(d => {
                             if (d.action === 'BUY') {
                                 d.shares = Math.floor(d.shares || 0);
-                                if (d.shares < 1) d.shares = 1; // Force minimum 1 share for BUY
+                                // Force minimum 1 share only for NEW stocks (prevents ghost holdings)
+                                // For current holdings, 0 shares = reaffirmation, not an add — drop it
+                                if (d.shares < 1) {
+                                    if (portfolio.holdings[d.symbol]) {
+                                        console.log(`📋 Dropping reaffirmation BUY for ${d.symbol} (already held, 0 new shares)`);
+                                        d.action = 'SKIP'; // Will be filtered out downstream
+                                    } else {
+                                        d.shares = 1; // Force minimum 1 share for new stocks
+                                    }
+                                }
                             } else if (d.shares) {
                                 d.shares = Math.floor(d.shares);
                             }
@@ -9441,17 +9451,22 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const overallReasoning = response.overall_reasoning || '';
             const researchSummary = response.research_summary || '';
             
-            // Check if APEX is just reaffirming existing positions
+            // Check if APEX is just reaffirming existing positions vs genuinely adding
             const buyDecisions = decisions.filter(d => d.action === 'BUY');
             const existingSymbols = Object.keys(portfolio.holdings);
             const newBuys = buyDecisions.filter(d => !existingSymbols.includes(d.symbol));
-            const reaffirmations = buyDecisions.filter(d => existingSymbols.includes(d.symbol));
-            
-            // If ALL buy decisions are for stocks we already own, this is a HOLD signal
-            if (buyDecisions.length > 0 && newBuys.length === 0) {
+            // Filter out "reaffirmation" buys where Claude restates current position size (not actually adding)
+            const genuineAdds = buyDecisions.filter(d => {
+                if (!existingSymbols.includes(d.symbol)) return false; // new stock, handled by newBuys
+                // If Claude says "BUY ARM 11 shares" and we already hold 11, that's a reaffirmation, not an add
+                const held = portfolio.holdings[d.symbol] || 0;
+                return d.shares > 0 && d.shares !== held;
+            });
+
+            // If ALL buy decisions are reaffirmations (no new stocks, no genuine adds), treat as HOLD
+            if (buyDecisions.length > 0 && newBuys.length === 0 && genuineAdds.length === 0) {
                 addActivity(`💎 APEX reviewed the market and confirms: Your current positions are still the best plays! Holding ${existingSymbols.join(', ')}.`, 'success');
-                
-                // Still show the reasoning panel so user can see the analysis
+
                 addDecisionReasoning({
                     action: 'HOLD',
                     reasoning: `I analyzed the market and your current positions (${existingSymbols.join(', ')}) are still the best opportunities. No changes needed!\n\n` + overallReasoning,
@@ -9459,9 +9474,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     decisions: decisions,
                     budgetWarning: ''
                 }, marketData);
-                
+
                 await updateUI();
-                return; // Don't execute duplicate trades
+                return;
             }
             
             // ══════════════════════════════════════════════════════════════
@@ -9593,7 +9608,24 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 // Budget is fine, use all buy decisions
                 validatedBuyDecisions.push(...buyDecisionsAll);
             }
-            
+
+            // Budget threshold: if trimmed buys are <25% of original plan, hold cash instead
+            if (budgetWarning && validatedBuyDecisions.length > 0) {
+                let trimmedCost = 0;
+                for (const d of validatedBuyDecisions) {
+                    const price = marketData[d.symbol]?.price || 0;
+                    trimmedCost += price * d.shares;
+                }
+                const deploymentRatio = totalCost > 0 ? trimmedCost / totalCost : 1;
+                if (deploymentRatio < 0.25) {
+                    const msg = `💰 Budget threshold: Can only deploy $${trimmedCost.toFixed(2)} of $${totalCost.toFixed(2)} planned (${(deploymentRatio * 100).toFixed(0)}%) — holding cash for better opportunity.`;
+                    console.log(msg);
+                    addActivity(msg, 'info');
+                    budgetWarning += '\n' + msg;
+                    validatedBuyDecisions.length = 0; // Clear all buys
+                }
+            }
+
             // Combine all decisions for display: sells (already executed) + validated buys + holds
             const validatedDecisions = [...sellDecisions, ...validatedBuyDecisions, ...holdDecisions];
             
