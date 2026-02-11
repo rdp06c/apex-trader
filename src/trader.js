@@ -113,7 +113,7 @@
             'DDOG': 'Datadog', 'NET': 'Cloudflare', 'MDB': 'MongoDB', 'CRWD': 'CrowdStrike',
             'PANW': 'Palo Alto Networks', 'ZS': 'Zscaler', 'OKTA': 'Okta', 'CFLT': 'Confluent',
             'GTLB': 'GitLab', 'FROG': 'JFrog', 'BILL': 'Bill Holdings', 'DOCN': 'DigitalOcean',
-            'ZI': 'ZoomInfo', 'MNDY': 'monday.com', 'PCOR': 'Procore', 'APP': 'AppLovin',
+            'GTM': 'ZoomInfo', 'MNDY': 'monday.com', 'PCOR': 'Procore', 'APP': 'AppLovin',
             'INTU': 'Intuit',
 
             // Tech - Hardware/Semiconductors
@@ -136,11 +136,11 @@
             'STLA': 'Stellantis', 'TM': 'Toyota', 'HMC': 'Honda', 'RACE': 'Ferrari',
             'VWAGY': 'Volkswagen', 'PSNY': 'Polestar', 'NSANY': 'Nissan', 'MBGYY': 'Mercedes-Benz',
             'POAHY': 'Porsche', 'FUJHY': 'Subaru', 'BLNK': 'Blink Charging', 'CHPT': 'ChargePoint',
-            'EVGO': 'EVgo', 'PAG': 'Penske Auto', 'WOLF': 'Wolfspeed', 'TPIC': 'TPI Composites',
-            'QS': 'QuantumScape', 'PTRA': 'Proterra', 'WKHS': 'Workhorse', 'ALV': 'Autoliv',
+            'EVGO': 'EVgo', 'PAG': 'Penske Auto', 'WOLF': 'Wolfspeed',
+            'QS': 'QuantumScape', 'WKHS': 'Workhorse', 'ALV': 'Autoliv',
             'HYLN': 'Hyliion', 'GEV': 'GE Vernova', 'JZXN': 'Jiuzi Holdings', 'VRM': 'Vroom',
-            'SFT': 'Shift Technologies', 'CVNA': 'Carvana', 'KMX': 'CarMax', 'APTV': 'Aptiv',
-            'LAZR': 'Luminar', 'OUST': 'Ouster', 'AN': 'AutoNation', 'LAD': 'Lithia Motors',
+            'CVNA': 'Carvana', 'KMX': 'CarMax', 'APTV': 'Aptiv',
+            'OUST': 'Ouster', 'AN': 'AutoNation', 'LAD': 'Lithia Motors',
 
             // Finance
             'JPM': 'JPMorgan Chase', 'BAC': 'Bank of America', 'V': 'Visa', 'MA': 'Mastercard',
@@ -153,7 +153,7 @@
             'USB': 'U.S. Bancorp', 'PNC': 'PNC Financial', 'TFC': 'Truist Financial',
             'RF': 'Regions Financial', 'KEY': 'KeyCorp', 'FITB': 'Fifth Third', 'CFG': 'Citizens Financial',
             'HBAN': 'Huntington Bancshares', 'MTB': 'M&T Bank', 'STT': 'State Street', 'BK': 'Bank of New York',
-            'NTRS': 'Northern Trust', 'CMA': 'Comerica', 'ZION': 'Zions Bancorp', 'FHN': 'First Horizon',
+            'NTRS': 'Northern Trust', 'ZION': 'Zions Bancorp', 'FHN': 'First Horizon',
             'WRB': 'Berkley', 'CB': 'Chubb', 'TRV': 'Travelers', 'ALL': 'Allstate',
             'PGR': 'Progressive', 'AIG': 'AIG', 'MET': 'MetLife', 'PRU': 'Prudential',
             'RKT': 'Rocket Companies',
@@ -174,7 +174,7 @@
             'ISRG': 'Intuitive Surgical', 'TMO': 'Thermo Fisher', 'DHR': 'Danaher', 'ABT': 'Abbott Labs',
             'CI': 'Cigna', 'HUM': 'Humana', 'SYK': 'Stryker', 'BSX': 'Boston Scientific',
             'MDT': 'Medtronic', 'BDX': 'Becton Dickinson', 'BAX': 'Baxter', 'ZBH': 'Zimmer Biomet',
-            'HCA': 'HCA Healthcare', 'DVA': 'DaVita', 'CANO': 'Cano Health',
+            'HCA': 'HCA Healthcare', 'DVA': 'DaVita',
             'EXAS': 'Exact Sciences', 'ILMN': 'Illumina', 'BIIB': 'Biogen', 'ALNY': 'Alnylam',
             'INCY': 'Incyte', 'NBIX': 'Neurocrine Bio', 'UTHR': 'United Therapeutics', 'JAZZ': 'Jazz Pharma',
             'SRPT': 'Sarepta', 'BMRN': 'BioMarin', 'IONS': 'Ionis Pharma', 'RGEN': 'Repligen',
@@ -203,7 +203,7 @@
             'WMB': 'Williams Companies', 'APA': 'APA Corporation', 'HAL': 'Halliburton', 'BKR': 'Baker Hughes',
             'NOV': 'NOV Inc.', 'FTI': 'TechnipFMC', 'DUK': 'Duke Energy', 'SO': 'Southern Company',
             'D': 'Dominion Energy', 'AEP': 'American Electric Power', 'EXC': 'Exelon', 'OKE': 'ONEOK',
-            'SEDG': 'SolarEdge', 'RUN': 'Sunrun', 'NOVA': 'Sunnova', 'PBF': 'PBF Energy', 'DK': 'Delek US',
+            'SEDG': 'SolarEdge', 'RUN': 'Sunrun', 'PBF': 'PBF Energy', 'DK': 'Delek US',
             'CTRA': 'Coterra Energy', 'OVV': 'Ovintiv', 'PR': 'Permian Resources', 'SM': 'SM Energy',
             'MGY': 'Magnolia Oil', 'MTDR': 'Matador Resources', 'CHRD': 'Chord Energy', 'VNOM': 'Viper Energy',
             'EQT': 'EQT Corporation', 'SMR': 'NuScale Power', 'VST': 'Vistra', 'CEG': 'Constellation Energy',
@@ -229,10 +229,10 @@
             'MAA': 'Mid-America Apartment', 'UDR': 'UDR Inc.', 'CPT': 'Camden Property', 'ESS': 'Essex Property',
             'AIV': 'Aimco', 'ELS': 'Equity LifeStyle', 'SUI': 'Sun Communities', 'NXRT': 'NexPoint Residential',
             'VTR': 'Ventas', 'STWD': 'Starwood Property', 'DOC': 'Healthpeak', 'OHI': 'Omega Healthcare',
-            'SBRA': 'Sabra Healthcare', 'LTC': 'LTC Properties', 'HR': 'Healthcare Realty', 'MPW': 'Medical Properties',
+            'SBRA': 'Sabra Healthcare', 'LTC': 'LTC Properties', 'HR': 'Healthcare Realty', 'MPT': 'Medical Properties Trust',
             'NHI': 'National Health Investors', 'CTRE': 'CareTrust REIT', 'IRM': 'Iron Mountain', 'CUBE': 'CubeSmart',
-            'LSI': 'Life Storage', 'NSA': 'National Storage', 'REXR': 'Rexford Industrial', 'PSB': 'PS Business Parks',
-            'TRNO': 'Terreno Realty', 'SELF': 'Global Self Storage', 'STOR': 'STORE Capital', 'SAFE': 'Safehold',
+            'NSA': 'National Storage', 'REXR': 'Rexford Industrial',
+            'TRNO': 'Terreno Realty', 'SELF': 'Global Self Storage', 'SAFE': 'Safehold',
 
             // Materials
             'NEM': 'Newmont', 'FCX': 'Freeport-McMoRan', 'NUE': 'Nucor', 'DOW': 'Dow Inc.',
@@ -253,7 +253,7 @@
             'AXON': 'Axon Enterprise', 'KTOS': 'Kratos Defense', 'AVAV': 'AeroVironment', 'AIR': 'AAR Corp',
             'SAIC': 'SAIC', 'LDOS': 'Leidos', 'CACI': 'CACI International', 'BAH': 'Booz Allen Hamilton',
             'BWXT': 'BWX Technologies', 'WWD': 'Woodward', 'TDG': 'TransDigm', 'HEI': 'HEICO',
-            'CW': 'Curtiss-Wright',
+            'CW': 'Curtiss-Wright', 'LGTY': 'Logility',
 
             // Index Funds
             'SPY': 'S&P 500 ETF', 'QQQ': 'Nasdaq 100 ETF', 'IWM': 'Russell 2000 ETF', 'VOO': 'Vanguard S&P 500'
@@ -270,7 +270,7 @@
             'DDOG': 'Technology', 'NET': 'Technology', 'MDB': 'Technology', 'CRWD': 'Technology',
             'PANW': 'Technology', 'ZS': 'Technology', 'OKTA': 'Technology', 'CFLT': 'Technology',
             'GTLB': 'Technology', 'FROG': 'Technology', 'BILL': 'Technology', 'DOCN': 'Technology',
-            'ZI': 'Technology', 'MNDY': 'Technology', 'PCOR': 'Technology', 'APP': 'Technology',
+            'GTM': 'Technology', 'MNDY': 'Technology', 'PCOR': 'Technology', 'APP': 'Technology',
             'INTU': 'Technology',
             
             // Tech - Hardware/Semiconductors
@@ -294,10 +294,10 @@
             'VWAGY': 'Automotive', 'PSNY': 'Automotive', 'NSANY': 'Automotive',
             'MBGYY': 'Automotive', 'POAHY': 'Automotive', 'FUJHY': 'Automotive', 
             'BLNK': 'Automotive', 'CHPT': 'Automotive', 'EVGO': 'Automotive',
-            'PAG': 'Automotive', 'WOLF': 'Automotive', 'TPIC': 'Automotive', 'QS': 'Automotive',
-            'PTRA': 'Automotive', 'WKHS': 'Automotive', 'ALV': 'Automotive', 'HYLN': 'Automotive',
-            'GEV': 'Automotive', 'JZXN': 'Automotive', 'VRM': 'Automotive', 'SFT': 'Automotive',
-            'CVNA': 'Automotive', 'KMX': 'Automotive', 'APTV': 'Automotive', 'LAZR': 'Automotive',
+            'PAG': 'Automotive', 'WOLF': 'Automotive', 'QS': 'Automotive',
+            'WKHS': 'Automotive', 'ALV': 'Automotive', 'HYLN': 'Automotive',
+            'GEV': 'Automotive', 'JZXN': 'Automotive', 'VRM': 'Automotive',
+            'CVNA': 'Automotive', 'KMX': 'Automotive', 'APTV': 'Automotive',
             'OUST': 'Automotive', 'AN': 'Automotive', 'LAD': 'Automotive',
             
             // Finance
@@ -310,7 +310,7 @@
             'USB': 'Financial', 'PNC': 'Financial', 'TFC': 'Financial', 'RF': 'Financial',
             'KEY': 'Financial', 'FITB': 'Financial', 'CFG': 'Financial', 'HBAN': 'Financial',
             'MTB': 'Financial', 'STT': 'Financial', 'BK': 'Financial', 'NTRS': 'Financial',
-            'STATE': 'Financial', 'CMA': 'Financial', 'ZION': 'Financial', 'FHN': 'Financial',
+            'ZION': 'Financial', 'FHN': 'Financial',
             'WRB': 'Financial', 'CB': 'Financial', 'TRV': 'Financial', 'ALL': 'Financial',
             'PGR': 'Financial', 'AIG': 'Financial', 'MET': 'Financial', 'PRU': 'Financial',
 
@@ -330,7 +330,7 @@
             'CI': 'Healthcare', 'HUM': 'Healthcare', 'ISRG': 'Healthcare', 'TMO': 'Healthcare',
             'DHR': 'Healthcare', 'ABT': 'Healthcare', 'SYK': 'Healthcare', 'BSX': 'Healthcare',
             'MDT': 'Healthcare', 'BDX': 'Healthcare', 'BAX': 'Healthcare', 'ZBH': 'Healthcare',
-            'HCA': 'Healthcare', 'DVA': 'Healthcare', 'CANO': 'Healthcare',
+            'HCA': 'Healthcare', 'DVA': 'Healthcare',
             'EXAS': 'Healthcare', 'ILMN': 'Healthcare', 'BIIB': 'Healthcare', 'ALNY': 'Healthcare',
             'INCY': 'Healthcare', 'NBIX': 'Healthcare', 'UTHR': 'Healthcare', 'JAZZ': 'Healthcare',
             'SRPT': 'Healthcare', 'BMRN': 'Healthcare', 'IONS': 'Healthcare', 'RGEN': 'Healthcare',
@@ -358,7 +358,7 @@
             'NOV': 'Energy', 'FTI': 'Energy', 'NEE': 'Energy', 'DUK': 'Energy',
             'SO': 'Energy', 'D': 'Energy', 'AEP': 'Energy', 'EXC': 'Energy',
             'OKE': 'Energy',
-            'ENPH': 'Energy', 'SEDG': 'Energy', 'RUN': 'Energy', 'NOVA': 'Energy',
+            'ENPH': 'Energy', 'SEDG': 'Energy', 'RUN': 'Energy',
             'FSLR': 'Energy', 'PLUG': 'Energy', 'PBF': 'Energy', 'DK': 'Energy',
             'CTRA': 'Energy', 'OVV': 'Energy', 'PR': 'Energy', 'SM': 'Energy',
             'MGY': 'Energy', 'MTDR': 'Energy', 'CHRD': 'Energy', 'VNOM': 'Energy',
@@ -385,10 +385,10 @@
             'MAA': 'Real Estate', 'UDR': 'Real Estate', 'CPT': 'Real Estate', 'ESS': 'Real Estate',
             'AIV': 'Real Estate', 'ELS': 'Real Estate', 'SUI': 'Real Estate', 'NXRT': 'Real Estate',
             'VTR': 'Real Estate', 'STWD': 'Real Estate', 'VLTO': 'Industrials', 'DOC': 'Real Estate', 'OHI': 'Real Estate',
-            'SBRA': 'Real Estate', 'LTC': 'Real Estate', 'HR': 'Real Estate', 'MPW': 'Real Estate',
+            'SBRA': 'Real Estate', 'LTC': 'Real Estate', 'HR': 'Real Estate', 'MPT': 'Real Estate',
             'NHI': 'Real Estate', 'CTRE': 'Real Estate', 'IRM': 'Real Estate', 'CUBE': 'Real Estate',
-            'LSI': 'Real Estate', 'NSA': 'Real Estate', 'REXR': 'Real Estate', 'PSB': 'Real Estate',
-            'TRNO': 'Real Estate', 'SELF': 'Real Estate', 'STOR': 'Real Estate', 'SAFE': 'Real Estate',
+            'NSA': 'Real Estate', 'REXR': 'Real Estate',
+            'TRNO': 'Real Estate', 'SELF': 'Real Estate', 'SAFE': 'Real Estate',
             
             // Materials
             'NEM': 'Materials', 'FCX': 'Materials', 'GOLD': 'Materials', 'AU': 'Materials',
@@ -410,10 +410,10 @@
             'SAIC': 'Defense', 'LDOS': 'Defense', 'CACI': 'Defense', 'BAH': 'Defense',
             'BWXT': 'Defense', 'WWD': 'Defense', 'MOG.A': 'Defense', 'TDG': 'Defense',
             'HEI': 'Defense', 'ROCK': 'Defense', 'EQT': 'Energy', 'CW': 'Defense',
-            'AIN': 'Defense', 'GMS': 'Defense', 'MLI': 'Defense', 'B': 'Defense',
-            'RUSHA': 'Defense', 'AMSWA': 'Defense', 'PLXS': 'Defense', 'NPAB': 'Defense',
+            'AIN': 'Defense', 'MLI': 'Defense', 'B': 'Defense',
+            'RUSHA': 'Defense', 'LGTY': 'Defense', 'PLXS': 'Defense',
             'VECO': 'Defense', 'POWI': 'Defense', 'VICR': 'Defense', 'MYRG': 'Defense',
-            'DY': 'Defense', 'APOG': 'Defense', 'HSII': 'Defense', 'IMOS': 'Defense',
+            'DY': 'Defense', 'APOG': 'Defense', 'IMOS': 'Defense',
             
             // Index Funds (not tracked in portfolio)
             'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund'
@@ -3204,7 +3204,7 @@
                 techAI: ['NVDA', 'AVGO', 'GOOGL', 'MSFT', 'META', 'ORCL', 'CRM', 'ADBE', 'NOW', 'INTU',
                          'PLTR', 'SNOW', 'AI', 'BBAI', 'SOUN', 'PATH', 'S', 'HUBS', 'ZM', 'DOCU',
                          'TEAM', 'WDAY', 'VEEV', 'ESTC', 'DDOG', 'NET', 'MDB', 'CRWD', 'PANW', 'ZS',
-                         'OKTA', 'CFLT', 'GTLB', 'FROG', 'BILL', 'DOCN', 'ZI', 'MNDY', 'PCOR', 'APP'],
+                         'OKTA', 'CFLT', 'GTLB', 'FROG', 'BILL', 'DOCN', 'GTM', 'MNDY', 'PCOR', 'APP'],
                 
                 techHardware: ['AAPL', 'QCOM', 'INTC', 'MU', 'ARM', 'DELL', 'HPQ', 'AMAT', 'LRCX', 'MRVL',
                                'AMD', 'TXN', 'ADI', 'NXPI', 'KLAC', 'ASML', 'TSM', 'SNPS', 'CDNS', 'ON',
@@ -3214,12 +3214,12 @@
                 
                 evAuto: ['TSLA', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'F', 'GM', 'STLA', 'TM',
                          'HMC', 'RACE', 'VWAGY', 'PSNY', 'NSANY', 'APTV', 'MBGYY', 'POAHY', 'FUJHY', 'ALV',
-                         'WKHS', 'BLNK', 'CHPT', 'EVGO', 'PAG', 'WOLF', 'TPIC', 'QS', 'LAZR', 'OUST',
-                         'PTRA', 'HYLN', 'GEV', 'JZXN', 'VRM', 'SFT', 'CVNA', 'KMX', 'AN', 'LAD'],
+                         'WKHS', 'BLNK', 'CHPT', 'EVGO', 'PAG', 'WOLF', 'QS', 'OUST',
+                         'HYLN', 'GEV', 'JZXN', 'VRM', 'CVNA', 'KMX', 'AN', 'LAD'],
                 
                 finance: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'V', 'MA',
                           'PYPL', 'GPN', 'AXP', 'FIS', 'COF', 'ALLY', 'USB', 'PNC', 'TFC', 'RF',
-                          'KEY', 'FITB', 'MTB', 'CFG', 'HBAN', 'STT', 'BK', 'NTRS', 'STATE', 'CMA',
+                          'KEY', 'FITB', 'MTB', 'CFG', 'HBAN', 'STT', 'BK', 'NTRS',
                           'ZION', 'FHN', 'WRB', 'CB', 'TRV', 'ALL', 'PGR', 'AIG', 'MET', 'PRU'],
                 
                 growth: ['DKNG', 'RBLX', 'U', 'PINS', 'SNAP', 'SPOT', 'ABNB', 'LYFT', 'DASH', 'UBER',
@@ -3229,7 +3229,7 @@
                 
                 healthcare: ['JNJ', 'UNH', 'LLY', 'ABBV', 'PFE', 'MRNA', 'VRTX', 'REGN', 'BMY', 'GILD',
                              'AMGN', 'CVS', 'CI', 'HUM', 'ISRG', 'TMO', 'DHR', 'ABT', 'SYK', 'BSX',
-                             'MDT', 'BDX', 'BAX', 'ZBH', 'HCA', 'DVA', 'CANO', 'EXAS', 'ILMN',
+                             'MDT', 'BDX', 'BAX', 'ZBH', 'HCA', 'DVA', 'EXAS', 'ILMN',
                              'BIIB', 'ALNY', 'INCY', 'NBIX', 'UTHR', 'JAZZ', 'SRPT', 'BMRN', 'IONS', 'RGEN'],
                 
                 consumer: ['AMZN', 'WMT', 'COST', 'TGT', 'HD', 'LOW', 'SBUX', 'MCD', 'CMG', 'YUM',
@@ -3239,7 +3239,7 @@
                 
                 energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'OXY', 'MPC', 'PSX', 'VLO', 'TRGP',
                          'DVN', 'FANG', 'WMB', 'APA', 'HAL', 'BKR', 'NOV', 'FTI', 'NEE', 'DUK',
-                         'SO', 'D', 'AEP', 'EXC', 'ENPH', 'SEDG', 'RUN', 'NOVA', 'FSLR', 'PLUG',
+                         'SO', 'D', 'AEP', 'EXC', 'ENPH', 'SEDG', 'RUN', 'FSLR', 'PLUG',
                          'PBF', 'DK', 'CTRA', 'OVV', 'PR', 'SM', 'MGY', 'MTDR', 'CHRD', 'OKE',
                          'SMR', 'VST', 'CEG', 'CCJ', 'LNG', 'AR'],
                 
@@ -3252,8 +3252,8 @@
                 
                 realEstate: ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'WELL', 'O', 'VICI', 'SPG',
                              'AVB', 'EQR', 'MAA', 'UDR', 'CPT', 'ESS', 'AIV', 'ELS', 'SUI', 'NXRT',
-                             'VTR', 'STWD', 'DOC', 'OHI', 'SBRA', 'LTC', 'HR', 'MPW', 'NHI', 'CTRE',
-                             'IRM', 'CUBE', 'LSI', 'NSA', 'REXR', 'PSB', 'TRNO', 'SELF', 'STOR', 'SAFE'],
+                             'VTR', 'STWD', 'DOC', 'OHI', 'SBRA', 'LTC', 'HR', 'MPT', 'NHI', 'CTRE',
+                             'IRM', 'CUBE', 'NSA', 'REXR', 'TRNO', 'SELF', 'SAFE'],
                 
                 materials: ['NEM', 'FCX', 'GOLD', 'AU', 'AEM', 'WPM', 'FNV', 'RGLD', 'KGC', 'HL',
                             'NUE', 'STLD', 'RS', 'CLF', 'AA', 'MT', 'TX', 'CMC', 'NB', 'ATI',
@@ -3262,8 +3262,8 @@
                 
                 defense: ['LMT', 'RTX', 'NOC', 'GD', 'BA', 'LHX', 'HII', 'TXT', 'HWM', 'AXON',
                           'KTOS', 'AVAV', 'AIR', 'SAIC', 'LDOS', 'CACI', 'BAH', 'BWXT', 'WWD', 'MOG.A',
-                          'TDG', 'HEI', 'ROCK', 'IMOS', 'CW', 'AIN', 'GMS', 'MLI', 'B', 'RUSHA',
-                          'AMSWA', 'PLXS', 'NPAB', 'VECO', 'POWI', 'VICR', 'MYRG', 'DY', 'APOG', 'HSII']
+                          'TDG', 'HEI', 'ROCK', 'IMOS', 'CW', 'AIN', 'MLI', 'B', 'RUSHA',
+                          'LGTY', 'PLXS', 'VECO', 'POWI', 'VICR', 'MYRG', 'DY', 'APOG']
             };
             
             // Use all stocks from every sector for maximum coverage
