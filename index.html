@@ -7516,7 +7516,7 @@
                     
                     const p1Data = await fetchAnthropicStreaming({
                             model: 'claude-sonnet-4-5-20250929',
-                            max_tokens: 4000,
+                            max_tokens: 6000,
                             tools: [{
                                 type: "web_search_20250305",
                                 name: "web_search",
@@ -7605,9 +7605,13 @@ Include a decision for EVERY holding.` }]
                         if (em.includes('rate_limit')) throw new Error('Rate limit on Phase 1! Wait 60s. 🕐');
                         console.warn('Phase 1 error (non-fatal):', em);
                     } else {
+                        if (p1Data.stop_reason === 'max_tokens') {
+                            console.warn('⚠️ Phase 1 TRUNCATED — hit max_tokens limit! Response may be incomplete. Consider increasing max_tokens.');
+                            addActivity('⚠️ Phase 1 response was truncated — analysis may be incomplete.', 'warning');
+                        }
                         let p1Text = '';
                         if (p1Data.content) for (const b of p1Data.content) { if (b.type === 'text') p1Text += b.text; }
-                        
+
                         try {
                             console.log('Phase 1 raw text (first 500):', p1Text.substring(0, 500));
                             let pj = p1Text;
@@ -9410,6 +9414,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         }]
                 });
                 console.log('AI Analysis response:', data);
+                if (data.stop_reason === 'max_tokens') {
+                    console.warn('⚠️ Phase 2 TRUNCATED — hit max_tokens limit! Response may be incomplete. Consider increasing max_tokens.');
+                    addActivity('⚠️ Phase 2 response was truncated — buy analysis may be incomplete.', 'warning');
+                }
 
                 // Check for API errors (rate limits, etc.)
                 if (data.type === 'error' || data.error) {
