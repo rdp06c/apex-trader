@@ -114,7 +114,7 @@
             'PANW': 'Palo Alto Networks', 'ZS': 'Zscaler', 'OKTA': 'Okta', 'CFLT': 'Confluent',
             'GTLB': 'GitLab', 'FROG': 'JFrog', 'BILL': 'Bill Holdings', 'DOCN': 'DigitalOcean',
             'ZI': 'ZoomInfo', 'MNDY': 'monday.com', 'PCOR': 'Procore', 'APP': 'AppLovin',
-            'INTU': 'Intuit', 'IONQ': 'IonQ',
+            'INTU': 'Intuit',
 
             // Tech - Hardware/Semiconductors
             'AAPL': 'Apple', 'QCOM': 'Qualcomm', 'INTC': 'Intel', 'MU': 'Micron Technology',
@@ -127,6 +127,8 @@
             'IPGP': 'IPG Photonics', 'LITE': 'Lumentum', 'AMBA': 'Ambarella', 'SLAB': 'Silicon Labs',
             'CRUS': 'Cirrus Logic', 'SYNA': 'Synaptics', 'MCHP': 'Microchip Technology',
             'WDC': 'Western Digital', 'STX': 'Seagate', 'PSTG': 'Pure Storage', 'NTAP': 'NetApp', 'CHKP': 'Check Point',
+            'IONQ': 'IonQ', 'RGTI': 'Rigetti Computing', 'QBTS': 'D-Wave Quantum', 'QUBT': 'Quantum Computing',
+            'ARQQ': 'Arqit Quantum', 'IBM': 'IBM',
 
             // EV/Automotive
             'TSLA': 'Tesla', 'RIVN': 'Rivian', 'LCID': 'Lucid Group', 'NIO': 'NIO Inc.',
@@ -204,7 +206,8 @@
             'SEDG': 'SolarEdge', 'RUN': 'Sunrun', 'NOVA': 'Sunnova', 'PBF': 'PBF Energy', 'DK': 'Delek US',
             'CTRA': 'Coterra Energy', 'OVV': 'Ovintiv', 'PR': 'Permian Resources', 'SM': 'SM Energy',
             'MGY': 'Magnolia Oil', 'MTDR': 'Matador Resources', 'CHRD': 'Chord Energy', 'VNOM': 'Viper Energy',
-            'EQT': 'EQT Corporation',
+            'EQT': 'EQT Corporation', 'SMR': 'NuScale Power', 'VST': 'Vistra', 'CEG': 'Constellation Energy',
+            'CCJ': 'Cameco', 'LNG': 'Cheniere Energy', 'AR': 'Antero Resources',
 
             // Industrials
             'BA': 'Boeing', 'CAT': 'Caterpillar', 'DE': 'Deere & Co.', 'GE': 'General Electric',
@@ -281,7 +284,9 @@
             'LITE': 'Technology', 'AMBA': 'Technology', 'SLAB': 'Technology', 'CRUS': 'Technology',
             'SYNA': 'Technology', 'MCHP': 'Technology', 'SMCI': 'Technology', 'WDC': 'Technology',
             'STX': 'Technology', 'PSTG': 'Technology', 'NTAP': 'Technology', 'CHKP': 'Technology',
-            
+            'IONQ': 'Technology', 'RGTI': 'Technology', 'QBTS': 'Technology', 'QUBT': 'Technology',
+            'ARQQ': 'Technology', 'IBM': 'Technology',
+
             // EV/Automotive
             'TSLA': 'Automotive', 'RIVN': 'Automotive', 'LCID': 'Automotive', 'NIO': 'Automotive',
             'XPEV': 'Automotive', 'LI': 'Automotive', 'F': 'Automotive', 'GM': 'Automotive',
@@ -325,7 +330,7 @@
             'CI': 'Healthcare', 'HUM': 'Healthcare', 'ISRG': 'Healthcare', 'TMO': 'Healthcare',
             'DHR': 'Healthcare', 'ABT': 'Healthcare', 'SYK': 'Healthcare', 'BSX': 'Healthcare',
             'MDT': 'Healthcare', 'BDX': 'Healthcare', 'BAX': 'Healthcare', 'ZBH': 'Healthcare',
-            'HCA': 'Healthcare', 'DVA': 'Healthcare', 'CANO': 'Healthcare', 'IONQ': 'Technology',
+            'HCA': 'Healthcare', 'DVA': 'Healthcare', 'CANO': 'Healthcare',
             'EXAS': 'Healthcare', 'ILMN': 'Healthcare', 'BIIB': 'Healthcare', 'ALNY': 'Healthcare',
             'INCY': 'Healthcare', 'NBIX': 'Healthcare', 'UTHR': 'Healthcare', 'JAZZ': 'Healthcare',
             'SRPT': 'Healthcare', 'BMRN': 'Healthcare', 'IONS': 'Healthcare', 'RGEN': 'Healthcare',
@@ -357,7 +362,9 @@
             'FSLR': 'Energy', 'PLUG': 'Energy', 'PBF': 'Energy', 'DK': 'Energy',
             'CTRA': 'Energy', 'OVV': 'Energy', 'PR': 'Energy', 'SM': 'Energy',
             'MGY': 'Energy', 'MTDR': 'Energy', 'CHRD': 'Energy', 'VNOM': 'Energy',
-            
+            'SMR': 'Energy', 'VST': 'Energy', 'CEG': 'Energy', 'CCJ': 'Energy',
+            'LNG': 'Energy', 'AR': 'Energy',
+
             // Industrials
             'BA': 'Industrials', 'CAT': 'Industrials', 'DE': 'Industrials', 'GE': 'Industrials',
             'HON': 'Industrials', 'MMM': 'Industrials', 'UNP': 'Industrials', 'NSC': 'Industrials',
@@ -3202,7 +3209,8 @@
                 techHardware: ['AAPL', 'QCOM', 'INTC', 'MU', 'ARM', 'DELL', 'HPQ', 'AMAT', 'LRCX', 'MRVL',
                                'AMD', 'TXN', 'ADI', 'NXPI', 'KLAC', 'ASML', 'TSM', 'SNPS', 'CDNS', 'ON',
                                'MPWR', 'SWKS', 'QRVO', 'ENTG', 'FORM', 'MKSI', 'COHR', 'IPGP', 'LITE', 'AMBA',
-                               'SLAB', 'CRUS', 'SYNA', 'MCHP', 'SMCI', 'WDC', 'STX', 'PSTG', 'NTAP', 'CHKP'],
+                               'SLAB', 'CRUS', 'SYNA', 'MCHP', 'SMCI', 'WDC', 'STX', 'PSTG', 'NTAP', 'CHKP',
+                               'IONQ', 'RGTI', 'QBTS', 'QUBT', 'ARQQ', 'IBM'],
                 
                 evAuto: ['TSLA', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'F', 'GM', 'STLA', 'TM',
                          'HMC', 'RACE', 'VWAGY', 'PSNY', 'NSANY', 'APTV', 'MBGYY', 'POAHY', 'FUJHY', 'ALV',
@@ -3221,7 +3229,7 @@
                 
                 healthcare: ['JNJ', 'UNH', 'LLY', 'ABBV', 'PFE', 'MRNA', 'VRTX', 'REGN', 'BMY', 'GILD',
                              'AMGN', 'CVS', 'CI', 'HUM', 'ISRG', 'TMO', 'DHR', 'ABT', 'SYK', 'BSX',
-                             'MDT', 'BDX', 'BAX', 'ZBH', 'HCA', 'DVA', 'CANO', 'IONQ', 'EXAS', 'ILMN',
+                             'MDT', 'BDX', 'BAX', 'ZBH', 'HCA', 'DVA', 'CANO', 'EXAS', 'ILMN',
                              'BIIB', 'ALNY', 'INCY', 'NBIX', 'UTHR', 'JAZZ', 'SRPT', 'BMRN', 'IONS', 'RGEN'],
                 
                 consumer: ['AMZN', 'WMT', 'COST', 'TGT', 'HD', 'LOW', 'SBUX', 'MCD', 'CMG', 'YUM',
@@ -3232,7 +3240,8 @@
                 energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'OXY', 'MPC', 'PSX', 'VLO', 'TRGP',
                          'DVN', 'FANG', 'WMB', 'APA', 'HAL', 'BKR', 'NOV', 'FTI', 'NEE', 'DUK',
                          'SO', 'D', 'AEP', 'EXC', 'ENPH', 'SEDG', 'RUN', 'NOVA', 'FSLR', 'PLUG',
-                         'PBF', 'DK', 'CTRA', 'OVV', 'PR', 'SM', 'MGY', 'MTDR', 'CHRD', 'OKE'],
+                         'PBF', 'DK', 'CTRA', 'OVV', 'PR', 'SM', 'MGY', 'MTDR', 'CHRD', 'OKE',
+                         'SMR', 'VST', 'CEG', 'CCJ', 'LNG', 'AR'],
                 
                 // NEW SECTORS ADDED:
                 
@@ -3257,20 +3266,15 @@
                           'AMSWA', 'PLXS', 'NPAB', 'VECO', 'POWI', 'VICR', 'MYRG', 'DY', 'APOG', 'HSII']
             };
             
-            // Sample stocks from EVERY sector for comprehensive cross-sector analysis
-            // With unlimited API calls, we can analyze many more stocks
-            const stocksPerSector = 25; // 25 stocks from each of 12 sectors = 300 total
+            // Use all stocks from every sector for maximum coverage
             const selectedStocks = [];
-            
+
             for (const [sector, stocks] of Object.entries(stockLists)) {
-                // Take first N stocks from each sector
-                const sectorSample = stocks.slice(0, Math.min(stocksPerSector, stocks.length));
-                selectedStocks.push(...sectorSample);
+                selectedStocks.push(...stocks);
             }
             
             console.log(`🔍 COMPREHENSIVE Cross-Sector Analysis`);
             console.log(`📊 Analyzing ${selectedStocks.length} stocks across ${Object.keys(stockLists).length} sectors`);
-            console.log(`📈 Breakdown: ${stocksPerSector} stocks per sector`);
             console.log(`⚡ Full market coverage enabled`);
             
             // Remove duplicates (some stocks appear in multiple sectors)
