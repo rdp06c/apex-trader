@@ -4588,7 +4588,16 @@ Include a decision for EVERY holding.` }]
                 }
                 
                 // ── PHASE 2: BUY DECISIONS ──
-                // Hard guard: Remove Phase 1 sell symbols from the candidate pool
+                // Hard guard: Remove ALL held symbols from Phase 2 candidate pool
+                // Phase 1 already reviewed holdings — Phase 2 should only see new candidates
+                const heldSymbols = Object.keys(portfolio.holdings);
+                heldSymbols.forEach(sym => {
+                    if (filteredMarketData[sym]) {
+                        delete filteredMarketData[sym];
+                        console.log(`🚫 Removed ${sym} from Phase 2 candidates (current holding, reviewed in Phase 1)`);
+                    }
+                });
+                // Also remove Phase 1 sell symbols (in case they weren't in holdings anymore)
                 if (phase1SellDecisions.length > 0) {
                     const sellSymbols = phase1SellDecisions.map(d => d.symbol);
                     sellSymbols.forEach(sym => {
@@ -4599,6 +4608,10 @@ Include a decision for EVERY holding.` }]
                     });
                 }
                 
+                // Update candidate count to reflect removals
+                const phase2CandidateCount = Object.keys(filteredMarketData).length;
+                console.log(`📊 Phase 2 candidates: ${phase2CandidateCount} (after removing ${candidateCount - phase2CandidateCount} held/sold symbols)`);
+
                 // Flag recently-sold stocks in candidate data (sold within last 5 trading days)
                 // Forces Claude to justify re-buying with a NEW catalyst, not just "price dropped more"
                 const RECENT_SELL_COOLDOWN_DAYS = 5;
@@ -5341,16 +5354,16 @@ ${recentlySoldWarnings ? `
 🚫 RECENTLY SOLD — RE-BUY REQUIRES NEW CATALYST:
 ${recentlySoldWarnings}Do NOT re-buy these stocks unless you can cite a specific NEW development that was NOT known when the sell decision was made.
 ` : ''}
-Current Market Data (PRE-SCREENED TOP ${candidateCount} CANDIDATES with Momentum, RS & Sector Rotation):
+Current Market Data (PRE-SCREENED TOP ${phase2CandidateCount} BUY CANDIDATES — holdings excluded):
 ${JSON.stringify(filteredMarketData)}
 
 SECTOR SUMMARY (from all 300 stocks analyzed - full market context):
 ${JSON.stringify(sectorSummary)}
 
 UNDERSTANDING THE DATA:
-These ${candidateCount} stocks were pre-screened from 300+ by composite score (momentum + relative strength + sector flow).
+These ${phase2CandidateCount} stocks were pre-screened from 300+ by composite score (momentum + relative strength + sector flow).
+Current holdings have been REMOVED from this data — Phase 1 already reviewed them. Only evaluate NEW positions.
 The sector summary covers ALL 300 stocks so you have full market context.
-Holdings are EXCLUDED from candidates — Phase 1 already reviewed them.
 
 Each stock includes:
 • price, change, changePercent - Current price data (today vs prev close)
