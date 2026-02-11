@@ -2436,6 +2436,20 @@
             flex-shrink: 0;
         }
 
+        .regime-vix {
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: auto;
+            flex-shrink: 0;
+            padding: 3px 10px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .regime-vix.vix-low { color: var(--green); }
+        .regime-vix.vix-normal { color: var(--text-secondary); }
+        .regime-vix.vix-elevated { color: var(--yellow); }
+        .regime-vix.vix-panic { color: var(--red); }
+
         /* ── Regime Timeline (Learning Insights) ──────────── */
         .regime-timeline {
             display: flex;

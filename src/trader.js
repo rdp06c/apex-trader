@@ -13,6 +13,7 @@
             lastMarketRegime: null, // { regime, timestamp }
             lastCandidateScores: null, // { timestamp, candidates: [...] }
             lastSectorRotation: null, // { timestamp, sectors: {...} }
+            lastVIX: null, // { level, interpretation, trend, ... }
             holdSnapshots: [],    // Hold decision outcome tracking
             regimeHistory: []     // Rolling regime transition log
         };
@@ -1520,6 +1521,9 @@
         let newsCache = {};
         const NEWS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
+        let vixCache = null;
+        const VIX_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours (EOD data)
+
         async function fetchNewsForStocks(symbols) {
             // Restore from localStorage
             try {
@@ -1576,6 +1580,87 @@
                 localStorage.setItem('newsCache', JSON.stringify(newsCache));
                 localStorage.setItem('newsCacheTs', String(Date.now()));
             } catch (e) { console.warn('Could not persist news cache:', e.message); }
+        }
+
+        // === VIX INDEX DATA ===
+        async function fetchVIX() {
+            // Check memory cache first
+            if (vixCache && Date.now() - vixCache._fetchedAt < VIX_CACHE_TTL) {
+                console.log('📦 VIX: from memory cache');
+                return vixCache;
+            }
+
+            // Check localStorage cache
+            try {
+                const cached = localStorage.getItem('vixCache');
+                const ts = parseInt(localStorage.getItem('vixCacheTs') || '0');
+                if (cached && Date.now() - ts < VIX_CACHE_TTL) {
+                    vixCache = JSON.parse(cached);
+                    vixCache._fetchedAt = ts;
+                    console.log(`📦 VIX: ${vixCache.level} from localStorage cache`);
+                    return vixCache;
+                }
+            } catch { /* ignore corrupt cache */ }
+
+            try {
+                const to = new Date().toISOString().split('T')[0];
+                const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                console.log(`📊 Fetching VIX data (${from} to ${to})...`);
+
+                const response = await fetch(
+                    `https://api.polygon.io/v2/aggs/ticker/I:VIX/range/1/day/${from}/${to}?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`
+                );
+                if (!response.ok) {
+                    console.warn(`VIX fetch failed: HTTP ${response.status}`);
+                    return null;
+                }
+                const data = await response.json();
+                if (!data.results || data.results.length === 0) {
+                    console.warn('VIX fetch: no results returned');
+                    return null;
+                }
+
+                const bars = data.results;
+                const latest = bars[bars.length - 1];
+                const level = latest.c;
+                const prevClose = bars.length >= 2 ? bars[bars.length - 2].c : level;
+                const change = level - prevClose;
+                const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
+
+                // Trend over full range
+                const firstClose = bars[0].c;
+                const rangeChange = firstClose !== 0 ? ((level - firstClose) / firstClose) * 100 : 0;
+                const trend = rangeChange > 10 ? 'rising' : rangeChange < -10 ? 'falling' : 'stable';
+
+                // Interpretation
+                let interpretation;
+                if (level < 15) interpretation = 'complacent';
+                else if (level <= 20) interpretation = 'normal';
+                else if (level <= 30) interpretation = 'elevated';
+                else interpretation = 'panic';
+
+                vixCache = {
+                    level,
+                    prevClose,
+                    change,
+                    changePercent,
+                    trend,
+                    interpretation,
+                    _fetchedAt: Date.now()
+                };
+
+                // Persist to localStorage
+                try {
+                    localStorage.setItem('vixCache', JSON.stringify(vixCache));
+                    localStorage.setItem('vixCacheTs', String(Date.now()));
+                } catch (e) { console.warn('Could not persist VIX cache:', e.message); }
+
+                console.log(`✅ VIX: ${level.toFixed(1)} (${interpretation}, ${trend}), change: ${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}%)`);
+                return vixCache;
+            } catch (err) {
+                console.warn('VIX fetch error:', err.message);
+                return null;
+            }
         }
 
         // Calculate REAL 5-day momentum score (uses last 5 bars from 20-day cache)
@@ -3393,7 +3478,8 @@
                     await Promise.all([
                         fetchGroupedDailyBars(new Set(symbols)),
                         fetchTickerDetails(symbols),
-                        fetchShortInterest(symbols)
+                        fetchShortInterest(symbols),
+                        fetchVIX()
                     ]);
                 } catch (groupedErr) {
                     console.warn('Grouped daily bars failed, falling back to per-ticker:', groupedErr.message);
@@ -3470,6 +3556,9 @@
                     timestamp: new Date().toISOString(),
                     candidates: dryRunScored.slice(0, 40)
                 };
+
+                // Persist VIX from dry run
+                if (vixCache) portfolio.lastVIX = { ...vixCache, fetchedAt: new Date().toISOString() };
 
                 // Backfill thesis entries missing momentum/RS/sectorFlow
                 if (portfolio.holdingTheses) {
@@ -3921,7 +4010,8 @@
                     await Promise.all([
                         fetchGroupedDailyBars(allSymbolSet),
                         fetchTickerDetails(allSymbolsFetched),
-                        fetchShortInterest(allSymbolsFetched)
+                        fetchShortInterest(allSymbolsFetched),
+                        fetchVIX()
                     ]);
                 } catch (groupedErr) {
                     console.warn('Grouped daily bars failed, falling back to per-ticker fetch:', groupedErr.message);
@@ -3934,6 +4024,9 @@
 
                 // Persist sector rotation for dashboard display
                 portfolio.lastSectorRotation = { timestamp: new Date().toISOString(), sectors: sectorRotation };
+
+                // Persist VIX for dashboard display
+                if (vixCache) portfolio.lastVIX = { ...vixCache, fetchedAt: new Date().toISOString() };
 
                 // 2. Group stocks by sector for relative strength calculations
                 const stocksBySector = {};
@@ -4272,13 +4365,15 @@ For each holding, compare ORIGINAL_THESIS vs CURRENT_INDICATORS:
 7. Would you buy TODAY at current price with current indicators?
 
 SEARCH STRATEGY: You have pre-loaded recentNews with recent headlines + machine sentiment for each holding.
-Scan those FIRST, then use web search for:
-1. One market regime search (required)
+VIX level is pre-loaded below — no need to search for it.
+Scan recentNews FIRST, then use web search for:
+1. One market regime search — broader context beyond VIX (e.g. SPY trend, macro headlines)
 2. If ANY holding has EMPTY or STALE recentNews (no articles, or all articles older than 7 days), search for recent news on those holdings — news gaps are blind spots that could hide sell signals. Search: "SYMBOL stock news this week site:investing.com OR site:reuters.com OR site:marketwatch.com"
 3. Deep dive on a holding if recentNews shows a potentially alarming headline that needs verification
 Pre-loaded news coverage varies by ticker — do NOT assume silence means safety.
 
 Portfolio Cash: $${portfolio.cash.toFixed(2)}
+${vixCache ? `VIX: ${vixCache.level.toFixed(1)} (${vixCache.interpretation}${vixCache.trend !== 'stable' ? ', ' + vixCache.trend : ''})` : ''}
 Holdings: ${(() => {
     const eh = {};
     Object.entries(portfolio.holdings).forEach(([sym, sh]) => {
@@ -4521,8 +4616,9 @@ IMPORTANT DATE CONTEXT:
 Today's date is ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
 Current quarter: Q${Math.floor((new Date().getMonth() + 3) / 3)} ${new Date().getFullYear()}
 
-${hasHoldings && phase1SellDecisions.length > 0 ? '\n══ PHASE 1 RESULTS (Sells already decided) ══\nSells: ' + phase1SellDecisions.map(d => 'SELL ' + d.shares + ' ' + d.symbol + ': ' + d.reasoning).join('\n') + '\nHoldings Summary: ' + phase1Summary + '\nMarket Regime: ' + phase1Regime + '\n══════════════════════════════════════\n' : ''}
-${hasHoldings && phase1SellDecisions.length === 0 ? '\n══ PHASE 1 RESULTS: All holdings reviewed, no sells needed. Keeping current positions. ══\nMarket Regime: ' + phase1Regime + '\n' : ''}
+${hasHoldings && phase1SellDecisions.length > 0 ? '\n══ PHASE 1 RESULTS (Sells already decided) ══\nSells: ' + phase1SellDecisions.map(d => 'SELL ' + d.shares + ' ' + d.symbol + ': ' + d.reasoning).join('\n') + '\nHoldings Summary: ' + phase1Summary + '\nMarket Regime: ' + phase1Regime + (vixCache ? '\nVIX: ' + vixCache.level.toFixed(1) + ' (' + vixCache.interpretation + (vixCache.trend !== 'stable' ? ', ' + vixCache.trend : '') + ')' : '') + '\n══════════════════════════════════════\n' : ''}
+${hasHoldings && phase1SellDecisions.length === 0 ? '\n══ PHASE 1 RESULTS: All holdings reviewed, no sells needed. Keeping current positions. ══\nMarket Regime: ' + phase1Regime + (vixCache ? '\nVIX: ' + vixCache.level.toFixed(1) + ' (' + vixCache.interpretation + (vixCache.trend !== 'stable' ? ', ' + vixCache.trend : '') + ')' : '') + '\n' : ''}
+${!hasHoldings && vixCache ? '\n══ MARKET CONTEXT ══\nVIX: ' + vixCache.level.toFixed(1) + ' (' + vixCache.interpretation + (vixCache.trend !== 'stable' ? ', ' + vixCache.trend : '') + ')\n══════════════════\n' : ''}
 
 When searching and citing data:
 - ONLY use earnings from 2025 or later (2024 data is over 1 year old!)
@@ -5884,11 +5980,11 @@ Quickly assess market regime by checking:
    • 8+ sectors outflow = Broad bear
    • 5-7 mixed = Choppy
 
-3. **Volatility Context** (Search: "VIX level today")
-   • VIX <15 = Low volatility (complacent)
-   • VIX 15-25 = Normal volatility
-   • VIX >25 = Elevated volatility (fear)
-   • VIX >35 = Panic mode
+3. **Volatility Context** (VIX level pre-loaded above — no search needed)
+   • VIX <15 = Complacent
+   • VIX 15-20 = Normal
+   • VIX 20-30 = Elevated (fear)
+   • VIX >30 = Panic
 
 ────────────────────────────────────────────────────────────────
 
@@ -7263,6 +7359,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (!portfolio.lastMarketRegime) portfolio.lastMarketRegime = null;
                     if (!portfolio.lastCandidateScores) portfolio.lastCandidateScores = null;
                     if (!portfolio.lastSectorRotation) portfolio.lastSectorRotation = null;
+                    if (!portfolio.lastVIX) portfolio.lastVIX = null;
                     if (!portfolio.blockedTrades) portfolio.blockedTrades = [];
                     if (!portfolio.tradingRules) portfolio.tradingRules = null;
                     if (!portfolio.holdSnapshots) portfolio.holdSnapshots = [];
@@ -8778,6 +8875,25 @@ Current Portfolio:
 
             if (data.timestamp) {
                 timeEl.textContent = 'Last detected: ' + new Date(data.timestamp).toLocaleString();
+            }
+
+            // VIX display
+            const vixEl = document.getElementById('regimeVIX');
+            if (vixEl) {
+                const vix = portfolio.lastVIX;
+                if (vix && vix.level != null) {
+                    const sign = vix.change >= 0 ? '+' : '';
+                    vixEl.textContent = `VIX ${vix.level.toFixed(1)} (${sign}${vix.change.toFixed(2)})`;
+                    vixEl.className = 'regime-vix';
+                    if (vix.interpretation === 'complacent') vixEl.classList.add('vix-low');
+                    else if (vix.interpretation === 'normal') vixEl.classList.add('vix-normal');
+                    else if (vix.interpretation === 'elevated') vixEl.classList.add('vix-elevated');
+                    else if (vix.interpretation === 'panic') vixEl.classList.add('vix-panic');
+                    vixEl.title = `${vix.interpretation}, ${vix.trend} trend`;
+                } else {
+                    vixEl.textContent = '';
+                    vixEl.className = 'regime-vix';
+                }
             }
         }
 
