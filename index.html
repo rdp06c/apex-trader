@@ -7544,6 +7544,8 @@ ${vixCache ? 'VIX level is pre-loaded below — no need to search for it.\n' : '
 3. Deep dive on a holding if recentNews shows a potentially alarming headline that needs verification
 Pre-loaded news coverage varies by ticker — do NOT assume silence means safety.
 
+SEARCH RECENCY RULE: Today is the ONLY date that matters. Search results older than 2 trading days may reflect outdated conditions (e.g. "tech selloff" that has since reversed). When search results conflict with the real-time price/momentum/RS data provided below, ALWAYS trust the quantitative data — it is live. Note the date of any search result you cite and discount stale narratives. Include "today" or "this week" in search queries to get current results.
+
 Portfolio Cash: $${portfolio.cash.toFixed(2)}
 ${vixCache ? `VIX: ${vixCache.level.toFixed(1)} (${vixCache.interpretation}${vixCache.trend !== 'stable' ? ', ' + vixCache.trend : ''})` : ''}
 Holdings: ${(() => {
@@ -7798,6 +7800,7 @@ When searching and citing data:
 - Prefer most recent quarter data (Q4 2025, Q1 2026, etc.)
 - If you can't find recent data, state that explicitly
 - Don't mix old training knowledge with current searches
+- SEARCH RECENCY: Include "today" or "this week" in queries. Results older than 2 trading days may reflect outdated conditions. When search narratives conflict with the real-time price/momentum/RS data below, ALWAYS trust the quantitative data — it is live. Note the date of any cited source.
 
 CRITICAL RESEARCH REQUIREMENTS:
 You have web_search tool available. Use it STRATEGICALLY to find CATALYSTS that will drive future moves.
@@ -9521,9 +9524,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 if (decision.decisions && Array.isArray(decision.decisions)) {
                         // SAFETY: Ensure whole shares only for all decisions
                         decision.decisions.forEach(d => {
-                            if (d.shares) {
+                            if (d.action === 'BUY') {
+                                d.shares = Math.floor(d.shares || 0);
+                                if (d.shares < 1) d.shares = 1; // Force minimum 1 share for BUY
+                            } else if (d.shares) {
                                 d.shares = Math.floor(d.shares);
-                                if (d.shares < 1) d.shares = 1;
                             }
                         });
                         
@@ -9692,10 +9697,19 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
 
             // Step 3: Now validate BUY budget against ACTUAL post-sell cash
+            // Pre-filter: drop buy decisions with invalid share counts
+            buyDecisionsAll = buyDecisionsAll.filter(d => {
+                if (!d.shares || d.shares <= 0 || !Number.isFinite(d.shares)) {
+                    console.warn(`⚠️ Dropping BUY ${d.symbol}: invalid shares (${d.shares})`);
+                    return false;
+                }
+                return true;
+            });
+
             let totalCost = 0;
             let budgetWarning = '';
             const validatedBuyDecisions = [];
-            
+
             for (const decision of buyDecisionsAll) {
                 const price = marketData[decision.symbol]?.price || 0;
                 const cost = price * decision.shares;
@@ -9810,6 +9824,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (!marketData[symbol] || !marketData[symbol].price) {
                 console.error(`❌ No market data for ${symbol} — cannot execute trade`);
                 addActivity(`❌ Trade skipped for ${symbol}: no price data available`, 'error');
+                return false;
+            }
+            if (decision.action === 'BUY' && (!shares || shares <= 0 || !Number.isFinite(shares))) {
+                console.error(`❌ Invalid share count (${shares}) for BUY ${symbol} — skipping`);
+                addActivity(`❌ Trade skipped for ${symbol}: invalid share count`, 'error');
                 return false;
             }
             const price = marketData[symbol].price;
