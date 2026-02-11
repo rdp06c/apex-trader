@@ -1603,34 +1603,48 @@
             } catch { /* ignore corrupt cache */ }
 
             try {
-                const to = new Date().toISOString().split('T')[0];
-                const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                console.log(`📊 Fetching VIX data (${from} to ${to})...`);
+                console.log('📊 Fetching VIX snapshot...');
 
-                const response = await fetch(
-                    `https://api.massive.com/v2/aggs/ticker/I:VIX/range/1/day/${from}/${to}?sort=asc&apiKey=${POLYGON_API_KEY}`
-                );
-                if (!response.ok) {
-                    console.warn(`VIX fetch failed: HTTP ${response.status}`);
+                // Use snapshot endpoint (covered by Indices Basic plan)
+                // Try api.polygon.io first (known CORS-friendly), fall back to api.massive.com with Bearer auth
+                let data = null;
+                const endpoints = [
+                    { url: `https://api.polygon.io/v3/snapshot/indices?ticker.any_of=I:VIX&apiKey=${POLYGON_API_KEY}`, label: 'polygon' },
+                    { url: `https://api.massive.com/v3/snapshot/indices?ticker.any_of=I:VIX`, label: 'massive', headers: { 'Authorization': `Bearer ${POLYGON_API_KEY}` } }
+                ];
+
+                for (const ep of endpoints) {
+                    try {
+                        const response = await fetch(ep.url, ep.headers ? { headers: ep.headers } : undefined);
+                        if (!response.ok) {
+                            console.warn(`VIX fetch (${ep.label}): HTTP ${response.status}`);
+                            continue;
+                        }
+                        data = await response.json();
+                        if (data.results && data.results.length > 0) {
+                            console.log(`✅ VIX fetched via ${ep.label}`);
+                            break;
+                        }
+                        data = null;
+                    } catch (e) {
+                        console.warn(`VIX fetch (${ep.label}) error:`, e.message);
+                    }
+                }
+
+                if (!data || !data.results || data.results.length === 0) {
+                    console.warn('VIX fetch: no results from any endpoint');
                     return null;
                 }
-                const data = await response.json();
-                if (!data.results || data.results.length === 0) {
-                    console.warn('VIX fetch: no results returned');
-                    return null;
-                }
 
-                const bars = data.results;
-                const latest = bars[bars.length - 1];
-                const level = latest.c;
-                const prevClose = bars.length >= 2 ? bars[bars.length - 2].c : level;
-                const change = level - prevClose;
-                const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
+                const snap = data.results[0];
+                const level = snap.value;
+                const session = snap.session || {};
+                const prevClose = session.previous_close || level;
+                const change = session.change || (level - prevClose);
+                const changePercent = session.change_percent || (prevClose !== 0 ? ((level - prevClose) / prevClose) * 100 : 0);
 
-                // Trend over full range
-                const firstClose = bars[0].c;
-                const rangeChange = firstClose !== 0 ? ((level - firstClose) / firstClose) * 100 : 0;
-                const trend = rangeChange > 10 ? 'rising' : rangeChange < -10 ? 'falling' : 'stable';
+                // Trend from today's change direction
+                const trend = changePercent > 5 ? 'rising' : changePercent < -5 ? 'falling' : 'stable';
 
                 // Interpretation
                 let interpretation;
