@@ -48,7 +48,7 @@ Browser (index.html)
 1. **Stock Screening** (`screenStocks`) – Builds a universe of ~300 stocks across 12 sectors
 2. **Parallel Data Fetching** (runs simultaneously):
    - `fetchBulkSnapshot` – Prices for all stocks via Polygon `/v2/snapshot` (single API call, cached 15s)
-   - `fetchGroupedDailyBars` – 40-day OHLCV bars via Polygon `/v2/aggs/grouped` (~40 API calls per date, cached 1hr). Falls back to `fetchAll5DayHistories` (per-ticker) on failure.
+   - `fetchGroupedDailyBars` – 40-day OHLCV bars via Polygon `/v2/aggs/grouped` (~40 API calls per date, cached 15min). Falls back to `fetchAll5DayHistories` (per-ticker) on failure.
    - `fetchTickerDetails` – Market cap + SIC description via `/v3/reference/tickers` (cached 7 days)
    - `fetchShortInterest` – Short interest + days-to-cover via `/stocks/v1/short-interest` (cached 24hr)
 3. **Technical Analysis** (client-side):
@@ -75,6 +75,7 @@ Browser (index.html)
 7. **Budget Validation & Execution** (`executeMultipleTrades`):
    - Receives `enhancedMarketData` (with all technical indicators, company details, short interest) — used by `executeSingleTrade` to populate `entryTechnicals`, `holdingTheses`, and `exitTechnicals`
    - Sells execute first (freeing up actual cash)
+   - **Derived trading rules** (`deriveTradingRules`) are enforced: `block`-level rules hard-reject buy candidates; `warn`-level rules add badges to Decision Reasoning cards
    - Buy budget validates against real post-sell `portfolio.cash`
    - Buys execute in conviction-priority order
    - Trades that exceed budget get trimmed (share count reduced) or dropped
@@ -94,6 +95,9 @@ Browser (index.html)
   lastMarketRegime: { regime, timestamp },           // Persisted from Phase 1 AI response
   lastCandidateScores: { timestamp, candidates: [] }, // Top 40 scored candidates
   lastSectorRotation: { timestamp, sectors: {} },     // All sectors with money flow data
+  holdSnapshots: [...],      // Hold decision outcome tracking (price at hold time + next-cycle price)
+  regimeHistory: [...],      // Rolling regime transition log (capped at 200 entries)
+  blockedTrades: [...],      // Trades blocked by derived trading rules (capped at 50, initialized on-demand)
   tradingStrategy: 'aggressive',
   journalEntries: [...]
 }
@@ -118,8 +122,19 @@ Tracks performance patterns from `closedTrades`:
 - **Technical Indicator Accuracy** (`analyzeTechnicalAccuracy`) – Which signals correlate with wins? Analyzes: momentum score, RS, sector rotation, runner entries, market structure (CHoCH/BOS), acceleration, regime, concentration, position sizing, RSI zones (oversold/neutral/overbought), MACD crossover (bullish/bearish/none), squeeze potential (DTC buckets), and composite score calibration (high/medium/low)
 - **Exit Timing Analysis** (`analyzeExitTiming`) – Post-exit price tracking to evaluate sell decisions
 - **Behavioral Patterns** – Detects tendency to sell winners too early, hold losers too long, etc.
+- **Hold Accuracy** (`analyzeHoldAccuracy`) – Evaluates HOLD decisions by comparing price at hold time vs next analysis cycle. Tracks whether holds gained or lost value and correlates with conviction level and market regime.
+- **Regime Transitions** (`analyzeRegimeTransitions`) – Tracks market regime changes (bull/bear/choppy) over time via `regimeHistory`. Detects regime shift frequency and patterns.
 
 These insights are injected into Phase 2's prompt so Claude can learn from past decisions. They're also surfaced in the Learning Insights UI via `updateLearningInsightsDisplay()`, which renders 7 analytics panels: Risk/Reward Profile, Hold Time Comparison, Streaks, Conviction Accuracy, Signal Accuracy, Exit Analysis, and Post-Exit Tracking. Each panel has a minimum data threshold and won't render with insufficient trades.
+
+### Derived Trading Rules (in `src/trader.js`)
+Auto-learns from `closedTrades` to prevent repeating mistakes:
+- **`deriveTradingRules()`** – Analyzes 9 pattern dimensions (runner entries, overbought RSI, bearish structure, bearish MACD, outflow sectors, high momentum, large positions, low composite scores, overconfident conviction). For each pattern with enough data, calculates win rate and assigns enforcement level:
+  - **`block`** – Hard stop. Trade is rejected in `executeMultipleTrades` and logged to `portfolio.blockedTrades`.
+  - **`warn`** – Soft warning. A badge is displayed on the Decision Reasoning card.
+  - **`observe`** – Tracking only. No user-visible action.
+- **`matchesPattern(ruleId, data)`** – Checks whether a buy candidate matches a specific rule pattern using its market data (RSI, MACD, structure, sector flow, momentum, composite score, conviction).
+- Rules are re-derived on every analysis cycle (not cached long-term). The Learning Insights UI displays blocked trades and active rules.
 
 ### Analytics Modules (in `src/trader.js` and `src/body.html`)
 Four modules provide visibility into APEX's analysis data and portfolio state. UI section order in `body.html`:
@@ -128,7 +143,7 @@ Four modules provide visibility into APEX's analysis data and portfolio state. U
 2. Charts (existing — perf chart + sector pie)
 3. **Market Regime Indicator** — non-collapsible banner
 4. Current Holdings (existing collapsible) — includes sector, entry momentum, RS, live RSI/MACD/DTC indicators, and up to 2 recent news headlines with sentiment badges
-5. Decision Reasoning (existing collapsible) — individual cards are also collapsible (click header); restored cards start collapsed
+5. Decision Reasoning (existing collapsible) — individual cards are also collapsible (click header); restored cards start collapsed. Persisted to `localStorage` (`apexDecisionHistory`, last 5 records) and auto-uploaded to Google Drive. Hold decisions are synthesized for any holdings the AI omits from Phase 1.
 6. **Candidate Scorecard** — collapsible, collapsed by default. Columns: #, Symbol, Score, Day, Mom, RS, RSI (color-coded), MACD (arrow), Sector, Structure, DTC (squeeze highlight), MCap
 7. **Sector Rotation Heatmap** — collapsible, collapsed by default
 8. Learning Insights (existing collapsible)
@@ -158,6 +173,7 @@ All AI-generated and user-generated content is escaped via `escapeHtml()` before
 ### Google Drive Integration (in `src/trader.js`)
 - OAuth 2.0 with `drive.file` scope (APEX can only see files it created)
 - Portfolio backup/restore as JSON
+- Decision reasoning auto-upload (`uploadDecisionToDrive`) into a `APEX_Decisions` folder (`findOrCreateFolder`)
 - Encrypted API key sync between devices (XOR + base64 encryption)
 - Uses Google Identity Services library
 
@@ -177,12 +193,12 @@ The build produces a single `index.html` file. This is intentional for portabili
 The Anthropic API is not called directly from the browser. All Claude API calls go through a Cloudflare Worker that injects the API key server-side. The `ANTHROPIC_API_URL` points to this worker. The worker injects `stream: true` into every request and pipes the SSE stream straight through to the browser — this keeps the connection alive and avoids Cloudflare's free-plan 100s timeout. On the client side, `fetchAnthropicStreaming()` reads the SSE events and reconstructs the same message object shape as the non-streaming API, so all downstream code (JSON parsing, text extraction) works unchanged.
 
 ### API Cost Consciousness
-- Polygon Stocks Advanced plan – real-time data, unlimited API calls. Endpoints used: bulk snapshot (`/v2/snapshot`), grouped daily bars (`/v2/aggs/grouped`), ticker details (`/v3/reference/tickers`), short interest (`/stocks/v1/short-interest`), news (`/v2/reference/news`), and per-ticker OHLCV bars as fallback (`/v2/aggs/ticker`). Caching (4hr TTL for individual prices, 15s for bulk snapshots, 1hr for grouped bars + news, 24hr for short interest, 7 days for ticker details) avoids redundant requests and keeps responses fast
+- Polygon Stocks Advanced plan – real-time data, unlimited API calls. Endpoints used: bulk snapshot (`/v2/snapshot`), grouped daily bars (`/v2/aggs/grouped`), ticker details (`/v3/reference/tickers`), short interest (`/stocks/v1/short-interest`), news (`/v2/reference/news`), and per-ticker OHLCV bars as fallback (`/v2/aggs/ticker`). Caching (4hr TTL for individual prices, 15s for bulk snapshots, 15min for grouped bars, 1hr for news, 24hr for short interest, 7 days for ticker details) avoids redundant requests and keeps responses fast
 - Claude API calls are expensive – freshness checks prevent wasting analysis on stale data
 - Phase 1 uses `claude-sonnet-4-5-20250929` with `max_tokens: 4000`
 - Phase 2 uses `claude-sonnet-4-5-20250929` with `max_tokens: 8000`
 - Chat uses `max_tokens: 1500`
-- **Search token optimization**: Pre-loaded `recentNews` (headlines + machine sentiment from Polygon) is injected into both Phase 1 and Phase 2 prompts. Phase 1 uses 1-2 web searches max (regime + alarming headline verification). Phase 2 uses 2-3 focused searches (catalyst verification, sector rotation, deep dive) instead of 3-5 broad discovery searches. Saves ~2,000-4,000 tokens per analysis cycle.
+- **Search token optimization**: Pre-loaded `recentNews` (headlines + machine sentiment from Polygon) is injected into both Phase 1 and Phase 2 prompts. Phase 1 uses up to 3 web searches (regime check + news gap filling for holdings with empty/stale news + alarming headline verification). Phase 2 uses up to 4 focused searches (catalyst verification, sector rotation, deep dive). Saves ~2,000-4,000 tokens per analysis cycle vs broad discovery searches.
 
 ### After-Hours Price Handling
 Polygon's `lastTrade.p` reflects extended-hours trading, which differs from the regular-session closing price most sites display. The `isMarketOpen()` helper checks Eastern Time (9:30 AM – 4:00 PM ET, weekdays). When market is closed, price priority is `day.c > lastTrade.p > day.l`; when open, it's `lastTrade.p > day.c > day.l`. Change calculations are also recomputed from scratch when market is closed (Polygon's pre-computed `todaysChange`/`todaysChangePerc` include extended-hours movement). This applies to both `fetchBulkSnapshot` and individual `getStockPrice` calls.
@@ -237,13 +253,23 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `analyzeConvictionAccuracy` | ML: conviction vs outcome correlation |
 | `analyzeTechnicalAccuracy` | ML: which indicators predict wins |
 | `analyzeExitTiming` | ML: post-exit price analysis |
+| `analyzeHoldAccuracy` | ML: hold decision outcome analysis |
+| `analyzeRegimeTransitions` | ML: regime change pattern analysis |
+| `deriveTradingRules` | Auto-generates block/warn rules from closed trade patterns |
+| `matchesPattern` | Checks if a buy candidate matches a derived rule pattern |
+| `recordHoldSnapshots` | Captures hold decisions with technicals for later evaluation |
+| `evaluateHoldSnapshots` | Fills in next-cycle prices for hold outcome tracking |
+| `recordRegimeTransition` | Tracks market regime changes over time |
 | `formatPerformanceInsights` | Formats ML insights for Claude's prompt |
 | `calculatePortfolioValue` | Current total value calculation |
 | `updateUI` | Refreshes all dashboard elements |
 | `escapeHtml` | Sanitizes strings for safe innerHTML insertion |
 | `formatMarketCap` | Formats market cap as $1.2T / $45B / $800M |
 | `formatTimeAgo` | Formats ISO date as relative time (2h, 1d, 3d) |
-| `addDecisionReasoning` | Renders decision cards in UI |
+| `addDecisionReasoning` | Renders decision cards in UI (persisted to localStorage) |
+| `buildDecisionText` | Extracts text from decision card for export |
+| `uploadDecisionToDrive` | Uploads decision reasoning to Google Drive |
+| `findOrCreateFolder` | Google Drive folder management helper |
 | `sendMessage` | Chat interface message handling (with rate limiting) |
 | `activateChat` | Unlocks chat UI for the session |
 | `updateRegimeBanner` | Renders market regime banner (bull/bear/choppy) |
@@ -259,7 +285,7 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 
 The AI prompts are extensive and embedded inline in `src/trader.js`. Key sections (search for these strings):
 
-- **Phase 1 prompt** (in `runAIAnalysis`, search `"Phase 1"`): Holdings review. Includes thesis comparison, anti-whipsaw rules, opportunity cost context (top buy candidates teased).
+- **Phase 1 prompt** (in `runAIAnalysis`, search `"Phase 1"`): Holdings review. Includes thesis comparison, anti-whipsaw rules, opportunity cost context (top buy candidates teased), news gap search strategy (searches for holdings with empty/stale news). Hold decisions are synthesized for any holdings the AI omits from its response.
 - **Phase 2 prompt** (in `runAIAnalysis`, search `"Phase 2"`): Buy decisions. Includes market regime guidance (bull/bear/choppy with different cash deployment strategies), conviction-based allocation rules, entry quality tiers (Extended → avoid, Good Entry → sweet spot, Pullback → preferred, Red Flag → skip), recently-sold warnings, and learning insights.
 - **Chat prompt** (in `sendMessage`): Concise system prompt with personality, portfolio context. Uses `system` parameter with conversation memory.
 
