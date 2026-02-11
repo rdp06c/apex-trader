@@ -7776,9 +7776,9 @@ Include a decision for EVERY holding.` }]
                 
                 // ── LOW-CASH SKIP: If cash can't buy 1 share of any top-25 candidate, skip Phase 2 ──
                 // Use top-25 scored candidates (real buy targets), not wildcards/reversals/penny stocks
-                const holdingSymbols = new Set(Object.keys(portfolio.holdings));
+                const holdingSymbolSet = new Set(holdingSymbols);
                 const top25Prices = scoredStocks
-                    .filter(s => !holdingSymbols.has(s.symbol))
+                    .filter(s => !holdingSymbolSet.has(s.symbol))
                     .slice(0, 25)
                     .map(s => s.data.price)
                     .filter(p => p > 0);
