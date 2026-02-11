@@ -7534,6 +7534,20 @@ Include a decision for EVERY holding.` }]
                                         return true;
                                     });
                                     phase1HoldDecisions = parsed.decisions.filter(d => d.action === 'HOLD');
+                                    // Synthesize HOLD decisions for holdings the AI didn't explicitly mention
+                                    const phase1MentionedSymbols = new Set(parsed.decisions.map(d => d.symbol));
+                                    for (const sym of holdingSymbolsList) {
+                                        if (!phase1MentionedSymbols.has(sym)) {
+                                            console.log(`📊 Synthesizing HOLD for ${sym} (not mentioned in Phase 1 response)`);
+                                            phase1HoldDecisions.push({
+                                                action: 'HOLD',
+                                                symbol: sym,
+                                                shares: portfolio.holdings[sym],
+                                                conviction: 5,
+                                                reasoning: 'Holding — not flagged for sale in Phase 1 review.'
+                                            });
+                                        }
+                                    }
                                     phase1Summary = parsed.holdings_summary || '';
                                     phase1Regime = parsed.market_regime || '';
                                     // Persist market regime for dashboard display
@@ -10889,8 +10903,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 reasoningCard.className = 'decision-card';
 
                 let stocksList = '';
-                // Display order: SELL → HOLD → BUY (mirrors Phase 1→2 logic: sell to free cash, then buy)
-                const actionOrder = { 'SELL': 0, 'BUY': 1, 'HOLD': 2 };
+                // Display order: SELL → HOLD → BUY (mirrors Phase 1→2 logic: sells first, holds, then buys)
+                const actionOrder = { 'SELL': 0, 'HOLD': 1, 'BUY': 2 };
                 const sortedDecisions = [...decision.decisions].sort((a, b) =>
                     (actionOrder[a.action] ?? 3) - (actionOrder[b.action] ?? 3)
                 );
