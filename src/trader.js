@@ -4627,8 +4627,35 @@ Include a decision for EVERY holding.` }]
                     }
                 });
                 
+                // ── LOW-CASH SKIP: If cash can't buy 1 share of any candidate, skip Phase 2 ──
+                const candidatePrices = Object.values(filteredMarketData)
+                    .map(d => d.price)
+                    .filter(p => p > 0);
+                const cheapestCandidate = candidatePrices.length > 0 ? Math.min(...candidatePrices) : Infinity;
+
+                if (updatedCash < cheapestCandidate) {
+                    console.log(`💰 Low cash skip: $${updatedCash.toFixed(2)} < cheapest candidate $${cheapestCandidate.toFixed(2)} — skipping Phase 2`);
+                    addActivity(`💰 Cash ($${updatedCash.toFixed(2)}) insufficient for any candidate — skipping buy analysis to save API costs.`, 'info');
+
+                    // Execute Phase 1 sells (if any) and show Phase 1 decisions
+                    const phase1Decisions = [...phase1SellDecisions, ...phase1HoldDecisions];
+                    if (phase1Decisions.length > 0) {
+                        await executeMultipleTrades({
+                            decisions: phase1Decisions,
+                            overall_reasoning: '**Phase 1 - Holdings Review:**\n' + phase1Summary + '\n\n**Phase 2 skipped** — insufficient cash for new positions.',
+                            research_summary: ''
+                        }, enhancedMarketData);
+                    }
+
+                    savePortfolio();
+                    await updateUI();
+                    updatePerformanceAnalytics();
+                    setTimeout(() => { thinking.classList.remove('active'); }, 3000);
+                    return;
+                }
+
                 thinkingDetail.textContent = hasHoldings ? 'Phase 2: Finding buy opportunities...' : 'Researching buy opportunities...';
-                
+
                 // Call Claude API for BUY decisions (Phase 2) via Cloudflare Worker proxy
                 const data = await fetchAnthropicStreaming({
                         model: 'claude-sonnet-4-5-20250929',
