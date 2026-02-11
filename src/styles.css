@@ -2436,6 +2436,37 @@
             flex-shrink: 0;
         }
 
+        /* ── Regime Timeline (Learning Insights) ──────────── */
+        .regime-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .regime-timeline-entry {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .regime-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .regime-transition-stats {
+            margin-left: auto;
+            font-size: 10px;
+            color: var(--text-faint);
+        }
+
         /* ── Candidate Scorecard ─────────────────────────── */
         .scorecard-table-wrap {
             max-height: 500px;

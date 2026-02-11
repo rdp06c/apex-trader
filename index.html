@@ -2449,6 +2449,37 @@
             flex-shrink: 0;
         }
 
+        /* ── Regime Timeline (Learning Insights) ──────────── */
+        .regime-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .regime-timeline-entry {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .regime-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .regime-transition-stats {
+            margin-left: auto;
+            font-size: 10px;
+            color: var(--text-faint);
+        }
+
         /* ── Candidate Scorecard ─────────────────────────── */
         .scorecard-table-wrap {
             max-height: 500px;
@@ -3109,7 +3140,9 @@
             journalEntries: [], // Trading journal notes
             lastMarketRegime: null, // { regime, timestamp }
             lastCandidateScores: null, // { timestamp, candidates: [...] }
-            lastSectorRotation: null // { timestamp, sectors: {...} }
+            lastSectorRotation: null, // { timestamp, sectors: {...} }
+            holdSnapshots: [],    // Hold decision outcome tracking
+            regimeHistory: []     // Rolling regime transition log
         };
 
         // Anthropic API Configuration
@@ -5973,6 +6006,25 @@
             insights += `PERFORMANCE: ${s.wins}W-${s.losses}L (${s.winRate.toFixed(0)}%), Avg winner: +${s.avgWin.toFixed(1)}% (${s.avgWinDays.toFixed(1)}d), Avg loser: ${s.avgLoss.toFixed(1)}% (${s.avgLossDays.toFixed(1)}d)\n`;
             insights += `RECENT: ${s.recentWins}W-${s.recentLosses}L — ${s.recentTrend}\n\n`;
 
+            // Hold accuracy insights
+            const holdStats = analyzeHoldAccuracy();
+            if (holdStats) {
+                insights += `HOLD ACCURACY: ${holdStats.overall.accuracy.toFixed(0)}% correct (${holdStats.overall.total} holds), avg ${holdStats.overall.avgChange >= 0 ? '+' : ''}${holdStats.overall.avgChange.toFixed(1)}% next-cycle change.`;
+                if (holdStats.byConviction.high) insights += ` High conviction: ${holdStats.byConviction.high.accuracy.toFixed(0)}%.`;
+                if (holdStats.byConviction.low) insights += ` Low conviction: ${holdStats.byConviction.low.accuracy.toFixed(0)}%.`;
+                insights += '\n';
+            }
+
+            // Regime context insights
+            const regimeStats = analyzeRegimeTransitions();
+            if (regimeStats) {
+                insights += `REGIME CONTEXT: ${regimeStats.current.toUpperCase()} for ${regimeStats.durationDays}d (${regimeStats.transitionCount} transitions, avg every ${regimeStats.avgFrequencyDays}d).`;
+                if (regimeStats.nearTransition && regimeStats.overallWinRate !== null) {
+                    insights += ` Trades near regime changes: ${regimeStats.nearTransition.winRate.toFixed(0)}% win rate vs ${regimeStats.overallWinRate.toFixed(0)}% overall.`;
+                }
+                insights += '\n';
+            }
+
             return insights;
         }
 
@@ -6033,6 +6085,235 @@
                 console.log('✅ Post-exit tracking updated');
                 // Portfolio will be saved by the normal save flow after analysis
             }
+        }
+
+        // REGIME TRANSITION LOG: Track regime changes over time
+        function recordRegimeTransition(regime) {
+            if (!regime) return { isTransition: false };
+            if (!portfolio.regimeHistory) portfolio.regimeHistory = [];
+
+            // Normalize to bull/bear/choppy
+            const raw = regime.toLowerCase();
+            const normalized = raw.includes('bull') ? 'bull' : raw.includes('bear') ? 'bear' : 'choppy';
+            const now = new Date().toISOString();
+
+            const last = portfolio.regimeHistory.length > 0
+                ? portfolio.regimeHistory[portfolio.regimeHistory.length - 1]
+                : null;
+
+            // Same regime — just update timestamp
+            if (last && last.regime === normalized) {
+                last.lastSeen = now;
+                return { isTransition: false };
+            }
+
+            // New regime — record transition
+            const entry = {
+                regime: normalized,
+                timestamp: now,
+                lastSeen: now,
+                from: last ? last.regime : null
+            };
+            portfolio.regimeHistory.push(entry);
+
+            // Cap at 200 entries (FIFO)
+            if (portfolio.regimeHistory.length > 200) {
+                portfolio.regimeHistory = portfolio.regimeHistory.slice(-200);
+            }
+
+            console.log(`📊 Regime transition: ${last ? last.regime : 'none'} → ${normalized}`);
+            return { isTransition: true, from: last ? last.regime : null, to: normalized };
+        }
+
+        // HOLD OUTCOME TRACKING: Record hold decisions with current price
+        function recordHoldSnapshots(holdDecisions, enhancedMarketData, regime) {
+            if (!holdDecisions || holdDecisions.length === 0) return;
+            if (!portfolio.holdSnapshots) portfolio.holdSnapshots = [];
+
+            const normalizedRegime = regime ? (regime.toLowerCase().includes('bull') ? 'bull' : regime.toLowerCase().includes('bear') ? 'bear' : 'choppy') : 'unknown';
+            const now = new Date().toISOString();
+
+            for (const decision of holdDecisions) {
+                const sym = decision.symbol;
+                const emd = enhancedMarketData[sym];
+                if (!emd || !emd.price) continue;
+
+                portfolio.holdSnapshots.push({
+                    symbol: sym,
+                    holdDate: now,
+                    price: emd.price,
+                    conviction: decision.conviction || null,
+                    reasoning: (decision.reasoning || '').substring(0, 120),
+                    technicals: {
+                        rsi: emd.rsi ?? null,
+                        macdCrossover: emd.macd?.crossover || null,
+                        structure: emd.marketStructure?.structure || null,
+                        dtc: emd.shortInterest?.daysToCover ?? null
+                    },
+                    regime: normalizedRegime,
+                    nextPrice: null,
+                    nextDate: null,
+                    priceChange: null,
+                    evaluated: false
+                });
+            }
+
+            // Cap at 200 entries — evict evaluated first, then oldest
+            if (portfolio.holdSnapshots.length > 200) {
+                const evaluated = portfolio.holdSnapshots.filter(s => s.evaluated);
+                const unevaluated = portfolio.holdSnapshots.filter(s => !s.evaluated);
+                if (unevaluated.length > 200) {
+                    portfolio.holdSnapshots = unevaluated.slice(-200);
+                } else {
+                    const keepEvaluated = 200 - unevaluated.length;
+                    portfolio.holdSnapshots = evaluated.slice(-keepEvaluated).concat(unevaluated);
+                }
+            }
+
+            console.log(`📊 Recorded ${holdDecisions.length} hold snapshots (total: ${portfolio.holdSnapshots.length})`);
+        }
+
+        // HOLD OUTCOME EVALUATION: Fill in next-cycle prices for unevaluated snapshots
+        function evaluateHoldSnapshots(enhancedMarketData) {
+            if (!portfolio.holdSnapshots || portfolio.holdSnapshots.length === 0) return;
+
+            const now = new Date().toISOString();
+            let evaluatedCount = 0;
+
+            for (const snapshot of portfolio.holdSnapshots) {
+                if (snapshot.evaluated) continue;
+
+                const emd = enhancedMarketData[snapshot.symbol];
+                if (!emd || !emd.price) continue;
+
+                snapshot.nextPrice = emd.price;
+                snapshot.nextDate = now;
+                snapshot.priceChange = ((emd.price - snapshot.price) / snapshot.price) * 100;
+                snapshot.evaluated = true;
+                evaluatedCount++;
+            }
+
+            if (evaluatedCount > 0) {
+                console.log(`📊 Evaluated ${evaluatedCount} hold snapshots`);
+            }
+        }
+
+        // HOLD ACCURACY ANALYSIS: Aggregate hold decision outcomes
+        function analyzeHoldAccuracy() {
+            const snapshots = (portfolio.holdSnapshots || []).filter(s => s.evaluated && s.priceChange !== null);
+            if (snapshots.length < 5) return null;
+
+            const correct = snapshots.filter(s => s.priceChange > 0);
+            const overall = {
+                total: snapshots.length,
+                accuracy: (correct.length / snapshots.length) * 100,
+                avgChange: snapshots.reduce((sum, s) => sum + s.priceChange, 0) / snapshots.length
+            };
+
+            // By conviction bucket
+            const byConviction = {};
+            for (const bucket of ['low', 'medium', 'high']) {
+                const range = bucket === 'low' ? [1, 4] : bucket === 'medium' ? [5, 7] : [8, 10];
+                const group = snapshots.filter(s => s.conviction >= range[0] && s.conviction <= range[1]);
+                if (group.length >= 3) {
+                    const wins = group.filter(s => s.priceChange > 0);
+                    byConviction[bucket] = {
+                        total: group.length,
+                        accuracy: (wins.length / group.length) * 100,
+                        avgChange: group.reduce((sum, s) => sum + s.priceChange, 0) / group.length
+                    };
+                }
+            }
+
+            // By regime
+            const byRegime = {};
+            for (const regime of ['bull', 'bear', 'choppy']) {
+                const group = snapshots.filter(s => s.regime === regime);
+                if (group.length >= 3) {
+                    const wins = group.filter(s => s.priceChange > 0);
+                    byRegime[regime] = {
+                        total: group.length,
+                        accuracy: (wins.length / group.length) * 100,
+                        avgChange: group.reduce((sum, s) => sum + s.priceChange, 0) / group.length
+                    };
+                }
+            }
+
+            // By RSI zone
+            const byRSI = {};
+            for (const zone of ['oversold', 'neutral', 'overbought']) {
+                const range = zone === 'oversold' ? [0, 30] : zone === 'neutral' ? [30, 70] : [70, 100];
+                const group = snapshots.filter(s => s.technicals?.rsi >= range[0] && s.technicals?.rsi < range[1]);
+                if (group.length >= 3) {
+                    const wins = group.filter(s => s.priceChange > 0);
+                    byRSI[zone] = {
+                        total: group.length,
+                        accuracy: (wins.length / group.length) * 100,
+                        avgChange: group.reduce((sum, s) => sum + s.priceChange, 0) / group.length
+                    };
+                }
+            }
+
+            return { overall, byConviction, byRegime, byRSI };
+        }
+
+        // REGIME TRANSITION ANALYSIS: Correlate regime changes with trade outcomes
+        function analyzeRegimeTransitions() {
+            const history = portfolio.regimeHistory || [];
+            if (history.length < 2) return null;
+
+            const latest = history[history.length - 1];
+            const durationMs = Date.now() - new Date(latest.timestamp).getTime();
+            const durationDays = Math.round(durationMs / (24 * 60 * 60 * 1000));
+
+            // Transition frequency
+            const firstTs = new Date(history[0].timestamp).getTime();
+            const totalDays = Math.max(1, (Date.now() - firstTs) / (24 * 60 * 60 * 1000));
+            const avgFrequency = totalDays / (history.length - 1);
+
+            // Near-transition trade analysis: trades entered within 2 days of a regime change
+            const closedTrades = portfolio.closedTrades || [];
+            const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
+            let nearTransitionWins = 0, nearTransitionTotal = 0;
+            let overallWins = 0, overallTotal = 0;
+
+            for (const trade of closedTrades) {
+                if (!trade.buyDate) continue;
+                const buyTime = new Date(trade.buyDate).getTime();
+                const isWin = trade.profitLoss > 0;
+                overallTotal++;
+                if (isWin) overallWins++;
+
+                for (const transition of history) {
+                    const transTime = new Date(transition.timestamp).getTime();
+                    if (Math.abs(buyTime - transTime) <= TWO_DAYS) {
+                        nearTransitionTotal++;
+                        if (isWin) nearTransitionWins++;
+                        break;
+                    }
+                }
+            }
+
+            // Recent transitions for UI timeline (last 5)
+            const recentTransitions = history.slice(-6).map(h => ({
+                regime: h.regime,
+                from: h.from,
+                timestamp: h.timestamp,
+                daysAgo: Math.round((Date.now() - new Date(h.timestamp).getTime()) / (24 * 60 * 60 * 1000))
+            }));
+
+            return {
+                current: latest.regime,
+                durationDays,
+                transitionCount: history.length - 1,
+                avgFrequencyDays: Math.round(avgFrequency),
+                nearTransition: nearTransitionTotal >= 3 ? {
+                    winRate: (nearTransitionWins / nearTransitionTotal) * 100,
+                    total: nearTransitionTotal
+                } : null,
+                overallWinRate: overallTotal >= 3 ? (overallWins / overallTotal) * 100 : null,
+                recentTransitions
+            };
         }
 
         // Smart Stock Screener - Samples across ALL sectors every time
@@ -6841,6 +7122,9 @@
 
                 console.log('✅ Enhanced market data prepared with momentum, RS, rotation, and structure analysis');
 
+                // Evaluate any pending hold snapshots from previous cycle
+                evaluateHoldSnapshots(enhancedMarketData);
+
                 // === PRE-SCREEN: Rank all stocks and select top candidates for Claude ===
                 thinkingDetail.textContent = 'Pre-screening: ranking stocks by composite score...';
                 
@@ -7255,6 +7539,7 @@ Include a decision for EVERY holding.` }]
                                     // Persist market regime for dashboard display
                                     if (phase1Regime) {
                                         portfolio.lastMarketRegime = { regime: phase1Regime, timestamp: new Date().toISOString() };
+                                        recordRegimeTransition(phase1Regime);
                                     }
                                     for (const sd of phase1SellDecisions) {
                                         sd.shares = Math.floor(sd.shares || 0);
@@ -7268,6 +7553,11 @@ Include a decision for EVERY holding.` }]
                                         if (sp > 0 && sd.shares > 0) updatedCash += sp * sd.shares;
                                     }
                                     console.log('✅ Phase 1:', phase1SellDecisions.length, 'sells, cash now $' + updatedCash.toFixed(2));
+
+                                    // Record hold decisions for outcome tracking
+                                    if (phase1HoldDecisions.length > 0) {
+                                        recordHoldSnapshots(phase1HoldDecisions, enhancedMarketData, phase1Regime);
+                                    }
                                 }
                             }
                         } catch (pe) {
@@ -10085,6 +10375,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (!portfolio.lastSectorRotation) portfolio.lastSectorRotation = null;
                     if (!portfolio.blockedTrades) portfolio.blockedTrades = [];
                     if (!portfolio.tradingRules) portfolio.tradingRules = null;
+                    if (!portfolio.holdSnapshots) portfolio.holdSnapshots = [];
+                    if (!portfolio.regimeHistory) portfolio.regimeHistory = [];
 
                     // MIGRATION: Reconstruct totalDeposits if missing or zero
                     // For portfolios created before totalDeposits tracking was added
@@ -10210,7 +10502,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     journalEntries: [],
                     lastMarketRegime: null,
                     lastCandidateScores: null,
-                    lastSectorRotation: null
+                    lastSectorRotation: null,
+                    holdSnapshots: [],
+                    regimeHistory: []
                 };
                 localStorage.removeItem('aiTradingPortfolio');
                 document.getElementById('activityFeed').innerHTML = '<div class="empty-state">No activity yet</div>';
@@ -11262,6 +11556,91 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 html += `</div></div></div>`;
             }
 
+            // ── Section D: Hold Decision Accuracy ──
+            const holdStats = analyzeHoldAccuracy();
+            if (holdStats) {
+                const accColor = holdStats.overall.accuracy >= 60 ? 'var(--green)' : holdStats.overall.accuracy >= 45 ? 'var(--yellow)' : 'var(--red)';
+                const avgColor = holdStats.overall.avgChange >= 0 ? 'var(--green)' : 'var(--red)';
+
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Hold Decision Accuracy</div>
+                    <div class="insight-panel-body">
+                        <div class="rr-stats-row">
+                            <div class="rr-stat">
+                                <div class="rr-stat-value" style="color: ${accColor};">${holdStats.overall.accuracy.toFixed(0)}%</div>
+                                <div class="rr-stat-label">Correct (${holdStats.overall.total} holds)</div>
+                            </div>
+                            <div class="rr-stat">
+                                <div class="rr-stat-value" style="color: ${avgColor};">${holdStats.overall.avgChange >= 0 ? '+' : ''}${holdStats.overall.avgChange.toFixed(2)}%</div>
+                                <div class="rr-stat-label">Avg Next-Cycle Change</div>
+                            </div>`;
+
+                for (const [bucket, label] of [['high', 'High Conv'], ['medium', 'Med Conv'], ['low', 'Low Conv']]) {
+                    if (holdStats.byConviction[bucket]) {
+                        const bc = holdStats.byConviction[bucket];
+                        const bColor = bc.accuracy >= 60 ? 'var(--green)' : bc.accuracy >= 45 ? 'var(--yellow)' : 'var(--red)';
+                        html += `<div class="rr-stat">
+                                <div class="rr-stat-value" style="color: ${bColor};">${bc.accuracy.toFixed(0)}%</div>
+                                <div class="rr-stat-label">${label} (${bc.total})</div>
+                            </div>`;
+                    }
+                }
+
+                html += `</div></div></div>`;
+            }
+
+            // ── Section E: Regime History ──
+            const regimeStats = analyzeRegimeTransitions();
+            if (regimeStats) {
+                const regimeColors = { bull: 'var(--green)', bear: 'var(--red)', choppy: 'var(--yellow)' };
+                const regimeLabels = { bull: 'BULL', bear: 'BEAR', choppy: 'CHOPPY' };
+                const curColor = regimeColors[regimeStats.current] || 'var(--text-muted)';
+
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Regime History</div>
+                    <div class="insight-panel-body">
+                        <div class="rr-stats-row">
+                            <div class="rr-stat">
+                                <div class="rr-stat-value" style="color: ${curColor};">${regimeLabels[regimeStats.current] || regimeStats.current.toUpperCase()}</div>
+                                <div class="rr-stat-label">Current (${regimeStats.durationDays}d)</div>
+                            </div>
+                            <div class="rr-stat">
+                                <div class="rr-stat-value">${regimeStats.transitionCount}</div>
+                                <div class="rr-stat-label">Transitions</div>
+                            </div>
+                            <div class="rr-stat">
+                                <div class="rr-stat-value">${regimeStats.avgFrequencyDays}d</div>
+                                <div class="rr-stat-label">Avg Between</div>
+                            </div>`;
+
+                if (regimeStats.nearTransition && regimeStats.overallWinRate !== null) {
+                    const ntColor = regimeStats.nearTransition.winRate < regimeStats.overallWinRate ? 'var(--red)' : 'var(--green)';
+                    html += `<div class="rr-stat">
+                                <div class="rr-stat-value" style="color: ${ntColor};">${regimeStats.nearTransition.winRate.toFixed(0)}%</div>
+                                <div class="rr-stat-label">Near-Shift WR (${regimeStats.nearTransition.total})</div>
+                            </div>`;
+                }
+
+                html += `</div>`;
+
+                // Timeline of recent transitions
+                if (regimeStats.recentTransitions.length > 1) {
+                    html += `<div class="regime-timeline">`;
+                    for (const t of regimeStats.recentTransitions.reverse()) {
+                        const dotColor = regimeColors[t.regime] || 'var(--text-muted)';
+                        const fromLabel = t.from ? `${regimeLabels[t.from] || t.from} →` : '';
+                        html += `<div class="regime-timeline-entry">
+                            <span class="regime-dot" style="background: ${dotColor};"></span>
+                            <span>${fromLabel} ${regimeLabels[t.regime] || t.regime}</span>
+                            <span class="regime-transition-stats">${t.daysAgo === 0 ? 'today' : t.daysAgo + 'd ago'}</span>
+                        </div>`;
+                    }
+                    html += `</div>`;
+                }
+
+                html += `</div></div>`;
+            }
+
             container.innerHTML = html;
         }
 
@@ -11481,19 +11860,31 @@ Current Portfolio:
             const descEl = document.getElementById('regimeDescription');
             const timeEl = document.getElementById('regimeTimestamp');
 
+            let desc = '';
             if (regime.includes('bull')) {
                 banner.classList.add('bull');
                 labelEl.textContent = 'BULL MARKET';
-                descEl.textContent = 'Aggressive deployment — favor momentum, full sizing';
+                desc = 'Aggressive deployment — favor momentum, full sizing';
             } else if (regime.includes('bear')) {
                 banner.classList.add('bear');
                 labelEl.textContent = 'BEAR MARKET';
-                descEl.textContent = 'Defensive posture — preserve cash, tight stops';
+                desc = 'Defensive posture — preserve cash, tight stops';
             } else {
                 banner.classList.add('choppy');
                 labelEl.textContent = 'CHOPPY / MIXED';
-                descEl.textContent = 'Selective entries only — smaller positions';
+                desc = 'Selective entries only — smaller positions';
             }
+
+            // Append recent transition info if available
+            const history = portfolio.regimeHistory || [];
+            if (history.length >= 2) {
+                const latest = history[history.length - 1];
+                const daysAgo = Math.round((Date.now() - new Date(latest.timestamp).getTime()) / (24 * 60 * 60 * 1000));
+                if (daysAgo <= 14 && latest.from) {
+                    desc += ` — Changed from ${latest.from} ${daysAgo === 0 ? 'today' : daysAgo + 'd ago'}`;
+                }
+            }
+            descEl.textContent = desc;
 
             if (data.timestamp) {
                 timeEl.textContent = 'Last detected: ' + new Date(data.timestamp).toLocaleString();
