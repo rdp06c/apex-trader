@@ -45,7 +45,7 @@ Browser (index.html)
 
 ### Core Data Flow: AI Analysis Cycle
 
-1. **Stock Screening** (`screenStocks`) – Builds a universe of ~300 stocks across 12 sectors
+1. **Stock Screening** (`screenStocks`) – Builds a universe of ~490 stocks across 12 sectors (all stocks per sector, no cap)
 2. **Parallel Data Fetching** (runs simultaneously):
    - `fetchBulkSnapshot` – Prices for all stocks via Polygon `/v2/snapshot` (single API call, cached 15s)
    - `fetchGroupedDailyBars` – 40-day OHLCV bars via Polygon `/v2/aggs/grouped` (~40 API calls per date, cached 15min). Falls back to `fetchAll5DayHistories` (per-ticker) on failure.
@@ -233,7 +233,7 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 
 | Function | Purpose |
 |----------|---------|
-| `screenStocks` | Builds 300-stock universe across 12 sectors |
+| `screenStocks` | Builds ~490-stock universe across 12 sectors (no per-sector cap) |
 | `fetchAnthropicStreaming` | SSE streaming fetch — reconstructs Messages API response shape |
 | `fetchBulkSnapshot` | Single API call for all ticker prices |
 | `fetchGroupedDailyBars` | 40-day OHLCV bars via grouped daily endpoint (~40 API calls) |
