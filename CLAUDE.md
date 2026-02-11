@@ -71,15 +71,17 @@ Browser (index.html)
 5. **News Fetching** (`fetchNewsForStocks`) – After scoring, fetches recent headlines + machine sentiment for top 25 candidates + holdings (cached 1hr)
 6. **Two-Phase AI Decision**:
    - **Phase 1** (`runAIAnalysis`, first API call) – Reviews existing holdings → SELL or HOLD decisions. Claude gets holdings data, theses, P&L, current technical indicators, and web search capability.
-   - Between phases: Sell proceeds are projected into `updatedCash`. Sold symbols are removed from Phase 2 candidates.
-   - **Phase 2** (second API call) – Evaluates buy candidates using `updatedCash` as available budget. Gets market data, structure analysis, Phase 1 results, learning insights, market regime context. Entry quality guidance prioritizes pullback setups over extended stocks.
+   - Between phases: Sell proceeds are projected into `updatedCash`. Sold symbols are removed from Phase 2 candidates. Current holdings are flagged (`currentlyHeld`, `sharesHeld`) but kept in candidate data for potential add-to-position.
+   - **Phase 2** (second API call) – Evaluates buy candidates using `updatedCash` as available budget. Gets market data, structure analysis, Phase 1 results, learning insights, market regime context. Entry quality guidance prioritizes pullback setups over extended stocks. May recommend adding shares to existing holdings if setup is exceptional.
 7. **Budget Validation & Execution** (`executeMultipleTrades`):
    - Receives `enhancedMarketData` (with all technical indicators, company details, short interest) — used by `executeSingleTrade` to populate `entryTechnicals`, `holdingTheses`, and `exitTechnicals`
    - Sells execute first (freeing up actual cash)
    - **Derived trading rules** (`deriveTradingRules`) are enforced: `block`-level rules hard-reject buy candidates; `warn`-level rules add badges to Decision Reasoning cards
    - Buy budget validates against real post-sell `portfolio.cash`
+   - **Budget threshold**: If trimmed buys total <25% of original plan, all buys are skipped (hold cash for better opportunity)
    - Buys execute in conviction-priority order
    - Trades that exceed budget get trimmed (share count reduced) or dropped
+   - **Reaffirmation guard**: If all Phase 2 BUYs are for held stocks with no new shares (same count as held), treated as HOLD — no execution
 
 ### Portfolio State (`portfolio` object)
 
@@ -208,7 +210,7 @@ Polygon's `lastTrade.p` reflects extended-hours trading, which differs from the 
 ### Anti-Whipsaw Protections (5 layers)
 1. **24-hour sell block** (code-enforced): `executeSingleTrade` rejects sells on holdings < 24 hours old regardless of AI recommendation
 2. **5-day re-buy cooldown** (code-enforced): `executeMultipleTrades` filters out symbols sold within 5 days from buy candidates
-3. **Phase 1 sells removed from Phase 2** (code-enforced): Sold symbols deleted from Phase 2 candidate list — prevents same-session re-buy
+3. **Phase 1 sells removed from Phase 2** (code-enforced): Sold symbols deleted from Phase 2 candidate list — prevents same-session re-buy. Current holdings remain in data (flagged) for add-to-position.
 4. **Recently-sold warnings** (prompt-level): Phase 2 tags recently-sold symbols with sell date, P&L, exit reason — requires NEW catalyst to re-buy
 5. **Prompt anti-whipsaw rules**: "Do not contradict decisions made in last 24 hours", "consistency builds trust"
 - **Thesis tracking**: Entry conditions (catalyst, conviction, price, momentum, RS, sector flow) stored in `holdingTheses` so Phase 1 can compare original thesis vs current state
