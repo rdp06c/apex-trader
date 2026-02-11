@@ -38,7 +38,7 @@ The build assembles `src/template.html` + `src/styles.css` + `src/body.html` + `
 ```
 Browser (index.html)
   ├── Cloudflare Worker proxy → Anthropic API (Claude Sonnet)
-  ├── Polygon.io API → Market data (snapshots, grouped daily bars, ticker details, short interest, news)
+  ├── Polygon.io API → Market data (snapshots, grouped daily bars, ticker details, short interest, news, VIX index)
   ├── Google Drive API → Portfolio backup/restore, encrypted API key sync
   └── localStorage → Portfolio state, price cache, API keys
 ```
@@ -51,6 +51,7 @@ Browser (index.html)
    - `fetchGroupedDailyBars` – 40-day OHLCV bars via Polygon `/v2/aggs/grouped` (~40 API calls per date, cached 15min). Falls back to `fetchAll5DayHistories` (per-ticker) on failure.
    - `fetchTickerDetails` – Market cap + SIC description via `/v3/reference/tickers` (cached 7 days)
    - `fetchShortInterest` – Short interest + days-to-cover via `/stocks/v1/short-interest` (cached 24hr)
+   - `fetchVIX` – VIX index level + trend via Polygon `/v2/aggs/ticker/I:VIX` (7-day daily bars, cached 4hr). Computes level, day change, weekly trend (rising/falling/stable), interpretation (complacent/normal/elevated/panic)
 3. **Technical Analysis** (client-side):
    - `detectStructure` – Swing high/low detection, CHoCH, BOS, liquidity sweeps, FVGs (uses 40-day bars)
    - `calculate5DayMomentum` – Price momentum scoring
@@ -90,12 +91,13 @@ Browser (index.html)
   holdings: { SYMBOL: shares },
   transactions: [...],       // Full trade log (BUY/SELL entries)
   performanceHistory: [...], // Time-series for chart (value + deposit markers)
-  closedTrades: [...],       // Completed round-trip trades with learning data (includes entryTechnicals + exitTechnicals with RSI, MACD, structure, DTC, compositeScore)
-  holdingTheses: { SYMBOL: { originalCatalyst, entryConviction, entryPrice, entryMomentum, entryRS, entrySectorFlow, entryRSI, entryMACDCrossover, entryStructure, entryDTC, entryCompositeScore, ... } },
+  closedTrades: [...],       // Completed round-trip trades with learning data (includes entryTechnicals + exitTechnicals with RSI, MACD, structure, DTC, compositeScore, VIX level/interpretation)
+  holdingTheses: { SYMBOL: { originalCatalyst, entryConviction, entryPrice, entryMomentum, entryRS, entrySectorFlow, entryRSI, entryMACDCrossover, entryStructure, entryDTC, entryCompositeScore, entryVIX, entryVIXInterpretation, ... } },
   lastMarketRegime: { regime, timestamp },           // Persisted from Phase 1 AI response
   lastCandidateScores: { timestamp, candidates: [] }, // Top 40 scored candidates
   lastSectorRotation: { timestamp, sectors: {} },     // All sectors with money flow data
-  holdSnapshots: [...],      // Hold decision outcome tracking (price at hold time + next-cycle price)
+  lastVIX: { level, interpretation, trend, ... },     // Latest VIX data for banner display
+  holdSnapshots: [...],      // Hold decision outcome tracking (price at hold time + next-cycle price, includes VIX)
   regimeHistory: [...],      // Rolling regime transition log (capped at 200 entries)
   blockedTrades: [...],      // Trades blocked by derived trading rules (capped at 50, initialized on-demand)
   tradingStrategy: 'aggressive',
@@ -119,7 +121,7 @@ Implements ICT/SMC-style analysis on 40-day bars:
 ### Machine Learning / Self-Improvement (in `src/trader.js`)
 Tracks performance patterns from `closedTrades`:
 - **Conviction Accuracy** (`analyzeConvictionAccuracy`) – Do high-conviction trades actually outperform?
-- **Technical Indicator Accuracy** (`analyzeTechnicalAccuracy`) – Which signals correlate with wins? Analyzes: momentum score, RS, sector rotation, runner entries, market structure (CHoCH/BOS), acceleration, regime, concentration, position sizing, RSI zones (oversold/neutral/overbought), MACD crossover (bullish/bearish/none), squeeze potential (DTC buckets), and composite score calibration (high/medium/low)
+- **Technical Indicator Accuracy** (`analyzeTechnicalAccuracy`) – Which signals correlate with wins? Analyzes: momentum score, RS, sector rotation, runner entries, market structure (CHoCH/BOS), acceleration, regime, concentration, position sizing, RSI zones (oversold/neutral/overbought), MACD crossover (bullish/bearish/none), squeeze potential (DTC buckets), composite score calibration (high/medium/low), and VIX zones (complacent/normal/elevated/panic)
 - **Exit Timing Analysis** (`analyzeExitTiming`) – Post-exit price tracking to evaluate sell decisions
 - **Behavioral Patterns** – Detects tendency to sell winners too early, hold losers too long, etc.
 - **Hold Accuracy** (`analyzeHoldAccuracy`) – Evaluates HOLD decisions by comparing price at hold time vs next analysis cycle. Tracks whether holds gained or lost value and correlates with conviction level and market regime.
@@ -141,7 +143,7 @@ Four modules provide visibility into APEX's analysis data and portfolio state. U
 
 1. Performance Analytics (existing)
 2. Charts (existing — perf chart + sector pie)
-3. **Market Regime Indicator** — non-collapsible banner
+3. **Market Regime Indicator** — non-collapsible banner with color-coded VIX level display (right-aligned)
 4. Current Holdings (existing collapsible) — includes sector, entry momentum, RS, live RSI/MACD/DTC indicators, and up to 2 recent news headlines with sentiment badges
 5. Decision Reasoning (existing collapsible) — individual cards are also collapsible (click header); restored cards start collapsed. Persisted to `localStorage` (`apexDecisionHistory`, last 5 records) and auto-uploaded to Google Drive. Hold decisions are synthesized for any holdings the AI omits from Phase 1.
 6. **Candidate Scorecard** — collapsible, collapsed by default. Columns: #, Symbol, Score, Day, Mom, RS, RSI (color-coded), MACD (arrow), Sector, Structure, DTC (squeeze highlight), MCap
@@ -150,13 +152,13 @@ Four modules provide visibility into APEX's analysis data and portfolio state. U
 9. Recent Activity (existing collapsible)
 10. Chat (existing)
 
-**Data persistence**: Three transient datasets (regime, candidate scores, sector rotation) are saved to the `portfolio` object in `runAIAnalysis()` (full analysis) and `testDataFetch()` (dry run) so they survive page refresh. Thesis data (`holdingTheses`) was already persistent.
+**Data persistence**: Four transient datasets (regime, candidate scores, sector rotation, VIX) are saved to the `portfolio` object in `runAIAnalysis()` (full analysis) and `testDataFetch()` (dry run) so they survive page refresh. Thesis data (`holdingTheses`) was already persistent.
 
 **Backfill**: Holdings bought before thesis tracking was added get momentum/RS/sectorFlow backfilled on next analysis or dry run.
 
 | Module | Function | Data Source | Trigger |
 |--------|----------|-------------|---------|
-| Market Regime | `updateRegimeBanner()` | `portfolio.lastMarketRegime` | `updatePerformanceAnalytics()` |
+| Market Regime + VIX | `updateRegimeBanner()` | `portfolio.lastMarketRegime` + `portfolio.lastVIX` | `updatePerformanceAnalytics()` |
 | Candidate Scorecard | `updateCandidateScorecard()` | `portfolio.lastCandidateScores` | `updatePerformanceAnalytics()` |
 | Sector Rotation | `updateSectorRotationHeatmap()` | `portfolio.lastSectorRotation` | `updatePerformanceAnalytics()` |
 
@@ -193,12 +195,12 @@ The build produces a single `index.html` file. This is intentional for portabili
 The Anthropic API is not called directly from the browser. All Claude API calls go through a Cloudflare Worker that injects the API key server-side. The `ANTHROPIC_API_URL` points to this worker. The worker injects `stream: true` into every request and pipes the SSE stream straight through to the browser — this keeps the connection alive and avoids Cloudflare's free-plan 100s timeout. On the client side, `fetchAnthropicStreaming()` reads the SSE events and reconstructs the same message object shape as the non-streaming API, so all downstream code (JSON parsing, text extraction) works unchanged.
 
 ### API Cost Consciousness
-- Polygon Stocks Advanced plan – real-time data, unlimited API calls. Endpoints used: bulk snapshot (`/v2/snapshot`), grouped daily bars (`/v2/aggs/grouped`), ticker details (`/v3/reference/tickers`), short interest (`/stocks/v1/short-interest`), news (`/v2/reference/news`), and per-ticker OHLCV bars as fallback (`/v2/aggs/ticker`). Caching (4hr TTL for individual prices, 15s for bulk snapshots, 15min for grouped bars, 1hr for news, 24hr for short interest, 7 days for ticker details) avoids redundant requests and keeps responses fast
+- Polygon Stocks Advanced + Indices Basic plan – real-time stock data, EOD index data (5 calls/min). Endpoints used: bulk snapshot (`/v2/snapshot`), grouped daily bars (`/v2/aggs/grouped`), ticker details (`/v3/reference/tickers`), short interest (`/stocks/v1/short-interest`), news (`/v2/reference/news`), VIX index (`/v2/aggs/ticker/I:VIX`), and per-ticker OHLCV bars as fallback (`/v2/aggs/ticker`). Caching (4hr TTL for individual prices, 15s for bulk snapshots, 15min for grouped bars, 1hr for news, 24hr for short interest, 7 days for ticker details, 4hr for VIX) avoids redundant requests and keeps responses fast
 - Claude API calls are expensive – freshness checks prevent wasting analysis on stale data
 - Phase 1 uses `claude-sonnet-4-5-20250929` with `max_tokens: 4000`
 - Phase 2 uses `claude-sonnet-4-5-20250929` with `max_tokens: 8000`
 - Chat uses `max_tokens: 1500`
-- **Search token optimization**: Pre-loaded `recentNews` (headlines + machine sentiment from Polygon) is injected into both Phase 1 and Phase 2 prompts. Phase 1 uses up to 3 web searches (regime check + news gap filling for holdings with empty/stale news + alarming headline verification). Phase 2 uses up to 4 focused searches (catalyst verification, sector rotation, deep dive). Saves ~2,000-4,000 tokens per analysis cycle vs broad discovery searches.
+- **Search token optimization**: Pre-loaded `recentNews` (headlines + machine sentiment from Polygon) and pre-loaded VIX level are injected into both Phase 1 and Phase 2 prompts. VIX pre-loading eliminates the "VIX level today" web search that previously consumed a Phase 1 search slot (~500-1500 tokens saved). Phase 1 uses up to 3 web searches (broader regime context + news gap filling for holdings with empty/stale news + alarming headline verification). Phase 2 uses up to 4 focused searches (catalyst verification, sector rotation, deep dive). Saves ~2,500-5,500 tokens per analysis cycle vs broad discovery searches.
 
 ### After-Hours Price Handling
 Polygon's `lastTrade.p` reflects extended-hours trading, which differs from the regular-session closing price most sites display. The `isMarketOpen()` helper checks Eastern Time (9:30 AM – 4:00 PM ET, weekdays). When market is closed, price priority is `day.c > lastTrade.p > day.l`; when open, it's `lastTrade.p > day.c > day.l`. Change calculations are also recomputed from scratch when market is closed (Polygon's pre-computed `todaysChange`/`todaysChangePerc` include extended-hours movement). This applies to both `fetchBulkSnapshot` and individual `getStockPrice` calls.
@@ -224,6 +226,7 @@ Splitting sell/buy into separate API calls solves information asymmetry: Phase 1
 - **No hard cap on candidate count**: With many holdings, candidate list can exceed 50+. Could degrade Phase 2 decision quality.
 - **Keyboard accessibility**: Collapsible section headers and expandable cards use `<div onclick>` — not keyboard-navigable. Should migrate to `<button>` or add `role="button"` + `tabindex="0"`.
 - **`bigMoverBonus` dead code**: Always set to 0 in scoring formula. Intentionally disabled but still present in the code.
+- **`analyzeTechnicalAccuracy` / `analyzeConvictionAccuracy` dead code**: Both functions are defined but never called. They compute detailed signal-vs-outcome breakdowns (including VIX zones) but nothing invokes them — neither `formatPerformanceInsights` (prompt) nor `updateLearningInsightsDisplay` (UI). Data is still being recorded in `entryTechnicals` for when these get wired up.
 - **Technical indicators are client-side approximations**: RSI(14) and MACD(12,26,9) are computed from 40-day bars. RSI warm-up (25+ smoothed values) is good but not as accurate as server-computed from full price history. Sufficient for screening purposes.
 - **Short interest data availability**: The `/stocks/v1/short-interest` endpoint returns bi-monthly settlement data. Coverage may be incomplete for smaller stocks.
 
@@ -241,6 +244,7 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `fetchTickerDetails` | Market cap + SIC description (7-day cache) |
 | `fetchShortInterest` | Short interest + days-to-cover (24hr cache) |
 | `fetchNewsForStocks` | Recent headlines + machine sentiment (1hr cache) |
+| `fetchVIX` | VIX index level + trend via Polygon Indices (4hr cache) |
 | `calculateRSI` | RSI(14) from bar data (Wilder's smoothing) |
 | `calculateSMA` | Simple Moving Average from bar data |
 | `calculateEMAArray` | EMA helper (returns array for MACD signal line) |
@@ -285,8 +289,8 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 
 The AI prompts are extensive and embedded inline in `src/trader.js`. Key sections (search for these strings):
 
-- **Phase 1 prompt** (in `runAIAnalysis`, search `"Phase 1"`): Holdings review. Includes thesis comparison, anti-whipsaw rules, opportunity cost context (top buy candidates teased), news gap search strategy (searches for holdings with empty/stale news). Hold decisions are synthesized for any holdings the AI omits from its response.
-- **Phase 2 prompt** (in `runAIAnalysis`, search `"Phase 2"`): Buy decisions. Includes market regime guidance (bull/bear/choppy with different cash deployment strategies), conviction-based allocation rules, entry quality tiers (Extended → avoid, Good Entry → sweet spot, Pullback → preferred, Red Flag → skip), recently-sold warnings, and learning insights.
+- **Phase 1 prompt** (in `runAIAnalysis`, search `"Phase 1"`): Holdings review. Includes thesis comparison, anti-whipsaw rules, opportunity cost context (top buy candidates teased), pre-loaded VIX level, news gap search strategy (searches for holdings with empty/stale news). Hold decisions are synthesized for any holdings the AI omits from its response.
+- **Phase 2 prompt** (in `runAIAnalysis`, search `"Phase 2"`): Buy decisions. Includes market regime guidance (bull/bear/choppy with different cash deployment strategies), pre-loaded VIX in Phase 1 results (all 3 paths: sells, no-sells, no-holdings), conviction-based allocation rules, entry quality tiers (Extended → avoid, Good Entry → sweet spot, Pullback → preferred, Red Flag → skip), recently-sold warnings, and learning insights. VIX volatility thresholds (<15 complacent, 15-20 normal, 20-30 elevated, >30 panic) are aligned with `fetchVIX` interpretation — no search needed.
 - **Chat prompt** (in `sendMessage`): Concise system prompt with personality, portfolio context. Uses `system` parameter with conversation memory.
 
 When modifying prompts, be careful about:
