@@ -3100,9 +3100,9 @@
                             updated = true;
                             console.log(`📊 Post-exit 1wk: ${trade.symbol} sold at $${trade.sellPrice.toFixed(2)}, now $${priceData.price.toFixed(2)} (${trade.tracking.weekReturnVsSell})`);
                         }
-                    } catch (e) { /* Skip - will retry next run */ }
+                    } catch (e) { console.warn(`📊 Post-exit 1wk tracking failed for ${trade.symbol}:`, e.message); }
                 }
-                
+
                 // Check 1-month tracking (after 30+ days)
                 if (trade.tracking.priceAfter1Month === null && timeSinceSell >= ONE_MONTH) {
                     try {
@@ -3114,7 +3114,7 @@
                             updated = true;
                             console.log(`📊 Post-exit 1mo: ${trade.symbol} sold at $${trade.sellPrice.toFixed(2)}, now $${priceData.price.toFixed(2)} (${trade.tracking.monthReturnVsSell})`);
                         }
-                    } catch (e) { /* Skip - will retry next run */ }
+                    } catch (e) { console.warn(`📊 Post-exit 1mo tracking failed for ${trade.symbol}:`, e.message); }
                 }
                 
                 // Mark as fully tracked if both filled
@@ -3637,8 +3637,15 @@
                     candidates: dryRunScored.slice(0, 40)
                 };
 
-                // Persist VIX from dry run
-                if (vixCache) portfolio.lastVIX = { ...vixCache, fetchedAt: new Date().toISOString() };
+                // Persist VIX from dry run + infer market regime if not yet set
+                if (vixCache) {
+                    portfolio.lastVIX = { ...vixCache, fetchedAt: new Date().toISOString() };
+                    if (!portfolio.lastMarketRegime) {
+                        const vixRegime = vixCache.level > 30 ? 'bear' : vixCache.level > 25 ? 'choppy' : 'bull';
+                        portfolio.lastMarketRegime = { regime: vixRegime, timestamp: new Date().toISOString() };
+                        console.log(`📊 Dry run inferred market regime from VIX ${vixCache.level.toFixed(1)}: ${vixRegime}`);
+                    }
+                }
 
                 // Backfill thesis entries missing momentum/RS/sectorFlow
                 if (portfolio.holdingTheses) {
@@ -6668,18 +6675,28 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         // Get the original buy transaction data for learning
                         const originalBuyTx = buyTransactions[0];
                         
-                        // Determine exit reason
-                        let exitReason = 'manual';
-                        if (decision.reasoning) {
-                            const reasonLower = decision.reasoning.toLowerCase();
-                            if (reasonLower.includes('profit') || reasonLower.includes('gain') || reasonLower.includes('target')) {
-                                exitReason = 'profit_target';
-                            } else if (reasonLower.includes('stop') || reasonLower.includes('loss') || returnPercent < -10) {
-                                exitReason = 'stop_loss';
-                            } else if (reasonLower.includes('catalyst') || reasonLower.includes('thesis') || reasonLower.includes('fail')) {
-                                exitReason = 'catalyst_failure';
-                            } else if (reasonLower.includes('opportunity') || reasonLower.includes('better') || reasonLower.includes('swap')) {
-                                exitReason = 'opportunity_cost';
+                        // Determine exit reason — use return % first (objective), then keywords for middle ground
+                        let exitReason;
+                        if (returnPercent >= 2) {
+                            exitReason = 'profit_target';
+                        } else if (returnPercent <= -8) {
+                            exitReason = 'stop_loss';
+                        } else {
+                            // Middle ground (-8% to +2%): check reasoning keywords with specific phrases
+                            exitReason = 'manual';
+                            if (decision.reasoning) {
+                                const reasonLower = decision.reasoning.toLowerCase();
+                                if (reasonLower.includes('stop loss') || reasonLower.includes('stop-loss') || reasonLower.includes('cutting loss')) {
+                                    exitReason = 'stop_loss';
+                                } else if (reasonLower.includes('redeploy') || reasonLower.includes('better use of capital') || reasonLower.includes('freeing')) {
+                                    exitReason = 'opportunity_cost';
+                                } else if (reasonLower.includes('catalyst') || reasonLower.includes('thesis') || reasonLower.includes('deteriorat')) {
+                                    exitReason = 'catalyst_failure';
+                                } else if (returnPercent < 0) {
+                                    exitReason = 'catalyst_failure';
+                                } else {
+                                    exitReason = 'profit_target';
+                                }
                             }
                         }
                         
@@ -7265,6 +7282,36 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (!portfolio.tradingRules) portfolio.tradingRules = null;
                     if (!portfolio.holdSnapshots) portfolio.holdSnapshots = [];
                     if (!portfolio.regimeHistory) portfolio.regimeHistory = [];
+
+                    // MIGRATION: Reclassify exitReason on historical closedTrades
+                    // Old keyword matching was too loose ("gain" matched "gains" in loss context)
+                    if (!portfolio._exitReasonV2) {
+                        (portfolio.closedTrades || []).forEach(trade => {
+                            if (!trade.exitReason || trade.exitReason === 'manual' || trade.exitReason === 'profit_target') {
+                                const ret = trade.returnPercent || 0;
+                                if (ret >= 2) {
+                                    trade.exitReason = 'profit_target';
+                                } else if (ret <= -8) {
+                                    trade.exitReason = 'stop_loss';
+                                } else {
+                                    const reasonLower = (trade.exitReasoning || '').toLowerCase();
+                                    if (reasonLower.includes('stop loss') || reasonLower.includes('cutting loss')) {
+                                        trade.exitReason = 'stop_loss';
+                                    } else if (reasonLower.includes('redeploy') || reasonLower.includes('better use of capital') || reasonLower.includes('freeing')) {
+                                        trade.exitReason = 'opportunity_cost';
+                                    } else if (reasonLower.includes('catalyst') || reasonLower.includes('thesis') || reasonLower.includes('deteriorat')) {
+                                        trade.exitReason = 'catalyst_failure';
+                                    } else if (ret < 0) {
+                                        trade.exitReason = 'catalyst_failure';
+                                    } else {
+                                        trade.exitReason = 'profit_target';
+                                    }
+                                }
+                            }
+                        });
+                        portfolio._exitReasonV2 = true;
+                        console.log('✅ Migration: Reclassified exitReason on closedTrades (v2)');
+                    }
 
                     // MIGRATION: Reconstruct totalDeposits if missing or zero
                     // For portfolios created before totalDeposits tracking was added
