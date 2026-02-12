@@ -4564,8 +4564,15 @@ Include a decision for EVERY holding.` }]
                         try {
                             console.log('Phase 1 raw text (first 500):', p1Text.substring(0, 500));
                             let pj = p1Text;
-                            if (pj.includes('```json')) pj = (pj.match(/```json\s*([\s\S]*?)\s*```/) || [null, pj])[1];
-                            else if (pj.includes('```')) pj = (pj.match(/```\s*([\s\S]*?)\s*```/) || [null, pj])[1];
+                            // Use LAST fence — web search can produce earlier fences with non-JSON content
+                            if (pj.includes('```json')) {
+                                const fIdx = pj.lastIndexOf('```json');
+                                const m = pj.substring(fIdx).match(/```json\s*([\s\S]*?)\s*```/);
+                                if (m) pj = m[1];
+                            } else if (pj.includes('```')) {
+                                const allM = [...pj.matchAll(/```\s*([\s\S]*?)\s*```/g)];
+                                if (allM.length > 0) pj = allM[allM.length - 1][1];
+                            }
                             const si = pj.indexOf('{');
                             if (si !== -1) {
                                 let bc = 0, ei = si, ins = false, esc = false;
@@ -6134,15 +6141,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 let jsonText = aiResponse;
                 
                 // Remove markdown code blocks if present
+                // Use LAST fence — web search can produce earlier fences with non-JSON content
                 if (aiResponse.includes('```json')) {
-                    const jsonMatch = aiResponse.match(/```json\s*([\s\S]*?)\s*```/);
+                    const lastFenceIdx = aiResponse.lastIndexOf('```json');
+                    const jsonMatch = aiResponse.substring(lastFenceIdx).match(/```json\s*([\s\S]*?)\s*```/);
                     if (jsonMatch) {
                         jsonText = jsonMatch[1];
                     }
                 } else if (aiResponse.includes('```')) {
-                    const jsonMatch = aiResponse.match(/```\s*([\s\S]*?)\s*```/);
-                    if (jsonMatch) {
-                        jsonText = jsonMatch[1];
+                    const allMatches = [...aiResponse.matchAll(/```\s*([\s\S]*?)\s*```/g)];
+                    if (allMatches.length > 0) {
+                        jsonText = allMatches[allMatches.length - 1][1];
                     }
                 }
                 
