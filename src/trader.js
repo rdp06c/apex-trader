@@ -3737,6 +3737,41 @@
             }
         }
 
+        // Extract just the decisions array from raw AI response text using string-aware bracket matching
+        // Returns parsed array or throws. Used by Phase 1 structural fallback.
+        function extractDecisionsArray(rawText) {
+            const keyIdx = rawText.indexOf('"decisions"');
+            if (keyIdx === -1) throw new Error('No "decisions" key found');
+            const arrStart = rawText.indexOf('[', keyIdx);
+            if (arrStart === -1) throw new Error('No decisions array found');
+            let bc = 0, inStr = false, esc = false, arrEnd = -1;
+            for (let i = arrStart; i < rawText.length; i++) {
+                const ch = rawText[i];
+                if (esc) { esc = false; continue; }
+                if (ch === '\\') { esc = true; continue; }
+                if (ch === '"') { inStr = !inStr; continue; }
+                if (!inStr) {
+                    if (ch === '[') bc++;
+                    if (ch === ']') bc--;
+                    if (bc === 0) { arrEnd = i; break; }
+                }
+            }
+            if (arrEnd === -1) throw new Error('Could not find end of decisions array');
+            let dStr = rawText.substring(arrStart, arrEnd + 1);
+            dStr = dStr.replace(/,(\s*[}\]])/g, '$1');
+            try {
+                return JSON.parse(dStr);
+            } catch (e) {
+                dStr = escapeNewlinesInJsonStrings(dStr);
+                try {
+                    return JSON.parse(dStr);
+                } catch (e2) {
+                    dStr = dStr.replace(/[\x00-\x1F\x7F]/g, ' ');
+                    return JSON.parse(dStr);
+                }
+            }
+        }
+
         // Robust JSON extraction for Claude responses that have broken escaping
         // Uses string-aware bracket counting to extract the decisions array reliably
         function extractDecisionFromRawResponse(rawResponse) {
@@ -4543,35 +4578,34 @@ Include a decision for EVERY holding.` }]
                                 ps = ps.replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '');
                                 ps = ps.replace(/,(\s*[}\]])/g, '$1');
                                 ps = escapeNewlinesInJsonStrings(ps);
-                                // Fix single quotes around property names and string values
-                                ps = ps.replace(/'([^']+)':/g, '"$1":');
-                                ps = ps.replace(/:\s*'([^']*)'/g, ': "$1"');
                                 ps = ps.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
                                 let parsed;
                                 try {
                                     parsed = JSON.parse(ps);
                                 } catch (innerParseErr) {
-                                    // Fallback: structural extraction for Phase 1 fields
-                                    console.warn('Phase 1 JSON.parse failed, trying structural extraction:', innerParseErr.message);
-                                    parsed = {};
-                                    // Extract decisions array
-                                    const decisionsMatch = p1Text.match(/"decisions"\s*:\s*(\[[\s\S]*?\])\s*(?:,\s*"|\s*})/);
-                                    if (decisionsMatch) {
+                                    // Retry with single-quote fixes (only safe when Claude used single quotes for JSON keys/values,
+                                    // but dangerous when reasoning text contains ': 'word'' patterns — so we try without first)
+                                    console.warn('Phase 1 JSON.parse failed, retrying with single-quote fix:', innerParseErr.message);
+                                    try {
+                                        let ps2 = ps.replace(/'([^']+)':/g, '"$1":').replace(/:\s*'([^']*)'/g, ': "$1"');
+                                        parsed = JSON.parse(ps2);
+                                        console.log('✅ Phase 1 parsed after single-quote fix');
+                                    } catch (sqErr) {
+                                        // Structural extraction: bracket-matching for decisions array + regex for simple fields
+                                        console.warn('Phase 1 single-quote retry failed, trying structural extraction:', sqErr.message);
+                                        parsed = {};
                                         try {
-                                            let dStr = escapeNewlinesInJsonStrings(decisionsMatch[1]);
-                                            dStr = dStr.replace(/'([^']+)':/g, '"$1":').replace(/:\s*'([^']*)'/g, ': "$1"');
-                                            dStr = dStr.replace(/,(\s*[}\]])/g, '$1');
-                                            parsed.decisions = JSON.parse(dStr);
+                                            parsed.decisions = extractDecisionsArray(p1Text);
+                                            console.log('✅ Phase 1 structural extraction recovered', parsed.decisions.length, 'decisions');
                                         } catch (e2) { console.warn('Structural decisions parse failed:', e2.message); }
+                                        // Extract holdings_summary
+                                        const summaryMatch = p1Text.match(/"holdings_summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                                        if (summaryMatch) parsed.holdings_summary = summaryMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                                        // Extract market_regime
+                                        const regimeMatch = p1Text.match(/"market_regime"\s*:\s*"(bull|bear|choppy)"/i);
+                                        if (regimeMatch) parsed.market_regime = regimeMatch[1].toLowerCase();
+                                        if (!parsed.decisions) throw innerParseErr; // Give up if no decisions found
                                     }
-                                    // Extract holdings_summary
-                                    const summaryMatch = p1Text.match(/"holdings_summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-                                    if (summaryMatch) parsed.holdings_summary = summaryMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-                                    // Extract market_regime
-                                    const regimeMatch = p1Text.match(/"market_regime"\s*:\s*"(bull|bear|choppy)"/i);
-                                    if (regimeMatch) parsed.market_regime = regimeMatch[1].toLowerCase();
-                                    if (!parsed.decisions) throw innerParseErr; // Give up if no decisions found
-                                    console.log('✅ Phase 1 structural extraction recovered', parsed.decisions.length, 'decisions');
                                 }
                                 if (parsed.decisions) {
                                     phase1SellDecisions = parsed.decisions.filter(d => {
@@ -6163,30 +6197,31 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 
                 // 3. Escape newlines/tabs only inside JSON string values (not between tokens)
                 jsonString = escapeNewlinesInJsonStrings(jsonString);
-                
-                // 5. Fix single quotes around property names (should be double quotes)
-                jsonString = jsonString.replace(/'([^']+)':/g, '"$1":');
-                
-                // 6. Fix single quotes around string values (should be double quotes)
-                jsonString = jsonString.replace(/:\s*'([^']*)'/g, ': "$1"');
-                
-                // 7. Remove any remaining control characters (except those we already escaped)
+
+                // 4. Remove any remaining control characters (except those we already escaped)
                 jsonString = jsonString.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-                
+
                 console.log('Extracted JSON (first 500 chars):', jsonString.substring(0, 500) + '...');
-                
+
                 let decision;
-                
+
                 // Strategy 1: Direct JSON.parse (works when Claude outputs clean JSON)
                 try {
                     decision = JSON.parse(jsonString);
                     console.log('✅ Direct JSON parse succeeded');
                 } catch (parseError) {
-                    console.warn('Direct JSON parse failed:', parseError.message);
-                    console.warn('Falling back to structural extraction from raw response...');
-                    
-                    // Strategy 2: Structural extraction from the raw AI response
-                    // This handles Claude's most common failure: broken escaping in 
+                    // Strategy 2: Retry with single-quote fixes (deferred to here because applying
+                    // them eagerly corrupts JSON when reasoning text contains ': 'word'' patterns)
+                    console.warn('Direct JSON parse failed, retrying with single-quote fix:', parseError.message);
+                    try {
+                        let sqFixed = jsonString.replace(/'([^']+)':/g, '"$1":').replace(/:\s*'([^']*)'/g, ': "$1"');
+                        decision = JSON.parse(sqFixed);
+                        console.log('✅ JSON parse succeeded after single-quote fix');
+                    } catch (sqErr) {
+                        console.warn('Single-quote retry failed, falling back to structural extraction:', sqErr.message);
+
+                    // Strategy 3: Structural extraction from the raw AI response
+                    // This handles Claude's most common failure: broken escaping in
                     // overall_reasoning/research_summary while decisions array is valid
                     try {
                         decision = extractDecisionFromRawResponse(aiResponse);
@@ -6197,6 +6232,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         console.error('Extract error:', extractError.message);
                         console.error('Raw response (first 2000 chars):', aiResponse.substring(0, 2000));
                         throw new Error('Failed to parse AI response. Try running the analysis again.');
+                    }
                     }
                 }
                 
