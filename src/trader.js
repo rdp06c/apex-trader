@@ -2670,14 +2670,23 @@
             };
         }
 
+        // Cache for deriveTradingRules — invalidated when closedTrades count changes
+        let _tradingRulesCache = null;
+        let _tradingRulesCacheKey = -1;
+
         // Derive actionable trading rules from closed trade history
         // Returns { rules: [...], summary: {...} } with enforcement levels: block, warn, observe
         function deriveTradingRules() {
+            const tradeCount = (portfolio.closedTrades || []).length;
+            if (_tradingRulesCache && _tradingRulesCacheKey === tradeCount) return _tradingRulesCache;
             const closedTrades = portfolio.closedTrades || [];
             const tradesWithTechnicals = closedTrades.filter(t => t.entryTechnicals && Object.keys(t.entryTechnicals).length > 0);
 
             if (closedTrades.length < 3) {
-                return { rules: [], summary: { totalTrades: closedTrades.length, insufficientData: true } };
+                const r = { rules: [], summary: { totalTrades: closedTrades.length, insufficientData: true } };
+                _tradingRulesCache = r;
+                _tradingRulesCacheKey = tradeCount;
+                return r;
             }
 
             const totalWins = closedTrades.filter(t => t.profitLoss > 0).length;
@@ -2923,6 +2932,8 @@
             // Persist to portfolio for cross-refresh availability
             portfolio.tradingRules = result;
 
+            _tradingRulesCache = result;
+            _tradingRulesCacheKey = tradeCount;
             return result;
         }
 
@@ -4280,6 +4291,11 @@
                     return { symbol, compositeScore, data };
                 });
                 
+                // Write compositeScore back to enhancedMarketData so matchesPattern('low_composite') can access it
+                for (const { symbol, compositeScore } of scoredStocks) {
+                    if (enhancedMarketData[symbol]) enhancedMarketData[symbol].compositeScore = compositeScore;
+                }
+
                 // 2. Sort by composite score descending
                 scoredStocks.sort((a, b) => b.compositeScore - a.compositeScore);
 
@@ -6564,10 +6580,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     portfolio.cash -= cost;
                     portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
                     
-                    // Calculate position size for learning
+                    // Calculate position size for learning (fall back to priceCache/bulkSnapshotCache for holdings not in marketData)
                     const totalPortfolioValue = portfolio.cash + cost + Object.entries(portfolio.holdings)
                         .filter(([s]) => s !== symbol)
-                        .reduce((sum, [s, sh]) => sum + (marketData[s]?.price || 0) * sh, 0);
+                        .reduce((sum, [s, sh]) => sum + (marketData[s]?.price || priceCache[s]?.price || bulkSnapshotCache[s]?.price || 0) * sh, 0);
                     const positionSizePercent = totalPortfolioValue > 0 ? (cost / totalPortfolioValue) * 100 : 0;
                     
                     portfolio.transactions.push({
@@ -6797,23 +6813,30 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         async function calculatePortfolioValue() {
             let total = portfolio.cash;
             const priceData = {}; // Store prices for reuse
-            
-            for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
-                try {
-                    const price = await getStockPrice(symbol);
-                    if (price && price.price > 0) {
-                        priceData[symbol] = price;
-                        total += price.price * shares;
-                    } else {
-                        throw new Error('Invalid price data');
+            const holdingSymbols = Object.keys(portfolio.holdings);
+
+            if (holdingSymbols.length === 0) return { total, priceData };
+
+            // Use bulk snapshot (single API call, 15s cache) instead of N individual calls
+            try {
+                const snapshot = await fetchBulkSnapshot(holdingSymbols);
+                for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
+                    if (snapshot[symbol] && snapshot[symbol].price > 0) {
+                        priceData[symbol] = snapshot[symbol];
+                        total += snapshot[symbol].price * shares;
                     }
-                } catch (error) {
-                    console.warn(`Failed to get price for ${symbol}:`, error.message);
-                    // Use last known price from transactions as fallback
+                }
+            } catch (error) {
+                console.warn('Bulk snapshot failed in calculatePortfolioValue:', error.message);
+            }
+
+            // Fall back to transaction price for any holdings missed by bulk snapshot
+            for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
+                if (!priceData[symbol]) {
                     const lastTransaction = portfolio.transactions
                         .filter(t => t.symbol === symbol && t.price > 0)
                         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
-                    
+
                     if (lastTransaction) {
                         console.log(`Using fallback price for ${symbol}: $${lastTransaction.price}`);
                         priceData[symbol] = {
@@ -6825,7 +6848,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         };
                         total += lastTransaction.price * shares;
                     } else {
-                        // Absolute fallback - use 0 but log it
                         console.error(`No price data available for ${symbol} - using $0`);
                         priceData[symbol] = {
                             price: 0,
@@ -6837,7 +6859,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     }
                 }
             }
-            
+
             return { total, priceData };
         }
 
@@ -7508,18 +7530,27 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         // ===== GOOGLE DRIVE SYNC FUNCTIONS (Updated for Google Identity Services) =====
         
+        let _gdriveInitRetries = 0;
+        const GDRIVE_MAX_RETRIES = 20; // 10 seconds max (20 × 500ms)
+
         function initGoogleDrive() {
             // Check if credentials are configured
-            if (!GDRIVE_CONFIG.CLIENT_ID || !GDRIVE_CONFIG.API_KEY || 
+            if (!GDRIVE_CONFIG.CLIENT_ID || !GDRIVE_CONFIG.API_KEY ||
                 GDRIVE_CONFIG.CLIENT_ID === '' || GDRIVE_CONFIG.API_KEY === '') {
                 console.log('Google Drive credentials not configured yet');
                 updateCloudSyncStatus('⚙️ Setup needed', 'Configure in settings');
                 return;
             }
-            
+
             // Wait for Google Identity Services to load
             if (typeof google === 'undefined' || !google.accounts) {
-                console.log('Waiting for Google Identity Services to load...');
+                _gdriveInitRetries++;
+                if (_gdriveInitRetries > GDRIVE_MAX_RETRIES) {
+                    console.warn('Google Identity Services failed to load after ' + GDRIVE_MAX_RETRIES + ' retries');
+                    updateCloudSyncStatus('❌ GIS unavailable', 'Check ad blocker / network');
+                    return;
+                }
+                console.log('Waiting for Google Identity Services to load... (attempt ' + _gdriveInitRetries + ')');
                 setTimeout(initGoogleDrive, 500);
                 return;
             }
@@ -7553,6 +7584,29 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 console.error('Error initializing Google Drive:', error);
                 updateCloudSyncStatus('❌ Init failed', 'Check console');
             }
+        }
+
+        // Wrapper for Google Drive API calls — auto-refreshes token on 401
+        async function gdriveApiFetch(url, options = {}) {
+            options.headers = { ...options.headers, 'Authorization': `Bearer ${accessToken}` };
+            let response = await fetch(url, options);
+            if (response.status === 401 && tokenClient) {
+                // Token expired — refresh and retry once
+                console.log('Drive token expired, refreshing...');
+                await new Promise((resolve, reject) => {
+                    const origCallback = tokenClient._configuration?.callback;
+                    tokenClient.callback = (resp) => {
+                        if (resp.error) { reject(new Error(resp.error)); return; }
+                        accessToken = resp.access_token;
+                        gdriveAuthorized = true;
+                        resolve();
+                    };
+                    tokenClient.requestAccessToken({ prompt: '' });
+                });
+                options.headers['Authorization'] = `Bearer ${accessToken}`;
+                response = await fetch(url, options);
+            }
+            return response;
         }
 
         function handleAuthClick() {
@@ -7590,12 +7644,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 console.log('Searching for portfolio file:', GDRIVE_CONFIG.PORTFOLIO_FILENAME);
                 console.log('Search URL:', searchUrl);
                 
-                const searchResponse = await fetch(searchUrl, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
+                const searchResponse = await gdriveApiFetch(searchUrl);
+
                 console.log('Search response status:', searchResponse.status);
-                
+
                 if (!searchResponse.ok) {
                     throw new Error(`Search failed: ${searchResponse.status}`);
                 }
@@ -7611,19 +7663,26 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const fileUrl = `https://www.googleapis.com/drive/v3/files/${portfolioFileId}?alt=media`;
                     console.log('Downloading from:', fileUrl);
                     
-                    const fileResponse = await fetch(fileUrl, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    
+                    const fileResponse = await gdriveApiFetch(fileUrl);
+
                     console.log('Download response status:', fileResponse.status);
-                    
+
                     if (!fileResponse.ok) {
                         throw new Error(`Download failed: ${fileResponse.status}`);
                     }
 
                     const cloudPortfolio = await fileResponse.json();
                     console.log('Downloaded portfolio from Google Drive:', cloudPortfolio);
-                    
+
+                    // Validate required schema fields before accepting
+                    if (typeof cloudPortfolio.cash !== 'number' || !cloudPortfolio.holdings || typeof cloudPortfolio.holdings !== 'object') {
+                        throw new Error('Invalid portfolio file — missing cash or holdings');
+                    }
+                    // Ensure critical arrays exist (default to empty if missing from old backups)
+                    if (!Array.isArray(cloudPortfolio.transactions)) cloudPortfolio.transactions = [];
+                    if (!Array.isArray(cloudPortfolio.performanceHistory)) cloudPortfolio.performanceHistory = [];
+                    if (!Array.isArray(cloudPortfolio.closedTrades)) cloudPortfolio.closedTrades = [];
+
                     // Replace local portfolio with cloud version (cloud is source of truth)
                     portfolio = cloudPortfolio;
                     console.log('Portfolio updated. Cash:', portfolio.cash, 'Holdings:', Object.keys(portfolio.holdings).length);
@@ -7704,11 +7763,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 console.log('Uploading to Google Drive:', method, url);
                 console.log('File ID:', portfolioFileId || 'Creating new file');
 
-                const response = await fetch(url, {
-                    method: method,
-                    headers: { 'Authorization': `Bearer ${accessToken}` },
-                    body: form
-                });
+                const response = await gdriveApiFetch(url, { method: method, body: form });
 
                 console.log('Upload response status:', response.status);
 

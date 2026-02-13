@@ -1558,14 +1558,22 @@
             padding: 14px;
         }
 
-        .insight-panel-title {
+        /* Shared panel title pattern */
+        .insight-panel-title,
+        .behavior-section-title,
+        .stock-context-title,
+        .sector-insights-title,
+        .analytics-panel-title,
+        .rules-section-title {
             font-weight: 600;
             font-size: 12px;
             margin-bottom: 10px;
-            color: var(--text-primary);
+            color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.3px;
         }
+        .insight-panel-title { color: var(--text-primary); }
+        .behavior-section-title { color: var(--accent-light); }
 
         .insight-panel-body {
             color: var(--text-secondary);
@@ -1581,14 +1589,7 @@
             margin-top: 12px;
         }
 
-        .behavior-section-title {
-            font-weight: 600;
-            font-size: 12px;
-            margin-bottom: 10px;
-            color: var(--accent-light);
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
+        /* color override defined above in shared panel title block */
 
         .behavior-list {
             display: flex;
@@ -1629,14 +1630,7 @@
             margin-top: 12px;
         }
 
-        .stock-context-title {
-            font-weight: 600;
-            font-size: 12px;
-            margin-bottom: 10px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
+        /* defined in shared panel title block */
 
         .stock-context-grid {
             display: grid;
@@ -1675,14 +1669,7 @@
             margin-top: 12px;
         }
 
-        .sector-insights-title {
-            font-weight: 600;
-            font-size: 12px;
-            margin-bottom: 10px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
+        /* defined in shared panel title block */
 
         .sector-insights-grid {
             display: grid;
@@ -1720,14 +1707,7 @@
             margin-top: 12px;
         }
 
-        .analytics-panel-title {
-            font-weight: 600;
-            font-size: 12px;
-            margin-bottom: 10px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
+        /* defined in shared panel title block */
 
         /* Risk/Reward stats + Streaks */
         .rr-stats-row {
@@ -2062,14 +2042,7 @@
             margin-bottom: 12px;
         }
 
-        .rules-section-title {
-            font-weight: 600;
-            font-size: 12px;
-            margin-bottom: 10px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
+        /* defined in shared panel title block */
 
         .rules-grid {
             display: flex;
@@ -2756,5 +2729,29 @@
 
             .analytics-popover {
                 width: 320px;
+            }
+        }
+
+        /* ── Focus Visible ────────────────────────────────── */
+        /* WCAG 2.4.7: keyboard users need visible focus indicators */
+        button:focus-visible,
+        .section-header:focus-visible,
+        .decision-card-header:focus-visible,
+        .expandable-card:focus-visible,
+        .sync-status:focus-visible,
+        .holding-card-catalyst:focus-visible,
+        select:focus-visible,
+        input[type="number"]:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        /* ── Reduced Motion ───────────────────────────────── */
+        /* WCAG 2.3.3: respect user preference for reduced animation */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
             }
         }
