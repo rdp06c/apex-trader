@@ -466,15 +466,26 @@
         // the same message object shape that response.json() would return.
         // Keeps the Cloudflare Worker connection alive so free-plan 100s timeout is never hit.
         async function fetchAnthropicStreaming(bodyParams) {
-            const resp = await fetch(ANTHROPIC_API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(bodyParams)
-            });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minute timeout
+            let resp;
+            try {
+                resp = await fetch(ANTHROPIC_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bodyParams),
+                    signal: controller.signal
+                });
+            } catch (err) {
+                clearTimeout(timeoutId);
+                if (err.name === 'AbortError') throw new Error('API request timed out after 3 minutes');
+                throw err;
+            }
 
             // Non-streaming path: error responses or worker didn't enable streaming
             const ct = resp.headers.get('content-type') || '';
             if (!resp.ok || !ct.includes('text/event-stream')) {
+                clearTimeout(timeoutId);
                 return await resp.json();
             }
 
@@ -524,6 +535,7 @@
                 }
             }
 
+            clearTimeout(timeoutId);
             if (message) {
                 message.content = blocks;
                 return message;
@@ -583,6 +595,7 @@
 
         // Initialize the chart
         function initChart() {
+            if (performanceChart) return; // Prevent double initialization
             const ctx = document.getElementById('performanceChart').getContext('2d');
             // Build gradient fill for portfolio line
             const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
@@ -1027,8 +1040,7 @@
                         throw new Error('File does not appear to be a valid APEX portfolio (missing cash or holdings).');
                     }
                     
-                    console.log('Loaded portfolio from local file:', restoredPortfolio);
-                    console.log('Cash:', restoredPortfolio.cash, 'Holdings:', Object.keys(restoredPortfolio.holdings).length);
+                    console.log('Loaded portfolio from local file:', Object.keys(restoredPortfolio.holdings).length, 'positions');
                     
                     preventAutoSave = true;
                     
@@ -1066,9 +1078,18 @@
         }
         
         // Manual save to Google Drive with user feedback
+        let _lastManualSave = 0;
         async function manualSaveToDrive() {
             const status = document.getElementById('recoveryStatus');
-            
+
+            // Debounce: 10s cooldown between manual saves
+            if (Date.now() - _lastManualSave < 10000) {
+                status.textContent = '⏳ Please wait before saving again.';
+                status.style.color = '#fbbf24';
+                return;
+            }
+            _lastManualSave = Date.now();
+
             if (!gdriveAuthorized || !accessToken) {
                 status.textContent = '❌ Not connected to Google Drive. Click the ☁️ cloud icon to sign in first.';
                 status.style.color = '#ef4444';
@@ -1204,7 +1225,7 @@
                 } else {
                     multiDayCache = {};
                 }
-            } catch { multiDayCache = {}; }
+            } catch (e) { console.warn('Failed to restore multiDayCache:', e.message); multiDayCache = {}; }
 
             const BATCH = 50, DELAY = 300;
             for (let i = 0; i < symbols.length; i += BATCH) {
@@ -1419,7 +1440,7 @@
                 if (cached && Date.now() - ts < TICKER_DETAILS_TTL) {
                     tickerDetailsCache = JSON.parse(cached);
                 }
-            } catch { tickerDetailsCache = {}; }
+            } catch (e) { console.warn('Failed to restore tickerDetailsCache:', e.message); tickerDetailsCache = {}; }
 
             const uncached = symbols.filter(s => !tickerDetailsCache[s]);
             if (uncached.length === 0) {
@@ -1479,7 +1500,7 @@
                         if (hitCount >= symbols.length * 0.8) return;
                     }
                 }
-            } catch { shortInterestCache = {}; }
+            } catch (e) { console.warn('Failed to restore shortInterestCache:', e.message); shortInterestCache = {}; }
 
             console.log(`📉 Fetching short interest data...`);
             const uncached = symbols.filter(s => !shortInterestCache[s]);
@@ -1539,7 +1560,7 @@
                 if (cached && Date.now() - ts < NEWS_CACHE_TTL) {
                     newsCache = JSON.parse(cached);
                 }
-            } catch { newsCache = {}; }
+            } catch (e) { console.warn('Failed to restore newsCache:', e.message); newsCache = {}; }
 
             const uncached = symbols.filter(s => !newsCache[s]);
             if (uncached.length === 0) {
@@ -4418,8 +4439,8 @@
                     filteredMarketData[symbol] = enhancedMarketData[symbol];
                 });
                 
-                // ISSUE F: After Phase 1 sells are decided, remove those symbols from Phase 2 candidates
-                // This is a hard guard against Claude recommending re-buying something it just sold
+                // After Phase 1 sells are decided, remove those symbols from Phase 2 candidates.
+                // Hard guard against Claude re-buying something it just sold.
                 // (Applied later after Phase 1 completes — see phase1SellSymbolFilter below)
                 
                 // 5. Build compact sector summary from ALL stocks (full market context)
@@ -6907,13 +6928,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         // Update UI
         async function updateUI() {
             try {
-                console.log('=== updateUI called ===');
-                console.log('Holdings:', portfolio.holdings);
-                
                 const { total: totalValue, priceData } = await calculatePortfolioValue();
-                
-                console.log('Price data received:', priceData);
-                console.log('Total portfolio value:', totalValue);
                 
             // Calculate DAILY PERFORMANCE using portfolio value snapshots
             // This is the most reliable method: compare current total value to start-of-day value,
@@ -7330,9 +7345,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         // Save portfolio to localStorage
         function savePortfolio() {
-            console.log('savePortfolio called. Holdings:', Object.keys(portfolio.holdings).length, 'Cash:', portfolio.cash);
             localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
-            console.log('Portfolio saved to localStorage');
             
             // Also save to Google Drive if authorized (and not in recovery mode)
             if (gdriveAuthorized && !preventAutoSave) {
@@ -7351,8 +7364,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (saved) {
                 try {
                     portfolio = JSON.parse(saved);
-                    console.log('Portfolio loaded from localStorage:', portfolio);
-                    console.log(`Cash: $${portfolio.cash}, Holdings: ${Object.keys(portfolio.holdings).length}, Transactions: ${portfolio.transactions.length}`);
+                    console.log(`Portfolio loaded: ${Object.keys(portfolio.holdings).length} positions, ${portfolio.transactions.length} transactions`);
                     
                     // MIGRATION: Ensure new analytics fields exist
                     if (!portfolio.lastMarketRegime) portfolio.lastMarketRegime = null;
@@ -7393,6 +7405,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         portfolio._exitReasonV2 = true;
                         console.log('✅ Migration: Reclassified exitReason on closedTrades (v2)');
                     }
+                    // Clean up one-time migration flag (no longer needed)
+                    if (portfolio._exitReasonV2) delete portfolio._exitReasonV2;
 
                     // MIGRATION: Reconstruct totalDeposits if missing or zero
                     // For portfolios created before totalDeposits tracking was added
@@ -7548,6 +7562,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             updateSectorAllocation();
             updateApiKeyStatus(); // Check API key configuration
 
+            // Event delegation for decision card interactivity
+            const decisionContainer = document.getElementById('decisionReasoning');
+            if (decisionContainer) {
+                decisionContainer.addEventListener('click', (e) => {
+                    const stockItem = e.target.closest('.decision-stock-item');
+                    if (stockItem && !e.target.closest('button')) {
+                        stockItem.classList.toggle('expanded');
+                    }
+                });
+                decisionContainer.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        const stockItem = e.target.closest('.decision-stock-item');
+                        if (stockItem) { e.preventDefault(); stockItem.classList.toggle('expanded'); }
+                    }
+                });
+            }
+
             // Restore persisted decision history
             try {
                 const history = JSON.parse(localStorage.getItem('apexDecisionHistory') || '[]');
@@ -7675,45 +7706,30 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         async function loadPortfolioFromDrive() {
-            console.log('=== loadPortfolioFromDrive called ===');
-            console.log('accessToken:', accessToken ? 'Present' : 'Missing');
-            console.log('GDRIVE_CONFIG:', GDRIVE_CONFIG);
-            
             if (!accessToken) {
-                console.log('No access token available - cannot load from Drive');
+                console.warn('No access token — cannot load from Drive');
                 return;
             }
-            
+
             try {
                 updateCloudSyncStatus('⏳ Loading...', 'Downloading from Drive');
-                
+
                 // Search for existing portfolio file
                 const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name='" + GDRIVE_CONFIG.PORTFOLIO_FILENAME + "' and trashed=false")}&fields=files(id,name)`;
-                console.log('Searching for portfolio file:', GDRIVE_CONFIG.PORTFOLIO_FILENAME);
-                console.log('Search URL:', searchUrl);
-                
                 const searchResponse = await gdriveApiFetch(searchUrl);
-
-                console.log('Search response status:', searchResponse.status);
 
                 if (!searchResponse.ok) {
                     throw new Error(`Search failed: ${searchResponse.status}`);
                 }
-                
+
                 const searchData = await searchResponse.json();
-                console.log('Search results:', searchData);
 
                 if (searchData.files && searchData.files.length > 0) {
                     portfolioFileId = searchData.files[0].id;
-                    console.log('Found portfolio file with ID:', portfolioFileId);
-                    
+
                     // Download the file
                     const fileUrl = `https://www.googleapis.com/drive/v3/files/${portfolioFileId}?alt=media`;
-                    console.log('Downloading from:', fileUrl);
-                    
                     const fileResponse = await gdriveApiFetch(fileUrl);
-
-                    console.log('Download response status:', fileResponse.status);
 
                     if (!fileResponse.ok) {
                         throw new Error(`Download failed: ${fileResponse.status}`);
@@ -7733,25 +7749,19 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                     // Replace local portfolio with cloud version (cloud is source of truth)
                     portfolio = cloudPortfolio;
-                    console.log('Portfolio updated. Cash:', portfolio.cash, 'Holdings:', Object.keys(portfolio.holdings).length);
-                    
+
                     // Save to localStorage so it persists
                     localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
-                    console.log('Portfolio saved to localStorage');
-                    
+
                     // Update all UI components
                     await updateUI();
                     updatePerformanceAnalytics();
                     await updateSectorAllocation();
                     
                     updateCloudSyncStatus('✓ Synced', 'Portfolio loaded from Drive');
-                    addActivity(`💾 Portfolio restored from Google Drive - $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions`, 'success');
-                    console.log('=== Portfolio load complete ===');
+                    addActivity(`💾 Portfolio restored from Google Drive - ${Object.keys(portfolio.holdings).length} positions`, 'success');
                 } else {
-                    // No file exists - DON'T auto-create during recovery
-                    console.error('❌ No portfolio file found in Google Drive');
-                    console.error('Searched for:', GDRIVE_CONFIG.PORTFOLIO_FILENAME);
-                    console.error('Search returned:', searchData);
+                    console.warn('No portfolio file found in Google Drive:', GDRIVE_CONFIG.PORTFOLIO_FILENAME);
                     
                     updateCloudSyncStatus('❌ File not found', 'Check Drive for exact filename');
                     
@@ -7761,9 +7771,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     );
                 }
             } catch (error) {
-                console.error('=== Error loading from Drive ===');
-                console.error('Error:', error);
-                console.error('Error stack:', error.stack);
+                console.error('Error loading from Drive:', error.message);
                 updateCloudSyncStatus('⚠️ Load failed', 'Using local data');
                 addActivity(`⚠️ Could not load from Google Drive: ${error.message}`, 'error');
                 
@@ -7773,22 +7781,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         async function savePortfolioToDrive() {
-            console.log('=== savePortfolioToDrive called ===');
-            console.log('gdriveAuthorized:', gdriveAuthorized);
-            console.log('accessToken:', accessToken ? 'Present' : 'Missing');
-            
-            if (!gdriveAuthorized || !accessToken) {
-                console.warn('❌ Not authorized to save to Drive');
-                return;
-            }
+            if (!gdriveAuthorized || !accessToken) return;
 
             try {
                 updateCloudSyncStatus('⏳ Saving...', 'Uploading to Drive');
-                
-                console.log('Portfolio to save:', Object.keys(portfolio.holdings).length, 'positions,', portfolio.transactions.length, 'transactions');
-                
                 const portfolioData = JSON.stringify(portfolio, null, 2);
-                console.log('Portfolio JSON size:', portfolioData.length, 'bytes');
                 
                 const metadata = {
                     name: GDRIVE_CONFIG.PORTFOLIO_FILENAME,
@@ -7804,33 +7801,22 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
 
                 const method = portfolioFileId ? 'PATCH' : 'POST';
-                console.log('Uploading to Google Drive:', method, url);
-                console.log('File ID:', portfolioFileId || 'Creating new file');
-
                 const response = await gdriveApiFetch(url, { method: method, body: form });
 
-                console.log('Upload response status:', response.status);
-
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Upload failed response:', errorText);
                     throw new Error(`Upload failed: ${response.status}`);
                 }
-                
+
                 const result = await response.json();
-                console.log('Upload result:', result);
-                
                 if (result.id) {
                     portfolioFileId = result.id;
                     updateCloudSyncStatus('✓ Synced', new Date().toLocaleTimeString());
-                    console.log('✅ Portfolio saved to Google Drive successfully!');
-                    console.log('File ID:', portfolioFileId);
                     addActivity(`💾 Portfolio saved to Google Drive`, 'success');
                 } else {
                     throw new Error('No file ID returned');
                 }
             } catch (error) {
-                console.error('Error saving to Drive:', error);
+                console.error('Error saving to Drive:', error.message);
                 updateCloudSyncStatus('⚠️ Save failed', 'Saved locally only');
             }
         }
@@ -7960,11 +7946,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                     const convictionColor = d.conviction >= 9 ? '#34d399' : d.conviction >= 7 ? '#60a5fa' : '#a8a8a0';
                     const convictionEmoji = d.conviction >= 9 ? '🔥' : d.conviction >= 7 ? '💪' : '';
-                    const price = marketData[d.symbol] ? `$${marketData[d.symbol].price.toFixed(2)}` : '';
+                    const symData = marketData && marketData[d.symbol];
+                    const price = symData ? `$${symData.price.toFixed(2)}` : '';
 
                     // Check for warn-level pattern matches on BUY decisions
                     let warningBadge = '';
-                    if (isBuy && marketData[d.symbol]) {
+                    if (isBuy && symData) {
                         for (const wr of warnRulesForBadges) {
                             if (matchesPattern(wr.id, marketData[d.symbol])) {
                                 warningBadge = `<div class="pattern-warning">Matches losing pattern: ${escapeHtml(wr.label)} (${wr.winRate.toFixed(0)}% win rate)</div>`;
@@ -7974,7 +7961,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     }
 
                     stocksList += `
-                        <div class="decision-stock-item ${actionClass}" onclick="this.classList.toggle('expanded')">
+                        <div class="decision-stock-item ${actionClass}" role="button" tabindex="0">
                             <div class="decision-stock-item-header">
                                 <span class="decision-stock-item-title" style="color: ${actionColor};">
                                     ${actionIcon} ${d.shares ? d.shares + ' ' : ''}${d.symbol}${price ? ' @ ' + price : ''}
@@ -8061,7 +8048,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 let priceText = '';
-                if (decision.symbol && marketData[decision.symbol]) {
+                if (decision.symbol && marketData && marketData[decision.symbol]) {
                     priceText = ` at $${marketData[decision.symbol].price.toFixed(2)}`;
                 }
 
@@ -9202,18 +9189,15 @@ Current Portfolio:
         }
 
         // Analytics card expansion — only one open at a time
-        let _popoverCloseHandler = null;
+        let _popoverAbort = null;
 
         function toggleAnalyticsExpansion(cardType, cardEl) {
             const popover = document.getElementById('analyticsPopover');
             const allCards = document.querySelectorAll('.expandable-card');
             const wasOpen = popover.classList.contains('open') && popover.dataset.cardType === cardType;
 
-            // Remove any existing outside-click handler before closing
-            if (_popoverCloseHandler) {
-                document.removeEventListener('click', _popoverCloseHandler);
-                _popoverCloseHandler = null;
-            }
+            // Abort previous listeners
+            if (_popoverAbort) { _popoverAbort.abort(); _popoverAbort = null; }
 
             // Close popover and remove expanded state from all cards
             popover.classList.remove('open');
@@ -9230,7 +9214,6 @@ Current Portfolio:
             const cardRect = cardEl.getBoundingClientRect();
             const top = cardRect.bottom - sectionRect.top + 6;
             let left = cardRect.left - sectionRect.left;
-            // Keep popover within section bounds
             const popoverWidth = 400;
             if (left + popoverWidth > section.offsetWidth) {
                 left = section.offsetWidth - popoverWidth;
@@ -9243,35 +9226,28 @@ Current Portfolio:
             popover.classList.add('open');
             cardEl.classList.add('expanded');
 
-            // Close on outside click (but not on other expandable cards — they handle themselves)
-            _popoverCloseHandler = (e) => {
-                if (!popover.contains(e.target) && !e.target.closest('.expandable-card')) {
-                    popover.classList.remove('open');
-                    allCards.forEach(c => c.classList.remove('expanded'));
-                    document.removeEventListener('click', _popoverCloseHandler);
-                    _popoverCloseHandler = null;
-                }
-            };
-            setTimeout(() => document.addEventListener('click', _popoverCloseHandler), 0);
+            // Close on outside click
+            _popoverAbort = new AbortController();
+            setTimeout(() => {
+                document.addEventListener('click', (e) => {
+                    if (!popover.contains(e.target) && !e.target.closest('.expandable-card')) {
+                        popover.classList.remove('open');
+                        allCards.forEach(c => c.classList.remove('expanded'));
+                        if (_popoverAbort) { _popoverAbort.abort(); _popoverAbort = null; }
+                    }
+                }, { signal: _popoverAbort.signal });
+            }, 0);
         }
 
         // Catalyst popover for holding cards
-        let _catalystCloseHandler = null;
-        let _catalystScrollHandler = null;
+        let _catalystAbort = null;
 
         function showCatalystPopover(el, symbol) {
             const popover = document.getElementById('catalystPopover');
             const wasOpen = popover.classList.contains('open') && popover.dataset.symbol === symbol;
 
-            // Remove existing handlers
-            if (_catalystCloseHandler) {
-                document.removeEventListener('click', _catalystCloseHandler);
-                _catalystCloseHandler = null;
-            }
-            if (_catalystScrollHandler) {
-                window.removeEventListener('scroll', _catalystScrollHandler, true);
-                _catalystScrollHandler = null;
-            }
+            // Abort previous listeners
+            if (_catalystAbort) { _catalystAbort.abort(); _catalystAbort = null; }
             popover.classList.remove('open');
 
             if (wasOpen) return;
@@ -9286,7 +9262,6 @@ Current Portfolio:
             let top = rect.bottom + 6;
             let left = rect.left;
 
-            // Keep within viewport
             const popoverWidth = 520;
             if (left + popoverWidth > window.innerWidth - 16) {
                 left = window.innerWidth - popoverWidth - 16;
@@ -9302,30 +9277,19 @@ Current Portfolio:
             requestAnimationFrame(() => { popover.scrollTop = 0; });
 
             // Close on outside click or scroll
+            _catalystAbort = new AbortController();
             const closeCatalyst = () => {
                 popover.classList.remove('open');
-                document.removeEventListener('click', _catalystCloseHandler);
-                window.removeEventListener('scroll', _catalystScrollHandler, true);
-                _catalystCloseHandler = null;
-                _catalystScrollHandler = null;
-            };
-
-            _catalystCloseHandler = (e) => {
-                if (!popover.contains(e.target) && !el.contains(e.target)) {
-                    closeCatalyst();
-                }
-            };
-
-            _catalystScrollHandler = (e) => {
-                // Don't close if scrolling inside the popover itself
-                if (!popover.contains(e.target)) {
-                    closeCatalyst();
-                }
+                if (_catalystAbort) { _catalystAbort.abort(); _catalystAbort = null; }
             };
 
             setTimeout(() => {
-                document.addEventListener('click', _catalystCloseHandler);
-                window.addEventListener('scroll', _catalystScrollHandler, true);
+                document.addEventListener('click', (e) => {
+                    if (!popover.contains(e.target) && !el.contains(e.target)) closeCatalyst();
+                }, { signal: _catalystAbort.signal });
+                window.addEventListener('scroll', (e) => {
+                    if (!popover.contains(e.target)) closeCatalyst();
+                }, { signal: _catalystAbort.signal, capture: true });
             }, 0);
         }
 
@@ -9425,13 +9389,25 @@ Current Portfolio:
             const googleClientId = document.getElementById('googleClientIdInput').value.trim();
             const googleApiKey = document.getElementById('googleApiKeyInput').value.trim();
             const anthropicUrl = document.getElementById('anthropicUrlInput').value.trim();
-            
+
+            // Basic format validation
+            const warnings = [];
+            if (anthropicUrl && !anthropicUrl.startsWith('https://')) {
+                warnings.push('Anthropic URL should start with https://');
+            }
+            if (polygonKey && polygonKey.length < 10) {
+                warnings.push('Polygon API key looks too short');
+            }
+            if (googleClientId && !googleClientId.includes('.apps.googleusercontent.com')) {
+                warnings.push('Google Client ID should end with .apps.googleusercontent.com');
+            }
+
             // Save to localStorage
             if (polygonKey) localStorage.setItem('polygon_api_key', polygonKey);
             if (googleClientId) localStorage.setItem('google_client_id', googleClientId);
             if (googleApiKey) localStorage.setItem('google_api_key', googleApiKey);
             if (anthropicUrl) localStorage.setItem('anthropic_api_url', anthropicUrl);
-            
+
             // Update global variables
             POLYGON_API_KEY = polygonKey;
             GOOGLE_CLIENT_ID = googleClientId;
@@ -9442,11 +9418,16 @@ Current Portfolio:
             GDRIVE_CONFIG.CLIENT_ID = googleClientId;
             GDRIVE_CONFIG.API_KEY = googleApiKey;
             
-            // Show success message
+            // Show success message (with warnings if any)
             const status = document.getElementById('apiKeySaveStatus');
             status.style.display = 'block';
-            status.style.color = '#34d399';
-            status.textContent = '✅ API keys saved locally! Use "Sync to Google Drive" to access from other devices.';
+            if (warnings.length > 0) {
+                status.style.color = '#fbbf24';
+                status.textContent = '⚠️ Saved with warnings: ' + warnings.join('; ');
+            } else {
+                status.style.color = '#34d399';
+                status.textContent = '✅ API keys saved locally! Use "Sync to Google Drive" to access from other devices.';
+            }
             
             // Update status indicators
             updateApiKeyStatus();
