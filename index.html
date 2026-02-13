@@ -7950,7 +7950,7 @@ Include a decision for EVERY holding.` }]
                 // Call Claude API for BUY decisions (Phase 2) via Cloudflare Worker proxy
                 const data = await fetchAnthropicStreaming({
                         model: 'claude-sonnet-4-5-20250929',
-                        max_tokens: 8000,
+                        max_tokens: 10000,
                         tools: [{
                             type: "web_search_20250305",
                             name: "web_search",
@@ -9177,6 +9177,8 @@ CRITICAL JSON RULES:
 - Use \\n for newlines within strings, never literal newlines
 - Double-check JSON is valid before responding
 
+⚠️ OUTPUT LENGTH: Keep total response UNDER 3000 words. Be specific but concise — bullet-point style, not essay style. Each decision reasoning should be 80-150 words max.
+
 {
   "decisions": [
     {
@@ -9184,62 +9186,25 @@ CRITICAL JSON RULES:
       "symbol": "STOCK_SYMBOL",
       "shares": WHOLE NUMBER ONLY,
       "conviction": 1-10 (scored using the conviction rubric above),
-      "reasoning": "MULTI-FACTOR ANALYSIS citing ALL factors:
-      
-      FOR BUY DECISIONS:
-      Technical: [Price action today, relative strength vs sector, trend direction]
-      Example: 'Up 6.5% vs sector +2%, breaking resistance at $145, strong volume'
-      
-      Fundamental: [Earnings results, revenue growth, profitability, guidance]
-      Example: 'Q1 2026 revenue $32.5B (+118% YoY), beat by $2.1B, EPS $1.25 vs $0.90 est, raised guidance 15%'
-      
-      Catalyst: [Specific news event, contract, upgrade, product launch]
-      Example: 'Won $480M Army contract Feb 1, analyst upgrades from $140 → $180 PT'
-      
-      Sector: [Sector momentum, peer performance, rotation dynamics]
-      Example: 'Semiconductors leading with NVDA +6.5%, AMD +5%, MU +8% - sector rotation into AI chips'
-      
-      Conviction Justification: [Why this specific conviction score]
-      Example: 'Conviction 9/10: All 4 factors aligned - technical breakout, earnings beat, major catalyst, sector strength'
-      
-      FOR SELL DECISIONS - BE VERY SPECIFIC ABOUT THE 'WHY':
-      Entry Recap: [When bought, at what price, what the original catalyst/thesis was]
-      Example: 'Bought at $125 on Jan 15 after earnings beat catalyst'
-      
-      What Changed: [The specific trigger - catalyst played out, negative news, thesis broken, technical breakdown, stop loss, or better opportunity]
-      Example: 'Original catalyst (Q4 earnings beat) fully priced in after 3 weeks. No new catalysts emerged. Stock up 22% from entry - gains at risk of fading.'
-      
-      Current Status: [Current price vs entry, P&L, how long held, current momentum/RS scores]
-      Example: 'Currently $152 (+22% from $125 entry). Held 21 days. Momentum fading to 4/10, RS dropped to 45.'
-      
-      Risk of Holding: [What happens if you DON'T sell - quantify the downside]
-      Example: 'Without new catalyst, likely to drift back toward $140 support. Holding risks giving back 50% of gains.'
-      
-      Better Use of Capital: [Where the freed cash goes - specific opportunity or dry powder]
-      Example: 'Freeing $4,560 to deploy into AVGO which has a fresh catalyst (10/10) vs this played-out setup (5/10).'"
+      "reasoning": "Concise multi-factor analysis (80-150 words max per decision):
+
+      FOR BUY DECISIONS — one line each:
+      Technical: Price action, RS vs sector, trend/structure (e.g. 'Up 6.5% vs sector +2%, breaking $145 resistance, strong volume')
+      Fundamental: Key earnings/revenue numbers (e.g. 'Q1 rev $32.5B +118% YoY, beat by $2.1B, raised guidance 15%')
+      Catalyst: Specific event + date (e.g. 'Won $480M Army contract Feb 1, PT upgrades to $180')
+      Sector: Flow direction + peer context (e.g. 'Semis leading: NVDA +6.5%, AMD +5%, rotation into AI chips')
+      Conviction: Why this score (e.g. '9/10: All 4 factors aligned — breakout + beat + catalyst + sector')
+
+      FOR SELL DECISIONS — one line each:
+      Entry: When, price, original thesis
+      Changed: What broke — catalyst played out, technicals, news
+      Status: Current price vs entry, P&L, momentum/RS now
+      Capital: Where freed cash goes"
     }
   ],
-  "overall_reasoning": "Your confident explanation WITH teaching element. Start with 'Alright, let me break down my multi-factor analysis...' Then explain:
-  
-  (1) PORTFOLIO REVIEW: Quick status of existing holdings - which are still strong, which have weakened
-  (2) SELLS FIRST (if any): For each sell, clearly explain: what the original thesis was, what changed, and why NOW is the time to exit. Be specific: 'I bought PLTR 3 weeks ago at $X on the Army contract catalyst. That catalyst is now fully priced in, momentum has faded to 4/10, and I see a better use of this capital in AVGO.'
-  (3) TECHNICAL SETUP: What the price action is telling you across buy candidates
-  (4) FUNDAMENTAL BACKDROP: What earnings/revenue data you found
-  (5) CATALYSTS IDENTIFIED: Specific news events driving momentum  
-  (6) SECTOR DYNAMICS: Which sectors are moving and why
-  (7) CONVICTION RATIONALE: Why these specific picks with these conviction levels
-  (8) TEACHING MOMENT: What this teaches about multi-factor investing
-  
-  CRITICAL FOR SELLS: Don't just say 'selling PLTR'. Walk through the full story - entry → thesis → what changed → why selling → where the capital goes next. The user should understand the complete lifecycle of the trade.",
-  
-  "research_summary": "Detailed summary organized by factor:
-  
-  FUNDAMENTAL FINDINGS: [Specific earnings, revenue, growth rates with dates/quarters]
-  CATALYST FINDINGS: [Specific news events, contracts, upgrades with dates]
-  SECTOR FINDINGS: [Which sectors strong/weak, peer performance data]
-  TECHNICAL OBSERVATIONS: [Price action patterns across analyzed stocks]
-  
-  IMPORTANT: Only cite recent data from 2025-2026, not old 2024 data. Include specific numbers and dates for everything."
+  "overall_reasoning": "Confident 150-250 word summary with teaching element covering: (1) Market regime + approach, (2) Key trades and why (sells: entry→thesis→exit; buys: catalyst + setup), (3) One teaching insight for the user.",
+
+  "research_summary": "Bullet-point findings from your web searches. One line per finding, cite specific numbers + dates. Only 2025-2026 data."
 }
 
 CONVICTION SCORING (must be research-backed):
