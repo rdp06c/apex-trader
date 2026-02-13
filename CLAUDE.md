@@ -199,8 +199,8 @@ The Anthropic API is not called directly from the browser. All Claude API calls 
 ### API Cost Consciousness
 - Polygon Stocks Advanced + Indices Basic plan – real-time stock data, EOD index data (5 calls/min). Endpoints used: bulk snapshot (`/v2/snapshot`), grouped daily bars (`/v2/aggs/grouped`), ticker details (`/v3/reference/tickers`), short interest (`/stocks/v1/short-interest`), news (`/v2/reference/news`), VIX index (`/v2/aggs/ticker/I:VIX`), and per-ticker OHLCV bars as fallback (`/v2/aggs/ticker`). Caching (4hr TTL for individual prices, 15s for bulk snapshots, 15min for grouped bars, 1hr for news, 24hr for short interest, 7 days for ticker details, 4hr for VIX) avoids redundant requests and keeps responses fast
 - Claude API calls are expensive – freshness checks prevent wasting analysis on stale data
-- Phase 1 uses `claude-sonnet-4-5-20250929` with `max_tokens: 4000`
-- Phase 2 uses `claude-sonnet-4-5-20250929` with `max_tokens: 8000`
+- Phase 1 uses `claude-sonnet-4-5-20250929` with `max_tokens: 6000`
+- Phase 2 uses `claude-sonnet-4-5-20250929` with `max_tokens: 10000` (prompt enforces "UNDER 3000 words" to prevent truncation; per-decision reasoning capped at 80-150 words, overall_reasoning at 150-250 words)
 - Chat uses `max_tokens: 1500`
 - **Search token optimization**: Pre-loaded `recentNews` (headlines + machine sentiment from Polygon) and pre-loaded VIX level are injected into both Phase 1 and Phase 2 prompts. VIX pre-loading eliminates the "VIX level today" web search that previously consumed a Phase 1 search slot (~500-1500 tokens saved). Phase 1 uses up to 3 web searches (broader regime context + news gap filling for holdings with empty/stale news + alarming headline verification). Phase 2 uses up to 4 focused searches (catalyst verification, sector rotation, deep dive). Saves ~2,500-5,500 tokens per analysis cycle vs broad discovery searches.
 
@@ -221,7 +221,7 @@ Splitting sell/buy into separate API calls solves information asymmetry: Phase 1
 ## Known Issues / Areas of Ongoing Work
 
 - **Runner bias** (mitigated): Extension penalty + pullback bonus + doubled reversal slots + stronger prompt guidance. Runners still score well (momentum matters), but no longer monopolize top 25.
-- **JSON parsing fragility** (largely mitigated): Both Phase 1 and Phase 2 now have single-quote fixes, citation stripping, brace matching, and structural fallback extractors. Phase 1 fallback regex-extracts `decisions`, `holdings_summary`, and `market_regime` individually when `JSON.parse` fails.
+- **JSON parsing fragility** (largely mitigated): Multi-layered recovery: (1) code fence extraction uses *last* fence (web search can produce earlier fences with non-JSON content), (2) citation stripping + brace matching + newline escaping, (3) single-quote regex deferred to a retry step (applying eagerly corrupts JSON when reasoning text contains `': 'word'` patterns), (4) `extractDecisionsArray` — string-aware bracket-matching extractor for Phase 1 decisions array, (5) `extractDecisionFromRawResponse` — Phase 2 structural fallback. Phase 1 also regex-extracts `holdings_summary` and `market_regime` individually.
 - **Post-exit tracking** (`updatePostExitTracking`): Checks prices 1 week / 1 month after sells to evaluate exit quality. Depends on Polygon API availability.
 - **Volume trend unused**: `calculate5DayMomentum` computes `volumeTrend` but it's never used in composite scoring. Could confirm momentum quality.
 - **FVG detection unused**: `detectStructure` detects Fair Value Gaps but they're not used in scoring or reversal filtering. Scaffolding for potential future use.
@@ -231,6 +231,8 @@ Splitting sell/buy into separate API calls solves information asymmetry: Phase 1
 - **`analyzeTechnicalAccuracy` / `analyzeConvictionAccuracy`**: Both wired into `formatPerformanceInsights()` (feeds signal accuracy + conviction calibration into Phase 2 prompt) and `updateLearningInsightsDisplay()` (renders Conviction Calibration + Signal Accuracy panels in Learning Insights UI). Requires 5+ closed trades with `entryConviction` / `entryTechnicals` to activate.
 - **Technical indicators are client-side approximations**: RSI(14) and MACD(12,26,9) are computed from 40-day bars. RSI warm-up (25+ smoothed values) is good but not as accurate as server-computed from full price history. Sufficient for screening purposes.
 - **Short interest data availability**: The `/stocks/v1/short-interest` endpoint returns bi-monthly settlement data. Coverage may be incomplete for smaller stocks.
+- **Exit reason classification**: Uses return % first (objective: ≥2% = `profit_target`, ≤-8% = `stop_loss`), then keyword matching for the middle ground (-8% to +2%). Includes a one-time migration (`_exitReasonV2`) to reclassify historical `closedTrades`.
+- **Dry run regime inference**: `testDataFetch` now infers `lastMarketRegime` from VIX level when no regime exists yet (>30 = bear, >25 = choppy, else bull).
 
 ## Function Reference (Key Functions)
 
@@ -263,6 +265,7 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `analyzeRegimeTransitions` | ML: regime change pattern analysis |
 | `deriveTradingRules` | Auto-generates block/warn rules from closed trade patterns |
 | `matchesPattern` | Checks if a buy candidate matches a derived rule pattern |
+| `extractDecisionsArray` | String-aware bracket-matching extractor for Phase 1 decisions array |
 | `recordHoldSnapshots` | Captures hold decisions with technicals for later evaluation |
 | `evaluateHoldSnapshots` | Fills in next-cycle prices for hold outcome tracking |
 | `recordRegimeTransition` | Tracks market regime changes over time |
