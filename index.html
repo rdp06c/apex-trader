@@ -7775,7 +7775,8 @@ Include a decision for EVERY holding.` }]
                                     // but dangerous when reasoning text contains ': 'word'' patterns — so we try without first)
                                     console.warn('Phase 1 JSON.parse failed, retrying with single-quote fix:', innerParseErr.message);
                                     try {
-                                        let ps2 = ps.replace(/'([^']+)':/g, '"$1":').replace(/:\s*'([^']*)'/g, ': "$1"');
+                                        // Targeted single-quote fix: only match keys (no spaces) and short values (no embedded quotes)
+                                        let ps2 = ps.replace(/'(\w+)':/g, '"$1":').replace(/:\s*'([^'\n]{0,200})'/g, ': "$1"');
                                         parsed = JSON.parse(ps2);
                                         console.log('✅ Phase 1 parsed after single-quote fix');
                                     } catch (sqErr) {
@@ -9369,7 +9370,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     // them eagerly corrupts JSON when reasoning text contains ': 'word'' patterns)
                     console.warn('Direct JSON parse failed, retrying with single-quote fix:', parseError.message);
                     try {
-                        let sqFixed = jsonString.replace(/'([^']+)':/g, '"$1":').replace(/:\s*'([^']*)'/g, ': "$1"');
+                        let sqFixed = jsonString.replace(/'(\w+)':/g, '"$1":').replace(/:\s*'([^'\n]{0,200})'/g, ': "$1"');
                         decision = JSON.parse(sqFixed);
                         console.log('✅ JSON parse succeeded after single-quote fix');
                     } catch (sqErr) {
@@ -10135,16 +10136,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 (dailyGain >= 0 ? '+' : '') + '$' + dailyGain.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('dailyPerformanceDollar').className = 'index-change ' + (dailyGain >= 0 ? 'positive' : 'negative');
                 
-            // Calculate actual cost basis (total invested) from transactions
+            // Calculate cost basis of current holdings (not a running BUY-SELL net, which goes negative on profit)
             let totalInvested = 0;
-            portfolio.transactions.forEach(transaction => {
-                if (transaction.type === 'BUY') {
-                    totalInvested += transaction.cost;
-                } else if (transaction.type === 'SELL') {
-                    // Subtract proceeds from sales (reduces invested capital)
-                    totalInvested -= (transaction.shares * transaction.price);
-                }
-            });
+            for (const symbol of Object.keys(portfolio.holdings)) {
+                const buys = getCurrentPositionBuys(symbol);
+                totalInvested += buys.reduce((sum, t) => sum + (t.price * t.shares), 0);
+            }
 
             document.getElementById('portfolioValue').textContent = '$' + totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('cashValue').textContent = '$' + portfolio.cash.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -11993,6 +11990,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         let lastChatTime = 0;
         let chatMessageCount = 0;
+        let isChatSending = false;
 
         function activateChat() {
             document.getElementById('chatGate').style.display = 'none';
@@ -12006,6 +12004,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const message = input.value.trim();
 
             if (!message) return;
+            if (isChatSending) return; // Concurrency guard
 
             // Rate limiting: 5s cooldown between messages, 20 per session
             const now = Date.now();
@@ -12020,13 +12019,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             lastChatTime = now;
             chatMessageCount++;
 
+            isChatSending = true;
+
             // Add user message
             addChatMessage(message, 'user');
             input.value = '';
-            
+
             // Show typing indicator
             showTypingIndicator();
-            
+
             try {
                 // Get portfolio context
                 const { total: totalValue } = await calculatePortfolioValue();
@@ -12101,14 +12102,17 @@ Current Portfolio:
                 addChatMessage(agentResponse, 'agent');
 
                 // Save to conversation memory (keep last 5 exchanges)
+                // Store full content blocks for assistant (preserves tool_use context for multi-turn)
                 chatHistory.push({ role: 'user', content: message });
-                chatHistory.push({ role: 'assistant', content: agentResponse });
+                chatHistory.push({ role: 'assistant', content: data.content || agentResponse });
                 if (chatHistory.length > 10) chatHistory = chatHistory.slice(-10);
 
             } catch (error) {
                 console.error('Chat error:', error);
                 removeTypingIndicator();
                 addChatMessage(`Connection error — try again in a moment. (${error.message})`, 'agent');
+            } finally {
+                isChatSending = false;
             }
         }
 
