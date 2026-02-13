@@ -7492,7 +7492,9 @@ Holdings: ${(() => {
                 shortInterest: holdingsData[sym]?.shortInterest ? { daysToCover: holdingsData[sym].shortInterest.daysToCover } : null,
                 recentNews: (holdingsData[sym]?.recentNews || []).slice(0, 2).map(n => ({ title: n.title, sentiment: n.sentiment }))
             } };
-        if (hh < 24) eh[sym].WARNING = 'RECENTLY PURCHASED - only sell on negative catalyst';
+        const buyDateET = new Date(buys[0].timestamp).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+        const todayET = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+        if (buyDateET === todayET) eh[sym].WARNING = 'BOUGHT TODAY - cannot sell same day';
     });
     return JSON.stringify(eh);
 })()}
@@ -7502,7 +7504,7 @@ Recent Transactions: ${(() => {
     return r.length === 0 ? 'None' : r.map(t => t.type + ' ' + t.shares + ' ' + t.symbol + ' @ $' + t.price.toFixed(2) + ' ' + new Date(t.timestamp).toLocaleDateString()).join('; ');
 })()}
 
-⚠️ ANTI-WHIPSAW: Do NOT contradict last 24hr decisions.
+⚠️ ANTI-WHIPSAW: Do NOT sell stocks bought today (same calendar day). Do NOT contradict recent decisions.
 
 💡 OPPORTUNITY COST — Top buy candidates waiting in Phase 2:
 ${topBuyOpportunities.join('\\n')}
@@ -7581,6 +7583,10 @@ Include a decision for EVERY holding.` }]
                                     }
                                 }
                                 if (parsed.decisions) {
+                                    // Normalize Phase 1 actions: uppercase for consistent matching
+                                    for (const d of parsed.decisions) {
+                                        if (d.action) d.action = d.action.toUpperCase();
+                                    }
                                     phase1SellDecisions = parsed.decisions.filter(d => {
                                         if (d.action !== 'SELL' || !d.shares || d.shares <= 0) return false;
 
@@ -7591,18 +7597,23 @@ Include a decision for EVERY holding.` }]
                                             return false;
                                         }
 
-                                        // Anti-whipsaw: block sells for positions < 24 hours old
+                                        // Anti-whipsaw: block same-day sells (bought today)
+                                        // Converts blocked sells to HOLD so they still appear in Decision Reasoning
                                         const buys = getCurrentPositionBuys(d.symbol);
                                         if (buys.length > 0) {
-                                            const holdHours = (Date.now() - new Date(buys[0].timestamp).getTime()) / 3600000;
-                                            if (holdHours < 24) {
-                                                console.warn(`⚠️ Anti-whipsaw: blocking sell of ${d.symbol} (held only ${holdHours.toFixed(1)}hrs)`);
-                                                addActivity(`⚠️ Anti-whipsaw blocked sell of ${d.symbol} (held < 24hrs)`, 'warning');
+                                            const buyDate = new Date(buys[0].timestamp).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+                                            const todayDate = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+                                            if (buyDate === todayDate) {
+                                                console.warn(`⚠️ Anti-whipsaw: blocking same-day sell of ${d.symbol} (bought today)`);
+                                                addActivity(`⚠️ Anti-whipsaw blocked sell of ${d.symbol} (bought today)`, 'warning');
+                                                d.action = 'HOLD';
+                                                d.reasoning = `Anti-whipsaw: same-day sell blocked. Original reasoning: ${d.reasoning || 'N/A'}`;
                                                 return false;
                                             }
                                         }
                                         return true;
                                     });
+                                    // Phase 1 holds: explicit HOLDs + sells converted to HOLD by anti-whipsaw
                                     phase1HoldDecisions = parsed.decisions.filter(d => d.action === 'HOLD');
                                     // Synthesize HOLD decisions for holdings the AI didn't explicitly mention
                                     const phase1MentionedSymbols = new Set(parsed.decisions.map(d => d.symbol));
@@ -9639,13 +9650,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     return false; // Failed - insufficient funds
                 }
             } else if (decision.action === 'SELL') {
-                // Safety net: 24-hour sell block (primary enforcement is in Phase 1 filtering)
+                // Safety net: same-day sell block (primary enforcement is in Phase 1 filtering)
                 const sellBuys = getCurrentPositionBuys(symbol);
                 if (sellBuys.length > 0) {
-                    const holdHours = (Date.now() - new Date(sellBuys[0].timestamp).getTime()) / 3600000;
-                    if (holdHours < 24) {
-                        console.warn(`⚠️ executeSingleTrade: blocking sell of ${symbol} (held only ${holdHours.toFixed(1)}hrs)`);
-                        addActivity(`⚠️ Anti-whipsaw blocked sell of ${symbol} (held < 24hrs)`, 'warning');
+                    const buyDateET = new Date(sellBuys[0].timestamp).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+                    const todayET = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+                    if (buyDateET === todayET) {
+                        console.warn(`⚠️ executeSingleTrade: blocking same-day sell of ${symbol} (bought today)`);
+                        addActivity(`⚠️ Anti-whipsaw blocked sell of ${symbol} (bought today)`, 'warning');
                         return false;
                     }
                 }
