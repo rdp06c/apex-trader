@@ -62,75 +62,75 @@
 
             <!-- Account Controls (collapsible) -->
             <div class="controls collapsible-section" id="controlsSection">
-                <div class="section-header" onclick="toggleSection('controls')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="controlsBody" onclick="toggleSection('controls')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('controls')}">
                     <h2 class="chart-title" style="margin-bottom: 0;">Account Controls & Settings</h2>
                     <span class="toggle-icon collapsed" id="controlsToggle">&#9662;</span>
                 </div>
                 <div class="section-body collapsed" id="controlsBody">
                     <!-- API Configuration Panel -->
-                    <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; padding: 15px; margin-bottom: 20px; margin-top: 16px;">
-                        <div style="font-size: 14px; color: #f5f5f0; margin-bottom: 10px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                    <div class="api-config-panel">
+                        <div class="api-config-header">
                             <span>API Configuration</span>
-                            <button onclick="toggleApiConfig()" style="padding: 4px 12px; font-size: 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #f5f5f0;">
+                            <button class="api-config-toggle-btn" onclick="toggleApiConfig()">
                                 <span id="apiConfigToggle">Show</span>
                             </button>
                         </div>
 
-                        <div id="apiConfigPanel" style="display: none; margin-top: 15px;">
-                            <div style="font-size: 12px; color: #fbbf24; margin-bottom: 15px; padding: 10px; background: rgba(251, 191, 36, 0.1); border-radius: 4px;">
+                        <div id="apiConfigPanel">
+                            <div class="api-security-notice">
                                 <strong>Security:</strong> API keys are stored locally in your browser only. They are NEVER uploaded to GitHub or shared publicly.
                             </div>
 
-                            <div class="control-group" style="margin-bottom: 15px;">
+                            <div class="control-group">
                                 <label for="polygonKeyInput">Polygon.io API Key</label>
-                                <input type="password" id="polygonKeyInput" placeholder="Enter your Polygon API key" style="font-family: monospace;">
+                                <input type="password" id="polygonKeyInput" placeholder="Enter your Polygon API key">
                             </div>
 
-                            <div class="control-group" style="margin-bottom: 15px;">
+                            <div class="control-group">
                                 <label for="googleClientIdInput">Google Client ID</label>
-                                <input type="password" id="googleClientIdInput" placeholder="Enter your Google Client ID" style="font-family: monospace;">
+                                <input type="password" id="googleClientIdInput" placeholder="Enter your Google Client ID">
                             </div>
 
-                            <div class="control-group" style="margin-bottom: 15px;">
+                            <div class="control-group">
                                 <label for="googleApiKeyInput">Google API Key</label>
-                                <input type="password" id="googleApiKeyInput" placeholder="Enter your Google API Key" style="font-family: monospace;">
+                                <input type="password" id="googleApiKeyInput" placeholder="Enter your Google API Key">
                             </div>
 
-                            <div class="control-group" style="margin-bottom: 15px;">
+                            <div class="control-group">
                                 <label for="anthropicUrlInput">Anthropic API Worker URL</label>
-                                <input type="text" id="anthropicUrlInput" placeholder="https://apex-proxy.your-username.workers.dev" style="font-family: monospace;">
-                                <div style="font-size: 11px; color: #78786e; margin-top: 4px;">
+                                <input type="text" id="anthropicUrlInput" placeholder="https://apex-proxy.your-username.workers.dev">
+                                <div class="api-helper-text">
                                     Your Cloudflare Worker URL (see setup guide)
                                 </div>
                             </div>
 
-                            <button onclick="saveApiKeys()" style="padding: 10px 20px; font-size: 14px; background: #f59e0b; color: #000; font-weight: 600; margin-right: 10px;">
+                            <button class="btn-save" onclick="saveApiKeys()">
                                 Save Locally
                             </button>
 
-                            <button onclick="syncKeysToGoogleDrive()" style="padding: 10px 20px; font-size: 14px; background: #10b981; color: white; font-weight: 600; margin-right: 10px;">
+                            <button class="btn-sync" onclick="syncKeysToGoogleDrive()">
                                 Sync to Google Drive
                             </button>
 
-                            <button onclick="downloadKeysFromGoogleDrive()" style="padding: 10px 20px; font-size: 14px; background: #3b82f6; color: white; font-weight: 600;">
+                            <button class="btn-download" onclick="downloadKeysFromGoogleDrive()">
                                 Download from Google Drive
                             </button>
 
-                            <div id="apiKeySaveStatus" style="font-size: 12px; margin-top: 10px; display: none;"></div>
+                            <div id="apiKeySaveStatus"></div>
                         </div>
 
-                        <div id="apiConfigStatus" style="font-size: 11px; margin-top: 10px;">
-                            <div id="polygonStatus" style="color: #78786e;">Polygon: Not configured</div>
-                            <div id="googleStatus" style="color: #78786e;">Google Drive: Not configured</div>
-                            <div id="anthropicStatus" style="color: #78786e;">Anthropic: Not configured</div>
+                        <div id="apiConfigStatus">
+                            <div id="polygonStatus" class="api-status-line">Polygon: Not configured</div>
+                            <div id="googleStatus" class="api-status-line">Google Drive: Not configured</div>
+                            <div id="anthropicStatus" class="api-status-line">Anthropic: Not configured</div>
                         </div>
 
-                        <div id="apiUsageStatus" style="font-size: 11px; color: #34d399; margin-top: 8px; font-weight: 600;">
+                        <div id="apiUsageStatus">
                             API Calls: 0 used today | Unlimited remaining
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="controls-grid">
                         <div class="control-group">
                             <label for="initialBalance">Initial Balance ($)</label>
                             <input type="number" id="initialBalance" value="10000" step="1000">
@@ -144,38 +144,38 @@
                     <button onclick="addWeeklyFunding()" class="secondary">Add Weekly Funding</button>
 
                     <!-- Portfolio Backup & Recovery -->
-                    <div style="margin-top: 20px; padding: 15px; background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.25); border-radius: 8px;">
-                        <div style="font-size: 14px; color: #f5f5f0; margin-bottom: 10px; font-weight: 600;">
+                    <div class="backup-panel">
+                        <div class="backup-panel-title">
                             Portfolio Backup & Recovery
                         </div>
 
                         <!-- Save to Drive -->
-                        <div style="margin-bottom: 12px;">
-                            <div style="font-size: 12px; color: #a8a8a0; margin-bottom: 8px;">
+                        <div class="backup-section">
+                            <div class="backup-panel-description">
                                 Save your current portfolio to Google Drive as a backup.
                             </div>
-                            <button onclick="manualSaveToDrive()" style="padding: 8px 16px; font-size: 13px; background: #10b981; color: white; font-weight: 600;">
+                            <button class="btn-drive-save" onclick="manualSaveToDrive()">
                                 Save Portfolio to Google Drive
                             </button>
                         </div>
 
-                        <div style="border-top: 1px solid rgba(255, 200, 100, 0.1); margin: 12px 0;"></div>
+                        <div class="backup-divider"></div>
 
                         <!-- Restore from local file -->
                         <div>
-                            <div style="font-size: 12px; color: #a8a8a0; margin-bottom: 8px;">
+                            <div class="backup-panel-description">
                                 Restore from a previously saved Apex_Portfolio.json file on your computer.
                             </div>
                             <input type="file" id="localPortfolioFile" accept=".json" style="display: none;" onchange="restoreFromLocalFile(this)">
-                            <button onclick="document.getElementById('localPortfolioFile').click()" style="padding: 8px 16px; font-size: 13px; background: #a78bfa; color: white; font-weight: 600; margin-right: 10px;">
+                            <button class="btn-restore" onclick="document.getElementById('localPortfolioFile').click()">
                                 Restore from Local File
                             </button>
-                            <button onclick="clearLocalStorage()" style="padding: 8px 16px; font-size: 13px; background: transparent; color: #f87171; border: 1px solid rgba(248,113,113,0.3); font-weight: 600;">
+                            <button class="btn-clear" onclick="clearLocalStorage()">
                                 Clear Local Storage
                             </button>
                         </div>
 
-                        <div id="recoveryStatus" style="font-size: 11px; margin-top: 8px; color: #78786e;"></div>
+                        <div id="recoveryStatus"></div>
                     </div>
                     <button onclick="resetAccount()" class="danger">Reset Account</button>
                 </div>
@@ -211,7 +211,7 @@
                         <div class="index-price" id="winRate">0%</div>
                         <div class="index-change" id="winLossRatio">0W / 0L</div>
                     </div>
-                    <div class="index-card expandable-card" onclick="toggleAnalyticsExpansion('bestTrade', this)">
+                    <div class="index-card expandable-card" role="button" tabindex="0" aria-label="Expand best trade details" onclick="toggleAnalyticsExpansion('bestTrade', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnalyticsExpansion('bestTrade',this)}">
                         <span class="expand-icon">&#9662;</span>
                         <div class="index-header">
                             <div class="index-name">Best Trade</div>
@@ -220,7 +220,7 @@
                         <div class="index-price" id="bestTrade">--</div>
                         <div class="index-change positive" id="bestTradeGain">+0%</div>
                     </div>
-                    <div class="index-card expandable-card" onclick="toggleAnalyticsExpansion('worstTrade', this)">
+                    <div class="index-card expandable-card" role="button" tabindex="0" aria-label="Expand worst trade details" onclick="toggleAnalyticsExpansion('worstTrade', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnalyticsExpansion('worstTrade',this)}">
                         <span class="expand-icon">&#9662;</span>
                         <div class="index-header">
                             <div class="index-name">Worst Trade</div>
@@ -262,7 +262,7 @@
             </div>
 
             <!-- Market Regime Indicator -->
-            <div class="regime-banner" id="regimeBanner" style="display: none;">
+            <div class="regime-banner" id="regimeBanner" style="display: none;" aria-live="polite">
                 <div class="regime-banner-inner">
                     <div class="regime-label" id="regimeLabel">--</div>
                     <div class="regime-description" id="regimeDescription">Run AI Analysis to detect market regime</div>
@@ -273,7 +273,7 @@
 
             <!-- Holdings Detail (collapsible) -->
             <div class="card collapsible-section" id="holdingsDetailSection">
-                <div class="section-header" onclick="toggleSection('holdingsDetail')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="holdingsDetailBody" onclick="toggleSection('holdingsDetail')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('holdingsDetail')}">
                     <h2 class="chart-title">Current Holdings</h2>
                     <span class="toggle-icon" id="holdingsDetailToggle">&#9662;</span>
                 </div>
@@ -291,7 +291,7 @@
 
             <!-- Decision Reasoning (collapsible) -->
             <div class="chart-card card collapsible-section" id="decisionReasoningSection">
-                <div class="section-header" onclick="toggleSection('decisionReasoning')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="decisionReasoningBody" onclick="toggleSection('decisionReasoning')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('decisionReasoning')}">
                     <h2 class="chart-title">APEX's Decision Reasoning</h2>
                     <span class="toggle-icon" id="decisionReasoningToggle">&#9662;</span>
                 </div>
@@ -306,7 +306,7 @@
 
             <!-- Candidate Scorecard (collapsible, collapsed by default) -->
             <div class="card collapsible-section" id="candidateScorecardSection">
-                <div class="section-header" onclick="toggleSection('candidateScorecard')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="candidateScorecardBody" onclick="toggleSection('candidateScorecard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('candidateScorecard')}">
                     <h2 class="chart-title">Candidate Scorecard</h2>
                     <span class="toggle-icon collapsed" id="candidateScorecardToggle">&#9662;</span>
                 </div>
@@ -319,7 +319,7 @@
 
             <!-- Sector Rotation Heatmap (collapsible, collapsed by default) -->
             <div class="card collapsible-section" id="sectorRotationSection">
-                <div class="section-header" onclick="toggleSection('sectorRotation')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="sectorRotationBody" onclick="toggleSection('sectorRotation')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('sectorRotation')}">
                     <h2 class="chart-title">Sector Rotation Heatmap</h2>
                     <span class="toggle-icon collapsed" id="sectorRotationToggle">&#9662;</span>
                 </div>
@@ -332,12 +332,12 @@
 
             <!-- Learning Insights Section (collapsible) -->
             <div class="card collapsible-section" id="learningInsightsSection">
-                <div class="section-header" onclick="toggleSection('learningInsights')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="learningInsightsBody" onclick="toggleSection('learningInsights')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('learningInsights')}">
                     <h2 class="chart-title">Learning Insights</h2>
                     <span class="toggle-icon collapsed" id="learningInsightsToggle">&#9662;</span>
                 </div>
                 <div class="section-body collapsed" id="learningInsightsBody">
-                    <div class="learning-tag" style="display: inline-block; margin-bottom: 12px;">Rules derived from trade history</div>
+                    <div class="learning-tag">Rules derived from trade history</div>
                     <div id="learningInsights">
                         <div class="empty-state">
                             No trades yet - Learning will begin after your first completed trade
@@ -348,12 +348,12 @@
 
             <!-- Activity Feed (collapsible) -->
             <div class="activity-feed card collapsible-section" id="activityFeedSection">
-                <div class="section-header" onclick="toggleSection('activityFeed')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="activityFeedBody" onclick="toggleSection('activityFeed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('activityFeed')}">
                     <h2 class="chart-title">Recent Activity</h2>
                     <span class="toggle-icon" id="activityFeedToggle">&#9662;</span>
                 </div>
                 <div class="section-body" id="activityFeedBody">
-                    <div id="activityFeed">
+                    <div id="activityFeed" aria-live="polite">
                         <div class="empty-state">
                             No activity yet
                         </div>
@@ -387,7 +387,7 @@
 
     <!-- Result Modal -->
     <div class="modal" id="resultModal" onclick="if(event.target===this)this.classList.remove('active')">
-        <div class="modal-content" style="max-width: 440px;">
+        <div class="modal-content modal-narrow">
             <div id="resultModalBody"></div>
             <button class="result-modal-close" onclick="document.getElementById('resultModal').classList.remove('active')">Close</button>
         </div>

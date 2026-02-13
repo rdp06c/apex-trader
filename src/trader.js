@@ -932,6 +932,13 @@
         // Initialize account
         function initializeAccount() {
             const balance = parseFloat(document.getElementById('initialBalance').value);
+            if (!balance || balance <= 0 || !Number.isFinite(balance)) {
+                alert('Please enter a valid positive number for the starting balance.');
+                return;
+            }
+            if (portfolio.transactions.length > 0 || Object.keys(portfolio.holdings).length > 0) {
+                if (!confirm(`⚠️ This will reset your portfolio to $${balance.toFixed(2)}.\n\nAll current holdings (${Object.keys(portfolio.holdings).length} positions) and transaction history (${portfolio.transactions.length} trades) will be erased.\n\nContinue?`)) return;
+            }
             portfolio.cash = balance;
             portfolio.initialBalance = balance;
             portfolio.totalDeposits = balance; // Track initial deposit
@@ -1941,6 +1948,53 @@
             };
         }
 
+
+        // Shared scoring function — used by both runAIAnalysis and testDataFetch
+        function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg }) {
+            let sectorBonus = 0;
+            if (sectorFlow === 'inflow') sectorBonus = 2;
+            else if (sectorFlow === 'modest-inflow') sectorBonus = 1;
+            else if (sectorFlow === 'outflow') sectorBonus = -1;
+
+            const accelBonus = isAccelerating && momentumScore >= 6 ? 1.5 : 0;
+            const consistencyBonus = (upDays >= 3 && totalDays >= 4) ? 1.0 : 0;
+            const structureBonus = (structureScore || 0) * 0.75;
+
+            const chg = todayChange || 0;
+            const runnerPenalty = chg >= 15 ? -4 : chg >= 10 ? -3 : chg >= 7 ? -2 : chg >= 5 ? -1 : 0;
+
+            const extensionPenalty = (momentumScore >= 9 || rsNormalized >= 8.5) ? -3
+                : (momentumScore >= 8 || rsNormalized >= 8) ? -2
+                : (momentumScore >= 7.5 || rsNormalized >= 7.5) ? -1
+                : 0;
+
+            const ret5d = totalReturn5d ?? 0;
+            const pullbackBonus = (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow' && sectorFlow !== 'modest-outflow') ? 2
+                : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 0 && sectorFlow !== 'outflow') ? 1
+                : 0;
+
+            const rsiBonusPenalty = rsi != null ? (rsi < 30 ? 1.5 : rsi > 70 ? -1.0 : 0) : 0;
+            const macdBonus = macdCrossover === 'bullish' ? 1.0 : macdCrossover === 'bearish' ? -1.0 : 0;
+
+            const dtc = daysToCover || 0;
+            const squeezeBonus = (dtc > 5 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? 1.5
+                : (dtc > 3 && (structureScore ?? 0) >= 1) ? 0.75
+                : 0;
+
+            const vt = volumeTrend ?? 1;
+            const volumeBonus = vt > 1.2 ? 0.5 : vt < 0.8 ? -0.5 : 0;
+
+            // FVG bonus: bullish FVG on pullback suggests a support zone
+            const fvgBonus = (fvg === 'bullish' && ret5d < 0 && (structureScore ?? 0) >= 0) ? 0.5
+                : (fvg === 'bearish' && (structureScore ?? 0) < 0) ? -0.5
+                : 0;
+
+            const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus
+                + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty
+                + rsiBonusPenalty + macdBonus + squeezeBonus + volumeBonus + fvgBonus;
+
+            return compositeScore;
+        }
 
         // BULK SNAPSHOT: Fetch all tickers in ONE call instead of 300 individual calls
         let bulkSnapshotCache = {};
@@ -3612,17 +3666,11 @@
                     const momScore = momentum?.score || 0;
                     const rsNorm = ((rs?.rsScore || 50) / 100) * 10;
                     const flow = sectorRotation[sector]?.moneyFlow;
-                    const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
-                    const strBonus = (struct?.structureScore || 0) * 0.75;
-                    // Technical indicators
                     const drBars = multiDayCache[symbol];
                     const drRsi = calculateRSI(drBars);
                     const drMacd = calculateMACD(drBars);
-                    const drRsiBonus = drRsi != null ? (drRsi < 30 ? 1.5 : drRsi > 70 ? -1.0 : 0) : 0;
-                    const drMacdBonus = drMacd?.crossover === 'bullish' ? 1.0 : drMacd?.crossover === 'bearish' ? -1.0 : 0;
                     const drDtc = shortInterestCache[symbol]?.daysToCover || 0;
                     const drStructScore = struct?.structureScore || 0;
-                    const drSqueezeBonus = (drDtc > 5 && drStructScore >= 1 && flow !== 'outflow') ? 1.5 : (drDtc > 3 && drStructScore >= 1) ? 0.75 : 0;
                     // Use snapshot changePercent, but on weekends/closed (0%) fall back to last bar's return
                     let dayChg = data.changePercent || 0;
                     if (dayChg === 0) {
@@ -3631,7 +3679,24 @@
                             dayChg = prev.c ? ((last.c - prev.c) / prev.c) * 100 : 0;
                         }
                     }
-                    dryRunScored.push({ symbol, compositeScore: momScore + rsNorm + sBonus + strBonus + drRsiBonus + drMacdBonus + drSqueezeBonus, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null });
+                    const compositeScore = calculateCompositeScore({
+                        momentumScore: momScore,
+                        rsNormalized: rsNorm,
+                        sectorFlow: flow,
+                        structureScore: drStructScore,
+                        isAccelerating: momentum?.isAccelerating,
+                        upDays: momentum?.upDays ?? 0,
+                        totalDays: momentum?.totalDays ?? 0,
+                        todayChange: dayChg,
+                        totalReturn5d: momentum?.totalReturn5d ?? 0,
+                        rsi: drRsi,
+                        macdCrossover: drMacd?.crossover,
+                        daysToCover: drDtc,
+                        volumeTrend: momentum?.volumeTrend ?? 1,
+                        fvg: struct?.fvg
+                    });
+                    const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
+                    dryRunScored.push({ symbol, compositeScore, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null });
                 });
 
                 // Fetch news for top candidates + holdings
@@ -3697,12 +3762,12 @@
                     console.log(`  ${symbol}: $${data.price.toFixed(2)} (${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%) | momentum:${mom.score} ${mom.trend} | structure:${struct.structureSignal} ${struct.choch ? 'CHoCH-' + struct.chochType : ''} ${struct.bos ? 'BOS-' + struct.bosType : ''}`);
                 });
                 
-                // Calculate cost if this were a real run
-                const estimatedTokens = 25000; // Updated estimate with structure data
+                // Calculate cost if this were a real run (Sonnet pricing as of 2025)
+                const estimatedTokens = 35000; // Input tokens per phase (structure + news + learning)
                 const costPer1MInputTokens = 3.00;
                 const costPer1MOutputTokens = 15.00;
-                const estimatedOutputTokens = 8000;
-                const estimatedCost = (estimatedTokens / 1000000) * costPer1MInputTokens + (estimatedOutputTokens / 1000000) * costPer1MOutputTokens * 2; // 2 phases
+                const estimatedOutputTokens = 10000; // Phase 1: ~4k, Phase 2: ~6k
+                const estimatedCost = ((estimatedTokens * 2) / 1000000) * costPer1MInputTokens + ((estimatedOutputTokens * 2) / 1000000) * costPer1MOutputTokens;
                 
                 console.log('\n💰 If this were a real run:');
                 console.log(`  - Input tokens: ~${estimatedTokens.toLocaleString()} (×2 phases)`);
@@ -3933,6 +3998,35 @@
                 addActivity('Analysis already in progress — please wait', 'warning');
                 return;
             }
+            // MARKET HOURS CHECK: Warn BEFORE activating spinner to avoid frozen UI
+            const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            const day = etNow.getDay();
+            const etTime = etNow.getHours() * 60 + etNow.getMinutes();
+            const isWeekday = day >= 1 && day <= 5;
+            const isDuringMarketHours = isWeekday && etTime >= 570 && etTime < 960; // 9:30 AM - 4:00 PM ET
+
+            if (!isWeekday) {
+                if (!confirm(
+                    `📅 WEEKEND — Markets are closed\n\n` +
+                    `Running analysis now will use the same data as Friday's close.\n` +
+                    `This costs ~$3-5 in API fees for results that won't change until Monday.\n\n` +
+                    `Continue anyway?`
+                )) {
+                    addActivity('⏸️ Analysis skipped — markets closed (weekend)', 'warning');
+                    return;
+                }
+            } else if (!isDuringMarketHours) {
+                const timeStr = etTime < 570 ? 'before market open (ET)' : 'after market close (ET)';
+                if (!confirm(
+                    `🕐 Markets are currently closed (${timeStr})\n\n` +
+                    `Price data won't reflect live trading. Analysis will use ${etTime < 570 ? "yesterday's closing" : "today's closing"} data.\n\n` +
+                    `Continue anyway?`
+                )) {
+                    addActivity(`⏸️ Analysis skipped — markets closed (${timeStr})`, 'warning');
+                    return;
+                }
+            }
+
             isAnalysisRunning = true;
             const thinking = document.getElementById('aiThinking');
             const thinkingDetail = document.getElementById('thinkingDetail');
@@ -3942,42 +4036,10 @@
             let aiResponse = '';  // Declare here so catch block can access it
 
             try {
-                // MARKET HOURS CHECK: Warn if markets are closed to avoid wasting API costs
-                const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-                const day = etNow.getDay();
-                const etTime = etNow.getHours() * 60 + etNow.getMinutes();
-                const isWeekday = day >= 1 && day <= 5;
-                const isDuringMarketHours = isWeekday && etTime >= 570 && etTime < 960; // 9:30 AM - 4:00 PM ET
-                
-                if (!isWeekday) {
-                    const proceed = confirm(
-                        `📅 WEEKEND — Markets are closed\n\n` +
-                        `Running analysis now will use the same data as Friday's close.\n` +
-                        `This costs ~$3-5 in API fees for results that won't change until Monday.\n\n` +
-                        `Continue anyway?`
-                    );
-                    if (!proceed) {
-                        thinking.classList.remove('active');
-                        addActivity('⏸️ Analysis skipped — markets closed (weekend)', 'warning');
-                        return;
-                    }
-                } else if (!isDuringMarketHours) {
-                    const timeStr = etTime < 570 ? 'before market open (ET)' : 'after market close (ET)';
-                    const proceed = confirm(
-                        `🕐 Markets are currently closed (${timeStr})\n\n` +
-                        `Price data won't reflect live trading. Analysis will use ${currentTime < marketOpen ? "yesterday's closing" : "today's closing"} data.\n\n` +
-                        `Continue anyway?`
-                    );
-                    if (!proceed) {
-                        thinking.classList.remove('active');
-                        addActivity(`⏸️ Analysis skipped — markets closed (${timeStr})`, 'warning');
-                        return;
-                    }
-                }
 
                 // Update post-exit tracking for closed trades
                 thinkingDetail.textContent = 'Checking post-exit price tracking...';
-                await updatePostExitTracking();
+                try { await updatePostExitTracking(); } catch (e) { console.warn('Post-exit tracking failed (non-fatal):', e.message); }
                 
                 // Smart screener picks stocks dynamically
                 const symbols = await screenStocks();
@@ -4089,19 +4151,17 @@
                 }
                 
                 // CHECK PRICE FRESHNESS - Don't waste $3 on stale data!
+                // Use median age (not worst-case outlier) for a representative freshness check
                 const now = Date.now();
-                let oldestData = 0;
-                let oldestSymbol = '';
-                Object.entries(marketData).forEach(([symbol, data]) => {
-                    const age = now - new Date(data.timestamp).getTime();
-                    if (age > oldestData) {
-                        oldestData = age;
-                        oldestSymbol = symbol;
-                    }
-                });
-                
-                const minutesOld = Math.floor(oldestData / 60000);
-                console.log(`Oldest price data: ${oldestSymbol} is ${minutesOld} minutes old`);
+                const ages = Object.entries(marketData).map(([symbol, data]) => ({
+                    symbol,
+                    age: now - new Date(data.timestamp).getTime()
+                })).sort((a, b) => b.age - a.age);
+                const medianAge = ages.length > 0 ? ages[Math.floor(ages.length / 2)].age : 0;
+                const oldestSymbol = ages.length > 0 ? ages[0].symbol : '';
+
+                const minutesOld = Math.floor(medianAge / 60000);
+                console.log(`Median data age: ${minutesOld} min (oldest: ${ages[0]?.symbol} at ${Math.floor((ages[0]?.age || 0) / 60000)} min)`);
                 
                 // Warn if data is >30 minutes old (market might be closed or data stale)
                 if (minutesOld > 30) {
@@ -4228,66 +4288,22 @@
                 
                 // 1. Score every stock with a composite ranking
                 const scoredStocks = Object.entries(enhancedMarketData).map(([symbol, data]) => {
-                    const momentumScore = data.momentum?.score || 0;
-                    const rsNormalized = ((data.relativeStrength?.rsScore || 50) / 100) * 10;
-                    
-                    let sectorBonus = 0;
-                    const flow = data.sectorRotation?.moneyFlow;
-                    if (flow === 'inflow') sectorBonus = 2;
-                    else if (flow === 'modest-inflow') sectorBonus = 1;
-                    else if (flow === 'outflow') sectorBonus = -1;
-                    
-                    // Acceleration bonus: reward building momentum, not single-day spikes
-                    const accelBonus = data.momentum?.isAccelerating && data.momentum?.score >= 6 ? 1.5 : 0;
-                    // Consistency bonus: reward multi-day uptrends
-                    const consistencyBonus = (data.momentum?.upDays >= 3 && data.momentum?.totalDays >= 4) ? 1.0 : 0;
-                    // bigMoverBonus disabled: rewarding stocks already up >5% today is chasing by definition
-                    const bigMoverBonus = 0;
-                    // Structure bonus: reward bullish structure, BOS, bullish CHoCH; penalize bearish
-                    const structureBonus = (data.marketStructure?.structureScore || 0) * 0.75;
-
-                    // Intraday runner penalty: stocks already up big today are chasing risk
-                    const todayChg = data.momentum?.todayChange || data.changePercent || 0;
-                    const runnerPenalty = todayChg >= 15 ? -4
-                        : todayChg >= 10 ? -3
-                        : todayChg >= 7 ? -2
-                        : todayChg >= 5 ? -1
-                        : 0;
-
-                    // Extension penalty: stretched on momentum OR relative strength (not both required)
-                    const extensionPenalty = (momentumScore >= 9 || rsNormalized >= 8.5) ? -3
-                        : (momentumScore >= 8 || rsNormalized >= 8) ? -2
-                        : (momentumScore >= 7.5 || rsNormalized >= 7.5) ? -1
-                        : 0;
-
-                    // Pullback bonus: stock dipped but structure/sector still supportive
-                    const totalReturn5d = data.momentum?.totalReturn5d ?? 0;
-                    const pullbackBonus = (totalReturn5d >= -8 && totalReturn5d <= -2
-                        && (data.marketStructure?.structureScore ?? 0) >= 1
-                        && data.sectorRotation?.moneyFlow !== 'outflow'
-                        && data.sectorRotation?.moneyFlow !== 'modest-outflow') ? 2
-                        : (totalReturn5d >= -5 && totalReturn5d < 0
-                        && (data.marketStructure?.structureScore ?? 0) >= 0
-                        && data.sectorRotation?.moneyFlow !== 'outflow') ? 1
-                        : 0;
-
-                    // RSI bonus/penalty: oversold = opportunity, overbought = caution
-                    const stockRsi = data.rsi;
-                    const rsiBonusPenalty = stockRsi != null ? (stockRsi < 30 ? 1.5 : stockRsi > 70 ? -1.0 : 0) : 0;
-
-                    // MACD bonus: bullish crossover = momentum shifting positive
-                    const macdCross = data.macd?.crossover;
-                    const macdBonus = macdCross === 'bullish' ? 1.0 : macdCross === 'bearish' ? -1.0 : 0;
-
-                    // Squeeze bonus: high short interest + bullish structure = squeeze potential
-                    const dtc = data.shortInterest?.daysToCover || 0;
-                    const structScore = data.marketStructure?.structureScore ?? 0;
-                    const squeezeBonus = (dtc > 5 && structScore >= 1 && data.sectorRotation?.moneyFlow !== 'outflow') ? 1.5
-                        : (dtc > 3 && structScore >= 1) ? 0.75
-                        : 0;
-
-                    const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus + bigMoverBonus + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + rsiBonusPenalty + macdBonus + squeezeBonus;
-                    
+                    const compositeScore = calculateCompositeScore({
+                        momentumScore: data.momentum?.score || 0,
+                        rsNormalized: ((data.relativeStrength?.rsScore || 50) / 100) * 10,
+                        sectorFlow: data.sectorRotation?.moneyFlow,
+                        structureScore: data.marketStructure?.structureScore ?? 0,
+                        isAccelerating: data.momentum?.isAccelerating,
+                        upDays: data.momentum?.upDays ?? 0,
+                        totalDays: data.momentum?.totalDays ?? 0,
+                        todayChange: data.momentum?.todayChange || data.changePercent || 0,
+                        totalReturn5d: data.momentum?.totalReturn5d ?? 0,
+                        rsi: data.rsi,
+                        macdCrossover: data.macd?.crossover,
+                        daysToCover: data.shortInterest?.daysToCover || 0,
+                        volumeTrend: data.momentum?.volumeTrend ?? 1,
+                        fvg: data.marketStructure?.fvg
+                    });
                     return { symbol, compositeScore, data };
                 });
                 
@@ -4564,7 +4580,9 @@ Include a decision for EVERY holding.` }]
                     if (p1Data.type === 'error' || p1Data.error) {
                         const em = p1Data.error?.message || 'Phase 1 error';
                         if (em.includes('rate_limit')) throw new Error('Rate limit on Phase 1! Wait 60s. 🕐');
+                        if (em.includes('overloaded')) throw new Error('API overloaded on Phase 1 — try again shortly.');
                         console.warn('Phase 1 error (non-fatal):', em);
+                        addActivity(`⚠️ Phase 1 returned an error: ${em} — sell analysis may be missing`, 'warning');
                     } else {
                         if (p1Data.stop_reason === 'max_tokens') {
                             console.warn('⚠️ Phase 1 TRUNCATED — hit max_tokens limit! Response may be incomplete. Consider increasing max_tokens.');
@@ -4656,11 +4674,22 @@ Include a decision for EVERY holding.` }]
                                     for (const sym of holdingSymbolsList) {
                                         if (!phase1MentionedSymbols.has(sym)) {
                                             console.log(`📊 Synthesizing HOLD for ${sym} (not mentioned in Phase 1 response)`);
+                                            // Derive conviction from technical indicators rather than default 5
+                                            const emd = enhancedMarketData[sym];
+                                            let synthConviction = 5;
+                                            if (emd) {
+                                                const rsi = emd.rsi;
+                                                const struct = emd.marketStructure?.structure;
+                                                const flow = emd.sectorRotation?.moneyFlow;
+                                                if (rsi && rsi >= 40 && rsi <= 60 && struct === 'bullish' && flow === 'inflow') synthConviction = 7;
+                                                else if (struct === 'bullish' || flow === 'inflow') synthConviction = 6;
+                                                else if (struct === 'bearish' || flow === 'outflow') synthConviction = 4;
+                                            }
                                             phase1HoldDecisions.push({
                                                 action: 'HOLD',
                                                 symbol: sym,
                                                 shares: portfolio.holdings[sym],
-                                                conviction: 5,
+                                                conviction: synthConviction,
                                                 reasoning: 'Holding — not flagged for sale in Phase 1 review.'
                                             });
                                         }
@@ -6685,6 +6714,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         return false;
                     }
                 }
+                if (!shares || shares <= 0 || !Number.isFinite(shares)) {
+                    console.error(`❌ Invalid share count (${shares}) for SELL ${symbol} — skipping`);
+                    addActivity(`❌ Sell skipped for ${symbol}: invalid share count`, 'error');
+                    return false;
+                }
                 if ((portfolio.holdings[symbol] || 0) >= shares) {
                     const revenue = price * shares;
                     portfolio.cash += revenue;
@@ -6693,6 +6727,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (portfolio.holdings[symbol] === 0) {
                         delete portfolio.holdings[symbol];
                         if (portfolio.holdingTheses && portfolio.holdingTheses[symbol]) delete portfolio.holdingTheses[symbol];
+                    } else if (portfolio.holdingTheses && portfolio.holdingTheses[symbol]) {
+                        // Partial sell — update thesis with trim info
+                        portfolio.holdingTheses[symbol].lastTrimDate = new Date().toISOString();
+                        portfolio.holdingTheses[symbol].lastTrimPrice = price;
+                        portfolio.holdingTheses[symbol].lastTrimShares = shares;
+                        portfolio.holdingTheses[symbol].lastTrimReason = decision.reasoning || '';
                     }
 
                     // Find buy transactions for CURRENT position to calculate profit/loss
@@ -7186,10 +7226,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 lastEntry.timestamp = now.toISOString();
             }
 
-            // Hard cap: keep at most 3000 entries (prune oldest non-deposit entries)
+            // Hard cap: keep at most 3000 entries (prune oldest, but preserve deposit markers)
             if (portfolio.performanceHistory.length > 3000) {
                 const excess = portfolio.performanceHistory.length - 3000;
-                portfolio.performanceHistory.splice(0, excess);
+                let removed = 0;
+                portfolio.performanceHistory = portfolio.performanceHistory.filter((entry, i) => {
+                    if (removed >= excess) return true; // done pruning
+                    if (entry.deposit) return true; // preserve deposit markers
+                    removed++;
+                    return false;
+                });
             }
 
             await updatePerformanceChart();
@@ -7473,10 +7519,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     lastMarketRegime: null,
                     lastCandidateScores: null,
                     lastSectorRotation: null,
+                    lastVIX: null,
                     holdSnapshots: [],
-                    regimeHistory: []
+                    regimeHistory: [],
+                    blockedTrades: []
                 };
                 localStorage.removeItem('aiTradingPortfolio');
+                localStorage.removeItem('apexDecisionHistory');
+                _tradingRulesCache = null;
+                _tradingRulesCacheKey = -1;
                 document.getElementById('activityFeed').innerHTML = '<div class="empty-state">No activity yet</div>';
                 updateUI();
                 if (performanceChart) {
@@ -7637,7 +7688,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 updateCloudSyncStatus('⏳ Loading...', 'Downloading from Drive');
                 
                 // Search for existing portfolio file
-                const searchUrl = `https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_CONFIG.PORTFOLIO_FILENAME}' and trashed=false&fields=files(id,name)`;
+                const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name='" + GDRIVE_CONFIG.PORTFOLIO_FILENAME + "' and trashed=false")}&fields=files(id,name)`;
                 console.log('Searching for portfolio file:', GDRIVE_CONFIG.PORTFOLIO_FILENAME);
                 console.log('Search URL:', searchUrl);
                 
@@ -7669,7 +7720,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     }
 
                     const cloudPortfolio = await fileResponse.json();
-                    console.log('Downloaded portfolio from Google Drive:', cloudPortfolio);
+                    console.log('Downloaded portfolio from Google Drive:', Object.keys(cloudPortfolio.holdings || {}).length, 'positions');
 
                     // Validate required schema fields before accepting
                     if (typeof cloudPortfolio.cash !== 'number' || !cloudPortfolio.holdings || typeof cloudPortfolio.holdings !== 'object') {
@@ -7734,11 +7785,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             try {
                 updateCloudSyncStatus('⏳ Saving...', 'Uploading to Drive');
                 
-                console.log('Portfolio to save:', {
-                    cash: portfolio.cash,
-                    holdings: portfolio.holdings,
-                    transactions: portfolio.transactions.length
-                });
+                console.log('Portfolio to save:', Object.keys(portfolio.holdings).length, 'positions,', portfolio.transactions.length, 'transactions');
                 
                 const portfolioData = JSON.stringify(portfolio, null, 2);
                 console.log('Portfolio JSON size:', portfolioData.length, 'bytes');
@@ -8231,7 +8278,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             try {
                 // Search for existing folder
                 const searchResponse = await fetch(
-                    `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+                    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name='" + folderName + "' and mimeType='application/vnd.google-apps.folder' and trashed=false")}`,
                     {
                         headers: {
                             'Authorization': 'Bearer ' + accessToken
@@ -8631,7 +8678,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 // Timeline of recent transitions
                 if (regimeStats.recentTransitions.length > 1) {
                     html += `<div class="regime-timeline">`;
-                    for (const t of regimeStats.recentTransitions.reverse()) {
+                    for (const t of [...regimeStats.recentTransitions].reverse()) {
                         const dotColor = regimeColors[t.regime] || 'var(--text-muted)';
                         const fromLabel = t.from ? `${regimeLabels[t.from] || t.from} →` : '';
                         html += `<div class="regime-timeline-entry">
@@ -9147,6 +9194,11 @@ Current Portfolio:
             if (!body) return;
             body.classList.toggle('collapsed');
             if (icon) icon.classList.toggle('collapsed');
+            // Update ARIA state on the header button
+            const header = body.previousElementSibling;
+            if (header && header.hasAttribute('aria-expanded')) {
+                header.setAttribute('aria-expanded', !body.classList.contains('collapsed'));
+            }
         }
 
         // Analytics card expansion — only one open at a time

@@ -38,10 +38,22 @@
             --blue: #60a5fa;
             --blue-dim: rgba(96, 165, 250, 0.10);
 
+            --accent-subtle: rgba(245, 158, 11, 0.08);
+            --accent-border: rgba(245, 158, 11, 0.20);
+            --accent-glow: rgba(245, 158, 11, 0.30);
+            --accent-border-light: rgba(245, 158, 11, 0.15);
+            --green-border: rgba(52, 211, 153, 0.25);
+            --red-border: rgba(248, 113, 113, 0.30);
+            --yellow-border: rgba(251, 191, 36, 0.25);
+            --blue-border: rgba(96, 165, 250, 0.15);
+            --blue-subtle: rgba(96, 165, 250, 0.08);
+            --accent-secondary-dim: rgba(168, 139, 250, 0.12);
+            --overlay: rgba(0, 0, 0, 0.85);
+
             --text-primary: #f5f5f0;
             --text-secondary: #a8a8a0;
             --text-muted: #78786e;
-            --text-faint: #55554d;
+            --text-faint: #7a7a72;
 
             --radius-sm: 8px;
             --radius-md: 12px;
@@ -211,7 +223,7 @@
             transform: translate(-50%, -50%);
             width: 240px;
             height: 100px;
-            background: radial-gradient(ellipse, rgba(245,158,11,0.08) 0%, transparent 70%);
+            background: radial-gradient(ellipse, var(--accent-subtle) 0%, transparent 70%);
             pointer-events: none;
             z-index: 0;
         }
@@ -397,7 +409,7 @@
             background: var(--accent-gradient);
             border-radius: 2px;
             flex-shrink: 0;
-            box-shadow: 0 0 6px rgba(245, 158, 11, 0.3);
+            box-shadow: 0 0 6px var(--accent-glow);
         }
 
         /* ── Charts Grid ──────────────────────────────────── */
@@ -441,8 +453,8 @@
 
         .section-body {
             overflow: hidden;
-            transition: max-height var(--transition-med), opacity var(--transition-fast);
-            max-height: 3000px;
+            transition: max-height 0.3s ease, opacity var(--transition-fast);
+            max-height: 5000px;
             opacity: 1;
             padding-top: 16px;
         }
@@ -559,14 +571,14 @@
             margin: 8px 0;
             padding: 5px 12px;
             background: var(--accent-dim);
-            border: 1px solid rgba(245, 158, 11, 0.2);
+            border: 1px solid var(--accent-border);
             border-radius: var(--radius-sm);
             cursor: pointer;
             transition: all var(--transition-fast);
         }
 
         .holding-card-catalyst:hover {
-            background: rgba(245, 158, 11, 0.2);
+            background: var(--accent-border);
             border-color: var(--accent);
         }
 
@@ -780,7 +792,7 @@
         button:hover {
             opacity: 0.9;
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+            box-shadow: 0 4px 12px var(--accent-glow);
         }
 
         button:active {
@@ -803,7 +815,7 @@
         button.danger {
             background: transparent;
             color: var(--red);
-            border: 1px solid rgba(248, 113, 113, 0.3);
+            border: 1px solid var(--red-border);
         }
 
         button.danger:hover {
@@ -812,10 +824,143 @@
             box-shadow: none;
         }
 
+        /* ── Inline Style Extractions (from body.html) ──── */
+        .api-config-panel {
+            background: var(--accent-subtle);
+            border: 1px solid var(--accent-glow);
+            border-radius: var(--radius-sm);
+            padding: 15px;
+            margin-bottom: 20px;
+            margin-top: 16px;
+        }
+
+        .api-config-header {
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .api-config-toggle-btn {
+            padding: 4px 12px;
+            font-size: 12px;
+            background: var(--accent-border-light);
+            border: 1px solid var(--accent-glow);
+            color: var(--text-primary);
+        }
+
+        #apiConfigPanel {
+            display: none;
+            margin-top: 15px;
+        }
+
+        .api-security-notice {
+            font-size: 12px;
+            color: var(--accent-light);
+            margin-bottom: 15px;
+            padding: 10px;
+            background: var(--yellow-dim);
+            border-radius: 4px;
+        }
+
+        .api-config-panel .control-group {
+            margin-bottom: 15px;
+        }
+
+        .api-config-panel input[type="password"],
+        .api-config-panel input[type="text"] {
+            font-family: monospace;
+        }
+
+        .api-helper-text {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        button.btn-save { padding: 10px 20px; font-size: 14px; background: var(--accent); color: #000; font-weight: 600; margin-right: 10px; }
+        button.btn-sync { padding: 10px 20px; font-size: 14px; background: #10b981; color: white; font-weight: 600; margin-right: 10px; }
+        button.btn-download { padding: 10px 20px; font-size: 14px; background: #3b82f6; color: white; font-weight: 600; }
+        button.btn-restore { padding: 8px 16px; font-size: 13px; background: var(--accent-secondary); color: white; font-weight: 600; margin-right: 10px; }
+        button.btn-clear { padding: 8px 16px; font-size: 13px; background: transparent; color: var(--red); border: 1px solid var(--red-border); font-weight: 600; }
+        button.btn-drive-save { padding: 8px 16px; font-size: 13px; background: #10b981; color: white; font-weight: 600; }
+
+        #apiKeySaveStatus {
+            font-size: 12px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        #apiConfigStatus {
+            font-size: 11px;
+            margin-top: 10px;
+        }
+
+        .api-status-line {
+            color: var(--text-muted);
+        }
+
+        #apiUsageStatus {
+            font-size: 11px;
+            color: var(--green);
+            margin-top: 8px;
+            font-weight: 600;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .backup-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--blue-subtle);
+            border: 1px solid var(--blue-border);
+            border-radius: var(--radius-sm);
+        }
+
+        .backup-panel-title {
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .backup-panel-description {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .backup-section {
+            margin-bottom: 12px;
+        }
+
+        .backup-divider {
+            border-top: 1px solid var(--border-subtle);
+            margin: 12px 0;
+        }
+
+        #recoveryStatus {
+            font-size: 11px;
+            margin-top: 8px;
+            color: var(--text-muted);
+        }
+
+        .learning-tag {
+            display: inline-block;
+            margin-bottom: 12px;
+        }
+
         /* ── AI Thinking ───────────────────────────────────── */
         .ai-thinking {
             background: var(--yellow-dim);
-            border: 1px solid rgba(251, 191, 36, 0.25);
+            border: 1px solid var(--yellow-border);
             border-radius: var(--radius-sm);
             padding: 14px;
             margin-top: 8px;
@@ -857,7 +1002,7 @@
             z-index: 1000;
             left: 0; top: 0;
             width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.85);
+            background-color: var(--overlay);
         }
 
         .modal.active {
@@ -876,6 +1021,10 @@
             max-height: 80vh;
             overflow-y: auto;
             box-shadow: var(--shadow-lg);
+        }
+
+        .modal-content.modal-narrow {
+            max-width: 440px;
         }
 
         .result-modal-title {
@@ -1040,7 +1189,7 @@
 
         .user-message .message-text {
             background: var(--blue-dim);
-            border-color: rgba(96, 165, 250, 0.15);
+            border-color: var(--blue-border);
         }
 
         .chat-input-container {
@@ -1113,7 +1262,7 @@
 
         .index-card.positive {
             border-top: 2px solid var(--green);
-            box-shadow: inset 0 2px 8px rgba(52, 211, 153, 0.06);
+            box-shadow: inset 0 2px 8px var(--green-dim);
         }
 
         .index-card.positive:hover {
@@ -1122,7 +1271,7 @@
 
         .index-card.negative {
             border-top: 2px solid var(--red);
-            box-shadow: inset 0 2px 8px rgba(248, 113, 113, 0.06);
+            box-shadow: inset 0 2px 8px var(--red-dim);
         }
 
         .index-card.negative:hover {
@@ -1383,7 +1532,7 @@
         }
 
         .decision-stock-item.expanded .decision-stock-reasoning {
-            max-height: 5000px;
+            max-height: 500px;
             margin-top: 6px;
         }
 
@@ -1413,7 +1562,7 @@
             line-height: 1.6;
             overflow: hidden;
             transition: max-height 0.2s ease, opacity 0.15s;
-            max-height: 5000px;
+            max-height: 500px;
         }
 
         .decision-thoughts.collapsed .decision-thoughts-text {
@@ -1451,7 +1600,7 @@
             line-height: 1.6;
             overflow: hidden;
             transition: max-height 0.2s ease, opacity 0.15s;
-            max-height: 5000px;
+            max-height: 500px;
         }
 
         .research-summary.collapsed .research-summary-text {
@@ -1596,7 +1745,7 @@
 
         .behavior-section {
             background: var(--accent-dim);
-            border: 1px solid rgba(245, 158, 11, 0.15);
+            border: 1px solid var(--accent-border-light);
             border-radius: var(--radius-sm);
             padding: 14px;
             margin-top: 12px;
@@ -1965,7 +2114,7 @@
         .exit-reason-badge.profit { background: var(--green-dim); color: var(--green); }
         .exit-reason-badge.stop { background: var(--red-dim); color: var(--red); }
         .exit-reason-badge.catalyst { background: var(--accent-dim); color: var(--accent-light); }
-        .exit-reason-badge.opportunity { background: rgba(168, 139, 250, 0.12); color: var(--accent-secondary); }
+        .exit-reason-badge.opportunity { background: var(--accent-secondary-dim); color: var(--accent-secondary); }
         .exit-reason-badge.manual { background: var(--bg-raised); color: var(--text-muted); }
 
         .exit-reason-count,
@@ -1988,7 +2137,7 @@
 
         .exit-insight-callout {
             background: var(--accent-dim);
-            border: 1px solid rgba(245, 158, 11, 0.2);
+            border: 1px solid var(--accent-border);
             border-radius: var(--radius-sm);
             padding: 8px 12px;
             margin-top: 8px;
@@ -2076,12 +2225,12 @@
 
         .rule-card.rule-warn {
             background: rgba(245, 158, 11, 0.06);
-            border-color: rgba(245, 158, 11, 0.25);
+            border-color: var(--accent-glow);
         }
 
         .rule-card.rule-prefer {
-            background: rgba(52, 211, 153, 0.06);
-            border-color: rgba(52, 211, 153, 0.25);
+            background: var(--green-dim);
+            border-color: var(--green-border);
         }
 
         .rule-card.rule-observe {
@@ -2117,15 +2266,15 @@
         }
 
         .rule-badge-warn {
-            color: #f59e0b;
-            background: rgba(245, 158, 11, 0.12);
-            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: var(--accent);
+            background: var(--accent-dim);
+            border: 1px solid var(--accent-glow);
         }
 
         .rule-badge-prefer {
-            color: #34d399;
-            background: rgba(52, 211, 153, 0.1);
-            border: 1px solid rgba(52, 211, 153, 0.3);
+            color: var(--green);
+            background: var(--green-dim);
+            border: 1px solid var(--green-border);
         }
 
         .rule-badge-observe {
@@ -2195,9 +2344,9 @@
         /* ── Pattern Warning Badge (Decision Cards) ───────── */
         .pattern-warning {
             font-size: 10px;
-            color: #f59e0b;
-            background: rgba(245, 158, 11, 0.08);
-            border: 1px solid rgba(245, 158, 11, 0.2);
+            color: var(--accent);
+            background: var(--accent-subtle);
+            border: 1px solid var(--accent-border);
             border-radius: 3px;
             padding: 3px 8px;
             margin: 4px 12px 0 12px;
@@ -2231,7 +2380,7 @@
 
         .expandable-card.expanded {
             border-color: var(--accent);
-            box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.15);
+            box-shadow: 0 0 0 1px var(--accent-border-light);
         }
 
         .expand-icon {
@@ -2302,7 +2451,7 @@
         }
 
         .trade-history-badge {
-            font-size: 9px;
+            font-size: 10px;
             font-weight: 700;
             padding: 1px 6px;
             border-radius: 3px;
@@ -2413,17 +2562,17 @@
 
         .regime-banner.bull .regime-banner-inner {
             border-left-color: var(--green);
-            background: linear-gradient(90deg, rgba(52, 211, 153, 0.08) 0%, transparent 70%);
+            background: linear-gradient(90deg, var(--green-dim) 0%, transparent 70%);
         }
 
         .regime-banner.bear .regime-banner-inner {
             border-left-color: var(--red);
-            background: linear-gradient(90deg, rgba(248, 113, 113, 0.08) 0%, transparent 70%);
+            background: linear-gradient(90deg, var(--red-dim) 0%, transparent 70%);
         }
 
         .regime-banner.choppy .regime-banner-inner {
             border-left-color: var(--yellow);
-            background: linear-gradient(90deg, rgba(251, 191, 36, 0.08) 0%, transparent 70%);
+            background: linear-gradient(90deg, var(--yellow-dim) 0%, transparent 70%);
         }
 
         .regime-label {
@@ -2499,6 +2648,8 @@
         .scorecard-table-wrap {
             max-height: 500px;
             overflow-y: auto;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         .scorecard-table {
@@ -2547,7 +2698,7 @@
         }
 
         .scorecard-held-badge {
-            font-size: 9px;
+            font-size: 10px;
             font-weight: 700;
             padding: 1px 5px;
             border-radius: 3px;
@@ -2629,7 +2780,7 @@
         }
 
         .rotation-flow-badge {
-            font-size: 9px;
+            font-size: 10px;
             font-weight: 700;
             padding: 2px 8px;
             border-radius: 10px;
@@ -2667,7 +2818,7 @@
         .news-item { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; font-size: 11px; }
         .news-time { color: var(--text-faint); font-size: 10px; white-space: nowrap; min-width: 28px; }
         .news-title { color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .news-sentiment { font-size: 9px; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+        .news-sentiment { font-size: 10px; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
         .news-sentiment.positive { background: var(--green-dim); color: var(--green); }
         .news-sentiment.negative { background: var(--red-dim); color: var(--red); }
         .news-sentiment.neutral { background: var(--bg-raised); color: var(--text-muted); }
@@ -2835,75 +2986,75 @@
 
             <!-- Account Controls (collapsible) -->
             <div class="controls collapsible-section" id="controlsSection">
-                <div class="section-header" onclick="toggleSection('controls')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="controlsBody" onclick="toggleSection('controls')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('controls')}">
                     <h2 class="chart-title" style="margin-bottom: 0;">Account Controls & Settings</h2>
                     <span class="toggle-icon collapsed" id="controlsToggle">&#9662;</span>
                 </div>
                 <div class="section-body collapsed" id="controlsBody">
                     <!-- API Configuration Panel -->
-                    <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; padding: 15px; margin-bottom: 20px; margin-top: 16px;">
-                        <div style="font-size: 14px; color: #f5f5f0; margin-bottom: 10px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                    <div class="api-config-panel">
+                        <div class="api-config-header">
                             <span>API Configuration</span>
-                            <button onclick="toggleApiConfig()" style="padding: 4px 12px; font-size: 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #f5f5f0;">
+                            <button class="api-config-toggle-btn" onclick="toggleApiConfig()">
                                 <span id="apiConfigToggle">Show</span>
                             </button>
                         </div>
 
-                        <div id="apiConfigPanel" style="display: none; margin-top: 15px;">
-                            <div style="font-size: 12px; color: #fbbf24; margin-bottom: 15px; padding: 10px; background: rgba(251, 191, 36, 0.1); border-radius: 4px;">
+                        <div id="apiConfigPanel">
+                            <div class="api-security-notice">
                                 <strong>Security:</strong> API keys are stored locally in your browser only. They are NEVER uploaded to GitHub or shared publicly.
                             </div>
 
-                            <div class="control-group" style="margin-bottom: 15px;">
+                            <div class="control-group">
                                 <label for="polygonKeyInput">Polygon.io API Key</label>
-                                <input type="password" id="polygonKeyInput" placeholder="Enter your Polygon API key" style="font-family: monospace;">
+                                <input type="password" id="polygonKeyInput" placeholder="Enter your Polygon API key">
                             </div>
 
-                            <div class="control-group" style="margin-bottom: 15px;">
+                            <div class="control-group">
                                 <label for="googleClientIdInput">Google Client ID</label>
-                                <input type="password" id="googleClientIdInput" placeholder="Enter your Google Client ID" style="font-family: monospace;">
+                                <input type="password" id="googleClientIdInput" placeholder="Enter your Google Client ID">
                             </div>
 
-                            <div class="control-group" style="margin-bottom: 15px;">
+                            <div class="control-group">
                                 <label for="googleApiKeyInput">Google API Key</label>
-                                <input type="password" id="googleApiKeyInput" placeholder="Enter your Google API Key" style="font-family: monospace;">
+                                <input type="password" id="googleApiKeyInput" placeholder="Enter your Google API Key">
                             </div>
 
-                            <div class="control-group" style="margin-bottom: 15px;">
+                            <div class="control-group">
                                 <label for="anthropicUrlInput">Anthropic API Worker URL</label>
-                                <input type="text" id="anthropicUrlInput" placeholder="https://apex-proxy.your-username.workers.dev" style="font-family: monospace;">
-                                <div style="font-size: 11px; color: #78786e; margin-top: 4px;">
+                                <input type="text" id="anthropicUrlInput" placeholder="https://apex-proxy.your-username.workers.dev">
+                                <div class="api-helper-text">
                                     Your Cloudflare Worker URL (see setup guide)
                                 </div>
                             </div>
 
-                            <button onclick="saveApiKeys()" style="padding: 10px 20px; font-size: 14px; background: #f59e0b; color: #000; font-weight: 600; margin-right: 10px;">
+                            <button class="btn-save" onclick="saveApiKeys()">
                                 Save Locally
                             </button>
 
-                            <button onclick="syncKeysToGoogleDrive()" style="padding: 10px 20px; font-size: 14px; background: #10b981; color: white; font-weight: 600; margin-right: 10px;">
+                            <button class="btn-sync" onclick="syncKeysToGoogleDrive()">
                                 Sync to Google Drive
                             </button>
 
-                            <button onclick="downloadKeysFromGoogleDrive()" style="padding: 10px 20px; font-size: 14px; background: #3b82f6; color: white; font-weight: 600;">
+                            <button class="btn-download" onclick="downloadKeysFromGoogleDrive()">
                                 Download from Google Drive
                             </button>
 
-                            <div id="apiKeySaveStatus" style="font-size: 12px; margin-top: 10px; display: none;"></div>
+                            <div id="apiKeySaveStatus"></div>
                         </div>
 
-                        <div id="apiConfigStatus" style="font-size: 11px; margin-top: 10px;">
-                            <div id="polygonStatus" style="color: #78786e;">Polygon: Not configured</div>
-                            <div id="googleStatus" style="color: #78786e;">Google Drive: Not configured</div>
-                            <div id="anthropicStatus" style="color: #78786e;">Anthropic: Not configured</div>
+                        <div id="apiConfigStatus">
+                            <div id="polygonStatus" class="api-status-line">Polygon: Not configured</div>
+                            <div id="googleStatus" class="api-status-line">Google Drive: Not configured</div>
+                            <div id="anthropicStatus" class="api-status-line">Anthropic: Not configured</div>
                         </div>
 
-                        <div id="apiUsageStatus" style="font-size: 11px; color: #34d399; margin-top: 8px; font-weight: 600;">
+                        <div id="apiUsageStatus">
                             API Calls: 0 used today | Unlimited remaining
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="controls-grid">
                         <div class="control-group">
                             <label for="initialBalance">Initial Balance ($)</label>
                             <input type="number" id="initialBalance" value="10000" step="1000">
@@ -2917,38 +3068,38 @@
                     <button onclick="addWeeklyFunding()" class="secondary">Add Weekly Funding</button>
 
                     <!-- Portfolio Backup & Recovery -->
-                    <div style="margin-top: 20px; padding: 15px; background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.25); border-radius: 8px;">
-                        <div style="font-size: 14px; color: #f5f5f0; margin-bottom: 10px; font-weight: 600;">
+                    <div class="backup-panel">
+                        <div class="backup-panel-title">
                             Portfolio Backup & Recovery
                         </div>
 
                         <!-- Save to Drive -->
-                        <div style="margin-bottom: 12px;">
-                            <div style="font-size: 12px; color: #a8a8a0; margin-bottom: 8px;">
+                        <div class="backup-section">
+                            <div class="backup-panel-description">
                                 Save your current portfolio to Google Drive as a backup.
                             </div>
-                            <button onclick="manualSaveToDrive()" style="padding: 8px 16px; font-size: 13px; background: #10b981; color: white; font-weight: 600;">
+                            <button class="btn-drive-save" onclick="manualSaveToDrive()">
                                 Save Portfolio to Google Drive
                             </button>
                         </div>
 
-                        <div style="border-top: 1px solid rgba(255, 200, 100, 0.1); margin: 12px 0;"></div>
+                        <div class="backup-divider"></div>
 
                         <!-- Restore from local file -->
                         <div>
-                            <div style="font-size: 12px; color: #a8a8a0; margin-bottom: 8px;">
+                            <div class="backup-panel-description">
                                 Restore from a previously saved Apex_Portfolio.json file on your computer.
                             </div>
                             <input type="file" id="localPortfolioFile" accept=".json" style="display: none;" onchange="restoreFromLocalFile(this)">
-                            <button onclick="document.getElementById('localPortfolioFile').click()" style="padding: 8px 16px; font-size: 13px; background: #a78bfa; color: white; font-weight: 600; margin-right: 10px;">
+                            <button class="btn-restore" onclick="document.getElementById('localPortfolioFile').click()">
                                 Restore from Local File
                             </button>
-                            <button onclick="clearLocalStorage()" style="padding: 8px 16px; font-size: 13px; background: transparent; color: #f87171; border: 1px solid rgba(248,113,113,0.3); font-weight: 600;">
+                            <button class="btn-clear" onclick="clearLocalStorage()">
                                 Clear Local Storage
                             </button>
                         </div>
 
-                        <div id="recoveryStatus" style="font-size: 11px; margin-top: 8px; color: #78786e;"></div>
+                        <div id="recoveryStatus"></div>
                     </div>
                     <button onclick="resetAccount()" class="danger">Reset Account</button>
                 </div>
@@ -2984,7 +3135,7 @@
                         <div class="index-price" id="winRate">0%</div>
                         <div class="index-change" id="winLossRatio">0W / 0L</div>
                     </div>
-                    <div class="index-card expandable-card" onclick="toggleAnalyticsExpansion('bestTrade', this)">
+                    <div class="index-card expandable-card" role="button" tabindex="0" aria-label="Expand best trade details" onclick="toggleAnalyticsExpansion('bestTrade', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnalyticsExpansion('bestTrade',this)}">
                         <span class="expand-icon">&#9662;</span>
                         <div class="index-header">
                             <div class="index-name">Best Trade</div>
@@ -2993,7 +3144,7 @@
                         <div class="index-price" id="bestTrade">--</div>
                         <div class="index-change positive" id="bestTradeGain">+0%</div>
                     </div>
-                    <div class="index-card expandable-card" onclick="toggleAnalyticsExpansion('worstTrade', this)">
+                    <div class="index-card expandable-card" role="button" tabindex="0" aria-label="Expand worst trade details" onclick="toggleAnalyticsExpansion('worstTrade', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnalyticsExpansion('worstTrade',this)}">
                         <span class="expand-icon">&#9662;</span>
                         <div class="index-header">
                             <div class="index-name">Worst Trade</div>
@@ -3035,7 +3186,7 @@
             </div>
 
             <!-- Market Regime Indicator -->
-            <div class="regime-banner" id="regimeBanner" style="display: none;">
+            <div class="regime-banner" id="regimeBanner" style="display: none;" aria-live="polite">
                 <div class="regime-banner-inner">
                     <div class="regime-label" id="regimeLabel">--</div>
                     <div class="regime-description" id="regimeDescription">Run AI Analysis to detect market regime</div>
@@ -3046,7 +3197,7 @@
 
             <!-- Holdings Detail (collapsible) -->
             <div class="card collapsible-section" id="holdingsDetailSection">
-                <div class="section-header" onclick="toggleSection('holdingsDetail')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="holdingsDetailBody" onclick="toggleSection('holdingsDetail')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('holdingsDetail')}">
                     <h2 class="chart-title">Current Holdings</h2>
                     <span class="toggle-icon" id="holdingsDetailToggle">&#9662;</span>
                 </div>
@@ -3064,7 +3215,7 @@
 
             <!-- Decision Reasoning (collapsible) -->
             <div class="chart-card card collapsible-section" id="decisionReasoningSection">
-                <div class="section-header" onclick="toggleSection('decisionReasoning')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="decisionReasoningBody" onclick="toggleSection('decisionReasoning')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('decisionReasoning')}">
                     <h2 class="chart-title">APEX's Decision Reasoning</h2>
                     <span class="toggle-icon" id="decisionReasoningToggle">&#9662;</span>
                 </div>
@@ -3079,7 +3230,7 @@
 
             <!-- Candidate Scorecard (collapsible, collapsed by default) -->
             <div class="card collapsible-section" id="candidateScorecardSection">
-                <div class="section-header" onclick="toggleSection('candidateScorecard')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="candidateScorecardBody" onclick="toggleSection('candidateScorecard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('candidateScorecard')}">
                     <h2 class="chart-title">Candidate Scorecard</h2>
                     <span class="toggle-icon collapsed" id="candidateScorecardToggle">&#9662;</span>
                 </div>
@@ -3092,7 +3243,7 @@
 
             <!-- Sector Rotation Heatmap (collapsible, collapsed by default) -->
             <div class="card collapsible-section" id="sectorRotationSection">
-                <div class="section-header" onclick="toggleSection('sectorRotation')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="sectorRotationBody" onclick="toggleSection('sectorRotation')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('sectorRotation')}">
                     <h2 class="chart-title">Sector Rotation Heatmap</h2>
                     <span class="toggle-icon collapsed" id="sectorRotationToggle">&#9662;</span>
                 </div>
@@ -3105,12 +3256,12 @@
 
             <!-- Learning Insights Section (collapsible) -->
             <div class="card collapsible-section" id="learningInsightsSection">
-                <div class="section-header" onclick="toggleSection('learningInsights')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="learningInsightsBody" onclick="toggleSection('learningInsights')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('learningInsights')}">
                     <h2 class="chart-title">Learning Insights</h2>
                     <span class="toggle-icon collapsed" id="learningInsightsToggle">&#9662;</span>
                 </div>
                 <div class="section-body collapsed" id="learningInsightsBody">
-                    <div class="learning-tag" style="display: inline-block; margin-bottom: 12px;">Rules derived from trade history</div>
+                    <div class="learning-tag">Rules derived from trade history</div>
                     <div id="learningInsights">
                         <div class="empty-state">
                             No trades yet - Learning will begin after your first completed trade
@@ -3121,12 +3272,12 @@
 
             <!-- Activity Feed (collapsible) -->
             <div class="activity-feed card collapsible-section" id="activityFeedSection">
-                <div class="section-header" onclick="toggleSection('activityFeed')">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="activityFeedBody" onclick="toggleSection('activityFeed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('activityFeed')}">
                     <h2 class="chart-title">Recent Activity</h2>
                     <span class="toggle-icon" id="activityFeedToggle">&#9662;</span>
                 </div>
                 <div class="section-body" id="activityFeedBody">
-                    <div id="activityFeed">
+                    <div id="activityFeed" aria-live="polite">
                         <div class="empty-state">
                             No activity yet
                         </div>
@@ -3160,7 +3311,7 @@
 
     <!-- Result Modal -->
     <div class="modal" id="resultModal" onclick="if(event.target===this)this.classList.remove('active')">
-        <div class="modal-content" style="max-width: 440px;">
+        <div class="modal-content modal-narrow">
             <div id="resultModalBody"></div>
             <button class="result-modal-close" onclick="document.getElementById('resultModal').classList.remove('active')">Close</button>
         </div>
@@ -4101,6 +4252,13 @@
         // Initialize account
         function initializeAccount() {
             const balance = parseFloat(document.getElementById('initialBalance').value);
+            if (!balance || balance <= 0 || !Number.isFinite(balance)) {
+                alert('Please enter a valid positive number for the starting balance.');
+                return;
+            }
+            if (portfolio.transactions.length > 0 || Object.keys(portfolio.holdings).length > 0) {
+                if (!confirm(`⚠️ This will reset your portfolio to $${balance.toFixed(2)}.\n\nAll current holdings (${Object.keys(portfolio.holdings).length} positions) and transaction history (${portfolio.transactions.length} trades) will be erased.\n\nContinue?`)) return;
+            }
             portfolio.cash = balance;
             portfolio.initialBalance = balance;
             portfolio.totalDeposits = balance; // Track initial deposit
@@ -5110,6 +5268,53 @@
             };
         }
 
+
+        // Shared scoring function — used by both runAIAnalysis and testDataFetch
+        function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg }) {
+            let sectorBonus = 0;
+            if (sectorFlow === 'inflow') sectorBonus = 2;
+            else if (sectorFlow === 'modest-inflow') sectorBonus = 1;
+            else if (sectorFlow === 'outflow') sectorBonus = -1;
+
+            const accelBonus = isAccelerating && momentumScore >= 6 ? 1.5 : 0;
+            const consistencyBonus = (upDays >= 3 && totalDays >= 4) ? 1.0 : 0;
+            const structureBonus = (structureScore || 0) * 0.75;
+
+            const chg = todayChange || 0;
+            const runnerPenalty = chg >= 15 ? -4 : chg >= 10 ? -3 : chg >= 7 ? -2 : chg >= 5 ? -1 : 0;
+
+            const extensionPenalty = (momentumScore >= 9 || rsNormalized >= 8.5) ? -3
+                : (momentumScore >= 8 || rsNormalized >= 8) ? -2
+                : (momentumScore >= 7.5 || rsNormalized >= 7.5) ? -1
+                : 0;
+
+            const ret5d = totalReturn5d ?? 0;
+            const pullbackBonus = (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow' && sectorFlow !== 'modest-outflow') ? 2
+                : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 0 && sectorFlow !== 'outflow') ? 1
+                : 0;
+
+            const rsiBonusPenalty = rsi != null ? (rsi < 30 ? 1.5 : rsi > 70 ? -1.0 : 0) : 0;
+            const macdBonus = macdCrossover === 'bullish' ? 1.0 : macdCrossover === 'bearish' ? -1.0 : 0;
+
+            const dtc = daysToCover || 0;
+            const squeezeBonus = (dtc > 5 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? 1.5
+                : (dtc > 3 && (structureScore ?? 0) >= 1) ? 0.75
+                : 0;
+
+            const vt = volumeTrend ?? 1;
+            const volumeBonus = vt > 1.2 ? 0.5 : vt < 0.8 ? -0.5 : 0;
+
+            // FVG bonus: bullish FVG on pullback suggests a support zone
+            const fvgBonus = (fvg === 'bullish' && ret5d < 0 && (structureScore ?? 0) >= 0) ? 0.5
+                : (fvg === 'bearish' && (structureScore ?? 0) < 0) ? -0.5
+                : 0;
+
+            const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus
+                + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty
+                + rsiBonusPenalty + macdBonus + squeezeBonus + volumeBonus + fvgBonus;
+
+            return compositeScore;
+        }
 
         // BULK SNAPSHOT: Fetch all tickers in ONE call instead of 300 individual calls
         let bulkSnapshotCache = {};
@@ -6781,17 +6986,11 @@
                     const momScore = momentum?.score || 0;
                     const rsNorm = ((rs?.rsScore || 50) / 100) * 10;
                     const flow = sectorRotation[sector]?.moneyFlow;
-                    const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
-                    const strBonus = (struct?.structureScore || 0) * 0.75;
-                    // Technical indicators
                     const drBars = multiDayCache[symbol];
                     const drRsi = calculateRSI(drBars);
                     const drMacd = calculateMACD(drBars);
-                    const drRsiBonus = drRsi != null ? (drRsi < 30 ? 1.5 : drRsi > 70 ? -1.0 : 0) : 0;
-                    const drMacdBonus = drMacd?.crossover === 'bullish' ? 1.0 : drMacd?.crossover === 'bearish' ? -1.0 : 0;
                     const drDtc = shortInterestCache[symbol]?.daysToCover || 0;
                     const drStructScore = struct?.structureScore || 0;
-                    const drSqueezeBonus = (drDtc > 5 && drStructScore >= 1 && flow !== 'outflow') ? 1.5 : (drDtc > 3 && drStructScore >= 1) ? 0.75 : 0;
                     // Use snapshot changePercent, but on weekends/closed (0%) fall back to last bar's return
                     let dayChg = data.changePercent || 0;
                     if (dayChg === 0) {
@@ -6800,7 +6999,24 @@
                             dayChg = prev.c ? ((last.c - prev.c) / prev.c) * 100 : 0;
                         }
                     }
-                    dryRunScored.push({ symbol, compositeScore: momScore + rsNorm + sBonus + strBonus + drRsiBonus + drMacdBonus + drSqueezeBonus, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null });
+                    const compositeScore = calculateCompositeScore({
+                        momentumScore: momScore,
+                        rsNormalized: rsNorm,
+                        sectorFlow: flow,
+                        structureScore: drStructScore,
+                        isAccelerating: momentum?.isAccelerating,
+                        upDays: momentum?.upDays ?? 0,
+                        totalDays: momentum?.totalDays ?? 0,
+                        todayChange: dayChg,
+                        totalReturn5d: momentum?.totalReturn5d ?? 0,
+                        rsi: drRsi,
+                        macdCrossover: drMacd?.crossover,
+                        daysToCover: drDtc,
+                        volumeTrend: momentum?.volumeTrend ?? 1,
+                        fvg: struct?.fvg
+                    });
+                    const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
+                    dryRunScored.push({ symbol, compositeScore, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null });
                 });
 
                 // Fetch news for top candidates + holdings
@@ -6866,12 +7082,12 @@
                     console.log(`  ${symbol}: $${data.price.toFixed(2)} (${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%) | momentum:${mom.score} ${mom.trend} | structure:${struct.structureSignal} ${struct.choch ? 'CHoCH-' + struct.chochType : ''} ${struct.bos ? 'BOS-' + struct.bosType : ''}`);
                 });
                 
-                // Calculate cost if this were a real run
-                const estimatedTokens = 25000; // Updated estimate with structure data
+                // Calculate cost if this were a real run (Sonnet pricing as of 2025)
+                const estimatedTokens = 35000; // Input tokens per phase (structure + news + learning)
                 const costPer1MInputTokens = 3.00;
                 const costPer1MOutputTokens = 15.00;
-                const estimatedOutputTokens = 8000;
-                const estimatedCost = (estimatedTokens / 1000000) * costPer1MInputTokens + (estimatedOutputTokens / 1000000) * costPer1MOutputTokens * 2; // 2 phases
+                const estimatedOutputTokens = 10000; // Phase 1: ~4k, Phase 2: ~6k
+                const estimatedCost = ((estimatedTokens * 2) / 1000000) * costPer1MInputTokens + ((estimatedOutputTokens * 2) / 1000000) * costPer1MOutputTokens;
                 
                 console.log('\n💰 If this were a real run:');
                 console.log(`  - Input tokens: ~${estimatedTokens.toLocaleString()} (×2 phases)`);
@@ -7102,6 +7318,35 @@
                 addActivity('Analysis already in progress — please wait', 'warning');
                 return;
             }
+            // MARKET HOURS CHECK: Warn BEFORE activating spinner to avoid frozen UI
+            const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            const day = etNow.getDay();
+            const etTime = etNow.getHours() * 60 + etNow.getMinutes();
+            const isWeekday = day >= 1 && day <= 5;
+            const isDuringMarketHours = isWeekday && etTime >= 570 && etTime < 960; // 9:30 AM - 4:00 PM ET
+
+            if (!isWeekday) {
+                if (!confirm(
+                    `📅 WEEKEND — Markets are closed\n\n` +
+                    `Running analysis now will use the same data as Friday's close.\n` +
+                    `This costs ~$3-5 in API fees for results that won't change until Monday.\n\n` +
+                    `Continue anyway?`
+                )) {
+                    addActivity('⏸️ Analysis skipped — markets closed (weekend)', 'warning');
+                    return;
+                }
+            } else if (!isDuringMarketHours) {
+                const timeStr = etTime < 570 ? 'before market open (ET)' : 'after market close (ET)';
+                if (!confirm(
+                    `🕐 Markets are currently closed (${timeStr})\n\n` +
+                    `Price data won't reflect live trading. Analysis will use ${etTime < 570 ? "yesterday's closing" : "today's closing"} data.\n\n` +
+                    `Continue anyway?`
+                )) {
+                    addActivity(`⏸️ Analysis skipped — markets closed (${timeStr})`, 'warning');
+                    return;
+                }
+            }
+
             isAnalysisRunning = true;
             const thinking = document.getElementById('aiThinking');
             const thinkingDetail = document.getElementById('thinkingDetail');
@@ -7111,42 +7356,10 @@
             let aiResponse = '';  // Declare here so catch block can access it
 
             try {
-                // MARKET HOURS CHECK: Warn if markets are closed to avoid wasting API costs
-                const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-                const day = etNow.getDay();
-                const etTime = etNow.getHours() * 60 + etNow.getMinutes();
-                const isWeekday = day >= 1 && day <= 5;
-                const isDuringMarketHours = isWeekday && etTime >= 570 && etTime < 960; // 9:30 AM - 4:00 PM ET
-                
-                if (!isWeekday) {
-                    const proceed = confirm(
-                        `📅 WEEKEND — Markets are closed\n\n` +
-                        `Running analysis now will use the same data as Friday's close.\n` +
-                        `This costs ~$3-5 in API fees for results that won't change until Monday.\n\n` +
-                        `Continue anyway?`
-                    );
-                    if (!proceed) {
-                        thinking.classList.remove('active');
-                        addActivity('⏸️ Analysis skipped — markets closed (weekend)', 'warning');
-                        return;
-                    }
-                } else if (!isDuringMarketHours) {
-                    const timeStr = etTime < 570 ? 'before market open (ET)' : 'after market close (ET)';
-                    const proceed = confirm(
-                        `🕐 Markets are currently closed (${timeStr})\n\n` +
-                        `Price data won't reflect live trading. Analysis will use ${currentTime < marketOpen ? "yesterday's closing" : "today's closing"} data.\n\n` +
-                        `Continue anyway?`
-                    );
-                    if (!proceed) {
-                        thinking.classList.remove('active');
-                        addActivity(`⏸️ Analysis skipped — markets closed (${timeStr})`, 'warning');
-                        return;
-                    }
-                }
 
                 // Update post-exit tracking for closed trades
                 thinkingDetail.textContent = 'Checking post-exit price tracking...';
-                await updatePostExitTracking();
+                try { await updatePostExitTracking(); } catch (e) { console.warn('Post-exit tracking failed (non-fatal):', e.message); }
                 
                 // Smart screener picks stocks dynamically
                 const symbols = await screenStocks();
@@ -7258,19 +7471,17 @@
                 }
                 
                 // CHECK PRICE FRESHNESS - Don't waste $3 on stale data!
+                // Use median age (not worst-case outlier) for a representative freshness check
                 const now = Date.now();
-                let oldestData = 0;
-                let oldestSymbol = '';
-                Object.entries(marketData).forEach(([symbol, data]) => {
-                    const age = now - new Date(data.timestamp).getTime();
-                    if (age > oldestData) {
-                        oldestData = age;
-                        oldestSymbol = symbol;
-                    }
-                });
-                
-                const minutesOld = Math.floor(oldestData / 60000);
-                console.log(`Oldest price data: ${oldestSymbol} is ${minutesOld} minutes old`);
+                const ages = Object.entries(marketData).map(([symbol, data]) => ({
+                    symbol,
+                    age: now - new Date(data.timestamp).getTime()
+                })).sort((a, b) => b.age - a.age);
+                const medianAge = ages.length > 0 ? ages[Math.floor(ages.length / 2)].age : 0;
+                const oldestSymbol = ages.length > 0 ? ages[0].symbol : '';
+
+                const minutesOld = Math.floor(medianAge / 60000);
+                console.log(`Median data age: ${minutesOld} min (oldest: ${ages[0]?.symbol} at ${Math.floor((ages[0]?.age || 0) / 60000)} min)`);
                 
                 // Warn if data is >30 minutes old (market might be closed or data stale)
                 if (minutesOld > 30) {
@@ -7397,66 +7608,22 @@
                 
                 // 1. Score every stock with a composite ranking
                 const scoredStocks = Object.entries(enhancedMarketData).map(([symbol, data]) => {
-                    const momentumScore = data.momentum?.score || 0;
-                    const rsNormalized = ((data.relativeStrength?.rsScore || 50) / 100) * 10;
-                    
-                    let sectorBonus = 0;
-                    const flow = data.sectorRotation?.moneyFlow;
-                    if (flow === 'inflow') sectorBonus = 2;
-                    else if (flow === 'modest-inflow') sectorBonus = 1;
-                    else if (flow === 'outflow') sectorBonus = -1;
-                    
-                    // Acceleration bonus: reward building momentum, not single-day spikes
-                    const accelBonus = data.momentum?.isAccelerating && data.momentum?.score >= 6 ? 1.5 : 0;
-                    // Consistency bonus: reward multi-day uptrends
-                    const consistencyBonus = (data.momentum?.upDays >= 3 && data.momentum?.totalDays >= 4) ? 1.0 : 0;
-                    // bigMoverBonus disabled: rewarding stocks already up >5% today is chasing by definition
-                    const bigMoverBonus = 0;
-                    // Structure bonus: reward bullish structure, BOS, bullish CHoCH; penalize bearish
-                    const structureBonus = (data.marketStructure?.structureScore || 0) * 0.75;
-
-                    // Intraday runner penalty: stocks already up big today are chasing risk
-                    const todayChg = data.momentum?.todayChange || data.changePercent || 0;
-                    const runnerPenalty = todayChg >= 15 ? -4
-                        : todayChg >= 10 ? -3
-                        : todayChg >= 7 ? -2
-                        : todayChg >= 5 ? -1
-                        : 0;
-
-                    // Extension penalty: stretched on momentum OR relative strength (not both required)
-                    const extensionPenalty = (momentumScore >= 9 || rsNormalized >= 8.5) ? -3
-                        : (momentumScore >= 8 || rsNormalized >= 8) ? -2
-                        : (momentumScore >= 7.5 || rsNormalized >= 7.5) ? -1
-                        : 0;
-
-                    // Pullback bonus: stock dipped but structure/sector still supportive
-                    const totalReturn5d = data.momentum?.totalReturn5d ?? 0;
-                    const pullbackBonus = (totalReturn5d >= -8 && totalReturn5d <= -2
-                        && (data.marketStructure?.structureScore ?? 0) >= 1
-                        && data.sectorRotation?.moneyFlow !== 'outflow'
-                        && data.sectorRotation?.moneyFlow !== 'modest-outflow') ? 2
-                        : (totalReturn5d >= -5 && totalReturn5d < 0
-                        && (data.marketStructure?.structureScore ?? 0) >= 0
-                        && data.sectorRotation?.moneyFlow !== 'outflow') ? 1
-                        : 0;
-
-                    // RSI bonus/penalty: oversold = opportunity, overbought = caution
-                    const stockRsi = data.rsi;
-                    const rsiBonusPenalty = stockRsi != null ? (stockRsi < 30 ? 1.5 : stockRsi > 70 ? -1.0 : 0) : 0;
-
-                    // MACD bonus: bullish crossover = momentum shifting positive
-                    const macdCross = data.macd?.crossover;
-                    const macdBonus = macdCross === 'bullish' ? 1.0 : macdCross === 'bearish' ? -1.0 : 0;
-
-                    // Squeeze bonus: high short interest + bullish structure = squeeze potential
-                    const dtc = data.shortInterest?.daysToCover || 0;
-                    const structScore = data.marketStructure?.structureScore ?? 0;
-                    const squeezeBonus = (dtc > 5 && structScore >= 1 && data.sectorRotation?.moneyFlow !== 'outflow') ? 1.5
-                        : (dtc > 3 && structScore >= 1) ? 0.75
-                        : 0;
-
-                    const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus + bigMoverBonus + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + rsiBonusPenalty + macdBonus + squeezeBonus;
-                    
+                    const compositeScore = calculateCompositeScore({
+                        momentumScore: data.momentum?.score || 0,
+                        rsNormalized: ((data.relativeStrength?.rsScore || 50) / 100) * 10,
+                        sectorFlow: data.sectorRotation?.moneyFlow,
+                        structureScore: data.marketStructure?.structureScore ?? 0,
+                        isAccelerating: data.momentum?.isAccelerating,
+                        upDays: data.momentum?.upDays ?? 0,
+                        totalDays: data.momentum?.totalDays ?? 0,
+                        todayChange: data.momentum?.todayChange || data.changePercent || 0,
+                        totalReturn5d: data.momentum?.totalReturn5d ?? 0,
+                        rsi: data.rsi,
+                        macdCrossover: data.macd?.crossover,
+                        daysToCover: data.shortInterest?.daysToCover || 0,
+                        volumeTrend: data.momentum?.volumeTrend ?? 1,
+                        fvg: data.marketStructure?.fvg
+                    });
                     return { symbol, compositeScore, data };
                 });
                 
@@ -7733,7 +7900,9 @@ Include a decision for EVERY holding.` }]
                     if (p1Data.type === 'error' || p1Data.error) {
                         const em = p1Data.error?.message || 'Phase 1 error';
                         if (em.includes('rate_limit')) throw new Error('Rate limit on Phase 1! Wait 60s. 🕐');
+                        if (em.includes('overloaded')) throw new Error('API overloaded on Phase 1 — try again shortly.');
                         console.warn('Phase 1 error (non-fatal):', em);
+                        addActivity(`⚠️ Phase 1 returned an error: ${em} — sell analysis may be missing`, 'warning');
                     } else {
                         if (p1Data.stop_reason === 'max_tokens') {
                             console.warn('⚠️ Phase 1 TRUNCATED — hit max_tokens limit! Response may be incomplete. Consider increasing max_tokens.');
@@ -7825,11 +7994,22 @@ Include a decision for EVERY holding.` }]
                                     for (const sym of holdingSymbolsList) {
                                         if (!phase1MentionedSymbols.has(sym)) {
                                             console.log(`📊 Synthesizing HOLD for ${sym} (not mentioned in Phase 1 response)`);
+                                            // Derive conviction from technical indicators rather than default 5
+                                            const emd = enhancedMarketData[sym];
+                                            let synthConviction = 5;
+                                            if (emd) {
+                                                const rsi = emd.rsi;
+                                                const struct = emd.marketStructure?.structure;
+                                                const flow = emd.sectorRotation?.moneyFlow;
+                                                if (rsi && rsi >= 40 && rsi <= 60 && struct === 'bullish' && flow === 'inflow') synthConviction = 7;
+                                                else if (struct === 'bullish' || flow === 'inflow') synthConviction = 6;
+                                                else if (struct === 'bearish' || flow === 'outflow') synthConviction = 4;
+                                            }
                                             phase1HoldDecisions.push({
                                                 action: 'HOLD',
                                                 symbol: sym,
                                                 shares: portfolio.holdings[sym],
-                                                conviction: 5,
+                                                conviction: synthConviction,
                                                 reasoning: 'Holding — not flagged for sale in Phase 1 review.'
                                             });
                                         }
@@ -9854,6 +10034,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         return false;
                     }
                 }
+                if (!shares || shares <= 0 || !Number.isFinite(shares)) {
+                    console.error(`❌ Invalid share count (${shares}) for SELL ${symbol} — skipping`);
+                    addActivity(`❌ Sell skipped for ${symbol}: invalid share count`, 'error');
+                    return false;
+                }
                 if ((portfolio.holdings[symbol] || 0) >= shares) {
                     const revenue = price * shares;
                     portfolio.cash += revenue;
@@ -9862,6 +10047,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (portfolio.holdings[symbol] === 0) {
                         delete portfolio.holdings[symbol];
                         if (portfolio.holdingTheses && portfolio.holdingTheses[symbol]) delete portfolio.holdingTheses[symbol];
+                    } else if (portfolio.holdingTheses && portfolio.holdingTheses[symbol]) {
+                        // Partial sell — update thesis with trim info
+                        portfolio.holdingTheses[symbol].lastTrimDate = new Date().toISOString();
+                        portfolio.holdingTheses[symbol].lastTrimPrice = price;
+                        portfolio.holdingTheses[symbol].lastTrimShares = shares;
+                        portfolio.holdingTheses[symbol].lastTrimReason = decision.reasoning || '';
                     }
 
                     // Find buy transactions for CURRENT position to calculate profit/loss
@@ -10355,10 +10546,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 lastEntry.timestamp = now.toISOString();
             }
 
-            // Hard cap: keep at most 3000 entries (prune oldest non-deposit entries)
+            // Hard cap: keep at most 3000 entries (prune oldest, but preserve deposit markers)
             if (portfolio.performanceHistory.length > 3000) {
                 const excess = portfolio.performanceHistory.length - 3000;
-                portfolio.performanceHistory.splice(0, excess);
+                let removed = 0;
+                portfolio.performanceHistory = portfolio.performanceHistory.filter((entry, i) => {
+                    if (removed >= excess) return true; // done pruning
+                    if (entry.deposit) return true; // preserve deposit markers
+                    removed++;
+                    return false;
+                });
             }
 
             await updatePerformanceChart();
@@ -10642,10 +10839,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     lastMarketRegime: null,
                     lastCandidateScores: null,
                     lastSectorRotation: null,
+                    lastVIX: null,
                     holdSnapshots: [],
-                    regimeHistory: []
+                    regimeHistory: [],
+                    blockedTrades: []
                 };
                 localStorage.removeItem('aiTradingPortfolio');
+                localStorage.removeItem('apexDecisionHistory');
+                _tradingRulesCache = null;
+                _tradingRulesCacheKey = -1;
                 document.getElementById('activityFeed').innerHTML = '<div class="empty-state">No activity yet</div>';
                 updateUI();
                 if (performanceChart) {
@@ -10806,7 +11008,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 updateCloudSyncStatus('⏳ Loading...', 'Downloading from Drive');
                 
                 // Search for existing portfolio file
-                const searchUrl = `https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_CONFIG.PORTFOLIO_FILENAME}' and trashed=false&fields=files(id,name)`;
+                const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name='" + GDRIVE_CONFIG.PORTFOLIO_FILENAME + "' and trashed=false")}&fields=files(id,name)`;
                 console.log('Searching for portfolio file:', GDRIVE_CONFIG.PORTFOLIO_FILENAME);
                 console.log('Search URL:', searchUrl);
                 
@@ -10838,7 +11040,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     }
 
                     const cloudPortfolio = await fileResponse.json();
-                    console.log('Downloaded portfolio from Google Drive:', cloudPortfolio);
+                    console.log('Downloaded portfolio from Google Drive:', Object.keys(cloudPortfolio.holdings || {}).length, 'positions');
 
                     // Validate required schema fields before accepting
                     if (typeof cloudPortfolio.cash !== 'number' || !cloudPortfolio.holdings || typeof cloudPortfolio.holdings !== 'object') {
@@ -10903,11 +11105,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             try {
                 updateCloudSyncStatus('⏳ Saving...', 'Uploading to Drive');
                 
-                console.log('Portfolio to save:', {
-                    cash: portfolio.cash,
-                    holdings: portfolio.holdings,
-                    transactions: portfolio.transactions.length
-                });
+                console.log('Portfolio to save:', Object.keys(portfolio.holdings).length, 'positions,', portfolio.transactions.length, 'transactions');
                 
                 const portfolioData = JSON.stringify(portfolio, null, 2);
                 console.log('Portfolio JSON size:', portfolioData.length, 'bytes');
@@ -11400,7 +11598,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             try {
                 // Search for existing folder
                 const searchResponse = await fetch(
-                    `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+                    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name='" + folderName + "' and mimeType='application/vnd.google-apps.folder' and trashed=false")}`,
                     {
                         headers: {
                             'Authorization': 'Bearer ' + accessToken
@@ -11800,7 +11998,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 // Timeline of recent transitions
                 if (regimeStats.recentTransitions.length > 1) {
                     html += `<div class="regime-timeline">`;
-                    for (const t of regimeStats.recentTransitions.reverse()) {
+                    for (const t of [...regimeStats.recentTransitions].reverse()) {
                         const dotColor = regimeColors[t.regime] || 'var(--text-muted)';
                         const fromLabel = t.from ? `${regimeLabels[t.from] || t.from} →` : '';
                         html += `<div class="regime-timeline-entry">
@@ -12316,6 +12514,11 @@ Current Portfolio:
             if (!body) return;
             body.classList.toggle('collapsed');
             if (icon) icon.classList.toggle('collapsed');
+            // Update ARIA state on the header button
+            const header = body.previousElementSibling;
+            if (header && header.hasAttribute('aria-expanded')) {
+                header.setAttribute('aria-expanded', !body.classList.contains('collapsed'));
+            }
         }
 
         // Analytics card expansion — only one open at a time
