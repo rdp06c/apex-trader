@@ -3932,15 +3932,11 @@
 
             try {
                 // MARKET HOURS CHECK: Warn if markets are closed to avoid wasting API costs
-                const marketCheckTime = new Date();
-                const day = marketCheckTime.getDay();
-                const hour = marketCheckTime.getHours();
-                const minute = marketCheckTime.getMinutes();
-                const currentTime = hour * 60 + minute;
-                const marketOpen = 9 * 60 + 30; // 9:30 AM local (approximation)
-                const marketClose = 16 * 60; // 4:00 PM local
+                const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+                const day = etNow.getDay();
+                const etTime = etNow.getHours() * 60 + etNow.getMinutes();
                 const isWeekday = day >= 1 && day <= 5;
-                const isDuringMarketHours = currentTime >= marketOpen && currentTime < marketClose;
+                const isDuringMarketHours = isWeekday && etTime >= 570 && etTime < 960; // 9:30 AM - 4:00 PM ET
                 
                 if (!isWeekday) {
                     const proceed = confirm(
@@ -3955,7 +3951,7 @@
                         return;
                     }
                 } else if (!isDuringMarketHours) {
-                    const timeStr = currentTime < marketOpen ? 'before market open' : 'after market close';
+                    const timeStr = etTime < 570 ? 'before market open (ET)' : 'after market close (ET)';
                     const proceed = confirm(
                         `🕐 Markets are currently closed (${timeStr})\n\n` +
                         `Price data won't reflect live trading. Analysis will use ${currentTime < marketOpen ? "yesterday's closing" : "today's closing"} data.\n\n` +
@@ -4051,7 +4047,7 @@
                 // Check if we got any data at all
                 if (Object.keys(marketData).length === 0) {
                     thinking.classList.remove('active');
-                    addActivity('🚫 Unable to fetch market data: ' + fetchErrors[0].error, 'error');
+                    addActivity('🚫 Unable to fetch market data: ' + (fetchErrors.length > 0 ? fetchErrors[0].error : 'unknown error'), 'error');
                     alert('Unable to fetch market data. Please check your connection and try again.');
                     return;
                 }
@@ -6662,6 +6658,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     return false; // Failed - insufficient funds
                 }
             } else if (decision.action === 'SELL') {
+                // Safety net: 24-hour sell block (primary enforcement is in Phase 1 filtering)
+                const sellBuys = getCurrentPositionBuys(symbol);
+                if (sellBuys.length > 0) {
+                    const holdHours = (Date.now() - new Date(sellBuys[0].timestamp).getTime()) / 3600000;
+                    if (holdHours < 24) {
+                        console.warn(`⚠️ executeSingleTrade: blocking sell of ${symbol} (held only ${holdHours.toFixed(1)}hrs)`);
+                        addActivity(`⚠️ Anti-whipsaw blocked sell of ${symbol} (held < 24hrs)`, 'warning');
+                        return false;
+                    }
+                }
                 if ((portfolio.holdings[symbol] || 0) >= shares) {
                     const revenue = price * shares;
                     portfolio.cash += revenue;
@@ -7075,7 +7081,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 </div>
                             </div>
                             ${reasoning ? `
-                            <div class="holding-card-catalyst" onclick="event.stopPropagation(); showCatalystPopover(this, '${symbol}');" data-full-catalyst="${reasoning.replace(/'/g, '&#39;').replace(/"/g, '&quot;')}">
+                            <div class="holding-card-catalyst" onclick="event.stopPropagation(); showCatalystPopover(this, '${symbol}');" data-full-catalyst="${escapeHtml(reasoning)}">
                                 <span class="catalyst-label">View Catalyst</span>
                             </div>
                             ` : ''}
@@ -7224,7 +7230,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         // Escape HTML entities to prevent XSS from AI/user content
         function escapeHtml(str) {
-            if (typeof str !== 'string') return str;
+            if (typeof str !== 'string') return String(str ?? '');
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         }
 
@@ -7793,8 +7799,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Convert to percentages (based on total portfolio)
             const sectorPercentages = {};
-            for (const [sector, value] of Object.entries(sectorValues)) {
-                sectorPercentages[sector] = (value / totalPortfolioValue) * 100;
+            if (totalPortfolioValue > 0) {
+                for (const [sector, value] of Object.entries(sectorValues)) {
+                    sectorPercentages[sector] = (value / totalPortfolioValue) * 100;
+                }
             }
 
             // Update chart
