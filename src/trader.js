@@ -1227,11 +1227,11 @@
                 }
             } catch (e) { console.warn('Failed to restore multiDayCache:', e.message); multiDayCache = {}; }
 
-            const BATCH = 50, DELAY = 300;
+            const BATCH = 50;
             for (let i = 0; i < symbols.length; i += BATCH) {
                 const batch = symbols.slice(i, i + BATCH);
                 await Promise.all(batch.map(s => fetch5DayHistory(s)));
-                if (i + BATCH < symbols.length) await new Promise(r => setTimeout(r, DELAY));
+                if (i + BATCH < symbols.length) await new Promise(r => setTimeout(r, 50));
             }
             console.log(`✅ Fetched 5-day history for ${Object.keys(multiDayCache).length} stocks (${symbols.length} new)`);
 
@@ -1283,7 +1283,7 @@
 
             console.log(`📊 Fetching grouped daily bars for ${tradingDates.length} trading days...`);
 
-            const BATCH = 5, DELAY = 100;
+            const BATCH = 20;
             let fetchedDates = 0, skippedDates = 0;
 
             for (let i = 0; i < tradingDates.length; i += BATCH) {
@@ -1314,8 +1314,6 @@
                         multiDayCache[bar.T].push({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v, t: bar.t });
                     }
                 }
-
-                if (i + BATCH < tradingDates.length) await new Promise(r => setTimeout(r, DELAY));
             }
 
             // Sort each ticker's bars by timestamp ascending
@@ -1449,7 +1447,7 @@
             }
 
             console.log(`📋 Fetching ticker details for ${uncached.length} stocks...`);
-            const BATCH = 20, DELAY = 100;
+            const BATCH = 50;
             let fetched = 0;
             for (let i = 0; i < uncached.length; i += BATCH) {
                 const batch = uncached.slice(i, i + BATCH);
@@ -1473,7 +1471,7 @@
                         console.warn(`Ticker details failed for ${symbol}:`, err.message);
                     }
                 }));
-                if (i + BATCH < uncached.length) await new Promise(r => setTimeout(r, DELAY));
+                if (i + BATCH < uncached.length) await new Promise(r => setTimeout(r, 50));
             }
 
             console.log(`✅ Ticker details: ${fetched} new, ${symbols.length - uncached.length} cached`);
@@ -1569,7 +1567,7 @@
             }
 
             console.log(`📰 Fetching news for ${uncached.length} stocks...`);
-            const BATCH = 10, DELAY = 100;
+            const BATCH = 25;
             let fetched = 0;
             for (let i = 0; i < uncached.length; i += BATCH) {
                 const batch = uncached.slice(i, i + BATCH);
@@ -1600,7 +1598,7 @@
                         console.warn(`News fetch failed for ${symbol}:`, err.message);
                     }
                 }));
-                if (i + BATCH < uncached.length) await new Promise(r => setTimeout(r, DELAY));
+                if (i + BATCH < uncached.length) await new Promise(r => setTimeout(r, 50));
             }
 
             console.log(`✅ News: ${fetched} new, ${symbols.length - uncached.length} cached`);
@@ -3588,7 +3586,6 @@
                     if (missingSymbols.length > 0) {
                         thinkingDetail.textContent = `🧪 Fetching ${missingSymbols.length} remaining stocks...`;
                         const BATCH_SIZE = 50;
-                        const BATCH_DELAY_MS = 300;
                         for (let i = 0; i < missingSymbols.length; i += BATCH_SIZE) {
                             const batch = missingSymbols.slice(i, i + BATCH_SIZE);
                             const batchResults = await Promise.all(batch.map(async (symbol) => {
@@ -3603,9 +3600,7 @@
                                 if (result.success) marketData[result.symbol] = result.data;
                                 else fetchErrors.push({ symbol: result.symbol, error: result.error });
                             });
-                            if (i + BATCH_SIZE < missingSymbols.length) {
-                                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-                            }
+                            if (i + BATCH_SIZE < missingSymbols.length) await new Promise(r => setTimeout(r, 50));
                         }
                     }
                     console.log(`✅ Bulk snapshot: ${Object.keys(marketData).length}/${symbols.length} stocks`);
@@ -3613,7 +3608,6 @@
                     // Fallback to individual calls
                     console.warn('Bulk snapshot failed, falling back to individual calls');
                     const BATCH_SIZE_DR = 50;
-                    const BATCH_DELAY_DR = 1200;
                     for (let i = 0; i < symbols.length; i += BATCH_SIZE_DR) {
                         const batch = symbols.slice(i, i + BATCH_SIZE_DR);
                         thinkingDetail.textContent = `🧪 Fetching batch ${Math.floor(i / BATCH_SIZE_DR) + 1}/${Math.ceil(symbols.length / BATCH_SIZE_DR)}...`;
@@ -3629,9 +3623,7 @@
                             if (result.success) marketData[result.symbol] = result.data;
                             else fetchErrors.push({ symbol: result.symbol, error: result.error });
                         });
-                        if (i + BATCH_SIZE_DR < symbols.length) {
-                            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_DR));
-                        }
+                        if (i + BATCH_SIZE_DR < symbols.length) await new Promise(r => setTimeout(r, 50));
                     }
                 }
                 
@@ -4084,9 +4076,8 @@
                         console.log(`Bulk snapshot missing ${missingSymbols.length} symbols, fetching individually...`);
                         thinkingDetail.textContent = `Fetching ${missingSymbols.length} remaining stocks...`;
                         
-                        // Fetch missing ones individually (small batch)
+                        // Fetch missing ones individually
                         const BATCH_SIZE = 50;
-                        const BATCH_DELAY_MS = 300;
                         for (let i = 0; i < missingSymbols.length; i += BATCH_SIZE) {
                             const batch = missingSymbols.slice(i, i + BATCH_SIZE);
                             const batchResults = await Promise.all(batch.map(async (symbol) => {
@@ -4101,23 +4092,20 @@
                                 if (result.success) marketData[result.symbol] = result.data;
                                 else fetchErrors.push({ symbol: result.symbol, error: result.error });
                             });
-                            if (i + BATCH_SIZE < missingSymbols.length) {
-                                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-                            }
+                            if (i + BATCH_SIZE < missingSymbols.length) await new Promise(r => setTimeout(r, 50));
                         }
                     }
                 } else {
                     // Bulk fetch failed — fall back to individual batched calls
                     console.warn('Bulk snapshot insufficient, falling back to individual calls');
                     const BATCH_SIZE = 50;
-                    const BATCH_DELAY_MS = 300;
-                    
+
                     for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
                         const batch = symbols.slice(i, i + BATCH_SIZE);
                         const batchNum = Math.floor(i / BATCH_SIZE) + 1;
                         const totalBatches = Math.ceil(symbols.length / BATCH_SIZE);
                         thinkingDetail.textContent = `Fetching batch ${batchNum}/${totalBatches} (${Object.keys(marketData).length} stocks so far)...`;
-                        
+
                         const batchResults = await Promise.all(batch.map(async (symbol) => {
                             try {
                                 const data = await getStockPrice(symbol);
@@ -4130,9 +4118,7 @@
                             if (result.success) marketData[result.symbol] = result.data;
                             else fetchErrors.push({ symbol: result.symbol, error: result.error });
                         });
-                        if (i + BATCH_SIZE < symbols.length) {
-                            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-                        }
+                        if (i + BATCH_SIZE < symbols.length) await new Promise(r => setTimeout(r, 50));
                     }
                 }
                 
