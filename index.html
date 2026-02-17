@@ -7413,7 +7413,7 @@
                     holdingSymbolsList.forEach(sym => { if (enhancedMarketData[sym]) holdingsData[sym] = enhancedMarketData[sym]; });
                     
                     const p1Data = await fetchAnthropicStreaming({
-                            model: 'claude-sonnet-4-5-20250929',
+                            model: 'claude-sonnet-4-6',
                             max_tokens: 6000,
                             tools: [{
                                 type: "web_search_20250305",
@@ -7752,7 +7752,7 @@ Include a decision for EVERY holding.` }]
 
                 // Call Claude API for BUY decisions (Phase 2) via Cloudflare Worker proxy
                 const data = await fetchAnthropicStreaming({
-                        model: 'claude-sonnet-4-5-20250929',
+                        model: 'claude-sonnet-4-6',
                         max_tokens: 10000,
                         tools: [{
                             type: "web_search_20250305",
@@ -11839,7 +11839,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 
                 // Call Claude API via Cloudflare Worker proxy
                 const data = await fetchAnthropicStreaming({
-                        model: 'claude-sonnet-4-5-20250929',
+                        model: 'claude-sonnet-4-6',
                         max_tokens: 1500,
                         system: `You are APEX (Autonomous Portfolio EXpert), an AI trading agent created by ARC Investments. Confident but self-aware trader, patient teacher who explains the "why" behind decisions, light humor to keep it engaging. Aggressive swing-trading strategy — calculated risks, let winners run, cut losers fast.
 

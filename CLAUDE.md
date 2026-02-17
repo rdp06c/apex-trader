@@ -199,8 +199,8 @@ The Anthropic API is not called directly from the browser. All Claude API calls 
 ### API Cost Consciousness
 - Massive Stocks Advanced + Indices Basic plan – real-time stock data, EOD index data, **unlimited API calls** (recommended <100 req/s to avoid throttling). Endpoints used: bulk snapshot (`/v2/snapshot`), grouped daily bars (`/v2/aggs/grouped`), ticker details (`/v3/reference/tickers`), short interest (`/stocks/v1/short-interest`), news (`/v2/reference/news`), VIX index (`/v2/aggs/ticker/I:VIX`), and per-ticker OHLCV bars as fallback (`/v2/aggs/ticker`). Caching (4hr TTL for individual prices, 15s for bulk snapshots, 15min for grouped bars, 1hr for news, 24hr for short interest, 7 days for ticker details, 4hr for VIX) is for performance/efficiency, not rate limit avoidance
 - Claude API calls are expensive – freshness checks prevent wasting analysis on stale data
-- Phase 1 uses `claude-sonnet-4-5-20250929` with `max_tokens: 6000`
-- Phase 2 uses `claude-sonnet-4-5-20250929` with `max_tokens: 10000` (prompt enforces "UNDER 3000 words" to prevent truncation; per-decision reasoning capped at 80-150 words, overall_reasoning at 150-250 words)
+- Phase 1 uses `claude-sonnet-4-6` with `max_tokens: 6000`
+- Phase 2 uses `claude-sonnet-4-6` with `max_tokens: 10000` (prompt enforces "UNDER 3000 words" to prevent truncation; per-decision reasoning capped at 80-150 words, overall_reasoning at 150-250 words)
 - Chat uses `max_tokens: 1500`
 - **Search token optimization**: Pre-loaded `recentNews` (headlines + machine sentiment from Polygon) and pre-loaded VIX level are injected into both Phase 1 and Phase 2 prompts. VIX pre-loading eliminates the "VIX level today" web search that previously consumed a Phase 1 search slot (~500-1500 tokens saved). Phase 1 uses up to 3 web searches (broader regime context + news gap filling for holdings with empty/stale news + alarming headline verification). Phase 2 uses up to 4 focused searches (catalyst verification, sector rotation, deep dive). Saves ~2,500-5,500 tokens per analysis cycle vs broad discovery searches.
 
