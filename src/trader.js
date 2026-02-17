@@ -6534,7 +6534,34 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Combine all decisions for display: sells (already executed) + validated buys + holds
             const validatedDecisions = [...sellDecisions, ...validatedBuyDecisions, ...holdDecisions];
-            
+
+            // If buys were dropped due to budget, amend reasoning/research to reflect reality
+            if (budgetWarning && buyDecisionsAll.length > 0) {
+                const validatedSymbols = new Set(validatedBuyDecisions.map(d => d.symbol));
+                const droppedBuys = buyDecisionsAll.filter(d => !validatedSymbols.has(d.symbol));
+                const trimmedBuys = validatedBuyDecisions.filter(d => {
+                    const original = buyDecisionsAll.find(o => o.symbol === d.symbol);
+                    return original && d.shares < original.shares;
+                });
+                const parts = [];
+                if (droppedBuys.length > 0) {
+                    parts.push(`buying ${droppedBuys.map(d => d.symbol).join(', ')} was dropped — not enough capital`);
+                }
+                if (trimmedBuys.length > 0) {
+                    parts.push(`${trimmedBuys.map(d => {
+                        const orig = buyDecisionsAll.find(o => o.symbol === d.symbol);
+                        return `${d.symbol} was reduced from ${orig.shares} to ${d.shares} shares`;
+                    }).join(', ')}`);
+                }
+                if (parts.length > 0) {
+                    const disclaimer = `\n\n⚠️ Budget adjustment: ${parts.join('; ')}. The analysis above was written before budget validation.`;
+                    overallReasoning += disclaimer;
+                    if (researchSummary) {
+                        researchSummary += disclaimer;
+                    }
+                }
+            }
+
             // Add overall reasoning to decision panel (with validated decisions)
             addDecisionReasoning({
                 action: validatedDecisions.length > 0 ? 'MULTI' : 'HOLD',
