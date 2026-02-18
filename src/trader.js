@@ -3080,7 +3080,27 @@
             }
 
             insights += `PERFORMANCE: ${s.wins}W-${s.losses}L (${s.winRate.toFixed(0)}%), Avg winner: +${s.avgWin.toFixed(1)}% (${s.avgWinDays.toFixed(1)}d), Avg loser: ${s.avgLoss.toFixed(1)}% (${s.avgLossDays.toFixed(1)}d)\n`;
-            insights += `RECENT: ${s.recentWins}W-${s.recentLosses}L — ${s.recentTrend}\n\n`;
+            insights += `RECENT: ${s.recentWins}W-${s.recentLosses}L — ${s.recentTrend}\n`;
+
+            // Exit timing insights
+            const exitData = analyzeExitTiming();
+            if (exitData.hasData) {
+                let exitLine = 'EXIT TIMING: ';
+                // Best hold period bucket (3+ trades minimum)
+                const bestBucket = Object.entries(exitData.holdBuckets)
+                    .filter(([, b]) => b.count >= 3)
+                    .sort((a, b) => b[1].winRate - a[1].winRate)[0];
+                if (bestBucket) exitLine += `Best hold period: ${bestBucket[0]} (${bestBucket[1].winRate.toFixed(0)}% WR, ${bestBucket[1].count} trades). `;
+                exitLine += `Avg winner: +${exitData.avgWinnerReturn.toFixed(1)}%`;
+                if (exitData.avgWinnerReturn < 15) exitLine += ' (selling too early?)';
+                exitLine += '. ';
+                // Dominant exit reason
+                const topReason = Object.entries(exitData.byReason)
+                    .sort((a, b) => b[1].count - a[1].count)[0];
+                if (topReason) exitLine += `Most common exit: ${topReason[0].replace('_', ' ')} (${topReason[1].count}).`;
+                insights += exitLine + '\n';
+            }
+            insights += '\n';
 
             // Hold accuracy insights
             const holdStats = analyzeHoldAccuracy();
@@ -3099,6 +3119,32 @@
                     insights += ` Trades near regime changes: ${regimeStats.nearTransition.winRate.toFixed(0)}% win rate vs ${regimeStats.overallWinRate.toFixed(0)}% overall.`;
                 }
                 insights += '\n';
+            }
+
+            // Performance history insights (sector, stock cautions, behavior)
+            const perfHistory = analyzePerformanceHistory();
+            if (perfHistory.hasData) {
+                // Sector history — sectors with 3+ trades and notable win rate
+                const notableSectors = Object.entries(perfHistory.sectorPerformance)
+                    .filter(([, s]) => s.count >= 3 && (s.winRate > 60 || s.winRate < 45));
+                if (notableSectors.length > 0) {
+                    insights += 'SECTOR HISTORY: ' + notableSectors
+                        .map(([sector, s]) => `${sector}: ${s.winRate.toFixed(0)}% WR (${s.count})`)
+                        .join(', ') + '\n';
+                }
+                // Stock cautions — stocks with 3+ trades and <40% win rate
+                const repeatLosers = Object.entries(perfHistory.stockPerformance)
+                    .filter(([, s]) => s.trades.length >= 3 && s.winRate < 40);
+                if (repeatLosers.length > 0) {
+                    insights += 'STOCK CAUTIONS: ' + repeatLosers
+                        .map(([sym, s]) => `${sym} ${s.winRate.toFixed(0)}% WR (${s.trades.length} trades)`)
+                        .join(', ') + ' — repeat losers\n';
+                }
+                // Behavioral patterns
+                if (perfHistory.behaviorPatterns.length > 0) {
+                    insights += 'BEHAVIOR: ' + perfHistory.behaviorPatterns
+                        .map(p => p.action).join('. ') + '\n';
+                }
             }
 
             // Conviction calibration insights
@@ -3151,6 +3197,74 @@
                 insights += '\n';
             }
 
+            return insights;
+        }
+
+        // Phase 1 learning context — concise exit/hold insights for sell/hold decisions
+        function formatPhase1Insights() {
+            const closedTrades = portfolio.closedTrades || [];
+            if (closedTrades.length < 3) return '';
+
+            let insights = '\n📊 LEARNING FROM YOUR TRADE HISTORY:\n\n';
+
+            // Exit patterns from analyzeExitTiming
+            const exitData = analyzeExitTiming();
+            if (exitData.hasData) {
+                insights += 'EXIT PATTERNS: ';
+                const reasons = Object.entries(exitData.byReason)
+                    .sort((a, b) => b[1].count - a[1].count)
+                    .map(([reason, data]) => `${reason.replace('_', ' ')}: ${data.count} (${data.winRate.toFixed(0)}% profitable)`)
+                    .join(', ');
+                insights += reasons + '. ';
+                insights += `Avg winner return: +${exitData.avgWinnerReturn.toFixed(1)}%`;
+                if (exitData.avgWinnerReturn < 15) insights += ' — consider holding winners longer';
+                insights += '. ';
+                const bestBucket = Object.entries(exitData.holdBuckets)
+                    .filter(([, b]) => b.count >= 3)
+                    .sort((a, b) => b[1].winRate - a[1].winRate)[0];
+                if (bestBucket) insights += `Best hold period: ${bestBucket[0]} (${bestBucket[1].winRate.toFixed(0)}% WR).`;
+                insights += '\n';
+            }
+
+            // Hold accuracy from analyzeHoldAccuracy
+            const holdStats = analyzeHoldAccuracy();
+            if (holdStats) {
+                insights += `HOLD ACCURACY: ${holdStats.overall.accuracy.toFixed(0)}% of holds gained value next cycle (${holdStats.overall.total} holds, avg ${holdStats.overall.avgChange >= 0 ? '+' : ''}${holdStats.overall.avgChange.toFixed(1)}% change).`;
+                if (holdStats.byConviction.high) insights += ` High conviction: ${holdStats.byConviction.high.accuracy.toFixed(0)}%.`;
+                if (holdStats.byConviction.low) insights += ` Low conviction: ${holdStats.byConviction.low.accuracy.toFixed(0)}%.`;
+                if (holdStats.byRSI) {
+                    const rsiParts = [];
+                    if (holdStats.byRSI.oversold) rsiParts.push(`Oversold: ${holdStats.byRSI.oversold.accuracy.toFixed(0)}%`);
+                    if (holdStats.byRSI.overbought) rsiParts.push(`Overbought: ${holdStats.byRSI.overbought.accuracy.toFixed(0)}%`);
+                    if (rsiParts.length > 0) insights += ' RSI zones: ' + rsiParts.join(', ') + '.';
+                }
+                insights += '\n';
+            }
+
+            // Regime context from analyzeRegimeTransitions
+            const regimeStats = analyzeRegimeTransitions();
+            if (regimeStats) {
+                insights += `REGIME CONTEXT: ${regimeStats.current.toUpperCase()} market for ${regimeStats.durationDays}d.`;
+                if (regimeStats.nearTransition && regimeStats.overallWinRate !== null) {
+                    insights += ` Near-transition trades: ${regimeStats.nearTransition.winRate.toFixed(0)}% WR vs ${regimeStats.overallWinRate.toFixed(0)}% overall.`;
+                }
+                if (holdStats?.byRegime) {
+                    const currentRegime = regimeStats.current;
+                    if (holdStats.byRegime[currentRegime]) {
+                        insights += ` Hold accuracy in ${currentRegime}: ${holdStats.byRegime[currentRegime].accuracy.toFixed(0)}%.`;
+                    }
+                }
+                insights += '\n';
+            }
+
+            // Track record one-liner from deriveTradingRules summary
+            const rulesData = deriveTradingRules();
+            if (!rulesData.summary.insufficientData) {
+                const s = rulesData.summary;
+                insights += `TRACK RECORD: ${s.wins}W-${s.losses}L (${s.winRate.toFixed(0)}%), recent ${s.recentWins}W-${s.recentLosses}L — ${s.recentTrend}\n`;
+            }
+
+            insights += '\n';
             return insights;
         }
 
@@ -4521,6 +4635,10 @@ For each holding, compare ORIGINAL_THESIS vs CURRENT_INDICATORS:
 6. Time elapsed vs expected catalyst timeframe
 7. Would you buy TODAY at current price with current indicators?
 
+CONVICTION TIERS:
+HOLD: 9-10 = Strong Hold (thesis strengthening, all signals aligned), 7-8 = Confident Hold (thesis intact, momentum healthy), 5-6 = Cautious Hold (mixed signals, watch closely), 3-4 = Weak Hold (thesis fraying, one more negative signal triggers sell)
+SELL: 9-10 = High Conviction Sell (thesis broken, clear exit), 7-8 = Sell (catalyst faded, better opportunities), 5-6 = Reluctant Sell (marginal case, leaning toward exit)
+
 SEARCH STRATEGY: You have pre-loaded recentNews with recent headlines + machine sentiment for each holding.
 ${vixCache ? 'VIX level is pre-loaded below — no need to search for it.\n' : ''}Scan recentNews FIRST, then use web search for:
 1. One market regime search${vixCache ? ' — broader context beyond VIX (e.g. SPY trend, macro headlines)' : ' (required — include VIX level, SPY trend, macro headlines)'}
@@ -4581,7 +4699,7 @@ Recent Transactions: ${(() => {
 💡 OPPORTUNITY COST — Top buy candidates waiting in Phase 2:
 ${topBuyOpportunities.join('\\n')}
 If a holding is mediocre (flat thesis, weak momentum) and these candidates are significantly stronger, consider SELLING to free up cash. Don't hold a 4/10 position when 8/10 opportunities are available.
-
+${formatPhase1Insights()}
 JSON ONLY response:
 { "decisions": [{ "action": "SELL" or "HOLD", "symbol": "X", "shares": N, "conviction": 1-10, "reasoning": "..." }], "holdings_summary": "...", "market_regime": "bull/bear/choppy" }
 Include a decision for EVERY holding.` }]

@@ -70,7 +70,7 @@ Browser (index.html)
    - Final candidate pool: top 25 by score + all current holdings + 5 sector wildcards + up to 10 reversal candidates (bullish CHoCH, low-swept, bullish BOS)
 5. **News Fetching** (`fetchNewsForStocks`) – After scoring, fetches recent headlines + machine sentiment for top 25 candidates + holdings (cached 1hr)
 6. **Two-Phase AI Decision**:
-   - **Phase 1** (`runAIAnalysis`, first API call) – Reviews existing holdings → SELL or HOLD decisions. Claude gets holdings data, theses, P&L, current technical indicators, and web search capability.
+   - **Phase 1** (`runAIAnalysis`, first API call) – Reviews existing holdings → SELL or HOLD decisions. Claude gets holdings data, theses, P&L, current technical indicators, web search capability, conviction tier definitions (HOLD 3-10, SELL 5-10), and learning context via `formatPhase1Insights()` (exit patterns, hold accuracy, regime context, track record).
    - Between phases: Sell proceeds are projected into `updatedCash`. Sold symbols are removed from Phase 2 candidates. Current holdings are flagged (`currentlyHeld`, `sharesHeld`) but kept in candidate data for potential add-to-position.
    - **Phase 2** (second API call) – Evaluates buy candidates using `updatedCash` as available budget. Gets market data, structure analysis, Phase 1 results, learning insights, market regime context. Entry quality guidance prioritizes pullback setups over extended stocks. May recommend adding shares to existing holdings if setup is exceptional.
 7. **Budget Validation & Execution** (`executeMultipleTrades`):
@@ -129,7 +129,11 @@ Tracks performance patterns from `closedTrades`:
 - **Hold Accuracy** (`analyzeHoldAccuracy`) – Evaluates HOLD decisions by comparing price at hold time vs next analysis cycle. Tracks whether holds gained or lost value and correlates with conviction level and market regime.
 - **Regime Transitions** (`analyzeRegimeTransitions`) – Tracks market regime changes (bull/bear/choppy) over time via `regimeHistory`. Detects regime shift frequency and patterns.
 
-These insights are injected into Phase 2's prompt so Claude can learn from past decisions. They're also surfaced in the Learning Insights UI via `updateLearningInsightsDisplay()`, which renders 7 analytics panels: Risk/Reward Profile, Hold Time Comparison, Streaks, Conviction Accuracy, Signal Accuracy, Exit Analysis, and Post-Exit Tracking. Each panel has a minimum data threshold and won't render with insufficient trades.
+These insights are injected into both phases' prompts so Claude can learn from past decisions:
+- **Phase 1** receives concise learning context via `formatPhase1Insights()`: exit patterns (from `analyzeExitTiming`), hold accuracy by conviction/RSI zone (from `analyzeHoldAccuracy`), regime context with regime-specific hold accuracy (from `analyzeRegimeTransitions`), and W-L track record (from `deriveTradingRules` summary). ~250-350 tokens when fully populated, empty when <3 trades.
+- **Phase 2** receives rich learning context via `formatPerformanceInsights()`: trading rules, exit timing (best hold period, avg winner return, dominant exit reason from `analyzeExitTiming`), hold accuracy, regime context, sector/stock history and behavioral patterns (from `analyzePerformanceHistory`), conviction calibration, and signal accuracy.
+
+Insights are also surfaced in the Learning Insights UI via `updateLearningInsightsDisplay()`, which renders 7 analytics panels: Risk/Reward Profile, Hold Time Comparison, Streaks, Conviction Accuracy, Signal Accuracy, Exit Analysis, and Post-Exit Tracking. Each panel has a minimum data threshold and won't render with insufficient trades.
 
 ### Derived Trading Rules (in `src/trader.js`)
 Auto-learns from `closedTrades` to prevent repeating mistakes:
@@ -269,7 +273,8 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `recordHoldSnapshots` | Captures hold decisions with technicals for later evaluation |
 | `evaluateHoldSnapshots` | Fills in next-cycle prices for hold outcome tracking |
 | `recordRegimeTransition` | Tracks market regime changes over time |
-| `formatPerformanceInsights` | Formats ML insights for Claude's prompt |
+| `formatPerformanceInsights` | Formats ML insights for Phase 2 prompt (rules, exit timing, sectors, behavior, conviction, signals) |
+| `formatPhase1Insights` | Formats ML insights for Phase 1 prompt (exit patterns, hold accuracy, regime, track record) |
 | `calculatePortfolioValue` | Current total value calculation |
 | `updateUI` | Refreshes all dashboard elements |
 | `escapeHtml` | Sanitizes strings for safe innerHTML insertion |
@@ -294,14 +299,14 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 
 The AI prompts are extensive and embedded inline in `src/trader.js`. Key sections (search for these strings):
 
-- **Phase 1 prompt** (in `runAIAnalysis`, search `"Phase 1"`): Holdings review. Includes thesis comparison, anti-whipsaw rules, opportunity cost context (top buy candidates teased), pre-loaded VIX level, news gap search strategy (searches for holdings with empty/stale news). Hold decisions are synthesized for any holdings the AI omits from its response.
+- **Phase 1 prompt** (in `runAIAnalysis`, search `"Phase 1"`): Holdings review. Includes thesis comparison, anti-whipsaw rules, opportunity cost context (top buy candidates teased), pre-loaded VIX level, news gap search strategy (searches for holdings with empty/stale news), conviction tier definitions (HOLD: 9-10 Strong → 3-4 Weak; SELL: 9-10 High Conviction → 5-6 Reluctant), and learning context via `${formatPhase1Insights()}`. Hold decisions are synthesized for any holdings the AI omits from its response.
 - **Phase 2 prompt** (in `runAIAnalysis`, search `"Phase 2"`): Buy decisions. Includes market regime guidance (bull/bear/choppy with different cash deployment strategies), pre-loaded VIX in Phase 1 results (all 3 paths: sells, no-sells, no-holdings), conviction-based allocation rules, entry quality tiers (Extended → avoid, Good Entry → sweet spot, Pullback → preferred, Red Flag → skip), recently-sold warnings, and learning insights. VIX volatility thresholds (<15 complacent, 15-20 normal, 20-30 elevated, >30 panic) are aligned with `fetchVIX` interpretation — no search needed.
 - **Chat prompt** (in `sendMessage`): Concise system prompt with personality, portfolio context. Uses `system` parameter with conversation memory.
 
 When modifying prompts, be careful about:
 - The `updatedCash` variable must be correctly referenced in Phase 2's budget section
 - JSON response format specifications – Claude must return parseable JSON
-- Learning insights injection – `formatPerformanceInsights()` output goes into Phase 2
+- Learning insights injection – `formatPerformanceInsights()` output goes into Phase 2, `formatPhase1Insights()` output goes into Phase 1
 
 ## Development Notes
 
