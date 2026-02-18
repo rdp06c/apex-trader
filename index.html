@@ -9557,8 +9557,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         // Execute multiple trades from conviction-based analysis
         async function executeMultipleTrades(response, marketData) {
             const decisions = response.decisions;
-            const overallReasoning = response.overall_reasoning || '';
-            const researchSummary = response.research_summary || '';
+            let overallReasoning = response.overall_reasoning || '';
+            let researchSummary = response.research_summary || '';
             
             // Check if APEX is just reaffirming existing positions vs genuinely adding
             const buyDecisions = decisions.filter(d => d.action === 'BUY');
