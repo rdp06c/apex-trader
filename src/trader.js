@@ -1968,8 +1968,24 @@
         }
 
 
+        // Derive scoring adjustments from historical trade signal accuracy
+        function getSignalAccuracyAdjustments() {
+            const techData = analyzeTechnicalAccuracy();
+            if (!techData.hasData) return {};
+            const adj = {};
+            if (techData.rsi?.overbought?.count >= 3 && techData.rsi.overbought.winRate < 35)
+                adj.overboughtRsiExtraPenalty = -2;
+            if (techData.macd?.bullish?.count >= 3 && techData.macd.bullish.winRate > 65)
+                adj.bullishMacdExtraBonus = 1.5;
+            if (techData.structure?.bearish?.count >= 3 && techData.structure.bearish.winRate < 35)
+                adj.bearishStructureExtraPenalty = -2;
+            if (techData.runners?.runners?.count >= 3 && techData.runners.runners.winRate < 40)
+                adj.runnerExtraPenalty = -2;
+            return adj;
+        }
+
         // Shared scoring function — used by both runAIAnalysis and testDataFetch
-        function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg }) {
+        function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, signalAdjustments }) {
             let sectorBonus = 0;
             if (sectorFlow === 'inflow') sectorBonus = 2;
             else if (sectorFlow === 'modest-inflow') sectorBonus = 1;
@@ -1981,8 +1997,10 @@
 
             const chg = todayChange || 0;
             const runnerPenalty = chg >= 15 ? -4 : chg >= 10 ? -3 : chg >= 7 ? -2 : chg >= 5 ? -1 : 0;
+            const declinePenalty = chg <= -5 ? -3 : chg <= -3 ? -2 : chg <= -2 ? -1 : 0;
 
-            const extensionPenalty = (momentumScore >= 9 || rsNormalized >= 8.5) ? -3
+            const extensionPenalty = (momentumScore >= 9 && rsNormalized >= 8.5) ? -5
+                : (momentumScore >= 9 || rsNormalized >= 8.5) ? -3.5
                 : (momentumScore >= 8 || rsNormalized >= 8) ? -2
                 : (momentumScore >= 7.5 || rsNormalized >= 7.5) ? -1
                 : 0;
@@ -1992,8 +2010,10 @@
                 : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 0 && sectorFlow !== 'outflow') ? 1
                 : 0;
 
-            const rsiBonusPenalty = rsi != null ? (rsi < 30 ? 1.5 : rsi > 70 ? -1.0 : 0) : 0;
-            const macdBonus = macdCrossover === 'bullish' ? 1.0 : macdCrossover === 'bearish' ? -1.0 : 0;
+            const rsiBonusPenalty = rsi != null
+                ? (rsi < 30 ? 1.5 : rsi > 85 ? -4 : rsi > 75 ? -3 : rsi > 70 ? -2 : 0)
+                : 0;
+            const macdBonus = macdCrossover === 'bullish' ? 2.5 : macdCrossover === 'bearish' ? -2.0 : -0.5;
 
             const dtc = daysToCover || 0;
             const squeezeBonus = (dtc > 5 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? 1.5
@@ -2008,9 +2028,18 @@
                 : (fvg === 'bearish' && (structureScore ?? 0) < 0) ? -0.5
                 : 0;
 
+            // Learned adjustments from trade history
+            let learnedAdj = 0;
+            if (signalAdjustments) {
+                if (rsi > 70 && signalAdjustments.overboughtRsiExtraPenalty) learnedAdj += signalAdjustments.overboughtRsiExtraPenalty;
+                if (macdCrossover === 'bullish' && signalAdjustments.bullishMacdExtraBonus) learnedAdj += signalAdjustments.bullishMacdExtraBonus;
+                if ((structureScore ?? 0) < 0 && signalAdjustments.bearishStructureExtraPenalty) learnedAdj += signalAdjustments.bearishStructureExtraPenalty;
+                if ((todayChange || 0) >= 5 && signalAdjustments.runnerExtraPenalty) learnedAdj += signalAdjustments.runnerExtraPenalty;
+            }
+
             const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus
-                + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty
-                + rsiBonusPenalty + macdBonus + squeezeBonus + volumeBonus + fvgBonus;
+                + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + declinePenalty
+                + rsiBonusPenalty + macdBonus + squeezeBonus + volumeBonus + fvgBonus + learnedAdj;
 
             return compositeScore;
         }
@@ -2486,7 +2515,7 @@
                         count: trades.length,
                         winRate: winRate,
                         avgReturn: avgReturn,
-                        calibration: winRate >= parseInt(level.split('-')[0]) * 10 ? 'well-calibrated' : 'overconfident'
+                        calibration: winRate >= 70 ? 'well-calibrated' : winRate >= 50 ? 'slightly-overconfident' : 'overconfident'
                     };
                 }
             });
@@ -2894,13 +2923,13 @@
                 // Determine enforcement level
                 let enforcement = 'observe';
                 let type = 'neutral';
-                if (losingCount >= 10 && losingStats.winRate < 40 && winRateDiff > 15) {
+                if (losingCount >= 5 && losingStats.winRate < 40 && winRateDiff > 12) {
                     enforcement = 'block';
                     type = 'avoid';
-                } else if (losingCount >= 8 && winRateDiff > 15) {
+                } else if (losingCount >= 4 && winRateDiff > 12) {
                     enforcement = 'warn';
                     type = 'avoid';
-                } else if (losingCount >= 5 && winRateDiff > 10) {
+                } else if (losingCount >= 3 && winRateDiff > 8) {
                     enforcement = 'warn';
                     type = 'avoid';
                 }
@@ -3174,7 +3203,9 @@
             if (convictionData.hasData) {
                 insights += `CONVICTION CALIBRATION:\n`;
                 for (const [level, stats] of Object.entries(convictionData.analysis)) {
-                    insights += `- Conviction ${level}: ${stats.winRate.toFixed(0)}% win rate, ${stats.avgReturn >= 0 ? '+' : ''}${stats.avgReturn.toFixed(1)}% avg return (${stats.count} trades) — ${stats.calibration}\n`;
+                    insights += `- Conviction ${level}: ${stats.winRate.toFixed(0)}% win rate, ${stats.avgReturn >= 0 ? '+' : ''}${stats.avgReturn.toFixed(1)}% avg return (${stats.count} trades) — ${stats.calibration}`;
+                    if (stats.calibration === 'overconfident') insights += ` ⚠️ REDUCE conviction by 2-3 points for this tier`;
+                    insights += '\n';
                 }
                 insights += '\n';
             }
@@ -3860,6 +3891,9 @@
                 // Persist sector rotation from dry run
                 portfolio.lastSectorRotation = { timestamp: new Date().toISOString(), sectors: sectorRotation };
 
+                const signalAdj = getSignalAccuracyAdjustments();
+                if (Object.keys(signalAdj).length > 0) console.log('📊 Signal accuracy adjustments:', signalAdj);
+
                 let structureStats = { bullish: 0, bearish: 0, choch: 0, bos: 0, sweeps: 0, fvg: 0 };
                 const dryRunScored = [];
                 Object.keys(marketData).forEach(symbol => {
@@ -3905,6 +3939,7 @@
                         rsi: drRsi,
                         macdCrossover: drMacd?.crossover,
                         daysToCover: drDtc,
+                        signalAdjustments: signalAdj,
                         volumeTrend: momentum?.volumeTrend ?? 1,
                         fvg: struct?.fvg
                     });
@@ -4546,7 +4581,10 @@
 
                 // === PRE-SCREEN: Rank all stocks and select top candidates for Claude ===
                 thinkingDetail.textContent = 'Pre-screening: ranking stocks by composite score...';
-                
+
+                const signalAdj = getSignalAccuracyAdjustments();
+                if (Object.keys(signalAdj).length > 0) console.log('📊 Signal accuracy adjustments:', signalAdj);
+
                 // 1. Score every stock with a composite ranking
                 const scoredStocks = Object.entries(enhancedMarketData).map(([symbol, data]) => {
                     const compositeScore = calculateCompositeScore({
@@ -4563,7 +4601,8 @@
                         macdCrossover: data.macd?.crossover,
                         daysToCover: data.shortInterest?.daysToCover || 0,
                         volumeTrend: data.momentum?.volumeTrend ?? 1,
-                        fvg: data.marketStructure?.fvg
+                        fvg: data.marketStructure?.fvg,
+                        signalAdjustments: signalAdj
                     });
                     return { symbol, compositeScore, data };
                 });
@@ -4781,6 +4820,12 @@ CONVICTION TIERS:
 HOLD: 9-10 = Strong Hold (thesis strengthening, all signals aligned), 7-8 = Confident Hold (thesis intact, momentum healthy), 5-6 = Cautious Hold (mixed signals, watch closely), 3-4 = Weak Hold (thesis fraying, one more negative signal triggers sell)
 SELL: 9-10 = High Conviction Sell (thesis broken, clear exit), 7-8 = Sell (catalyst faded, better opportunities), 5-6 = Reluctant Sell (marginal case, leaning toward exit)
 
+HOLD DURATION DISCIPLINE — You are a SWING TRADER. Minimum expected hold: 5 trading days.
+- Positions < 3 days old: Do NOT sell unless the thesis is CLEARLY BROKEN (CHoCH, catastrophic news, earnings miss). A red day is NOT a broken thesis.
+- Positions 3-5 days old: Sell only with conviction 8+ and clear structural breakdown.
+- Positions 5+ days: Normal evaluation — full sell criteria apply.
+"The stock went down today" is NEVER sufficient reason to sell. Swing trades need time to work.
+
 SEARCH STRATEGY: You have pre-loaded recentNews with recent headlines + machine sentiment for each holding.
 ${vixCache ? 'VIX level is pre-loaded below — no need to search for it.\n' : ''}Scan recentNews FIRST, then use web search for:
 1. One market regime search${vixCache ? ' — broader context beyond VIX (e.g. SPY trend, macro headlines)' : ' (required — include VIX level, SPY trend, macro headlines)'}
@@ -4828,6 +4873,21 @@ Holdings: ${(() => {
         const todayET = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
         if (buyDateET === todayET) eh[sym].WARNING = 'BOUGHT TODAY - cannot sell same day';
     });
+    // Flag holdings matching losing patterns for Phase 1 awareness
+    const p1Rules = deriveTradingRules();
+    const avoidRules = p1Rules.rules.filter(r => r.type === 'avoid' && r.enforcement !== 'observe');
+    if (avoidRules.length > 0) {
+        Object.keys(eh).forEach(sym => {
+            const th2 = (portfolio.holdingTheses || {})[sym];
+            if (th2?.entryTechnicals) {
+                const matchingRules = avoidRules
+                    .filter(r => matchesPattern(r.id, th2.entryTechnicals))
+                    .map(r => `${r.label} (${r.winRate.toFixed(0)}% WR)`);
+                if (matchingRules.length > 0)
+                    eh[sym].ENTRY_WARNING = `Entered on losing pattern: ${matchingRules.join(', ')}`;
+            }
+        });
+    }
     return JSON.stringify(eh);
 })()}
 
@@ -4838,9 +4898,9 @@ Recent Transactions: ${(() => {
 
 ⚠️ ANTI-WHIPSAW: Do NOT sell stocks bought today (same calendar day). Do NOT contradict recent decisions.
 
-💡 OPPORTUNITY COST — Top buy candidates waiting in Phase 2:
+💡 OPPORTUNITY COST CONTEXT (for reference, NOT a sell trigger):
 ${topBuyOpportunities.join('\\n')}
-If a holding is mediocre (flat thesis, weak momentum) and these candidates are significantly stronger, consider SELLING to free up cash. Don't hold a 4/10 position when 8/10 opportunities are available.
+These candidates exist in Phase 2. Only consider selling to fund them if a holding's thesis is BROKEN (not just underperforming). Selling a position at a small loss to chase a new setup is the #1 pattern destroying your returns.
 ${formatPhase1Insights()}
 JSON ONLY response:
 { "decisions": [{ "action": "SELL" or "HOLD", "symbol": "X", "shares": N, "conviction": 1-10, "reasoning": "..." }], "holdings_summary": "...", "market_regime": "bull/bear/choppy" }
