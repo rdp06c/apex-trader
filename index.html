@@ -5993,6 +5993,21 @@
                 insights += '\n';
             }
 
+            // Portfolio health (benchmark + drawdown)
+            const health = portfolio.portfolioHealth;
+            if (health) {
+                let healthLine = `PORTFOLIO HEALTH: Return: ${health.portfolioReturn >= 0 ? '+' : ''}${health.portfolioReturn.toFixed(1)}%`;
+                if (portfolio.spyBaseline) {
+                    healthLine += `, SPY: ${health.spyReturn >= 0 ? '+' : ''}${health.spyReturn.toFixed(1)}%, Alpha: ${health.alpha >= 0 ? '+' : ''}${health.alpha.toFixed(1)}%`;
+                }
+                if (health.drawdownPct < -5) {
+                    healthLine += ` | IN DRAWDOWN: ${health.drawdownPct.toFixed(1)}% from peak`;
+                } else if (health.drawdownPct >= -1) {
+                    healthLine += ` | Near all-time high`;
+                }
+                insights += healthLine + '\n';
+            }
+
             insights += `PERFORMANCE: ${s.wins}W-${s.losses}L (${s.winRate.toFixed(0)}%), Avg winner: +${s.avgWin.toFixed(1)}% (${s.avgWinDays.toFixed(1)}d), Avg loser: ${s.avgLoss.toFixed(1)}% (${s.avgLossDays.toFixed(1)}d)\n`;
             insights += `RECENT: ${s.recentWins}W-${s.recentLosses}L — ${s.recentTrend}\n`;
 
@@ -6013,6 +6028,13 @@
                     .sort((a, b) => b[1].count - a[1].count)[0];
                 if (topReason) exitLine += `Most common exit: ${topReason[0].replace('_', ' ')} (${topReason[1].count}).`;
                 insights += exitLine + '\n';
+            }
+            // Post-exit quality one-liner
+            const postExit = summarizePostExitQuality();
+            if (postExit) {
+                let exitQLine = `EXIT QUALITY: ${postExit.weekWentHigher}/${postExit.weekTracked} exits went higher 1wk later (avg ${postExit.weekAvgMove >= 0 ? '+' : ''}${postExit.weekAvgMove.toFixed(1)}%)`;
+                if (postExit.sellingTooEarly) exitQLine += ` — HOLDING WINNERS LONGER would improve returns`;
+                insights += exitQLine + '\n';
             }
             insights += '\n';
 
@@ -6121,6 +6143,19 @@
 
             let insights = '\n📊 LEARNING FROM YOUR TRADE HISTORY:\n\n';
 
+            // Portfolio health status (benchmark + drawdown)
+            const health = portfolio.portfolioHealth;
+            if (health) {
+                let statusLine = `PORTFOLIO STATUS: Return: ${health.portfolioReturn >= 0 ? '+' : ''}${health.portfolioReturn.toFixed(1)}%`;
+                if (portfolio.spyBaseline) {
+                    statusLine += ` vs SPY ${health.spyReturn >= 0 ? '+' : ''}${health.spyReturn.toFixed(1)}% (alpha: ${health.alpha >= 0 ? '+' : ''}${health.alpha.toFixed(1)}%)`;
+                }
+                if (health.drawdownPct < -5) {
+                    statusLine += ` | Drawdown: ${health.drawdownPct.toFixed(1)}% from peak $${health.peakValue.toLocaleString(undefined, {maximumFractionDigits: 0})}`;
+                }
+                insights += statusLine + '\n';
+            }
+
             // Exit patterns from analyzeExitTiming
             const exitData = analyzeExitTiming();
             if (exitData.hasData) {
@@ -6178,8 +6213,59 @@
                 insights += `TRACK RECORD: ${s.wins}W-${s.losses}L (${s.winRate.toFixed(0)}%), recent ${s.recentWins}W-${s.recentLosses}L — ${s.recentTrend}\n`;
             }
 
+            // Post-exit quality from summarizePostExitQuality
+            const postExit = summarizePostExitQuality();
+            if (postExit) {
+                insights += `EXIT QUALITY: ${postExit.weekWentHigher}/${postExit.weekTracked} sells went HIGHER 1 week later (avg ${postExit.weekAvgMove >= 0 ? '+' : ''}${postExit.weekAvgMove.toFixed(1)}%).`;
+                if (postExit.monthTracked > 0) {
+                    insights += ` 1 month: ${postExit.monthWentHigher}/${postExit.monthTracked} higher (avg ${postExit.monthAvgMove >= 0 ? '+' : ''}${postExit.monthAvgMove.toFixed(1)}%).`;
+                }
+                if (postExit.sellingTooEarly) {
+                    insights += ` ⚠️ Pattern suggests selling winners too early.`;
+                }
+                insights += '\n';
+            }
+
             insights += '\n';
             return insights;
+        }
+
+        // Summarize post-exit tracking data for prompt injection
+        function summarizePostExitQuality() {
+            const closedTrades = portfolio.closedTrades || [];
+            const tracked = closedTrades.filter(t => t.tracking?.priceAfter1Week != null);
+            if (tracked.length < 3) return null;
+
+            let weekHigher = 0, weekTotalMove = 0;
+            let monthHigher = 0, monthTotalMove = 0, monthCount = 0;
+
+            for (const t of tracked) {
+                const sellPrice = t.tracking.sellPrice || t.sellPrice;
+                if (!sellPrice || sellPrice <= 0) continue;
+                const weekMove = ((t.tracking.priceAfter1Week - sellPrice) / sellPrice) * 100;
+                weekTotalMove += weekMove;
+                if (weekMove > 0) weekHigher++;
+
+                if (t.tracking.priceAfter1Month != null) {
+                    const monthMove = ((t.tracking.priceAfter1Month - sellPrice) / sellPrice) * 100;
+                    monthTotalMove += monthMove;
+                    if (monthMove > 0) monthHigher++;
+                    monthCount++;
+                }
+            }
+
+            const weekAvg = weekTotalMove / tracked.length;
+            const monthAvg = monthCount > 0 ? monthTotalMove / monthCount : null;
+
+            return {
+                weekTracked: tracked.length,
+                weekWentHigher: weekHigher,
+                weekAvgMove: weekAvg,
+                monthTracked: monthCount,
+                monthWentHigher: monthHigher,
+                monthAvgMove: monthAvg,
+                sellingTooEarly: (weekHigher / tracked.length) > 0.6 && weekAvg > 3
+            };
         }
 
         // POST-EXIT TRACKING: Check if sold stocks did better/worse after we exited
@@ -6764,6 +6850,33 @@
                     }
                 }
 
+                // Benchmark: fetch SPY price and compute portfolio health
+                try {
+                    const spyPrice = await getStockPrice('SPY');
+                    if (spyPrice > 0) {
+                        if (!portfolio.spyBaseline) {
+                            portfolio.spyBaseline = { price: spyPrice, date: new Date().toISOString() };
+                            console.log(`SPY baseline set: $${spyPrice.toFixed(2)}`);
+                        }
+                        portfolio.spyCurrent = { price: spyPrice, date: new Date().toISOString() };
+                        const currentValue = await calculatePortfolioValue().then(r => r.total);
+                        const peakValue = portfolio.performanceHistory.length > 0
+                            ? Math.max(...portfolio.performanceHistory.filter(e => e.value != null).map(e => e.value))
+                            : currentValue;
+                        const drawdownPct = peakValue > 0 ? ((currentValue - peakValue) / peakValue) * 100 : 0;
+                        const spyReturn = ((spyPrice - portfolio.spyBaseline.price) / portfolio.spyBaseline.price) * 100;
+                        const portfolioReturn = portfolio.totalDeposits > 0
+                            ? ((currentValue - portfolio.totalDeposits) / portfolio.totalDeposits) * 100 : 0;
+                        portfolio.portfolioHealth = {
+                            peakValue, drawdownPct, spyReturn, portfolioReturn,
+                            alpha: portfolioReturn - spyReturn, timestamp: new Date().toISOString()
+                        };
+                        console.log(`📊 Portfolio health: Return ${portfolioReturn.toFixed(1)}% vs SPY ${spyReturn.toFixed(1)}%, Alpha ${(portfolioReturn - spyReturn).toFixed(1)}%, Drawdown ${drawdownPct.toFixed(1)}%`);
+                    }
+                } catch (e) {
+                    console.warn('SPY benchmark fetch failed:', e.message);
+                }
+
                 // Backfill thesis entries missing momentum/RS/sectorFlow
                 if (portfolio.holdingTheses) {
                     Object.keys(portfolio.holdings).forEach(symbol => {
@@ -7252,6 +7365,33 @@
                 // Persist VIX for dashboard display
                 if (vixCache) portfolio.lastVIX = { ...vixCache, fetchedAt: new Date().toISOString() };
 
+                // Benchmark: fetch SPY price and compute portfolio health
+                try {
+                    const spyPrice = await getStockPrice('SPY');
+                    if (spyPrice > 0) {
+                        if (!portfolio.spyBaseline) {
+                            portfolio.spyBaseline = { price: spyPrice, date: new Date().toISOString() };
+                            console.log(`SPY baseline set: $${spyPrice.toFixed(2)}`);
+                        }
+                        portfolio.spyCurrent = { price: spyPrice, date: new Date().toISOString() };
+                        const currentValue = await calculatePortfolioValue().then(r => r.total);
+                        const peakValue = portfolio.performanceHistory.length > 0
+                            ? Math.max(...portfolio.performanceHistory.filter(e => e.value != null).map(e => e.value))
+                            : currentValue;
+                        const drawdownPct = peakValue > 0 ? ((currentValue - peakValue) / peakValue) * 100 : 0;
+                        const spyReturn = ((spyPrice - portfolio.spyBaseline.price) / portfolio.spyBaseline.price) * 100;
+                        const portfolioReturn = portfolio.totalDeposits > 0
+                            ? ((currentValue - portfolio.totalDeposits) / portfolio.totalDeposits) * 100 : 0;
+                        portfolio.portfolioHealth = {
+                            peakValue, drawdownPct, spyReturn, portfolioReturn,
+                            alpha: portfolioReturn - spyReturn, timestamp: new Date().toISOString()
+                        };
+                        console.log(`📊 Portfolio health: Return ${portfolioReturn.toFixed(1)}% vs SPY ${spyReturn.toFixed(1)}%, Alpha ${(portfolioReturn - spyReturn).toFixed(1)}%, Drawdown ${drawdownPct.toFixed(1)}%`);
+                    }
+                } catch (e) {
+                    console.warn('SPY benchmark fetch failed:', e.message);
+                }
+
                 // 2. Group stocks by sector for relative strength calculations
                 const stocksBySector = {};
                 Object.entries(marketData).forEach(([symbol, data]) => {
@@ -7537,6 +7677,8 @@
                             }],
                             messages: [{ role: 'user', content: `You are APEX, an AI trading agent. PHASE 1: HOLDINGS REVIEW ONLY.
 Today: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
+
+OBJECTIVE: Maximize portfolio returns. Your job is to protect capital by exiting broken setups and preserve winners by holding strong positions. Every dollar tied up in a weak holding is a dollar not working toward better opportunities.
 
 TASK: Review each holding → decide SELL or HOLD. NO BUY decisions.
 
@@ -7867,6 +8009,34 @@ Include a decision for EVERY holding.` }]
                 }
 
                 thinkingDetail.textContent = hasHoldings ? 'Phase 2: Finding buy opportunities...' : 'Researching buy opportunities...';
+
+                // Compute regime-specific performance for adaptive deployment
+                let regimeAdaptation = '';
+                try {
+                    const techData = analyzeTechnicalAccuracy();
+                    if (techData.hasData && techData.regime.hasData) {
+                        const rd = techData.regime;
+                        const parts = [];
+                        if (rd.bull) parts.push(`Bull: ${rd.bull.winRate.toFixed(0)}% WR (${rd.bull.count})`);
+                        if (rd.bear) parts.push(`Bear: ${rd.bear.winRate.toFixed(0)}% WR (${rd.bear.count})`);
+                        if (rd.choppy) parts.push(`Choppy: ${rd.choppy.winRate.toFixed(0)}% WR (${rd.choppy.count})`);
+                        if (parts.length > 0) {
+                            regimeAdaptation = `\n📊 YOUR REGIME TRACK RECORD: ${parts.join(', ')}`;
+                            // Find current regime's win rate
+                            const currentRegime = phase1Regime?.toLowerCase() || portfolio.lastMarketRegime?.regime || '';
+                            const currentData = rd[currentRegime];
+                            if (currentData && currentData.count >= 3) {
+                                if (currentData.winRate < 45) {
+                                    regimeAdaptation += `\n⚠️ Your ${currentRegime} win rate is ${currentData.winRate.toFixed(0)}% — deploy 15-20% LESS cash than guidelines suggest.`;
+                                } else if (currentData.winRate > 65) {
+                                    regimeAdaptation += `\n✅ Your ${currentRegime} win rate is strong at ${currentData.winRate.toFixed(0)}% — deployment guidelines are well-calibrated.`;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Regime adaptation computation failed:', e.message);
+                }
 
                 // Call Claude API for BUY decisions (Phase 2) via Cloudflare Worker proxy
                 const data = await fetchAnthropicStreaming({
@@ -9086,6 +9256,7 @@ Be defensive when markets are punishing aggression.
 
 The same strategy (concentration, hold for 50%+) that wins in bull markets
 can destroy portfolios in bear markets. Adapt to survive and thrive.
+${regimeAdaptation}
 
 ════════════════════════════════════════════════════════════════
 
