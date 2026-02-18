@@ -430,7 +430,7 @@
         // Check if API keys are configured
         function checkApiKeysConfigured() {
             const missingKeys = [];
-            if (!POLYGON_API_KEY) missingKeys.push('Polygon.io API Key');
+            if (!POLYGON_API_KEY) missingKeys.push('Massive API Key');
             if (!GOOGLE_CLIENT_ID) missingKeys.push('Google Client ID');
             if (!GOOGLE_API_KEY) missingKeys.push('Google API Key');
             if (!ANTHROPIC_API_URL) missingKeys.push('Anthropic API URL');
@@ -8794,7 +8794,28 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Total Trades
             const transactions = portfolio.transactions || [];
             document.getElementById('totalTrades').textContent = transactions.length;
-            
+
+            // Alpha vs SPY
+            const health = portfolio.portfolioHealth;
+            if (health && health.alpha != null) {
+                document.getElementById('alphaValue').textContent = (health.alpha >= 0 ? '+' : '') + health.alpha.toFixed(2) + '%';
+                document.getElementById('alphaValue').style.color = health.alpha >= 0 ? '#34d399' : '#f87171';
+                document.getElementById('spyReturn').textContent = 'SPY: ' + (health.spyReturn >= 0 ? '+' : '') + health.spyReturn.toFixed(2) + '%';
+                document.getElementById('spyReturn').className = 'index-change';
+            } else {
+                document.getElementById('alphaValue').textContent = '--';
+                document.getElementById('spyReturn').textContent = 'Run analysis to track';
+            }
+
+            // Drawdown from peak
+            if (health && health.drawdownPct != null) {
+                const dd = health.drawdownPct;
+                document.getElementById('drawdownValue').textContent = dd.toFixed(1) + '%';
+                document.getElementById('drawdownValue').style.color = dd > -5 ? '#34d399' : dd > -15 ? '#fbbf24' : '#f87171';
+            } else {
+                document.getElementById('drawdownValue').textContent = '--';
+            }
+
             // Update Learning Insights Display
             updateLearningInsightsDisplay();
 

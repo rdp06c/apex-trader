@@ -82,7 +82,7 @@
                             </div>
 
                             <div class="control-group">
-                                <label for="polygonKeyInput">Polygon.io API Key</label>
+                                <label for="polygonKeyInput">Massive API Key</label>
                                 <input type="password" id="polygonKeyInput" placeholder="Enter your Polygon API key">
                             </div>
 
@@ -211,6 +211,14 @@
                         <div class="index-price" id="winRate">0%</div>
                         <div class="index-change" id="winLossRatio">0W / 0L</div>
                     </div>
+                    <div class="index-card">
+                        <div class="index-header">
+                            <div class="index-name">Alpha vs SPY</div>
+                            <div class="index-symbol">&alpha;</div>
+                        </div>
+                        <div class="index-price" id="alphaValue">--</div>
+                        <div class="index-change" id="spyReturn">--</div>
+                    </div>
                     <div class="index-card expandable-card" role="button" tabindex="0" aria-label="Expand best trade details" onclick="toggleAnalyticsExpansion('bestTrade', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnalyticsExpansion('bestTrade',this)}">
                         <span class="expand-icon">&#9662;</span>
                         <div class="index-header">
@@ -242,6 +250,10 @@
                     <div class="sub-stat-card">
                         <div class="sub-stat-label">Total Trades</div>
                         <div class="sub-stat-value" id="totalTrades">0</div>
+                    </div>
+                    <div class="sub-stat-card">
+                        <div class="sub-stat-label">Drawdown</div>
+                        <div class="sub-stat-value" id="drawdownValue">--</div>
                     </div>
                 </div>
             </div>

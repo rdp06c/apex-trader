@@ -1317,7 +1317,7 @@
         /* ── Sub-Stats ─────────────────────────────────────── */
         .sub-stats-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: 12px;
             margin-top: 12px;
         }
@@ -2600,7 +2600,7 @@
                             </div>
 
                             <div class="control-group">
-                                <label for="polygonKeyInput">Polygon.io API Key</label>
+                                <label for="polygonKeyInput">Massive API Key</label>
                                 <input type="password" id="polygonKeyInput" placeholder="Enter your Polygon API key">
                             </div>
 
@@ -2729,6 +2729,14 @@
                         <div class="index-price" id="winRate">0%</div>
                         <div class="index-change" id="winLossRatio">0W / 0L</div>
                     </div>
+                    <div class="index-card">
+                        <div class="index-header">
+                            <div class="index-name">Alpha vs SPY</div>
+                            <div class="index-symbol">&alpha;</div>
+                        </div>
+                        <div class="index-price" id="alphaValue">--</div>
+                        <div class="index-change" id="spyReturn">--</div>
+                    </div>
                     <div class="index-card expandable-card" role="button" tabindex="0" aria-label="Expand best trade details" onclick="toggleAnalyticsExpansion('bestTrade', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnalyticsExpansion('bestTrade',this)}">
                         <span class="expand-icon">&#9662;</span>
                         <div class="index-header">
@@ -2760,6 +2768,10 @@
                     <div class="sub-stat-card">
                         <div class="sub-stat-label">Total Trades</div>
                         <div class="sub-stat-value" id="totalTrades">0</div>
+                    </div>
+                    <div class="sub-stat-card">
+                        <div class="sub-stat-label">Drawdown</div>
+                        <div class="sub-stat-value" id="drawdownValue">--</div>
                     </div>
                 </div>
             </div>
@@ -3344,7 +3356,7 @@
         // Check if API keys are configured
         function checkApiKeysConfigured() {
             const missingKeys = [];
-            if (!POLYGON_API_KEY) missingKeys.push('Polygon.io API Key');
+            if (!POLYGON_API_KEY) missingKeys.push('Massive API Key');
             if (!GOOGLE_CLIENT_ID) missingKeys.push('Google Client ID');
             if (!GOOGLE_API_KEY) missingKeys.push('Google API Key');
             if (!ANTHROPIC_API_URL) missingKeys.push('Anthropic API URL');
@@ -11708,7 +11720,28 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Total Trades
             const transactions = portfolio.transactions || [];
             document.getElementById('totalTrades').textContent = transactions.length;
-            
+
+            // Alpha vs SPY
+            const health = portfolio.portfolioHealth;
+            if (health && health.alpha != null) {
+                document.getElementById('alphaValue').textContent = (health.alpha >= 0 ? '+' : '') + health.alpha.toFixed(2) + '%';
+                document.getElementById('alphaValue').style.color = health.alpha >= 0 ? '#34d399' : '#f87171';
+                document.getElementById('spyReturn').textContent = 'SPY: ' + (health.spyReturn >= 0 ? '+' : '') + health.spyReturn.toFixed(2) + '%';
+                document.getElementById('spyReturn').className = 'index-change';
+            } else {
+                document.getElementById('alphaValue').textContent = '--';
+                document.getElementById('spyReturn').textContent = 'Run analysis to track';
+            }
+
+            // Drawdown from peak
+            if (health && health.drawdownPct != null) {
+                const dd = health.drawdownPct;
+                document.getElementById('drawdownValue').textContent = dd.toFixed(1) + '%';
+                document.getElementById('drawdownValue').style.color = dd > -5 ? '#34d399' : dd > -15 ? '#fbbf24' : '#f87171';
+            } else {
+                document.getElementById('drawdownValue').textContent = '--';
+            }
+
             // Update Learning Insights Display
             updateLearningInsightsDisplay();
 
