@@ -3973,7 +3973,8 @@
 
                 // Benchmark: fetch SPY price and compute portfolio health
                 try {
-                    const spyPrice = await getStockPrice('SPY');
+                    const spyData = await getStockPrice('SPY');
+                    const spyPrice = spyData && spyData.price ? spyData.price : 0;
                     if (spyPrice > 0) {
                         if (!portfolio.spyBaseline) {
                             portfolio.spyBaseline = { price: spyPrice, date: new Date().toISOString() };
@@ -4488,7 +4489,8 @@
 
                 // Benchmark: fetch SPY price and compute portfolio health
                 try {
-                    const spyPrice = await getStockPrice('SPY');
+                    const spyData = await getStockPrice('SPY');
+                    const spyPrice = spyData && spyData.price ? spyData.price : 0;
                     if (spyPrice > 0) {
                         if (!portfolio.spyBaseline) {
                             portfolio.spyBaseline = { price: spyPrice, date: new Date().toISOString() };
