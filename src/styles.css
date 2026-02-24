@@ -2394,6 +2394,8 @@
         .macd-neutral { color: var(--text-faint); }
         .dtc-squeeze { color: var(--accent); font-weight: 700; }
         .dtc-elevated { color: var(--yellow); }
+        .choch-bullish { color: var(--green); }
+        .choch-bearish { color: var(--red); }
         .mcap-cell { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
 
         /* ── Holdings News Headlines ─────────────────────── */

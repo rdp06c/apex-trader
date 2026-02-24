@@ -7581,7 +7581,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                         const dc = dtcVal > 5 ? 'dtc-squeeze' : dtcVal > 3 ? 'dtc-elevated' : '';
                                         dtcStr = ` · DTC: <strong class="${dc}">${dtcVal.toFixed(1)}</strong>`;
                                     }
-                                    return rsiStr + macdStr + dtcStr;
+                                    let chochStr = '';
+                                    if (bars && bars.length >= 5) {
+                                        const struct = detectStructure(bars);
+                                        if (struct.choch) {
+                                            const cc = struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish';
+                                            const arrow = struct.chochType === 'bullish' ? '▲' : '▼';
+                                            chochStr = ` · CHoCH: <strong class="${cc}">${arrow} ${struct.chochType}</strong>`;
+                                        }
+                                    }
+                                    return rsiStr + macdStr + dtcStr + chochStr;
                                 })()}</span>
                             </div>
                             <div class="holding-card-footer">
