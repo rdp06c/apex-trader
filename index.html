@@ -7719,6 +7719,8 @@
                 
                 const holdingSymbolsList = Object.keys(portfolio.holdings);
                 const hasHoldings = holdingSymbolsList.length > 0;
+                const spyToday = enhancedMarketData['SPY']?.changePercent;
+                const spyTodayStr = spyToday != null ? `SPY today: ${spyToday >= 0 ? '+' : ''}${spyToday.toFixed(2)}%` : '';
                 let phase1SellDecisions = [];
                 let phase1HoldDecisions = [];
                 let phase1Summary = '';
@@ -7778,6 +7780,7 @@ SEARCH RECENCY RULE: Today is the ONLY date that matters. Search results older t
 
 Portfolio Cash: $${portfolio.cash.toFixed(2)}
 ${vixCache ? `VIX: ${vixCache.level.toFixed(1)} (${vixCache.interpretation}${vixCache.trend !== 'stable' ? ', ' + vixCache.trend : ''})` : ''}
+${spyTodayStr ? spyTodayStr + ' (real-time — trust this over search results for broad market direction)' : ''}
 Holdings: ${(() => {
     const eh = {};
     Object.entries(portfolio.holdings).forEach(([sym, sh]) => {
@@ -8143,9 +8146,9 @@ IMPORTANT DATE CONTEXT:
 Today's date is ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
 Current quarter: Q${Math.floor((new Date().getMonth() + 3) / 3)} ${new Date().getFullYear()}
 
-${hasHoldings && phase1SellDecisions.length > 0 ? '\n══ PHASE 1 RESULTS (Sells already decided) ══\nSells: ' + phase1SellDecisions.map(d => 'SELL ' + d.shares + ' ' + d.symbol + ': ' + d.reasoning).join('\n') + '\nHoldings Summary: ' + phase1Summary + '\nMarket Regime: ' + phase1Regime + (vixCache ? '\nVIX: ' + vixCache.level.toFixed(1) + ' (' + vixCache.interpretation + (vixCache.trend !== 'stable' ? ', ' + vixCache.trend : '') + ')' : '') + '\n══════════════════════════════════════\n' : ''}
-${hasHoldings && phase1SellDecisions.length === 0 ? '\n══ PHASE 1 RESULTS: All holdings reviewed, no sells needed. Keeping current positions. ══\nMarket Regime: ' + phase1Regime + (vixCache ? '\nVIX: ' + vixCache.level.toFixed(1) + ' (' + vixCache.interpretation + (vixCache.trend !== 'stable' ? ', ' + vixCache.trend : '') + ')' : '') + '\n' : ''}
-${!hasHoldings && vixCache ? '\n══ MARKET CONTEXT ══\nVIX: ' + vixCache.level.toFixed(1) + ' (' + vixCache.interpretation + (vixCache.trend !== 'stable' ? ', ' + vixCache.trend : '') + ')\n══════════════════\n' : ''}
+${hasHoldings && phase1SellDecisions.length > 0 ? '\n══ PHASE 1 RESULTS (Sells already decided) ══\nSells: ' + phase1SellDecisions.map(d => 'SELL ' + d.shares + ' ' + d.symbol + ': ' + d.reasoning).join('\n') + '\nHoldings Summary: ' + phase1Summary + '\nMarket Regime: ' + phase1Regime + (vixCache ? '\nVIX: ' + vixCache.level.toFixed(1) + ' (' + vixCache.interpretation + (vixCache.trend !== 'stable' ? ', ' + vixCache.trend : '') + ')' : '') + (spyTodayStr ? '\n' + spyTodayStr + ' (real-time)' : '') + '\n══════════════════════════════════════\n' : ''}
+${hasHoldings && phase1SellDecisions.length === 0 ? '\n══ PHASE 1 RESULTS: All holdings reviewed, no sells needed. Keeping current positions. ══\nMarket Regime: ' + phase1Regime + (vixCache ? '\nVIX: ' + vixCache.level.toFixed(1) + ' (' + vixCache.interpretation + (vixCache.trend !== 'stable' ? ', ' + vixCache.trend : '') + ')' : '') + (spyTodayStr ? '\n' + spyTodayStr + ' (real-time)' : '') + '\n' : ''}
+${!hasHoldings ? '\n══ MARKET CONTEXT ══\n' + (vixCache ? 'VIX: ' + vixCache.level.toFixed(1) + ' (' + vixCache.interpretation + (vixCache.trend !== 'stable' ? ', ' + vixCache.trend : '') + ')\n' : '') + (spyTodayStr ? spyTodayStr + ' (real-time)\n' : '') + '══════════════════\n' : ''}
 
 When searching and citing data:
 - ONLY use earnings from 2025 or later (2024 data is over 1 year old!)
