@@ -4491,7 +4491,7 @@
         const NEWS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
         let vixCache = null;
-        const VIX_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours (EOD data)
+        const VIX_CACHE_TTL = 15 * 60 * 1000; // 15 minutes (real-time via Yahoo)
 
         async function fetchNewsForStocks(symbols) {
             // Restore from localStorage
@@ -4571,11 +4571,55 @@
                 }
             } catch { /* ignore corrupt cache */ }
 
-            try {
-                console.log('📊 Fetching VIX snapshot...');
+            // Helper to build final vixCache object from raw values
+            function buildVixResult(level, prevClose) {
+                const change = level - prevClose;
+                const changePercent = prevClose !== 0 ? ((level - prevClose) / prevClose) * 100 : 0;
+                const trend = changePercent > 5 ? 'rising' : changePercent < -5 ? 'falling' : 'stable';
+                let interpretation;
+                if (level < 15) interpretation = 'complacent';
+                else if (level <= 20) interpretation = 'normal';
+                else if (level <= 30) interpretation = 'elevated';
+                else interpretation = 'panic';
 
-                // Use snapshot endpoint (covered by Indices Basic plan)
-                // Try api.polygon.io first (known CORS-friendly), fall back to api.massive.com with Bearer auth
+                vixCache = { level, prevClose, change, changePercent, trend, interpretation, _fetchedAt: Date.now() };
+
+                try {
+                    localStorage.setItem('vixCache', JSON.stringify(vixCache));
+                    localStorage.setItem('vixCacheTs', String(Date.now()));
+                } catch (e) { console.warn('Could not persist VIX cache:', e.message); }
+
+                console.log(`✅ VIX: ${level.toFixed(1)} (${interpretation}, ${trend}), change: ${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}%)`);
+                return vixCache;
+            }
+
+            // --- Primary: Yahoo Finance via Cloudflare Worker proxy ---
+            if (ANTHROPIC_API_URL) {
+                try {
+                    const baseUrl = ANTHROPIC_API_URL.replace(/\/+$/, '');
+                    console.log('📊 Fetching VIX via Yahoo (worker proxy)...');
+                    const resp = await fetch(`${baseUrl}/vix`);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        const meta = data.chart?.result?.[0]?.meta;
+                        if (meta && typeof meta.regularMarketPrice === 'number') {
+                            const level = meta.regularMarketPrice;
+                            const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? level;
+                            console.log(`✅ VIX fetched via yahoo`);
+                            return buildVixResult(level, prevClose);
+                        }
+                        console.warn('VIX (yahoo): unexpected response shape', data);
+                    } else {
+                        console.warn(`VIX (yahoo): HTTP ${resp.status}`);
+                    }
+                } catch (e) {
+                    console.warn('VIX (yahoo) error:', e.message);
+                }
+            }
+
+            // --- Fallback: Polygon indices snapshot (may be stale EOD data) ---
+            try {
+                console.log('📊 Fetching VIX via Polygon (fallback)...');
                 let data = null;
                 const endpoints = [
                     { url: `https://api.polygon.io/v3/snapshot/indices?ticker.any_of=I:VIX&apiKey=${POLYGON_API_KEY}`, label: 'polygon' },
@@ -4591,7 +4635,7 @@
                         }
                         data = await response.json();
                         if (data.results && data.results.length > 0) {
-                            console.log(`✅ VIX fetched via ${ep.label}`);
+                            console.log(`⚠️ VIX fetched via ${ep.label} (fallback — may be stale)`);
                             break;
                         }
                         data = null;
@@ -4609,37 +4653,7 @@
                 const level = snap.value;
                 const session = snap.session || {};
                 const prevClose = session.previous_close || level;
-                const change = session.change || (level - prevClose);
-                const changePercent = session.change_percent || (prevClose !== 0 ? ((level - prevClose) / prevClose) * 100 : 0);
-
-                // Trend from today's change direction
-                const trend = changePercent > 5 ? 'rising' : changePercent < -5 ? 'falling' : 'stable';
-
-                // Interpretation
-                let interpretation;
-                if (level < 15) interpretation = 'complacent';
-                else if (level <= 20) interpretation = 'normal';
-                else if (level <= 30) interpretation = 'elevated';
-                else interpretation = 'panic';
-
-                vixCache = {
-                    level,
-                    prevClose,
-                    change,
-                    changePercent,
-                    trend,
-                    interpretation,
-                    _fetchedAt: Date.now()
-                };
-
-                // Persist to localStorage
-                try {
-                    localStorage.setItem('vixCache', JSON.stringify(vixCache));
-                    localStorage.setItem('vixCacheTs', String(Date.now()));
-                } catch (e) { console.warn('Could not persist VIX cache:', e.message); }
-
-                console.log(`✅ VIX: ${level.toFixed(1)} (${interpretation}, ${trend}), change: ${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}%)`);
-                return vixCache;
+                return buildVixResult(level, prevClose);
             } catch (err) {
                 console.warn('VIX fetch error:', err.message);
                 return null;
