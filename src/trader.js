@@ -1295,33 +1295,57 @@
 
             const BATCH = 20;
             let fetchedDates = 0, skippedDates = 0;
+            const failedDates = [];
+
+            async function fetchGroupedDate(dateStr) {
+                try {
+                    const response = await fetch(
+                        `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${dateStr}?adjusted=true&apiKey=${POLYGON_API_KEY}`
+                    );
+                    if (!response.ok) return { dateStr, bars: [] };
+                    const data = await response.json();
+                    if (data.resultsCount === 0 || !data.results) {
+                        return { dateStr, bars: [], holiday: true };
+                    }
+                    return { dateStr, bars: data.results };
+                } catch (err) {
+                    return { dateStr, bars: [], error: err.message };
+                }
+            }
 
             for (let i = 0; i < tradingDates.length; i += BATCH) {
                 const batch = tradingDates.slice(i, i + BATCH);
-                const batchResults = await Promise.all(batch.map(async (dateStr) => {
-                    try {
-                        const response = await fetch(
-                            `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${dateStr}?adjusted=true&apiKey=${POLYGON_API_KEY}`
-                        );
-                        if (!response.ok) return { dateStr, bars: [] };
-                        const data = await response.json();
-                        if (data.resultsCount === 0 || !data.results) {
-                            return { dateStr, bars: [] }; // Holiday or no data
-                        }
-                        return { dateStr, bars: data.results };
-                    } catch (err) {
-                        console.warn(`Grouped daily fetch failed for ${dateStr}:`, err.message);
-                        return { dateStr, bars: [] };
-                    }
-                }));
+                const batchResults = await Promise.all(batch.map(fetchGroupedDate));
 
-                for (const { dateStr, bars } of batchResults) {
-                    if (bars.length === 0) { skippedDates++; continue; }
+                for (const result of batchResults) {
+                    if (result.error) { failedDates.push(result.dateStr); continue; }
+                    if (result.bars.length === 0) { skippedDates++; continue; }
                     fetchedDates++;
-                    for (const bar of bars) {
-                        if (!symbolSet.has(bar.T)) continue; // Filter to our universe
+                    for (const bar of result.bars) {
+                        if (!symbolSet.has(bar.T)) continue;
                         if (!multiDayCache[bar.T]) multiDayCache[bar.T] = [];
                         multiDayCache[bar.T].push({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v, t: bar.t });
+                    }
+                }
+            }
+
+            // Retry failed dates (connection resets etc) with small delay between each
+            if (failedDates.length > 0) {
+                console.log(`🔄 Retrying ${failedDates.length} failed dates...`);
+                for (const dateStr of failedDates) {
+                    await new Promise(r => setTimeout(r, 300));
+                    const result = await fetchGroupedDate(dateStr);
+                    if (result.bars.length > 0) {
+                        fetchedDates++;
+                        for (const bar of result.bars) {
+                            if (!symbolSet.has(bar.T)) continue;
+                            if (!multiDayCache[bar.T]) multiDayCache[bar.T] = [];
+                            multiDayCache[bar.T].push({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v, t: bar.t });
+                        }
+                        console.log(`  ✅ Recovered ${dateStr}`);
+                    } else {
+                        skippedDates++;
+                        console.warn(`  ❌ Retry failed for ${dateStr}:`, result.error || 'no data');
                     }
                 }
             }
