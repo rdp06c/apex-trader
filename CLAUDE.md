@@ -60,13 +60,16 @@ Browser (index.html)
    - `calculateRSI` – RSI(14) from 40-day bars (client-side Wilder's smoothing)
    - `calculateMACD` – MACD(12,26,9) with crossover detection from 40-day bars
 4. **Candidate Scoring & Selection**:
-   - Composite score = momentum (0-10) + RS normalized (0-10) + sector bonus (-1 to +2) + acceleration bonus (0/1.5) + consistency bonus (0/1) + structure bonus (-2.25 to +2.25) + extension penalty (0 to -3) + pullback bonus (0 to +2) + RSI bonus/penalty (-1 to +1.5) + MACD bonus (-1 to +1) + squeeze bonus (0 to +1.5)
-   - `bigMoverBonus` is disabled (was rewarding stocks already up >5% today — chasing)
-   - **RSI bonus/penalty**: RSI < 30 (oversold) → +1.5, RSI > 70 (overbought) → -1.0
-   - **MACD bonus**: Bullish crossover → +1.0, bearish crossover → -1.0
+   - Composite score = momentum×0.6 (0-6) + RS×0.6 (0-6) + sector bonus (-1 to +2) + acceleration bonus (0/1.5) + consistency bonus (0/1) + structure bonus (-3.75 to +3.75) + extension penalty (0 to -5) + pullback bonus (0 to +5) + runner penalty (0 to -3) + decline penalty (0 to -3, conditional) + RSI bonus/penalty (-5 to +2.5) + MACD bonus (-2 to +2.5) + RS mean-reversion penalty (0 to -3) + squeeze bonus (0 to +1.5) + volume bonus (-0.5 to +0.5) + FVG bonus (-0.5 to +0.5) + learned adjustments
+   - **Base scaling**: Momentum and RS are multiplied by 0.6 to reduce momentum dominance. Quality signals (structure, pullback, RSI zone) now carry proportionally more weight.
+   - **RSI bonus/penalty**: RSI < 30 → +2.5, RSI 30-40 → +1.5, RSI 40-50 → +0.5, RSI > 70 → -3, RSI > 80 → -5
+   - **MACD bonus**: Bullish crossover → +2.5, bearish crossover → -2.0, none → -0.5
    - **Squeeze bonus**: Days-to-cover > 5 + bullish structure + non-outflow sector → +1.5
    - **Extension penalty**: Graduated dampening when momentum OR RS very high. Prevents runners from monopolizing top slots.
-   - **Pullback bonus**: Stocks down 2-8% over 5 days with bullish structure + non-outflow sector get +2. Mild pullbacks (0 to -5%) with intact structure get +1. Helps quality dips compete with runners.
+   - **Pullback bonus** (5 tiers): Deep pullback + strong reversal structure → +5, deep pullback + bullish structure + good sector → +4, mild pullback + bullish structure → +3, deep pullback + neutral structure → +2, mild pullback + neutral → +1
+   - **Decline penalty**: Only applies when structure is NOT bullish. Stocks with bullish structure (score ≥ 1) get no penalty for dipping — these are healthy pullbacks, not breakdowns. Extreme single-day drops (>8%) still get mild -1 even with bullish structure.
+   - **RS mean-reversion penalty**: RS ≥ 95 → -3, RS ≥ 90 → -2, RS ≥ 85 → -1. Addresses the empirical finding that perfect RS (100) stocks have very low win rates (mean-reversion trap).
+   - **Runner penalty**: Scaled proportionally with 0.6 base — up >15% today → -3, up 10-15% → -2, up 7-10% → -1, up 5-7% → -0.5
    - Final candidate pool: top 25 by score + all current holdings + 5 sector wildcards + up to 10 reversal candidates (bullish CHoCH, low-swept, bullish BOS)
 5. **News Fetching** (`fetchNewsForStocks`) – After scoring, fetches recent headlines + machine sentiment for top 25 candidates + holdings (cached 1hr)
 6. **Two-Phase AI Decision**:

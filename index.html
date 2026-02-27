@@ -4967,6 +4967,10 @@
 
         // Shared scoring function — used by both runAIAnalysis and testDataFetch
         function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, signalAdjustments }) {
+            // [1] Scale momentum + RS by 0.6 to reduce base dominance (0-12 instead of 0-20)
+            const momentumContrib = momentumScore * 0.6;
+            const rsContrib = rsNormalized * 0.6;
+
             let sectorBonus = 0;
             if (sectorFlow === 'inflow') sectorBonus = 2;
             else if (sectorFlow === 'modest-inflow') sectorBonus = 1;
@@ -4974,11 +4978,16 @@
 
             const accelBonus = isAccelerating && momentumScore >= 6 ? 1.5 : 0;
             const consistencyBonus = (upDays >= 3 && totalDays >= 4) ? 1.0 : 0;
-            const structureBonus = (structureScore || 0) * 0.75;
+            // [6] Increase structure weight: *1.25 (max ±3.75, was ±2.25)
+            const structureBonus = (structureScore || 0) * 1.25;
 
             const chg = todayChange || 0;
-            const runnerPenalty = chg >= 15 ? -4 : chg >= 10 ? -3 : chg >= 7 ? -2 : chg >= 5 ? -1 : 0;
-            const declinePenalty = chg <= -5 ? -3 : chg <= -3 ? -2 : chg <= -2 ? -1 : 0;
+            // [7] Scale runner penalty proportionally with 0.6 base reduction
+            const runnerPenalty = chg >= 15 ? -3 : chg >= 10 ? -2 : chg >= 7 ? -1 : chg >= 5 ? -0.5 : 0;
+            // [4] Conditional decline penalty: no penalty for bullish structure dips
+            const declinePenalty = (structureScore ?? 0) >= 1
+                ? (chg <= -8 ? -1 : 0)
+                : (chg <= -5 ? -3 : chg <= -3 ? -2 : chg <= -2 ? -1 : 0);
 
             const extensionPenalty = (momentumScore >= 9 && rsNormalized >= 8.5) ? -5
                 : (momentumScore >= 9 || rsNormalized >= 8.5) ? -3.5
@@ -4987,14 +4996,24 @@
                 : 0;
 
             const ret5d = totalReturn5d ?? 0;
-            const pullbackBonus = (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow' && sectorFlow !== 'modest-outflow') ? 2
+            // [3] Bigger, more tiered pullback bonus (max +5, was +2)
+            const pullbackBonus =
+                (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 2 && sectorFlow !== 'outflow') ? 5
+                : (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow' && sectorFlow !== 'modest-outflow') ? 4
+                : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? 3
+                : (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 0) ? 2
                 : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 0 && sectorFlow !== 'outflow') ? 1
                 : 0;
 
+            // [5] Steeper RSI penalties, broader oversold bonuses
             const rsiBonusPenalty = rsi != null
-                ? (rsi < 30 ? 1.5 : rsi > 85 ? -4 : rsi > 75 ? -3 : rsi > 70 ? -2 : 0)
+                ? (rsi < 30 ? 2.5 : rsi < 40 ? 1.5 : rsi < 50 ? 0.5
+                    : rsi > 80 ? -5 : rsi > 70 ? -3 : 0)
                 : 0;
             const macdBonus = macdCrossover === 'bullish' ? 2.5 : macdCrossover === 'bearish' ? -2.0 : -0.5;
+
+            // [2] RS mean-reversion penalty: RS=100 has 11.1% win rate in our data
+            const rsMeanRevPenalty = rsNormalized >= 9.5 ? -3 : rsNormalized >= 9 ? -2 : rsNormalized >= 8.5 ? -1 : 0;
 
             const dtc = daysToCover || 0;
             const squeezeBonus = (dtc > 5 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? 1.5
@@ -5018,9 +5037,9 @@
                 if ((todayChange || 0) >= 5 && signalAdjustments.runnerExtraPenalty) learnedAdj += signalAdjustments.runnerExtraPenalty;
             }
 
-            const compositeScore = momentumScore + rsNormalized + sectorBonus + accelBonus + consistencyBonus
+            const compositeScore = momentumContrib + rsContrib + sectorBonus + accelBonus + consistencyBonus
                 + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + declinePenalty
-                + rsiBonusPenalty + macdBonus + squeezeBonus + volumeBonus + fvgBonus + learnedAdj;
+                + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus + learnedAdj;
 
             return compositeScore;
         }
@@ -5582,9 +5601,9 @@
 
             // Analyze composite score calibration
             const withScore = tradesWithTechnicals.filter(t => t.entryTechnicals.compositeScore != null);
-            const scoreHigh = withScore.filter(t => t.entryTechnicals.compositeScore >= 15);
-            const scoreMedium = withScore.filter(t => t.entryTechnicals.compositeScore >= 10 && t.entryTechnicals.compositeScore < 15);
-            const scoreLow = withScore.filter(t => t.entryTechnicals.compositeScore < 10);
+            const scoreHigh = withScore.filter(t => t.entryTechnicals.compositeScore >= 12);
+            const scoreMedium = withScore.filter(t => t.entryTechnicals.compositeScore >= 7 && t.entryTechnicals.compositeScore < 12);
+            const scoreLow = withScore.filter(t => t.entryTechnicals.compositeScore < 7);
 
             // Analyze VIX level at entry
             const withVIX = tradesWithTechnicals.filter(t => t.entryTechnicals.vixLevel != null);
@@ -5851,10 +5870,10 @@
                 },
                 {
                     id: 'low_composite',
-                    label: 'Low Composite Score (<10)',
-                    losingFilter: t => t.entryTechnicals && t.entryTechnicals.compositeScore != null && t.entryTechnicals.compositeScore < 10,
-                    winningFilter: t => t.entryTechnicals && t.entryTechnicals.compositeScore != null && t.entryTechnicals.compositeScore >= 15,
-                    descTemplate: (ls, ws) => `Low composite score (<10): ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for high scores (15+)`
+                    label: 'Low Composite Score (<7)',
+                    losingFilter: t => t.entryTechnicals && t.entryTechnicals.compositeScore != null && t.entryTechnicals.compositeScore < 7,
+                    winningFilter: t => t.entryTechnicals && t.entryTechnicals.compositeScore != null && t.entryTechnicals.compositeScore >= 12,
+                    descTemplate: (ls, ws) => `Low composite score (<7): ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for high scores (12+)`
                 },
                 {
                     id: 'overconfident_conviction',
@@ -6037,7 +6056,7 @@
                 case 'high_momentum':
                     return data.momentum?.score >= 9;
                 case 'low_composite':
-                    return data.compositeScore != null && data.compositeScore < 10;
+                    return data.compositeScore != null && data.compositeScore < 7;
                 case 'overconfident_conviction':
                     return false; // Can't block by conviction — Claude decides this
                 case 'large_position':
@@ -10780,6 +10799,24 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     // Clean up one-time migration flag (no longer needed)
                     if (portfolio._exitReasonV2) delete portfolio._exitReasonV2;
 
+                    // MIGRATION: Null out composite scores from pre-v2 scoring formula
+                    // Old formula (momentum 0-10 + RS 0-10 = 0-20 base) produced scores ~15-25.
+                    // New formula (×0.6 scaling + RS mean-reversion penalty) produces ~5-17.
+                    // Old scores are incomparable and pollute composite score calibration learning.
+                    // Individual indicator values (RSI, MACD, structure, momentum, etc.) are unaffected.
+                    if (!portfolio._scoringV2) {
+                        let nulled = 0;
+                        (portfolio.closedTrades || []).forEach(trade => {
+                            if (trade.entryTechnicals && trade.entryTechnicals.compositeScore != null) {
+                                trade.entryTechnicals.compositeScore = null;
+                                nulled++;
+                            }
+                        });
+                        portfolio._scoringV2 = true;
+                        if (nulled > 0) console.log(`✅ Migration: Nulled ${nulled} old-formula composite scores on closedTrades (scoring v2)`);
+                    }
+                    if (portfolio._scoringV2) delete portfolio._scoringV2;
+
                     // MIGRATION: Reconstruct totalDeposits if missing or zero
                     // For portfolios created before totalDeposits tracking was added
                     if (!portfolio.totalDeposits && portfolio.initialBalance) {
@@ -12150,9 +12187,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     addRow('Short Squeeze', 'Low DTC (<3)', techData.squeeze.low);
                 }
                 if (techData.compositeScore.hasData) {
-                    addRow('Composite', 'High (≥15)', techData.compositeScore.high);
-                    addRow('Composite', 'Medium (10-15)', techData.compositeScore.medium);
-                    addRow('Composite', 'Low (<10)', techData.compositeScore.low);
+                    addRow('Composite', 'High (≥12)', techData.compositeScore.high);
+                    addRow('Composite', 'Medium (7-12)', techData.compositeScore.medium);
+                    addRow('Composite', 'Low (<7)', techData.compositeScore.low);
                 }
                 if (techData.regime.hasData) {
                     addRow('Regime', 'Bull', techData.regime.bull);
@@ -12473,7 +12510,7 @@ Current Portfolio:
 
             data.candidates.forEach((c, i) => {
                 const score = c.compositeScore;
-                const scoreClass = score >= 15 ? 'score-high' : score >= 10 ? 'score-mid' : score >= 5 ? 'score-low' : 'score-poor';
+                const scoreClass = score >= 12 ? 'score-high' : score >= 8 ? 'score-mid' : score >= 4 ? 'score-low' : 'score-poor';
                 const pct = Math.max(0, Math.min(100, (score / maxScore) * 100));
                 const held = holdingSymbols.has(c.symbol);
                 const structLabel = (c.structure || 'unknown').replace(/_/g, ' ');
