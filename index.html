@@ -10312,9 +10312,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             try {
                 const { total: totalValue, priceData } = await calculatePortfolioValue();
                 
-            // Calculate DAILY PERFORMANCE using portfolio value snapshots
-            // This is the most reliable method: compare current total value to start-of-day value,
-            // adjusting for any deposits made today. No stock-by-stock reconstruction needed.
+            // Calculate DAILY PERFORMANCE by summing each holding's intraday change.
+            // This uses the same price data (change * shares) displayed on each holding card,
+            // so the daily total always matches the sum of individual cards.
             let dailyGain = 0;
             let dailyGainPercent = 0;
 
@@ -10323,77 +10323,27 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const now_local = new Date();
             const dayOfWeek = now_local.getDay(); // 0=Sun, 6=Sat
             const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-            const todayLocal = now_local.getFullYear() + '-' + 
-                String(now_local.getMonth() + 1).padStart(2, '0') + '-' + 
-                String(now_local.getDate()).padStart(2, '0');
-            
-            // Find the start-of-day portfolio value:
-            // Look for the last performanceHistory entry BEFORE today (end of previous day)
-            // If none exists, use the first entry of today as baseline
-            const perfHistory = portfolio.performanceHistory || [];
-            let startOfDayValue = null;
-            let todaysDeposits = 0;
-            
-            for (let i = perfHistory.length - 1; i >= 0; i--) {
-                const entry = perfHistory[i];
-                if (!entry.timestamp || entry.value === null || entry.value === undefined) continue;
-                
-                const entryDate = new Date(entry.timestamp);
-                const entryLocal = entryDate.getFullYear() + '-' + 
-                    String(entryDate.getMonth() + 1).padStart(2, '0') + '-' + 
-                    String(entryDate.getDate()).padStart(2, '0');
-                
-                if (entryLocal < todayLocal) {
-                    // This is the last snapshot from before today — our start-of-day value
-                    startOfDayValue = entry.value;
-                    console.log(`  Start-of-day value (from ${entry.timestamp}): $${startOfDayValue.toFixed(2)}`);
-                    break;
-                }
-            }
-            
-            // If no previous day entry found, use the earliest entry from today
-            if (startOfDayValue === null) {
-                for (let i = 0; i < perfHistory.length; i++) {
-                    const entry = perfHistory[i];
-                    if (!entry.timestamp || entry.value === null || entry.value === undefined) continue;
-                    
-                    const entryDate = new Date(entry.timestamp);
-                    const entryLocal = entryDate.getFullYear() + '-' + 
-                        String(entryDate.getMonth() + 1).padStart(2, '0') + '-' + 
-                        String(entryDate.getDate()).padStart(2, '0');
-                    
-                    if (entryLocal === todayLocal) {
-                        startOfDayValue = entry.value;
-                        console.log(`  Start-of-day value (first today entry ${entry.timestamp}): $${startOfDayValue.toFixed(2)}`);
-                        break;
-                    }
-                }
-            }
-            
-            // Sum up any deposits made today (these inflate portfolio value but aren't gains)
-            perfHistory.forEach(entry => {
-                if (!entry.timestamp) return;
-                const entryDate = new Date(entry.timestamp);
-                const entryLocal = entryDate.getFullYear() + '-' + 
-                    String(entryDate.getMonth() + 1).padStart(2, '0') + '-' + 
-                    String(entryDate.getDate()).padStart(2, '0');
-                if (entryLocal === todayLocal && entry.deposit) {
-                    todaysDeposits += entry.deposit;
-                }
-            });
-            
+
             if (isWeekend) {
                 console.log('  Weekend — market closed, forcing daily gain to 0');
-            } else if (startOfDayValue !== null && startOfDayValue > 0) {
-                dailyGain = totalValue - startOfDayValue - todaysDeposits;
-                dailyGainPercent = (dailyGain / startOfDayValue) * 100;
-                console.log(`  Current value: $${totalValue.toFixed(2)}`);
-                console.log(`  Today's deposits: $${todaysDeposits.toFixed(2)}`);
-                console.log(`  Daily gain: $${dailyGain.toFixed(2)} (${dailyGainPercent.toFixed(2)}%)`);
             } else {
-                console.log('  No start-of-day baseline available — showing 0');
+                // Sum each holding's daily dollar change (same values shown on holding cards)
+                for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
+                    const sp = priceData[symbol];
+                    if (sp && sp.change != null) {
+                        const holdingDailyChange = sp.change * shares;
+                        dailyGain += holdingDailyChange;
+                        console.log(`  ${symbol}: ${shares} shares × $${sp.change.toFixed(2)} = ${holdingDailyChange >= 0 ? '+' : ''}$${holdingDailyChange.toFixed(2)}`);
+                    }
+                }
+                // Percentage relative to total portfolio value (holdings + cash)
+                const baseValue = totalValue - dailyGain;
+                if (baseValue > 0) {
+                    dailyGainPercent = (dailyGain / baseValue) * 100;
+                }
+                console.log(`  Total daily gain: ${dailyGain >= 0 ? '+' : ''}$${dailyGain.toFixed(2)} (${dailyGainPercent.toFixed(2)}%)`);
             }
-            
+
             console.log('═══ END DAILY PERFORMANCE ═══');
             
             document.getElementById('dailyPerformance').textContent = dailyGainPercent.toFixed(2) + '%';
