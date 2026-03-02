@@ -1,0 +1,416 @@
+================================================================================
+  APEX FULL CODE REVIEW — March 2, 2026
+  Reviewer: Claude (Opus 4.6)
+  Scope: Architecture, decision loop, dashboard, portfolio performance, security
+================================================================================
+
+TABLE OF CONTENTS
+  I.   Executive Summary
+  II.  Portfolio Performance Analysis (from real trade data)
+  III. Critical & High Findings (must fix)
+  IV.  Medium Findings (should fix)
+  V.   Low Findings (nice to fix)
+  VI.  Architecture Recommendations
+  VII. Issue Index (quick reference)
+
+================================================================================
+I. EXECUTIVE SUMMARY
+================================================================================
+
+The APEX system is architecturally sound — the two-phase AI decision loop,
+multi-layer technical analysis, and self-learning framework are well-designed.
+However, the portfolio data tells a clear story: 29% win rate, -3.4% return on
+deposits, negative alpha vs SPY (-3.94%). The system is losing money.
+
+The root causes are NOT architectural — they're tuning and enforcement problems:
+  1. Entry quality filters are too weak (RS 100 entries dominate, 18% win rate)
+  2. Conviction is inflated (almost never below 7, full scale unused)
+  3. Cash deployment ignores regime (97% invested during choppy market)
+  4. Position sizing is uncapped (NOW = 24.6% of portfolio)
+  5. "Opportunity cost" churn destroys value (10 of 31 exits, coin-flip outcomes)
+  6. Several derived trading rules are broken or too weak
+
+Code-level bugs found: 26 issues in trader.js, 22 in HTML/CSS/build.
+No critical bugs. 7 high-severity issues. 17 medium. Balance is low.
+
+================================================================================
+II. PORTFOLIO PERFORMANCE ANALYSIS (31 closed trades, 10 open positions)
+================================================================================
+
+OVERALL PERFORMANCE
+  Win rate:           29.0% (9W / 22L)
+  Avg winner:         +3.35%
+  Avg loser:          -4.95%
+  Profit factor:      0.37 (for every $1 gained, $2.70 lost)
+  Total closed P&L:   -$269.94
+  Total deposits:     $6,512
+  Current value:      ~$6,289 (-3.4% return)
+  Alpha vs SPY:       -3.94%
+
+CONVICTION ACCURACY
+  Conv 9:  56% win rate (best)     — 9 trades
+  Conv 8:  22% win rate            — 9 trades
+  Conv 10:  0% win rate (worst!)   — 2 trades
+  Conv 7:   0% win rate            — 5 trades
+  Conv 5:   0% win rate            — 1 trade
+  >> AI is overconfident. Conv 10 = worst. Conv 9 = best. Full scale unused.
+
+SECTOR PERFORMANCE (worst to best)
+  Technology:   27% WR, -$134.88 total (11 trades) — WORST
+  Consumer:     12% WR, -$36.23 total (8 trades)
+  Materials:    33% WR, -$52.00 total (3 trades)
+  Energy:       33% WR, -$10.21 total (3 trades)
+  Industrials:  50% WR, -$5.09 total (2 trades)
+  Real Estate:  67% WR, -$15.78 total (3 trades) — BEST
+
+ENTRY QUALITY SIGNALS
+  RS 100 entries:      18% win rate, avg -3.91% (11 trades) — TRAP
+  RS 80-89 entries:    50% win rate, avg -0.39% (6 trades)
+  Overbought RSI >70:  17% win rate, avg -4.12% (6 trades)
+  RSI 60-70:           33% win rate, avg -1.08% (9 trades)
+  Sector "caution":     0% win rate, avg -10.32% (2 trades) — DEADLY
+
+EXIT QUALITY
+  64% of sold stocks continued falling (sells were correct)
+  Notable failures: IPGP sold -18.75% then rallied +11.45% (panic sell at bottom)
+                    CCI sold +2.82% then rallied +11.45% (winner cut too early)
+  "Opportunity cost" exits: 10/31 (32%) — essentially random outcomes
+
+CURRENT PORTFOLIO RISK
+  Top 4 positions = 75.1% of portfolio (NOW 24.6%, BWXT 17.4%, RTX 17%, FIS 16.1%)
+  Cash = 3.3% — zero flexibility
+  97% invested during choppy regime with 29% win rate
+
+LEARNING EFFECTIVENESS
+  First 15 trades:  33% win rate
+  Last 16 trades:   25% win rate
+  >> System is NOT improving. Win rate declined.
+
+================================================================================
+III. CRITICAL & HIGH FINDINGS
+================================================================================
+
+[H1] isAnalysisRunning Not Reset on Early Return
+  File: src/trader.js, lines ~4465-4494 (runAIAnalysis)
+  Category: Bug
+  When the zero-data gate fires or user cancels the <70% gate, the function
+  returns WITHOUT resetting isAnalysisRunning = false. This permanently locks
+  out all future analysis until page refresh.
+  FIX: Set isAnalysisRunning = false before every early return, or use finally.
+
+[H2] Pullback Entry Prefer Rule Tests Wrong Field (Dead Code)
+  File: src/trader.js, line ~3028 (deriveTradingRules)
+  Category: Bug
+  The pullback_entry prefer rule filters on entryTechnicals.momentumScore >= -8
+  && <= -2. But momentumScore is a 0-10 scale (never negative). This condition
+  NEVER matches. The "prefer pullback entries" learning signal is completely dead.
+  FIX: Change momentumScore to totalReturn5d (the 5-day return % that CAN be negative).
+
+[H3] XOR "Encryption" Provides Zero Security
+  File: src/trader.js, lines ~9937-9958 (encryptKeys/decryptKeys)
+  Category: Security
+  Uses XOR with GDRIVE_CONFIG.CLIENT_ID as key. Client IDs are public by design.
+  Anyone with the Drive file + Client ID can decrypt API keys trivially.
+  FIX: Use Web Crypto API (AES-GCM) with user-provided password, or document
+  this as obfuscation-only (acceptable given drive.file scope).
+
+[H4] External CDN Scripts Without Subresource Integrity (SRI)
+  File: src/template.html, lines 10, 12
+  Category: Security
+  Chart.js loaded from jsDelivr without integrity hash. CDN compromise = full
+  access to localStorage (API keys, portfolio data).
+  FIX: Add integrity="sha384-..." crossorigin="anonymous" to Chart.js script tag.
+
+[H5] Accessibility: Interactive Divs Without Keyboard Support (4 patterns)
+  Files: src/body.html line 11, src/trader.js (generated HTML)
+  Category: Accessibility
+  cloudSyncStatus, holding-card-catalyst, decision-stock-item, and
+  decision-thoughts/research-summary all use <div onclick> without role="button",
+  tabindex="0", or keyboard event handlers. Keyboard users cannot interact.
+  FIX: Add role="button" tabindex="0" onkeydown handler to all interactive divs.
+
+[H6] RS 100 Penalty Too Weak — Entries Still Dominating
+  File: src/trader.js (composite scoring)
+  Category: Trading Logic
+  RS >= 95 gets -3 penalty, but 11 of 22 tracked trades entered at RS 100 with
+  only 18% win rate. The penalty is NOT preventing these entries.
+  FIX: Double the penalty (RS >= 95 -> -6) or make it a block rule in deriveTradingRules.
+
+[H7] Overbought RSI Rule Should Be Block, Not Warn
+  File: src/trader.js (deriveTradingRules)
+  Category: Trading Logic
+  RSI >70 at entry: 17% win rate, avg -4.12%. Currently only "warn" level.
+  6 trades is enough data to confirm this pattern.
+  FIX: Upgrade overbought_rsi from "warn" to "block" enforcement level.
+
+================================================================================
+IV. MEDIUM FINDINGS
+================================================================================
+
+[M1] Migration Flags Immediately Deleted (Runs Every Load)
+  File: src/trader.js, lines ~7862-7884 (loadPortfolio)
+  _exitReasonV2 flag set then deleted. Same for _scoringV2. Migrations re-run
+  on every page load. Idempotent but wasteful.
+  FIX: Remove the delete lines so flags persist.
+
+[M2] fetchGroupedDailyBars Doesn't Account for US Holidays
+  File: src/trader.js, lines ~1282-1295
+  Skips weekends but not holidays. ~10 holidays/year means ~38 bars instead of 40.
+  In holiday clusters (Thanksgiving week), could get notably fewer bars.
+  FIX: After fetching, if <35 actual trading days, extend date range.
+
+[M3] fetchGroupedDailyBars Today-Bar Dedup Uses Local Timezone
+  File: src/trader.js, line ~1372
+  Uses browser local timezone for date comparison instead of ET. Users in
+  timezones ahead of Eastern could get duplicate or missing bars.
+  FIX: Use ET timezone comparison like isMarketOpen() does.
+
+[M4] uploadDecisionToDrive Doesn't Use gdriveApiFetch (No Token Refresh)
+  File: src/trader.js, lines ~8667-8671, ~8742-8748, ~9997-10044
+  Several Google Drive functions use raw fetch() instead of gdriveApiFetch()
+  which handles 401 token refresh. Mid-session token expiry = silent failures.
+  FIX: Use gdriveApiFetch() consistently for all Drive API calls.
+
+[M5] portfolio.transactions Grows Unbounded
+  File: src/trader.js, lines ~7118, 7330
+  No cap on transactions array. Over months, could hit localStorage 5-10MB limit.
+  FIX: Add rolling cap (e.g., last 500 transactions, summarize older).
+
+[M6] Phase 2 Candidate Count Can Overwhelm Context Window
+  Per CLAUDE.md: no hard cap on candidate count, can exceed 50+.
+  FIX: Hard cap at 35-40 candidates, summarize the rest.
+
+[M7] Feedback Loop Risk in Signal Accuracy Adjustments
+  File: src/trader.js, lines ~2023-2037 (getSignalAccuracyAdjustments)
+  Learned penalties reduce trades with that signal, which reduces recovery data
+  points, which locks in the penalty. No decay or recency weighting.
+  FIX: Weight recent trades more heavily, or cap adjustments at +/-1.
+
+[M8] Encryption Password Falls Back to Hardcoded Default
+  File: src/trader.js, lines ~10159-10163 (getEncryptionPassword)
+  If CLIENT_ID is empty, password = 'apex_default_key_2026' (public string).
+  FIX: Refuse to encrypt/decrypt without a real Client ID.
+
+[M9] Partial Sell Records Wrong Hold Time
+  File: src/trader.js, lines ~7222-7327 (executeSingleTrade)
+  Hold time uses first buy's timestamp, ignoring subsequent add-to-positions.
+  FIX: Weight hold time by shares from each buy transaction.
+
+[M10] max-height: 5000px Transition Hack for Collapsible Sections
+  File: src/styles.css, line ~444
+  Expanding sections animate through the full 0-5000px range causing timing
+  mismatch. Collapsing feels normal, expanding has visible delay.
+  FIX: Use JS to measure scrollHeight and set max-height dynamically.
+
+[M11] Global button Styles Leak Into All Button Elements
+  File: src/styles.css, lines ~770-793
+  Base button selector applies margins/padding to every <button>, forcing
+  overrides throughout the CSS.
+  FIX: Scope to .sidebar-actions button or add .btn-primary class.
+
+[M12] activity-feed max-height Conflicts With Collapsible Pattern
+  File: src/styles.css, lines ~688-691
+  overflow-y:auto on the outer card clips the collapsible animation.
+  FIX: Move max-height to inner #activityFeed div.
+
+[M13] Chart.js Loaded Synchronously (Render-Blocking)
+  File: src/template.html, line 10
+  200KB+ library blocks HTML parsing.
+  FIX: Add defer attribute to the script tag.
+
+[M14] No Content Security Policy (CSP)
+  File: src/template.html
+  No CSP meta tag. Inline onclick handlers require 'unsafe-inline' anyway,
+  but even a permissive CSP restricts script sources.
+  FIX: Add <meta http-equiv="Content-Security-Policy"> with domain whitelist.
+
+[M15] aria-expanded Not Dynamically Updated
+  File: src/body.html, lines 65, 288, 306, etc.
+  Section headers have static aria-expanded. If toggleSection() doesn't update
+  this attribute, screen readers won't know current state.
+  FIX: Verify toggleSection() updates aria-expanded on toggle.
+
+[M16] Modal Lacks Focus Trap and aria-modal
+  File: src/body.html, lines ~400-406
+  #resultModal has no role="dialog", aria-modal, or focus trap.
+  FIX: Add ARIA attributes and implement focus trap in JS.
+
+[M17] Cash Deployment Ignoring Regime
+  Category: Trading Logic
+  System is 97% invested during choppy regime with 29% win rate. Phase 2 has
+  regime-based cash deployment guidance but it's clearly not being followed.
+  FIX: Add code-enforced minimum cash reserve per regime (e.g., choppy = 20% min cash).
+
+================================================================================
+V. LOW FINDINGS
+================================================================================
+
+[L1] detectStructure returns basis: '20-day-structure' but uses 40-day bars
+[L2] rsNormalized name suggests 0-1 range but it's 0-10
+[L3] FVG detection overwrites earlier gaps (only last FVG returned)
+[L4] bigMoverBonus dead code (always 0, still in formula)
+[L5] deriveTradingRules writes to portfolio.tradingRules unnecessarily
+[L6] analyzeHoldAccuracy doesn't actually break down by RSI zone (docs claim it does)
+[L7] recentTrend calculation is simplistic (wins > losses, no trajectory)
+[L8] Sell decisions shown in UI even when execution failed (same-day block)
+[L9] escapeNewlinesInJsonStrings edge case with trailing backslash (harmless)
+[L10] stockNames not escaped in candidate scorecard innerHTML (safe since hardcoded)
+[L11] runAIAnalysis is ~2,460 lines long (maintainability concern)
+[L12] No timeout on individual Polygon API calls (hung connection blocks pipeline)
+[L13] loadPortfolio migration calls savePortfolio which can trigger Drive upload
+[L14] performanceHistory cap enforcement needs verification
+[L15] Duplicate .learning-tag CSS rule (lines 947 and 1693)
+[L16] Hardcoded color values bypass CSS design tokens
+[L17] -webkit-overflow-scrolling: touch is deprecated
+[L18] No scrollbar-width/scrollbar-color for Firefox
+[L19] Regime banner missing responsive rule for narrow screens
+[L20] onkeypress is deprecated (body.html line 393), use onkeydown
+[L21] No heading hierarchy below section <h2> elements
+[L22] build.cmd doesn't add trailing newline after injected content
+[L23] build.cmd mixed line endings (CRLF/LF)
+[L24] No build output integrity check
+[L25] --text-muted and --text-faint nearly identical, used inconsistently
+[L26] Conviction inflation (AI almost never assigns below 7)
+[L27] Missing entryTechnicals on first ~9 trades (data loss for learning)
+[L28] No max position size cap enforced in code
+[L29] Sector-specific rules absent from deriveTradingRules
+[L30] "Opportunity cost" churn (32% of exits, coin-flip outcomes)
+
+================================================================================
+VI. ARCHITECTURE RECOMMENDATIONS
+================================================================================
+
+1. STRUCTURED OUTPUT FOR AI RESPONSES
+   The 5-layer JSON parsing recovery system is impressive but symptoms of a
+   fundamental problem. Consider using Anthropic's tool_use response format for
+   Phase 1 and Phase 2, which guarantees valid JSON structure and eliminates
+   most parsing fallbacks.
+
+2. EXTRACT runAIAnalysis INTO SUB-FUNCTIONS
+   At ~2,460 lines, this function is the single biggest maintainability risk.
+   Extract: buildPhase1Prompt(), parsePhase1Response(), buildPhase2Prompt(),
+   parsePhase2Response(), preparePhase2Candidates(). This is a significant
+   refactor — discuss before implementing.
+
+3. CODE-ENFORCED TRADING GUARDRAILS
+   The derived trading rules system is good but several rules are too weak or
+   broken. Consider adding hard-coded guardrails that can't be overridden:
+     - Max position size: 15% of portfolio
+     - Min cash reserve: 10% (20% in choppy/bear regime)
+     - Block RSI >70 entries (or require exceptional other signals)
+     - Block RS 100 entries (mean-reversion trap)
+     - Block entries during sector "caution" flow
+
+4. WINNER MANAGEMENT
+   CCI was sold at +2.82% and then ran +11.45%. The system needs better "let
+   winners run" logic:
+     - Trailing stop based on ATR or structure (not fixed %)
+     - Phase 1 prompt guidance: "Don't sell a stock that's still in bullish
+       structure just because something else scores higher"
+     - Track opportunity cost of sells (already done) and inject this as
+       learning signal
+
+5. CONVICTION CALIBRATION
+   The AI uses 7-10 for nearly everything. Add prompt guidance:
+     - "Use the FULL 1-10 scale. Conviction 5-6 should be common for speculative
+       entries. 9-10 should be rare (<=20% of buys)."
+     - Or normalize AI-provided conviction scores programmatically.
+
+6. SECTOR-AWARE POSITION SIZING
+   Technology is -$134.88 over 11 trades. The system should:
+     - Track sector win rates in deriveTradingRules
+     - Reduce position size for sectors with <33% win rate
+     - Or block new entries in sectors with sustained losses
+
+================================================================================
+VII. ISSUE INDEX (QUICK REFERENCE)
+================================================================================
+
+  TOTAL: 7 High + 17 Medium + 30 Low = 54 issues
+
+  BUGS (code-level):
+    H1  isAnalysisRunning not reset on early return
+    H2  pullback_entry rule tests wrong field (dead code)
+    M1  Migration flags deleted immediately
+    M2  Holiday handling missing in grouped daily bars
+    M3  Timezone mismatch in today-bar dedup
+    M4  Drive functions skip token refresh
+    M9  Partial sell records wrong hold time
+    L8  Failed sells shown in decision UI
+
+  TRADING LOGIC:
+    H6  RS 100 penalty too weak
+    H7  Overbought RSI rule should be block
+    M7  Feedback loop in signal accuracy adjustments
+    M17 Cash deployment ignoring regime
+    L26 Conviction inflation
+    L28 No max position size cap
+    L29 No sector-specific derived rules
+    L30 Opportunity cost churn
+
+  SECURITY:
+    H3  XOR encryption provides zero security
+    H4  No SRI on CDN scripts
+    M8  Encryption fallback to hardcoded key
+    M14 No Content Security Policy
+    L10 stockNames not escaped in scorecard
+
+  ACCESSIBILITY:
+    H5  Interactive divs without keyboard support (4 patterns)
+    M15 aria-expanded not dynamically updated
+    M16 Modal lacks focus trap and aria-modal
+
+  PERFORMANCE:
+    M5  Unbounded transactions array
+    M6  Candidate count can overwhelm context
+    M10 max-height 5000px animation hack
+    M13 Chart.js loaded synchronously
+
+  CODE QUALITY:
+    M11 Global button styles leak
+    M12 activity-feed overflow clips collapsible
+    L1-L7, L11-L25 (various, see section V)
+
+================================================================================
+VIII. IMPLEMENTATION STATUS (branch: code-review-fixes-2026-03-02)
+================================================================================
+
+  FIXED (46 issues):
+    H1, H2, H6, H7, M1-M7, M9-M13, M17,
+    L1-L8, L11-L20, L22-L26, L28-L30
+
+  ARCHITECTURE RECOMMENDATIONS:
+    Rec #1 (Structured output/tool_use)   — DEFERRED (see note below)
+    Rec #2 (Extract runAIAnalysis)        — DEFERRED (see note below)
+    Rec #3 (Code-enforced guardrails)     — DONE (via H6, H7, M17, L28, L29)
+    Rec #4 (Winner management)            — DONE (Phase 1 prompt guidance)
+    Rec #5 (Conviction calibration)       — DONE (via L26 prompt rewrite)
+    Rec #6 (Sector-aware position sizing) — DONE (via L29 sector rules)
+
+  NOT IN SCOPE (8 issues — security/accessibility, separate effort):
+    H3  XOR encryption (zero security)
+    H4  No SRI on CDN scripts
+    H5  Interactive divs without keyboard support
+    M8  Encryption fallback to hardcoded key
+    M14 No Content Security Policy
+    M15 aria-expanded not dynamically updated
+    M16 Modal lacks focus trap and aria-modal
+    L10 stockNames not escaped in scorecard
+    L21 (not in fix list)
+    L27 (not in fix list)
+
+  DEFERRED RECOMMENDATIONS NOTE:
+    Rec #1 (Structured output/tool_use) — Switching the AI response format from
+    free-form JSON to tool_use structured output would touch the streaming parser,
+    both phase prompts, all JSON extraction/fallback code, and the Cloudflare
+    Worker. High risk, impossible to test without live API calls. Should be its
+    own branch/project.
+
+    Rec #2 (Extract runAIAnalysis) — The function is ~2,460 lines. Breaking it
+    into sub-functions is pure refactor with no behavioral change, but the scope
+    means high risk of subtle bugs (variable scoping, closures, shared state).
+    Should be its own branch/project with careful incremental extraction.
+
+================================================================================
+  END OF REVIEW
+================================================================================

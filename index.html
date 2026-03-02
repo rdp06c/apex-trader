@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <!-- Google Identity Services (New Auth Library) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
@@ -53,7 +53,7 @@
             --text-primary: #f5f5f0;
             --text-secondary: #a8a8a0;
             --text-muted: #78786e;
-            --text-faint: #7a7a72;
+            --text-faint: #5a5a52; /* Distinct from --text-muted: use for de-emphasized labels, timestamps */
 
             --radius-sm: 8px;
             --radius-md: 12px;
@@ -74,6 +74,9 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            /* Firefox scrollbar styling */
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-medium) transparent;
         }
 
         body {
@@ -453,14 +456,14 @@
 
         .section-body {
             overflow: hidden;
-            transition: max-height 0.3s ease, opacity var(--transition-fast);
-            max-height: 5000px;
+            transition: max-height 0.35s ease-out, opacity var(--transition-fast), padding-top var(--transition-fast);
+            max-height: none;
             opacity: 1;
             padding-top: 16px;
         }
 
         .section-body.collapsed {
-            max-height: 0;
+            max-height: 0 !important;
             opacity: 0;
             padding-top: 0;
         }
@@ -698,7 +701,7 @@
         }
 
         /* ── Activity Feed ─────────────────────────────────── */
-        .activity-feed {
+        .activity-feed .section-body {
             max-height: 500px;
             overflow-y: auto;
         }
@@ -790,6 +793,11 @@
             font-weight: 600;
             cursor: pointer;
             transition: all var(--transition-fast);
+        }
+
+        /* Spacing only for sidebar action buttons — not applied globally */
+        .sidebar-actions button,
+        .action-buttons button {
             margin-right: 8px;
             margin-bottom: 8px;
         }
@@ -887,11 +895,11 @@
         }
 
         button.btn-save { padding: 10px 20px; font-size: 14px; background: var(--accent); color: #000; font-weight: 600; margin-right: 10px; }
-        button.btn-sync { padding: 10px 20px; font-size: 14px; background: #10b981; color: white; font-weight: 600; margin-right: 10px; }
-        button.btn-download { padding: 10px 20px; font-size: 14px; background: #3b82f6; color: white; font-weight: 600; }
+        button.btn-sync { padding: 10px 20px; font-size: 14px; background: var(--green); color: white; font-weight: 600; margin-right: 10px; }
+        button.btn-download { padding: 10px 20px; font-size: 14px; background: var(--blue); color: white; font-weight: 600; }
         button.btn-restore { padding: 8px 16px; font-size: 13px; background: var(--accent-secondary); color: white; font-weight: 600; margin-right: 10px; }
         button.btn-clear { padding: 8px 16px; font-size: 13px; background: transparent; color: var(--red); border: 1px solid var(--red-border); font-weight: 600; }
-        button.btn-drive-save { padding: 8px 16px; font-size: 13px; background: #10b981; color: white; font-weight: 600; }
+        button.btn-drive-save { padding: 8px 16px; font-size: 13px; background: var(--green); color: white; font-weight: 600; }
 
         #apiKeySaveStatus {
             font-size: 12px;
@@ -957,10 +965,7 @@
             color: var(--text-muted);
         }
 
-        .learning-tag {
-            display: inline-block;
-            margin-bottom: 12px;
-        }
+        /* .learning-tag — consolidated in Learning Insights section below */
 
         /* ── AI Thinking ───────────────────────────────────── */
         .ai-thinking {
@@ -1704,6 +1709,8 @@
 
         /* ── Learning Insights ─────────────────────────────── */
         .learning-tag {
+            display: inline-block;
+            margin-bottom: 12px;
             font-size: 11px;
             color: var(--text-faint);
             background: var(--bg-raised);
@@ -1869,7 +1876,7 @@
         }
 
         .rule-badge-block {
-            color: #ef4444;
+            color: var(--red);
             background: rgba(239, 68, 68, 0.12);
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
@@ -2250,7 +2257,8 @@
             max-height: 500px;
             overflow-y: auto;
             overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-medium) transparent;
         }
 
         .scorecard-table {
@@ -2481,6 +2489,16 @@
 
             .rotation-grid {
                 grid-template-columns: 1fr 1fr;
+            }
+
+            .regime-banner-inner {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .regime-description {
+                order: 3;
+                flex-basis: 100%;
             }
 
             .sidebar-header {
@@ -2915,7 +2933,7 @@
                     </div>
                 </div>
                 <div class="chat-input-container" id="chatInputContainer" style="display: none;">
-                    <input type="text" id="chatInput" placeholder="Ask APEX about trading decisions..." onkeypress="handleChatKeyPress(event)">
+                    <input type="text" id="chatInput" placeholder="Ask APEX about trading decisions..." onkeydown="handleChatKeyPress(event)">
                     <button onclick="sendMessage()">Send</button>
                 </div>
             </div>
@@ -4212,11 +4230,12 @@
 
             multiDayCache = {};
 
-            // Compute 40 most recent weekdays (skip Sat/Sun)
+            // Compute 48 most recent weekdays (skip Sat/Sun) — extra buffer for ~10 US holidays/year
+            // We need 40 actual trading days; holidays return 0 results and get skipped
             const tradingDates = [];
             const d = new Date();
             d.setHours(0, 0, 0, 0);
-            while (tradingDates.length < 40) {
+            while (tradingDates.length < 48) {
                 d.setDate(d.getDate() - 1);
                 const dow = d.getDay();
                 if (dow !== 0 && dow !== 6) { // Skip Sunday (0) and Saturday (6)
@@ -4235,10 +4254,14 @@
             const failedDates = [];
 
             async function fetchGroupedDate(dateStr) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
                 try {
                     const response = await fetch(
-                        `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${dateStr}?adjusted=true&apiKey=${POLYGON_API_KEY}`
+                        `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${dateStr}?adjusted=true&apiKey=${POLYGON_API_KEY}`,
+                        { signal: controller.signal }
                     );
+                    clearTimeout(timeoutId);
                     if (!response.ok) return { dateStr, bars: [] };
                     const data = await response.json();
                     if (data.resultsCount === 0 || !data.results) {
@@ -4246,7 +4269,8 @@
                     }
                     return { dateStr, bars: data.results };
                 } catch (err) {
-                    return { dateStr, bars: [], error: err.message };
+                    clearTimeout(timeoutId);
+                    return { dateStr, bars: [], error: err.name === 'AbortError' ? 'timeout' : err.message };
                 }
             }
 
@@ -4302,7 +4326,9 @@
                         const todayBar = { o: raw.day.o, h: raw.day.h, l: raw.day.l, c: raw.day.c, v: raw.day.v, t: Date.now() };
                         // Only append if last bar isn't already today
                         const lastBar = multiDayCache[sym][multiDayCache[sym].length - 1];
-                        if (!lastBar || new Date(lastBar.t).toDateString() !== new Date().toDateString()) {
+                        const lastBarDateET = new Date(lastBar?.t).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+                        const todayET = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+                        if (!lastBar || lastBarDateET !== todayET) {
                             multiDayCache[sym].push(todayBar);
                         }
                     }
@@ -4906,17 +4932,18 @@
             
             // Step 6: Detect Fair Value Gaps (FVG) in the last 5 bars
             // FVG = gap between bar[i-1].high and bar[i+1].low (bullish) or bar[i-1].low and bar[i+1].high (bearish)
+            // Collect all FVGs and return the most recent one
             let fvg = null;
+            const fvgs = [];
             for (let i = Math.max(1, bars.length - 4); i < bars.length - 1; i++) {
-                // Bullish FVG: bar[i-1].h < bar[i+1].l (gap up — price moved so fast it left an unfilled zone)
                 if (bars[i-1].h < bars[i+1].l) {
-                    fvg = { type: 'bullish', gapTop: bars[i+1].l, gapBottom: bars[i-1].h, barIndex: i };
+                    fvgs.push({ type: 'bullish', gapTop: bars[i+1].l, gapBottom: bars[i-1].h, barIndex: i });
                 }
-                // Bearish FVG: bar[i-1].l > bar[i+1].h (gap down)
                 if (bars[i-1].l > bars[i+1].h) {
-                    fvg = { type: 'bearish', gapTop: bars[i-1].l, gapBottom: bars[i+1].h, barIndex: i };
+                    fvgs.push({ type: 'bearish', gapTop: bars[i-1].l, gapBottom: bars[i+1].h, barIndex: i });
                 }
             }
+            if (fvgs.length > 0) fvg = fvgs[fvgs.length - 1]; // Most recent FVG
             
             // Build composite structure signal for Claude
             let structureSignal = 'neutral';
@@ -4948,28 +4975,30 @@
                 lastSwingHigh: lastSH.price,
                 lastSwingLow: lastSL.price,
                 currentPrice,
-                basis: '20-day-structure'
+                basis: '40-day-structure'
             };
         }
 
 
         // Derive scoring adjustments from historical trade signal accuracy
+        // Capped at +/-1 to prevent feedback loops where penalties lock in permanently
         function getSignalAccuracyAdjustments() {
             const techData = analyzeTechnicalAccuracy();
             if (!techData.hasData) return {};
             const adj = {};
             if (techData.rsi?.overbought?.count >= 3 && techData.rsi.overbought.winRate < 35)
-                adj.overboughtRsiExtraPenalty = -2;
+                adj.overboughtRsiExtraPenalty = -1;
             if (techData.macd?.bullish?.count >= 3 && techData.macd.bullish.winRate > 65)
-                adj.bullishMacdExtraBonus = 1.5;
+                adj.bullishMacdExtraBonus = 1;
             if (techData.structure?.bearish?.count >= 3 && techData.structure.bearish.winRate < 35)
-                adj.bearishStructureExtraPenalty = -2;
+                adj.bearishStructureExtraPenalty = -1;
             if (techData.runners?.runners?.count >= 3 && techData.runners.runners.winRate < 40)
-                adj.runnerExtraPenalty = -2;
+                adj.runnerExtraPenalty = -1;
             return adj;
         }
 
         // Shared scoring function — used by both runAIAnalysis and testDataFetch
+        // rsNormalized: 0-10 scale (RS percentile / 10). Multiplied by 0.6 internally for 0-6 contribution.
         function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, signalAdjustments }) {
             // [1] Scale momentum + RS by 0.6 to reduce base dominance (0-12 instead of 0-20)
             const momentumContrib = momentumScore * 0.6;
@@ -5016,8 +5045,8 @@
                 : 0;
             const macdBonus = macdCrossover === 'bullish' ? 2.5 : macdCrossover === 'bearish' ? -2.0 : -0.5;
 
-            // [2] RS mean-reversion penalty: RS=100 has 11.1% win rate in our data
-            const rsMeanRevPenalty = rsNormalized >= 9.5 ? -3 : rsNormalized >= 9 ? -2 : rsNormalized >= 8.5 ? -1 : 0;
+            // [2] RS mean-reversion penalty: RS=100 has 18% win rate in our data — doubled from original
+            const rsMeanRevPenalty = rsNormalized >= 9.5 ? -6 : rsNormalized >= 9 ? -4 : rsNormalized >= 8.5 ? -2 : 0;
 
             const dtc = daysToCover || 0;
             const squeezeBonus = (dtc > 5 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? 1.5
@@ -5927,7 +5956,11 @@
                 // Determine enforcement level
                 let enforcement = 'observe';
                 let type = 'neutral';
-                if (losingCount >= 5 && losingStats.winRate < 40 && winRateDiff > 12) {
+                // Aggressive block for overbought RSI — 17% win rate with 6 trades is strong enough signal
+                if (pdef.id === 'overbought_rsi' && losingCount >= 4 && losingStats.winRate < 30) {
+                    enforcement = 'block';
+                    type = 'avoid';
+                } else if (losingCount >= 5 && losingStats.winRate < 40 && winRateDiff > 12) {
                     enforcement = 'block';
                     type = 'avoid';
                 } else if (losingCount >= 4 && winRateDiff > 12) {
@@ -5958,7 +5991,7 @@
                 {
                     id: 'pullback_entry',
                     label: 'Pullback Entries (-2% to -8% 5d)',
-                    filter: t => t.entryTechnicals && t.entryTechnicals.momentumScore != null && t.entryTechnicals.momentumScore >= -8 && t.entryTechnicals.momentumScore <= -2,
+                    filter: t => t.entryTechnicals && t.entryTechnicals.totalReturn5d != null && t.entryTechnicals.totalReturn5d >= -8 && t.entryTechnicals.totalReturn5d <= -2,
                     altFilter: t => t.entryTechnicals && t.entryTechnicals.todayChange != null && t.entryTechnicals.todayChange < 0 && t.entryTechnicals.structure === 'bullish'
                 },
                 {
@@ -6009,6 +6042,35 @@
                 }
             }
 
+            // Sector-specific rules: auto-detect sectors with consistently poor win rates
+            const sectorTrades = {};
+            for (const t of closedTrades) {
+                const sector = t.sector || 'Unknown';
+                if (!sectorTrades[sector]) sectorTrades[sector] = [];
+                sectorTrades[sector].push(t);
+            }
+            for (const [sector, trades] of Object.entries(sectorTrades)) {
+                if (trades.length < 5) continue;
+                const wins = trades.filter(t => t.returnPercent > 0).length;
+                const sectorWinRate = (wins / trades.length) * 100;
+                const avgReturn = trades.reduce((s, t) => s + t.returnPercent, 0) / trades.length;
+                if (sectorWinRate < 30 && avgReturn < -2) {
+                    rules.push({
+                        id: `sector_${sector.toLowerCase().replace(/\s+/g, '_')}`,
+                        label: `${sector} Sector (${sectorWinRate.toFixed(0)}% WR)`,
+                        type: 'avoid',
+                        enforcement: trades.length >= 8 ? 'block' : 'warn',
+                        winRate: sectorWinRate,
+                        avgReturn: avgReturn,
+                        trades: trades.length,
+                        compareWinRate: overallWinRate,
+                        compareTrades: closedTrades.length,
+                        compareAvgReturn: closedTrades.reduce((s, t) => s + t.returnPercent, 0) / closedTrades.length,
+                        description: `${sector}: ${sectorWinRate.toFixed(0)}% win rate across ${trades.length} trades (avg ${avgReturn.toFixed(1)}%)`
+                    });
+                }
+            }
+
             // Sort: block first, then warn, then prefer, then observe
             const enfOrder = { block: 0, warn: 1, observe: 2 };
             const typeOrder = { avoid: 0, prefer: 1, neutral: 2 };
@@ -6031,13 +6093,19 @@
                     avgLossDays,
                     recentWins,
                     recentLosses,
-                    recentTrend: recentWins > recentLosses ? 'improving' : recentWins < recentLosses ? 'declining' : 'steady'
+                    recentTrend: (() => {
+                        // Compare recent-10 win rate to overall win rate for trajectory
+                        const recentTotal = recentWins + recentLosses;
+                        if (recentTotal === 0) return 'steady';
+                        const recentWR = (recentWins / recentTotal) * 100;
+                        if (recentWR > overallWinRate + 10) return 'improving';
+                        if (recentWR < overallWinRate - 10) return 'declining';
+                        return 'steady';
+                    })()
                 }
             };
 
-            // Persist to portfolio for cross-refresh availability
-            portfolio.tradingRules = result;
-
+            // Cache in memory only — re-derived from closedTrades on each call
             _tradingRulesCache = result;
             _tradingRulesCacheKey = tradeCount;
             return result;
@@ -6066,6 +6134,12 @@
                 case 'large_position':
                     return false; // Position sizing is handled separately
                 default:
+                    // Sector-specific rules: match by sector name
+                    if (ruleId.startsWith('sector_')) {
+                        const sector = stockSectors[data.symbol] || stockSectors[data.ticker] || '';
+                        const ruleSector = ruleId.replace('sector_', '').replace(/_/g, ' ');
+                        return sector.toLowerCase() === ruleSector;
+                    }
                     return false;
             }
         }
@@ -7397,6 +7471,7 @@
                 // Check if we got any data at all
                 if (Object.keys(marketData).length === 0) {
                     thinking.classList.remove('active');
+                    isAnalysisRunning = false;
                     addActivity('🚫 Unable to fetch market data: ' + (fetchErrors.length > 0 ? fetchErrors[0].error : 'unknown error'), 'error');
                     alert('Unable to fetch market data. Please check your connection and try again.');
                     return;
@@ -7422,6 +7497,7 @@
                     
                     if (!proceed) {
                         thinking.classList.remove('active');
+                        isAnalysisRunning = false;
                         addActivity(`⚠️ AI Analysis cancelled - only ${(successRate * 100).toFixed(0)}% of stocks fetched successfully`, 'warning');
                         return;
                     }
@@ -7722,6 +7798,22 @@
                 }
                 
                 // 4. Build filtered data (only candidates go to Claude)
+                // Hard cap at 40 candidates to prevent Phase 2 context window overflow
+                const MAX_CANDIDATES = 40;
+                if (topCandidates.size > MAX_CANDIDATES) {
+                    // Keep all holdings, trim non-holdings by score
+                    const holdingSet = new Set(Object.keys(portfolio.holdings));
+                    const nonHoldings = [...topCandidates].filter(s => !holdingSet.has(s));
+                    const holdingsInCandidates = [...topCandidates].filter(s => holdingSet.has(s));
+                    const slotsForNew = MAX_CANDIDATES - holdingsInCandidates.length;
+                    // nonHoldings are already roughly in score order from insertion
+                    const trimmed = nonHoldings.slice(0, Math.max(0, slotsForNew));
+                    topCandidates.clear();
+                    holdingsInCandidates.forEach(s => topCandidates.add(s));
+                    trimmed.forEach(s => topCandidates.add(s));
+                    console.log(`📋 Capped candidates from ${holdingsInCandidates.length + nonHoldings.length} to ${topCandidates.size} (${holdingsInCandidates.length} holdings + ${trimmed.length} new)`);
+                }
+
                 const filteredMarketData = {};
                 topCandidates.forEach(symbol => {
                     filteredMarketData[symbol] = enhancedMarketData[symbol];
@@ -7912,7 +8004,11 @@ Recent Transactions: ${(() => {
 
 💡 OPPORTUNITY COST CONTEXT (for reference, NOT a sell trigger):
 ${topBuyOpportunities.join('\\n')}
-These candidates exist in Phase 2. Only consider selling to fund them if a holding's thesis is BROKEN (not just underperforming). Selling a position at a small loss to chase a new setup is the #1 pattern destroying your returns.
+These candidates exist in Phase 2. Only consider selling to fund them if a holding's thesis is BROKEN (not just underperforming).
+
+⚠️ OPPORTUNITY COST CHURN — OUR #1 PERFORMANCE KILLER:
+32% of exits were "opportunity cost" sells, and they are essentially random outcomes (coin flip).
+RULE: Do NOT sell a holding to "free up cash" unless the holding has a BROKEN thesis (CHoCH, failed catalyst, structural breakdown). "Something else scores higher" is NOT a valid sell reason. Holding a mediocre position is better than churning into a new one that statistically won't outperform.
 ${formatPhase1Insights()}
 JSON ONLY response:
 { "decisions": [{ "action": "SELL" or "HOLD", "symbol": "X", "shares": N, "conviction": 1-10, "reasoning": "..." }], "holdings_summary": "...", "market_regime": "bull/bear/choppy" }
@@ -8562,6 +8658,14 @@ SELL TRIGGER 2: FLEXIBLE PROFIT-TAKING (Context-Dependent, Not Rigid)
 ⚠️ CRITICAL: Don't use arbitrary 20% rule! Winners can go 50-100%+
 Ask: "Would I buy this stock TODAY at current price with current setup?"
 
+⚠️ WINNER MANAGEMENT — LEARNED FROM OUR TRADING HISTORY:
+Our data shows we cut winners too early (CCI sold at +2.8%, then ran +11.45%).
+RULES FOR WINNERS (stocks currently in profit):
+- If still in BULLISH structure → DO NOT SELL regardless of other factors
+- If RSI is elevated (60-80) but structure is intact → HOLD, this is healthy momentum
+- Only sell a winner if: (a) CHoCH to bearish detected, OR (b) catalyst is fully played out AND momentum reversing
+- When in doubt about a winner: HOLD. Our sell timing on winners is worse than our hold timing.
+
 ────────────────────────────────────────────────────────────────
 
 AT 20%+ GAINS - Three Factor Check:
@@ -8778,14 +8882,15 @@ If catalyst hasn't materialized after expected timeframe:
 
 ────────────────────────────────────────────────────────────────
 
-SELL TRIGGER 5: OPPORTUNITY COST
+SELL TRIGGER 5: OPPORTUNITY COST (USE SPARINGLY)
 ────────────────────────────────────────────────────────────────
 
-New stock appears with:
-• Stronger catalyst (9-10 vs current holding 7)
-• Better setup (all factors aligned)
-• Higher conviction potential
-• AND you need cash (portfolio full)
+⚠️ WARNING: Our data shows opportunity cost exits are coin-flip outcomes.
+Only use this trigger when ALL of the following are true:
+• The CURRENT holding has a WEAKENING thesis (not just flat)
+• New stock has DRAMATICALLY better setup (conviction 9+ vs holding 6-)
+• The current holding would independently qualify for a sell on triggers 1-4
+Do NOT sell a working position just because something else looks better.
 
 Action: Sell WEAKEST current holding to fund NEW opportunity
 
@@ -8820,15 +8925,12 @@ Stock down 8%+ AND:
 ⚠️ POSITION MANAGEMENT & RISK AWARENESS
 ════════════════════════════════════════════════════════════════
 
-POSITION SIZING - No Hard Limits, But FLAG Concentration:
+POSITION SIZING - HARD CAP 15% PER POSITION:
 ────────────────────────────────────────────────────────────────
 
-When allocating capital, provide awareness:
-
-If single position >30% of portfolio:
-  "⚠️ This would be 35% of portfolio in one position
-   Given catalyst strength (10/10) and all factors aligned,
-   this concentration is justified for maximum gain potential."
+Code enforces a 15% max position size. Plan your share counts accordingly.
+No single stock should exceed 15% of total portfolio value (existing + new shares).
+This cap cannot be overridden regardless of conviction level.
 
 If 3+ positions in same sector totaling >60%:
   "📊 Portfolio would be 70% in semiconductors (NVDA, AMD, AVGO)
@@ -9072,6 +9174,14 @@ PRINCIPLE: Size positions based on conviction level and opportunity set.
 
 ────────────────────────────────────────────────────────────────
 
+⚠️ CONVICTION CALIBRATION — USE THE FULL 1-10 SCALE:
+Our data shows 9-10 conviction: 33% win rate, 7-8: 15%. Conviction 9 = 56% WR (best).
+• 9-10 should be RARE (≤20% of buys) — only when ALL factors align
+• 7-8 should be COMMON for solid setups
+• 5-6 should be used for speculative entries
+• Below 5 = PASS (don't buy)
+Do NOT default to 7-8 for everything — differentiate rigorously.
+
 **10/10 CONVICTION** (Rare, Perfect Setup):
 ────────────────────────────────────────────────────────────────
 All Factors Aligned:
@@ -9081,9 +9191,9 @@ All Factors Aligned:
 • Sector: Inflow signal
 
 Position Size:
-→ Can allocate 30-40% of portfolio
+→ Allocate up to 15% of portfolio (hard cap)
 → This is your HIGHEST confidence
-→ Rare opportunity, size accordingly
+→ Rare opportunity — should occur ≤1 per cycle
 
 Example: "NVDA earnings beat + guidance raise, all factors perfect"
 
@@ -9098,7 +9208,7 @@ Nearly Perfect:
 • Sector: Positive
 
 Position Size:
-→ Allocate 20-30% of portfolio
+→ Allocate 10-15% of portfolio
 → Top tier opportunity
 → High confidence
 
@@ -9115,30 +9225,30 @@ Solid Setup:
 • Sector: Neutral to positive
 
 Position Size:
-→ Allocate 15-20% of portfolio
+→ Allocate 8-12% of portfolio
 → Good opportunity but not exceptional
-→ Moderate confidence
+→ This should be your MOST COMMON conviction level
 
 Example: "Analyst upgrade on solid company, technical okay"
 
 ────────────────────────────────────────────────────────────────
 
-**6/10 CONVICTION** (Conditional):
+**5-6/10 CONVICTION** (Speculative):
 ────────────────────────────────────────────────────────────────
 Marginal:
 • Some factors aligned, some weak
-• Not compelling enough alone
+• Worth a small position if opportunity set is thin
 
 Position Size:
-→ Allocate 10-15% OR better: PASS
-→ Only trade if no better opportunities
-→ Consider waiting for higher conviction
+→ Allocate 5-8% of portfolio
+→ Small position, tight risk management
+→ Assign 5-6 honestly — do not inflate to 7
 
-Decision: Usually better to wait for 7+ conviction
+Decision: Trade small if no better options, otherwise PASS
 
 ────────────────────────────────────────────────────────────────
 
-**<6/10 CONVICTION** (Pass):
+**<5/10 CONVICTION** (Pass):
 ────────────────────────────────────────────────────────────────
 → DO NOT TRADE
 → Wait for better opportunity
@@ -9785,14 +9895,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             let failCount = 0;
             
             // Step 1: Execute all SELL decisions first to free up cash
+            const executedSells = [];
             for (const decision of sellDecisions) {
                 try {
                     const success = await executeSingleTrade(decision, marketData, overallReasoning);
                     if (success) {
                         successCount++;
+                        executedSells.push(decision);
                         console.log(`✅ Sell executed: ${decision.symbol}, cash now $${portfolio.cash.toFixed(2)}`);
                     } else {
                         failCount++;
+                        // Convert failed sell to HOLD for display
+                        decision.action = 'HOLD';
+                        decision.reasoning = `[Sell blocked] ${decision.reasoning || ''}`;
+                        holdDecisions.push(decision);
                     }
                 } catch (error) {
                     console.error(`Failed to execute sell for ${decision.symbol}:`, error);
@@ -9847,6 +9963,30 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 });
             }
 
+            // Step 2c: Enforce maximum position size (15% of portfolio value)
+            const MAX_POSITION_PCT = 15;
+            const estimatedPortfolioValue = portfolio.cash + Object.entries(portfolio.holdings).reduce((sum, [sym, shares]) => {
+                return sum + (marketData[sym]?.price || 0) * shares;
+            }, 0);
+            const maxPositionValue = estimatedPortfolioValue * (MAX_POSITION_PCT / 100);
+            buyDecisionsAll = buyDecisionsAll.filter(d => {
+                const price = marketData[d.symbol]?.price || 0;
+                const currentValue = (portfolio.holdings[d.symbol] || 0) * price;
+                const addedValue = price * d.shares;
+                if (currentValue + addedValue > maxPositionValue && maxPositionValue > 0) {
+                    const allowedShares = Math.floor((maxPositionValue - currentValue) / price);
+                    if (allowedShares > 0) {
+                        d.shares = allowedShares;
+                        d.reasoning = (d.reasoning || '') + ` (capped to ${allowedShares} shares — ${MAX_POSITION_PCT}% max position)`;
+                        addActivity(`📏 ${d.symbol} capped to ${allowedShares} shares (${MAX_POSITION_PCT}% position limit)`, 'warning');
+                        return true;
+                    }
+                    addActivity(`📏 ${d.symbol} blocked — would exceed ${MAX_POSITION_PCT}% position limit`, 'warning');
+                    return false;
+                }
+                return true;
+            });
+
             // Step 3: Now validate BUY budget against ACTUAL post-sell cash
             // Pre-filter: drop buy decisions with invalid share counts
             buyDecisionsAll = buyDecisionsAll.filter(d => {
@@ -9857,6 +9997,21 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 return true;
             });
 
+            // Enforce regime-based minimum cash reserve
+            const regime = portfolio.lastMarketRegime?.regime || 'choppy';
+            const minCashPct = regime === 'bull' ? 10 : regime === 'choppy' ? 20 : 30; // bear = 30%
+            const minCashReserve = estimatedPortfolioValue * (minCashPct / 100);
+            const deployableCash = Math.max(0, portfolio.cash - minCashReserve);
+            if (portfolio.cash > minCashReserve) {
+                console.log(`💰 Regime ${regime}: reserving $${minCashReserve.toFixed(2)} (${minCashPct}%), deployable: $${deployableCash.toFixed(2)}`);
+            } else {
+                console.log(`💰 Regime ${regime}: cash $${portfolio.cash.toFixed(2)} already below ${minCashPct}% reserve ($${minCashReserve.toFixed(2)}) — no new buys`);
+                if (buyDecisionsAll.length > 0) {
+                    addActivity(`💰 ${regime.toUpperCase()} regime: holding cash (${minCashPct}% reserve). Skipping ${buyDecisionsAll.length} buy(s).`, 'info');
+                    buyDecisionsAll = [];
+                }
+            }
+
             let totalCost = 0;
             let budgetWarning = '';
             const validatedBuyDecisions = [];
@@ -9866,17 +10021,18 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const cost = price * decision.shares;
                 totalCost += cost;
             }
-            
-            // Check against actual current cash (which now includes sell proceeds)
-            if (totalCost > portfolio.cash) {
-                budgetWarning = `⚠️ APEX's original plan required $${totalCost.toFixed(2)} but only $${portfolio.cash.toFixed(2)} available. Adjusting trades...`;
+
+            // Check against deployable cash (respecting regime reserve)
+            const effectiveBudget = Math.min(portfolio.cash, deployableCash > 0 ? deployableCash : portfolio.cash);
+            if (totalCost > effectiveBudget) {
+                budgetWarning = `⚠️ APEX's original plan required $${totalCost.toFixed(2)} but only $${effectiveBudget.toFixed(2)} deployable (${regime} regime ${minCashPct}% reserve). Adjusting trades...`;
                 addActivity(budgetWarning, 'warning');
-                
+
                 // Keep only decisions that fit within budget (prioritize by conviction)
                 const sortedBuys = [...buyDecisionsAll]
                     .sort((a, b) => (b.conviction || 5) - (a.conviction || 5)); // Highest conviction first
-                
-                let remainingCash = portfolio.cash;
+
+                let remainingCash = effectiveBudget;
                 for (const decision of sortedBuys) {
                     const price = marketData[decision.symbol]?.price || 0;
                     const cost = price * decision.shares;
@@ -9919,8 +10075,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
             }
 
-            // Combine all decisions for display: sells (already executed) + validated buys + holds
-            const validatedDecisions = [...sellDecisions, ...validatedBuyDecisions, ...holdDecisions];
+            // Combine all decisions for display: executed sells + validated buys + holds (includes failed sells converted to holds)
+            const validatedDecisions = [...executedSells, ...validatedBuyDecisions, ...holdDecisions];
 
             // If buys were dropped due to budget, amend reasoning/research to reflect reality
             if (budgetWarning && buyDecisionsAll.length > 0) {
@@ -10218,7 +10374,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             returnPercent: returnPercent,
                             buyDate: buyTransactions[0].timestamp,
                             sellDate: new Date().toISOString(),
-                            holdTime: new Date() - new Date(buyTransactions[0].timestamp),
+                            holdTime: (() => {
+                                // Weighted average hold time across all buy lots
+                                const now = Date.now();
+                                let weightedSum = 0, totalShrs = 0;
+                                for (const bt of buyTransactions) {
+                                    const held = now - new Date(bt.timestamp).getTime();
+                                    weightedSum += held * bt.shares;
+                                    totalShrs += bt.shares;
+                                }
+                                return totalShrs > 0 ? weightedSum / totalShrs : now - new Date(buyTransactions[0].timestamp).getTime();
+                            })(),
 
                             // PHASE 1 LEARNING DATA:
                             // 1. Conviction Accuracy
@@ -10734,11 +10900,24 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // Save portfolio to localStorage
-        function savePortfolio() {
+        function savePortfolio(localOnly = false) {
+            // Cap unbounded arrays to prevent localStorage quota exhaustion
+            const TX_CAP = 500;
+            if (portfolio.transactions.length > TX_CAP) {
+                portfolio.transactions = portfolio.transactions.slice(-TX_CAP);
+            }
+            const CLOSED_CAP = 300;
+            if ((portfolio.closedTrades || []).length > CLOSED_CAP) {
+                portfolio.closedTrades = portfolio.closedTrades.slice(-CLOSED_CAP);
+            }
+            const PERF_CAP = 3000;
+            if ((portfolio.performanceHistory || []).length > PERF_CAP) {
+                portfolio.performanceHistory = portfolio.performanceHistory.slice(-PERF_CAP);
+            }
             localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
             
-            // Also save to Google Drive if authorized (and not in recovery mode)
-            if (gdriveAuthorized && !preventAutoSave) {
+            // Also save to Google Drive if authorized (and not in recovery mode or local-only)
+            if (gdriveAuthorized && !preventAutoSave && !localOnly) {
                 console.log('Google Drive authorized - saving to cloud...');
                 savePortfolioToDrive();
             } else if (preventAutoSave) {
@@ -10795,8 +10974,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         portfolio._exitReasonV2 = true;
                         console.log('✅ Migration: Reclassified exitReason on closedTrades (v2)');
                     }
-                    // Clean up one-time migration flag (no longer needed)
-                    if (portfolio._exitReasonV2) delete portfolio._exitReasonV2;
+                    // Migration flag persists to prevent re-running on every load
 
                     // MIGRATION: Null out composite scores from pre-v2 scoring formula
                     // Old formula (momentum 0-10 + RS 0-10 = 0-20 base) produced scores ~15-25.
@@ -10814,7 +10992,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         portfolio._scoringV2 = true;
                         if (nulled > 0) console.log(`✅ Migration: Nulled ${nulled} old-formula composite scores on closedTrades (scoring v2)`);
                     }
-                    if (portfolio._scoringV2) delete portfolio._scoringV2;
+                    // Migration flag persists to prevent re-running on every load
 
                     // MIGRATION: Reconstruct totalDeposits if missing or zero
                     // For portfolios created before totalDeposits tracking was added
@@ -10849,10 +11027,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         portfolio.totalDeposits = Math.round(reconstructed * 100) / 100;
                         console.log(`📊 MIGRATION: Reconstructed totalDeposits = $${portfolio.totalDeposits} (initial: $${portfolio.initialBalance}, buys: $${totalBuyCost.toFixed(2)}, sells: $${totalSellProceeds.toFixed(2)}, cash: $${portfolio.cash.toFixed(2)})`);
                         
-                        // Save the migrated portfolio
-                        savePortfolio();
+                        // Save the migrated portfolio (local only — don't trigger Drive upload during load)
+                        savePortfolio(true);
                     }
-                    
+
                     // MIGRATION: Fix corrupted performanceHistory values from deposit bug
                     // addWeeklyFunding() previously stored object + number = "[object Object]NNN" as value
                     if (portfolio.performanceHistory && portfolio.performanceHistory.length > 0) {
@@ -10877,7 +11055,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         }
                         if (fixed > 0) {
                             console.log(`📊 MIGRATION: Fixed ${fixed} corrupted performanceHistory entries`);
-                            savePortfolio();
+                            savePortfolio(true);
                         }
                     }
 
@@ -11597,9 +11775,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                 form.append('file', new Blob([content], { type: 'text/plain' }));
 
-                const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                const resp = await gdriveApiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                     method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + accessToken },
                     body: form
                 });
 
@@ -11672,13 +11849,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         async function findOrCreateFolder(folderName) {
             try {
                 // Search for existing folder
-                const searchResponse = await fetch(
-                    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name='" + folderName + "' and mimeType='application/vnd.google-apps.folder' and trashed=false")}`,
-                    {
-                        headers: {
-                            'Authorization': 'Bearer ' + accessToken
-                        }
-                    }
+                const searchResponse = await gdriveApiFetch(
+                    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name='" + folderName + "' and mimeType='application/vnd.google-apps.folder' and trashed=false")}`
                 );
                 
                 if (!searchResponse.ok) {
@@ -11694,12 +11866,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
                 
                 // Create folder if it doesn't exist
-                const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
+                const createResponse = await gdriveApiFetch('https://www.googleapis.com/drive/v3/files', {
                     method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + accessToken,
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         name: folderName,
                         mimeType: 'application/vnd.google-apps.folder'
@@ -12927,25 +13096,19 @@ Current Portfolio:
                 const fileContent = JSON.stringify({ encrypted: encryptedKeys });
 
                 // Check if file exists
-                const searchResponse = await fetch(
-                    `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false`,
-                    {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    }
+                const searchResponse = await gdriveApiFetch(
+                    `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false`
                 );
                 const searchData = await searchResponse.json();
 
                 if (searchData.files && searchData.files.length > 0) {
                     // Update existing file
                     const fileId = searchData.files[0].id;
-                    const updateResponse = await fetch(
+                    const updateResponse = await gdriveApiFetch(
                         `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
                         {
                             method: 'PATCH',
-                            headers: {
-                                'Authorization': `Bearer ${accessToken}`,
-                                'Content-Type': 'application/json'
-                            },
+                            headers: { 'Content-Type': 'application/json' },
                             body: fileContent
                         }
                     );
@@ -12967,11 +13130,10 @@ Current Portfolio:
                     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                     form.append('file', new Blob([fileContent], { type: 'application/json' }));
 
-                    const uploadResponse = await fetch(
+                    const uploadResponse = await gdriveApiFetch(
                         'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
                         {
                             method: 'POST',
-                            headers: { 'Authorization': `Bearer ${accessToken}` },
                             body: form
                         }
                     );
@@ -13015,11 +13177,8 @@ Current Portfolio:
                 const fileName = 'apex_api_keys_encrypted.json';
 
                 // Search for the keys file
-                const searchResponse = await fetch(
-                    `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false`,
-                    {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    }
+                const searchResponse = await gdriveApiFetch(
+                    `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false`
                 );
                 const searchData = await searchResponse.json();
 
@@ -13032,11 +13191,8 @@ Current Portfolio:
 
                 // Download the file
                 const fileId = searchData.files[0].id;
-                const downloadResponse = await fetch(
-                    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-                    {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    }
+                const downloadResponse = await gdriveApiFetch(
+                    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
                 );
 
                 if (!downloadResponse.ok) {

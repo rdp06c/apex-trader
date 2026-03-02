@@ -38,9 +38,9 @@ powershell -NoProfile -Command ^
     "$nl = \"`n\";" ^
     "$sb = New-Object System.Text.StringBuilder;" ^
     "foreach ($line in $template) {" ^
-    "  if ($line.Contains('<!-- STYLES -->')) { [void]$sb.Append($styles) }" ^
-    "  elseif ($line.Contains('<!-- BODY -->')) { [void]$sb.Append($body) }" ^
-    "  elseif ($line.Contains('<!-- SCRIPT -->')) { [void]$sb.Append($js) }" ^
+    "  if ($line.Contains('<!-- STYLES -->')) { [void]$sb.Append($styles + $nl) }" ^
+    "  elseif ($line.Contains('<!-- BODY -->')) { [void]$sb.Append($body + $nl) }" ^
+    "  elseif ($line.Contains('<!-- SCRIPT -->')) { [void]$sb.Append($js + $nl) }" ^
     "  else { [void]$sb.Append($line + $nl) }" ^
     "};" ^
     "[System.IO.File]::WriteAllText('%OUT%', $sb.ToString(), $enc);"

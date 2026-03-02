@@ -36,4 +36,12 @@ awk '
     { print }
 ' STYLES="$SRC/styles.css" BODY="$SRC/body.html" SCRIPT="$SRC/trader.js" "$SRC/template.html" > "$OUT"
 
+# Verify output integrity
+for marker in '</style>' '</script>' '</html>'; do
+    if ! grep -q "$marker" "$OUT"; then
+        echo "ERROR: $OUT is missing $marker — build may be corrupted" >&2
+        exit 1
+    fi
+done
+
 echo "Built: $OUT"
