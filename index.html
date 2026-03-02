@@ -10357,13 +10357,32 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (isWeekend) {
                 console.log('  Weekend — market closed, forcing daily gain to 0');
             } else {
-                // Sum each holding's daily dollar change (same values shown on holding cards)
+                // Sum each holding's daily dollar change (same values shown on holding cards).
+                // For same-day buys, use gain from entry price (not prevDay close)
+                // so we don't count pre-entry price movement as our P&L.
+                const todayStart = new Date(now_local.getFullYear(), now_local.getMonth(), now_local.getDate());
                 for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
                     const sp = priceData[symbol];
                     if (sp && sp.change != null) {
-                        const holdingDailyChange = sp.change * shares;
+                        // Check if this holding was bought today
+                        const buys = getCurrentPositionBuys(symbol);
+                        const earliestBuy = buys.length > 0 ? new Date(buys[0].timestamp) : null;
+                        const buyDayStart = earliestBuy ? new Date(earliestBuy.getFullYear(), earliestBuy.getMonth(), earliestBuy.getDate()) : null;
+                        const boughtToday = buyDayStart && todayStart.getTime() === buyDayStart.getTime();
+
+                        let holdingDailyChange;
+                        if (boughtToday) {
+                            // Same-day buy: gain is from entry price, not from prevDay close
+                            const totalCost = buys.reduce((sum, t) => sum + t.cost, 0);
+                            const totalShares = buys.reduce((sum, t) => sum + t.shares, 0);
+                            const avgEntry = totalCost / totalShares;
+                            holdingDailyChange = (sp.price - avgEntry) * shares;
+                            console.log(`  ${symbol}: ${shares} shares × ($${sp.price.toFixed(2)} - $${avgEntry.toFixed(2)} entry) = ${holdingDailyChange >= 0 ? '+' : ''}$${holdingDailyChange.toFixed(2)} [bought today]`);
+                        } else {
+                            holdingDailyChange = sp.change * shares;
+                            console.log(`  ${symbol}: ${shares} shares × $${sp.change.toFixed(2)} = ${holdingDailyChange >= 0 ? '+' : ''}$${holdingDailyChange.toFixed(2)}`);
+                        }
                         dailyGain += holdingDailyChange;
-                        console.log(`  ${symbol}: ${shares} shares × $${sp.change.toFixed(2)} = ${holdingDailyChange >= 0 ? '+' : ''}$${holdingDailyChange.toFixed(2)}`);
                     }
                 }
                 // Percentage relative to total portfolio value (holdings + cash)
