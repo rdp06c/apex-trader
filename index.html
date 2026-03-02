@@ -3481,9 +3481,13 @@
             clearTimeout(timeoutId);
             if (message) {
                 message.content = blocks;
+                if (blocks.length === 0) {
+                    console.warn('⚠️ SSE stream completed with message envelope but 0 content blocks — possible stream interruption. stop_reason:', message.stop_reason);
+                }
                 return message;
             }
             // Fallback — shouldn't happen, but return an error shape so callers handle it
+            console.error('🚨 SSE stream ended without message_start event — connection likely dropped before API responded');
             return { type: 'error', error: { message: 'Stream ended without message_start event' } };
         }
 
@@ -7926,7 +7930,20 @@ Include a decision for EVERY holding.` }]
                             addActivity('⚠️ Phase 1 response was truncated — analysis may be incomplete.', 'warning');
                         }
                         let p1Text = '';
-                        if (p1Data.content) for (const b of p1Data.content) { if (b.type === 'text') p1Text += b.text; }
+                        const p1BlockTypes = [];
+                        if (p1Data.content) for (const b of p1Data.content) {
+                            p1BlockTypes.push(b.type);
+                            if (b.type === 'text') p1Text += b.text;
+                        }
+                        console.log(`📦 Phase 1 response: ${p1Data.content?.length || 0} content blocks [${p1BlockTypes.join(', ')}], stop_reason: ${p1Data.stop_reason}, text length: ${p1Text.length}`);
+
+                        // Guard: if Phase 1 returned no text at all, something went wrong
+                        if (!p1Text.trim()) {
+                            const blockInfo = p1BlockTypes.length > 0 ? `(had ${p1BlockTypes.length} non-text blocks: ${p1BlockTypes.join(', ')})` : '(empty response)';
+                            console.error(`🚨 Phase 1 returned no text content ${blockInfo} — sell analysis failed!`);
+                            addActivity(`🚨 Phase 1 returned empty — sell analysis failed! ${blockInfo} Aborting to protect holdings.`, 'error');
+                            throw new Error(`Phase 1 returned no text content ${blockInfo}`);
+                        }
 
                         try {
                             console.log('Phase 1 raw text (first 500):', p1Text.substring(0, 500));
@@ -8072,7 +8089,20 @@ Include a decision for EVERY holding.` }]
                         }
                     }
                 }
-                
+
+                // Guard: if we have holdings but Phase 1 produced zero decisions, abort
+                // This catches empty API responses, stream interruptions, and parse failures
+                if (hasHoldings && phase1SellDecisions.length === 0 && phase1HoldDecisions.length === 0) {
+                    const msg = `🚨 Phase 1 produced 0 decisions for ${holdingSymbolsList.length} holdings — aborting analysis to protect portfolio. Try again.`;
+                    console.error(msg);
+                    addActivity(msg, 'error');
+                    updateStatus(msg);
+                    thinkingIndicator.style.display = 'none';
+                    savePortfolio();
+                    updatePerformanceAnalytics();
+                    return;
+                }
+
                 // ── PHASE 2: BUY DECISIONS ──
                 // Flag held symbols in Phase 2 candidate data so Claude knows they're current holdings
                 // Phase 1 already reviewed them for HOLD/SELL — Phase 2 can ADD shares but not re-analyze
