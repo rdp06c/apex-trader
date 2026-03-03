@@ -63,7 +63,8 @@ Browser (index.html)
    - `fetchServerIndicators` – Server-computed RSI/MACD/SMA50 from Massive API (15-min cache)
 4. **Candidate Scoring & Selection**:
    - Composite score = momentum×0.6 (0-6) + RS×0.6 (0-6) + sector bonus (-1 to +2) + acceleration bonus (0/1.5) + consistency bonus (0/1) + structure bonus (-3.75 to +3.75) + extension penalty (0 to -5) + pullback bonus (0 to +5) + runner penalty (0 to -3) + decline penalty (0 to -3, conditional) + RSI bonus/penalty (-5 to +2.5) + MACD bonus (-2 to +2.5) + RS mean-reversion penalty (0 to -3) + squeeze bonus (0 to +1.5) + volume bonus (-0.5 to +0.5) + FVG bonus (-0.5 to +0.5) + SMA20 proximity bonus (±2.0) + SMA crossover bonus (±2.0) + enhanced volume analysis + learned adjustments, then multiplied by entry quality multiplier (×0.3 Red Flag / ×0.6 Extended / ×1.0 default / ×1.3 Pullback). Returns `{total, breakdown}` object (breakdown contains per-component scores for tooltip decomposition).
-   - **Base scaling**: Momentum and RS are multiplied by 0.6 to reduce momentum dominance. Quality signals (structure, pullback, RSI zone) now carry proportionally more weight.
+   - **Calibratable weights**: All weight values (multipliers, bonuses, penalties) are defined in `DEFAULT_WEIGHTS` and can be auto-calibrated via `runCalibrationSweep`. Active weights loaded from `portfolio.calibratedWeights` on page init; regime-aware (VIX < 20 vs ≥ 20) weight selection via `getActiveWeights()`.
+   - **Base scaling**: Momentum and RS default multiplier is 0.6 (calibratable). Quality signals (structure, pullback, RSI zone) now carry proportionally more weight.
    - **RSI bonus/penalty**: RSI < 30 → +2.5, RSI 30-40 → +1.5, RSI 40-50 → +0.5, RSI > 70 → -3, RSI > 80 → -5
    - **MACD bonus**: Bullish crossover → +2.5, bearish crossover → -2.0, none → -0.5
    - **Squeeze bonus**: Days-to-cover > 5 + bullish structure + non-outflow sector → +1.5
@@ -153,6 +154,15 @@ These insights are injected into both phases' prompts so Claude can learn from p
 
 Insights are also surfaced in the Learning Insights UI via `updateLearningInsightsDisplay()`, which renders 7 analytics panels: Risk/Reward Profile, Hold Time Comparison, Streaks, Conviction Accuracy, Signal Accuracy, Exit Analysis, and Post-Exit Tracking. Each panel has a minimum data threshold and won't render with insufficient trades.
 
+### Calibration Engine (in `src/trader.js`)
+Data-driven weight optimization for `calculateCompositeScore`. All scoring weights (momentum ×0.6, structure ×1.25, RSI penalties, etc.) are defined in `DEFAULT_WEIGHTS` and can be auto-calibrated:
+- **`runCalibrationSweep(startDate, endDate)`** – Sweeps 40 evenly-spaced historical dates. For each date: fetches 80-day lookback bars, runs the FULL analysis pipeline (momentum, RS, sector rotation, structure, RSI, MACD, SMA), scores all ~490 stocks, and records component breakdowns + actual 5d/10d forward returns. Optimized: fetches ~230 unique dates once instead of 3,300+ calls (overlapping lookback windows are shared).
+- **Correlation analysis** – Computes Pearson correlation between each scoring component and 10-day forward returns. Quintile analysis measures top-vs-bottom bucket spread per component.
+- **Weight derivation** – `calibratedWeight = default × (1 + clamp(correlation × 2, -0.5, +0.5))`. Bounded: no weight changes more than ±50% from default. Shrinkage: `min(0.8, observations/10000)` blend between calibrated and default weights.
+- **Regime segmentation** – Separate weight sets for low-VIX (<20) and high-VIX (≥20) markets. `getActiveWeights()` selects appropriate set at runtime based on current VIX.
+- **Out-of-sample validation** – 70/30 train/validation split. Reports avg 10d return of top-25 picks under calibrated vs default weights. Auto-applies extra shrinkage if overfitting detected.
+- **Persistence** – Saved to `portfolio.calibratedWeights`. Loaded on page init via `activeCalibration`. Chat command: `calibrate` or `calibrate YYYY-MM-DD YYYY-MM-DD`.
+
 ### Derived Trading Rules (in `src/trader.js`)
 Auto-learns from `closedTrades` to prevent repeating mistakes:
 - **`deriveTradingRules()`** – Analyzes 9 base pattern dimensions (runner entries, overbought RSI, bearish structure, bearish MACD, outflow sectors, high momentum, large positions, low composite scores, overconfident conviction) plus **dynamic sector-specific rules** (auto-generated for sectors with <30% win rate and avg return < -2%). Overbought RSI escalates to `block` when 4+ losing trades at <30% win rate. For each pattern with enough data, calculates win rate and assigns enforcement level:
@@ -192,6 +202,10 @@ Conversational interface where users can ask APEX questions. Gets portfolio cont
 - **Conversation memory**: Last 5 exchanges (10 messages) stored in `chatHistory` and sent with each request. Resets on page refresh.
 - **Rate limiting**: 5-second cooldown between messages (`lastChatTime`), 20 messages per session max (`chatMessageCount`). Both reset on refresh.
 - **System prompt**: Concise ~80 token personality in the `system` parameter (not embedded in user message). Portfolio snapshot included as context.
+- **Special commands** (handled before Claude API call):
+  - `calibrate` — Run calibration sweep over last 6 months. Auto-calibrates scoring weights from historical data.
+  - `calibrate YYYY-MM-DD YYYY-MM-DD` — Calibrate over specific date range.
+  - `backtest YYYY-MM-DD` — Quick single-date backtest (uses current weights, calibrated or default).
 
 ### XSS Prevention
 All AI-generated and user-generated content is escaped via `escapeHtml()` before `innerHTML` insertion. This covers `addActivity()`, `addDecisionReasoning()` (reasoning, budget warnings, research summaries), and `addChatMessage()` (both user input and AI responses). The chat formatter applies markdown-like transforms (bold, line breaks) after escaping so the formatting tags are trusted.
@@ -316,7 +330,10 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `savePortfolio` / `loadPortfolio` | localStorage persistence (with array caps and optional `localOnly` mode) |
 | `savePortfolioToDrive` | Google Drive backup |
 | `initChart` | Chart.js performance chart setup |
-| `runBacktest` | Historical backtest simulation, wired to chat command `backtest YYYY-MM-DD` |
+| `runCalibrationSweep` | Automated calibration engine: sweeps 40 dates, full pipeline, derives data-driven weights |
+| `runBacktest` | Quick single-date backtest with full pipeline (uses calibrated weights) |
+| `pearsonCorrelation` | Pearson correlation coefficient helper for calibration |
+| `getActiveWeights` | Returns active scoring weights (regime-aware: VIX-based selection from calibrated/default) |
 
 ## Prompt Engineering Notes
 

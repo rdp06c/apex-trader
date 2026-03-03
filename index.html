@@ -2969,6 +2969,32 @@
             regimeHistory: []     // Rolling regime transition log
         };
 
+        // Calibration weight system — data-driven scoring via runCalibrationSweep
+        const DEFAULT_WEIGHTS = {
+            momentumMultiplier: 0.6, rsMultiplier: 0.6, structureMultiplier: 1.25,
+            accelBonus: 1.5, consistencyBonus: 1.0,
+            sectorInflow: 2.0, sectorModestInflow: 1.0, sectorOutflow: -1.0,
+            rsiOversold30: 2.5, rsiOversold40: 1.5, rsiOversold50: 0.5,
+            rsiOverbought70: -3.0, rsiOverbought80: -5.0,
+            macdBullish: 2.5, macdBearish: -2.0, macdNone: -0.5,
+            rsMeanRev95: -6.0, rsMeanRev90: -4.0, rsMeanRev85: -2.0,
+            squeezeBonusHigh: 1.5, squeezeBonusMod: 0.75,
+            smaProxNear: 2.0, smaProxBelow: 1.0, smaProxFar15: -1.5, smaProxFar10: -0.5,
+            smaCrossoverBullish: 2.0, smaCrossoverBearish: -2.0,
+            fvgBullish: 0.5, fvgBearish: -0.5,
+            entryMultExtreme: 0.3, entryMultExtended: 0.6, entryMultPullback: 1.3
+        };
+        function getActiveWeights() {
+            if (!portfolio.calibratedWeights) return DEFAULT_WEIGHTS;
+            const vix = portfolio.lastVIX?.level;
+            if (vix != null && portfolio.calibratedWeights.regimeWeights) {
+                return vix < 20
+                    ? portfolio.calibratedWeights.regimeWeights.lowVix || portfolio.calibratedWeights.weights || DEFAULT_WEIGHTS
+                    : portfolio.calibratedWeights.regimeWeights.highVix || portfolio.calibratedWeights.weights || DEFAULT_WEIGHTS;
+            }
+            return portfolio.calibratedWeights.weights || DEFAULT_WEIGHTS;
+        }
+
         // Anthropic API Configuration
         // IMPORTANT: Replace this with your Cloudflare Worker URL after setup
         // Anthropic API configuration - loaded from secure storage
@@ -5081,24 +5107,22 @@
         // Shared scoring function — used by both runAIAnalysis and testDataFetch
         // rsNormalized: 0-10 scale (RS percentile / 10). Multiplied by 0.6 internally for 0-6 contribution.
         function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, signalAdjustments, sma20, currentPrice, smaCrossover }) {
-            // [1] Scale momentum + RS by 0.6 to reduce base dominance (0-12 instead of 0-20)
-            const momentumContrib = momentumScore * 0.6;
-            const rsContrib = rsNormalized * 0.6;
+            const w = getActiveWeights();
+
+            const momentumContrib = momentumScore * w.momentumMultiplier;
+            const rsContrib = rsNormalized * w.rsMultiplier;
 
             let sectorBonus = 0;
-            if (sectorFlow === 'inflow') sectorBonus = 2;
-            else if (sectorFlow === 'modest-inflow') sectorBonus = 1;
-            else if (sectorFlow === 'outflow') sectorBonus = -1;
+            if (sectorFlow === 'inflow') sectorBonus = w.sectorInflow;
+            else if (sectorFlow === 'modest-inflow') sectorBonus = w.sectorModestInflow;
+            else if (sectorFlow === 'outflow') sectorBonus = w.sectorOutflow;
 
-            const accelBonus = isAccelerating && momentumScore >= 6 ? 1.5 : 0;
-            const consistencyBonus = (upDays >= 3 && totalDays >= 4) ? 1.0 : 0;
-            // [6] Increase structure weight: *1.25 (max ±3.75, was ±2.25)
-            const structureBonus = (structureScore || 0) * 1.25;
+            const accelBonus = isAccelerating && momentumScore >= 6 ? w.accelBonus : 0;
+            const consistencyBonus = (upDays >= 3 && totalDays >= 4) ? w.consistencyBonus : 0;
+            const structureBonus = (structureScore || 0) * w.structureMultiplier;
 
             const chg = todayChange || 0;
-            // [7] Scale runner penalty proportionally with 0.6 base reduction
             const runnerPenalty = chg >= 15 ? -3 : chg >= 10 ? -2 : chg >= 7 ? -1 : chg >= 5 ? -0.5 : 0;
-            // [4] Conditional decline penalty: no penalty for bullish structure dips
             const declinePenalty = (structureScore ?? 0) >= 1
                 ? (chg <= -8 ? -1 : 0)
                 : (chg <= -5 ? -3 : chg <= -3 ? -2 : chg <= -2 ? -1 : 0);
@@ -5110,7 +5134,6 @@
                 : 0;
 
             const ret5d = totalReturn5d ?? 0;
-            // [3] Bigger, more tiered pullback bonus (max +5, was +2)
             const pullbackBonus =
                 (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 2 && sectorFlow !== 'outflow') ? 5
                 : (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow' && sectorFlow !== 'modest-outflow') ? 4
@@ -5119,49 +5142,42 @@
                 : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 0 && sectorFlow !== 'outflow') ? 1
                 : 0;
 
-            // [5] Steeper RSI penalties, broader oversold bonuses
             const rsiBonusPenalty = rsi != null
-                ? (rsi < 30 ? 2.5 : rsi < 40 ? 1.5 : rsi < 50 ? 0.5
-                    : rsi > 80 ? -5 : rsi > 70 ? -3 : 0)
+                ? (rsi < 30 ? w.rsiOversold30 : rsi < 40 ? w.rsiOversold40 : rsi < 50 ? w.rsiOversold50
+                    : rsi > 80 ? w.rsiOverbought80 : rsi > 70 ? w.rsiOverbought70 : 0)
                 : 0;
-            const macdBonus = macdCrossover === 'bullish' ? 2.5 : macdCrossover === 'bearish' ? -2.0 : -0.5;
+            const macdBonus = macdCrossover === 'bullish' ? w.macdBullish : macdCrossover === 'bearish' ? w.macdBearish : w.macdNone;
 
-            // [2] RS mean-reversion penalty: RS=100 has 18% win rate in our data — doubled from original
-            const rsMeanRevPenalty = rsNormalized >= 9.5 ? -6 : rsNormalized >= 9 ? -4 : rsNormalized >= 8.5 ? -2 : 0;
+            const rsMeanRevPenalty = rsNormalized >= 9.5 ? w.rsMeanRev95 : rsNormalized >= 9 ? w.rsMeanRev90 : rsNormalized >= 8.5 ? w.rsMeanRev85 : 0;
 
             const dtc = daysToCover || 0;
-            const squeezeBonus = (dtc > 5 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? 1.5
-                : (dtc > 3 && (structureScore ?? 0) >= 1) ? 0.75
+            const squeezeBonus = (dtc > 5 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? w.squeezeBonusHigh
+                : (dtc > 3 && (structureScore ?? 0) >= 1) ? w.squeezeBonusMod
                 : 0;
 
             const vt = volumeTrend ?? 1;
-            // Enhanced volume analysis: divergences between momentum and volume
             const volumeBonus = (momentumScore >= 7 && vt < 0.7) ? -2.0
                 : (momentumScore >= 7 && vt > 1.3) ? 1.0
                 : (momentumScore < 5 && vt > 1.5 && (structureScore ?? 0) >= 0) ? 1.5
                 : (vt > 1.2 ? 0.5 : vt < 0.8 ? -0.5 : 0);
 
-            // FVG bonus: bullish FVG on pullback suggests a support zone
-            const fvgBonus = (fvg === 'bullish' && ret5d < 0 && (structureScore ?? 0) >= 0) ? 0.5
-                : (fvg === 'bearish' && (structureScore ?? 0) < 0) ? -0.5
+            const fvgBonus = (fvg === 'bullish' && ret5d < 0 && (structureScore ?? 0) >= 0) ? w.fvgBullish
+                : (fvg === 'bearish' && (structureScore ?? 0) < 0) ? w.fvgBearish
                 : 0;
 
-            // SMA20 proximity: near SMA20 = good entry, far above = extended
             let smaProximityBonus = 0;
             if (sma20 != null && currentPrice != null && sma20 > 0) {
                 const pctFromSMA20 = ((currentPrice - sma20) / sma20) * 100;
-                if (pctFromSMA20 >= 0 && pctFromSMA20 <= 3 && (structureScore ?? 0) >= 1) smaProximityBonus = 2.0;
-                else if (pctFromSMA20 < 0 && pctFromSMA20 >= -3 && (structureScore ?? 0) >= 1) smaProximityBonus = 1.0;
-                else if (pctFromSMA20 > 15) smaProximityBonus = -1.5;
-                else if (pctFromSMA20 > 10) smaProximityBonus = -0.5;
+                if (pctFromSMA20 >= 0 && pctFromSMA20 <= 3 && (structureScore ?? 0) >= 1) smaProximityBonus = w.smaProxNear;
+                else if (pctFromSMA20 < 0 && pctFromSMA20 >= -3 && (structureScore ?? 0) >= 1) smaProximityBonus = w.smaProxBelow;
+                else if (pctFromSMA20 > 15) smaProximityBonus = w.smaProxFar15;
+                else if (pctFromSMA20 > 10) smaProximityBonus = w.smaProxFar10;
             }
 
-            // SMA 20/50 crossover
-            const smaCrossoverBonus = smaCrossover?.crossover === 'bullish' ? 2.0
-                : smaCrossover?.crossover === 'bearish' ? -2.0
+            const smaCrossoverBonus = smaCrossover?.crossover === 'bullish' ? w.smaCrossoverBullish
+                : smaCrossover?.crossover === 'bearish' ? w.smaCrossoverBearish
                 : 0;
 
-            // Learned adjustments from trade history
             let learnedAdj = 0;
             if (signalAdjustments) {
                 if (rsi > 70 && signalAdjustments.overboughtRsiExtraPenalty) learnedAdj += signalAdjustments.overboughtRsiExtraPenalty;
@@ -5175,12 +5191,11 @@
                 + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus
                 + smaProximityBonus + smaCrossoverBonus + learnedAdj;
 
-            // Entry quality multiplier — penalize extended entries, reward pullbacks (only when score > 0)
             let entryMultiplier = 1.0;
             if (additiveScore > 0) {
-                if (rsi != null && rsi > 80 && momentumScore >= 9) entryMultiplier = 0.3;
-                else if ((rsi != null && rsi > 70) || momentumScore >= 9 || rsNormalized >= 9) entryMultiplier = 0.6;
-                else if (ret5d >= -8 && ret5d <= -1 && (structureScore ?? 0) >= 1) entryMultiplier = 1.3;
+                if (rsi != null && rsi > 80 && momentumScore >= 9) entryMultiplier = w.entryMultExtreme;
+                else if ((rsi != null && rsi > 70) || momentumScore >= 9 || rsNormalized >= 9) entryMultiplier = w.entryMultExtended;
+                else if (ret5d >= -8 && ret5d <= -1 && (structureScore ?? 0) >= 1) entryMultiplier = w.entryMultPullback;
             }
 
             const compositeScore = additiveScore * entryMultiplier;
@@ -11490,6 +11505,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             initGdriveConfig(); // Initialize Google Drive config with stored keys
             initChart();
             loadPortfolio();
+            // Log calibrated weights if available
+            if (portfolio.calibratedWeights?.weights) {
+                console.log(`📊 Loaded calibrated weights from ${portfolio.calibratedWeights.timestamp} (${portfolio.calibratedWeights.dataPoints} observations)`);
+            }
             loadApiUsage();
             updatePerformanceAnalytics();
             updateSectorAllocation();
@@ -12394,6 +12413,27 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
 
             let html = '';
+
+            // Calibration status indicator
+            const cal = portfolio.calibratedWeights;
+            if (cal?.weights) {
+                const calDate = new Date(cal.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                const improv = cal.validation?.improvement;
+                const improvStr = improv != null ? (improv >= 0 ? `+${improv}%` : `${improv}%`) : '';
+                const improvColor = improv >= 0 ? '#2ecc40' : '#ff6b6b';
+                const regime = cal.regimeWeights ? ' | regime-aware' : '';
+                const warn = cal.validation?.overfitWarning ? ' | <span style="color:#ff6b6b">overfit guard active</span>' : '';
+                html += `<div style="background:rgba(46,204,64,0.1);border:1px solid rgba(46,204,64,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85em;">
+                    <span style="color:#2ecc40;font-weight:600;">&#x1f4ca; Calibrated Weights Active</span>
+                    <span style="color:rgba(255,255,255,0.7);margin-left:6px;">— ${calDate} (${cal.dataPoints.toLocaleString()} obs, <span style="color:${improvColor}">${improvStr} validation improvement</span>${regime}${warn})</span>
+                </div>`;
+            } else {
+                html += `<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85em;">
+                    <span style="color:rgba(255,255,255,0.5);">&#x2699; Using default weights</span>
+                    <span style="color:rgba(255,255,255,0.35);margin-left:6px;">— type <code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:3px;">calibrate</code> in chat to optimize from historical data</span>
+                </div>`;
+            }
+
             const s = rulesData.summary;
 
             // ── Section A: Trading Rules ──
@@ -12810,186 +12850,655 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // === BACKTESTING FRAMEWORK ===
-        async function runBacktest(targetDateStr) {
-            const targetDate = new Date(targetDateStr);
-            if (isNaN(targetDate.getTime())) throw new Error('Invalid date format. Use YYYY-MM-DD.');
+        // Pearson correlation coefficient
+        function pearsonCorrelation(xs, ys) {
+            const n = xs.length;
+            if (n < 3) return 0;
+            const sumX = xs.reduce((a, b) => a + b, 0);
+            const sumY = ys.reduce((a, b) => a + b, 0);
+            const sumXY = xs.reduce((a, x, i) => a + x * ys[i], 0);
+            const sumX2 = xs.reduce((a, x) => a + x * x, 0);
+            const sumY2 = ys.reduce((a, y) => a + y * y, 0);
+            const denom = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+            return denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
+        }
 
-            console.log(`🧪 Backtest: simulating analysis for ${targetDateStr}`);
-
-            // Compute 80 weekdays ending at targetDate (separate from live cache)
-            const tradingDates = [];
-            const d = new Date(targetDate);
+        // Helper: generate weekdays between two dates
+        function generateWeekdays(startDate, endDate) {
+            const dates = [];
+            const d = new Date(startDate);
             d.setHours(0, 0, 0, 0);
-            while (tradingDates.length < 80) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            while (d <= end) {
+                if (d.getDay() !== 0 && d.getDay() !== 6) {
+                    dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+                }
+                d.setDate(d.getDate() + 1);
+            }
+            return dates;
+        }
+
+        // Helper: get N weekdays before a date
+        function getWeekdaysBefore(date, count) {
+            const dates = [];
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            while (dates.length < count) {
                 d.setDate(d.getDate() - 1);
-                const dow = d.getDay();
-                if (dow !== 0 && dow !== 6) {
-                    const yyyy = d.getFullYear();
-                    const mm = String(d.getMonth() + 1).padStart(2, '0');
-                    const dd = String(d.getDate()).padStart(2, '0');
-                    tradingDates.push(`${yyyy}-${mm}-${dd}`);
+                if (d.getDay() !== 0 && d.getDay() !== 6) {
+                    dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
                 }
             }
-            tradingDates.reverse();
+            return dates.reverse();
+        }
 
-            // Fetch historical grouped daily bars (separate cache key to avoid corrupting live data)
-            const btBars = {};
-            const BATCH_SIZE = 5;
-            let datesProcessed = 0;
-            for (let i = 0; i < tradingDates.length; i += BATCH_SIZE) {
-                const batch = tradingDates.slice(i, i + BATCH_SIZE);
+        // Helper: get N weekdays after a date
+        function getWeekdaysAfter(date, count) {
+            const dates = [];
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            while (dates.length < count) {
+                d.setDate(d.getDate() + 1);
+                if (d.getDay() !== 0 && d.getDay() !== 6) {
+                    dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+                }
+            }
+            return dates;
+        }
+
+        async function runCalibrationSweep(startDateStr, endDateStr, progressCallback) {
+            const report = (msg) => { console.log(msg); if (progressCallback) progressCallback(msg); };
+
+            // Default date range: 6 months ago to 21 trading days ago (need forward data)
+            const today = new Date();
+            const endDefault = new Date(today);
+            let forwardBuffer = 0;
+            while (forwardBuffer < 21) { endDefault.setDate(endDefault.getDate() - 1); if (endDefault.getDay() !== 0 && endDefault.getDay() !== 6) forwardBuffer++; }
+            const startDefault = new Date(endDefault);
+            startDefault.setMonth(startDefault.getMonth() - 6);
+
+            const rangeStart = startDateStr ? new Date(startDateStr) : startDefault;
+            const rangeEnd = endDateStr ? new Date(endDateStr) : endDefault;
+            if (isNaN(rangeStart.getTime()) || isNaN(rangeEnd.getTime())) throw new Error('Invalid date format. Use YYYY-MM-DD.');
+
+            const fmtDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+            // Select 40 evenly-spaced calibration dates
+            const allWeekdays = generateWeekdays(rangeStart, rangeEnd);
+            const NUM_DATES = Math.min(40, allWeekdays.length);
+            if (NUM_DATES < 5) throw new Error(`Only ${allWeekdays.length} trading days in range. Need at least 5.`);
+            const step = Math.max(1, Math.floor(allWeekdays.length / NUM_DATES));
+            const calibrationDates = [];
+            for (let i = 0; i < allWeekdays.length && calibrationDates.length < NUM_DATES; i += step) {
+                calibrationDates.push(allWeekdays[i]);
+            }
+
+            report(`📊 Calibration: ${calibrationDates.length} dates from ${calibrationDates[0]} to ${calibrationDates[calibrationDates.length - 1]}`);
+
+            // Compute full fetch window: earliest - 80 lookback to latest + 10 forward
+            const lookbackDates = getWeekdaysBefore(calibrationDates[0], 80);
+            const forwardDates = getWeekdaysAfter(calibrationDates[calibrationDates.length - 1], 10);
+            const allFetchDates = [...new Set([...lookbackDates, ...calibrationDates, ...forwardDates])].sort();
+
+            report(`🔄 Calibration: Fetching ${allFetchDates.length} dates of historical data...`);
+
+            // Fetch ALL dates in one pass (key optimization: ~230 calls vs ~3300)
+            const masterBars = {};
+            const universe = await screenStocks();
+            const universeSet = new Set(universe);
+            const BATCH = 10;
+            let fetchedCount = 0;
+            for (let i = 0; i < allFetchDates.length; i += BATCH) {
+                const batch = allFetchDates.slice(i, i + BATCH);
                 await Promise.all(batch.map(async (date) => {
                     try {
                         const resp = await fetch(`https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${date}?adjusted=true&apiKey=${POLYGON_API_KEY}`);
                         const data = await resp.json();
                         if (data.results) {
                             data.results.forEach(bar => {
-                                const sym = bar.T;
-                                if (!btBars[sym]) btBars[sym] = [];
-                                btBars[sym].push({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v, t: bar.t });
+                                if (!universeSet.has(bar.T)) return; // Only keep universe stocks
+                                if (!masterBars[bar.T]) masterBars[bar.T] = [];
+                                masterBars[bar.T].push({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v, t: bar.t });
                             });
-                            datesProcessed++;
+                            fetchedCount++;
                         }
                     } catch (e) { /* skip failed dates */ }
                 }));
-                if (i + BATCH_SIZE < tradingDates.length) await new Promise(r => setTimeout(r, 100));
+                if (i + BATCH < allFetchDates.length) await new Promise(r => setTimeout(r, 200));
+            }
+            // Sort all bars by timestamp
+            Object.values(masterBars).forEach(bars => bars.sort((a, b) => a.t - b.t));
+            report(`✅ Fetched ${fetchedCount}/${allFetchDates.length} dates, ${Object.keys(masterBars).length} symbols`);
+
+            // Fetch VIX history for regime segmentation via Yahoo Finance (Worker proxy)
+            const vixByDate = {};
+            try {
+                const vixStart = allFetchDates[0];
+                const vixEnd = allFetchDates[allFetchDates.length - 1];
+                const baseUrl = ANTHROPIC_API_URL ? ANTHROPIC_API_URL.replace(/\/+$/, '') : null;
+                if (baseUrl) {
+                    report(`🔄 Calibration: Fetching VIX history (${vixStart} to ${vixEnd})...`);
+                    const vixResp = await fetch(`${baseUrl}/vix-history?start=${vixStart}&end=${vixEnd}`);
+                    if (vixResp.ok) {
+                        const vixData = await vixResp.json();
+                        const timestamps = vixData.chart?.result?.[0]?.timestamp || [];
+                        const closes = vixData.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
+                        timestamps.forEach((ts, i) => {
+                            if (closes[i] != null) {
+                                const d = new Date(ts * 1000);
+                                const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+                                vixByDate[key] = closes[i];
+                            }
+                        });
+                    } else {
+                        console.warn(`VIX history: HTTP ${vixResp.status}`);
+                    }
+                }
+                if (Object.keys(vixByDate).length > 0) report(`📊 VIX history: ${Object.keys(vixByDate).length} dates`);
+                else report('⚠️ VIX history unavailable — regime segmentation will be skipped');
+            } catch (e) { console.warn('VIX history fetch failed:', e.message); }
+
+            // Save original multiDayCache to restore after calibration
+            const savedMultiDayCache = multiDayCache;
+
+            // Split dates: 70% training, 30% validation
+            const shuffled = [...calibrationDates];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            const splitIdx = Math.floor(shuffled.length * 0.7);
+            const trainingDates = shuffled.slice(0, splitIdx).sort();
+            const validationDates = shuffled.slice(splitIdx).sort();
+
+            // Run full pipeline for each calibration date, collect observations
+            const allObservations = [];
+            const signalAdj = getSignalAccuracyAdjustments();
+
+            try {
+                for (let di = 0; di < calibrationDates.length; di++) {
+                    const calDate = calibrationDates[di];
+                    const calTimestamp = new Date(calDate + 'T23:59:59').getTime();
+                    const isTraining = trainingDates.includes(calDate);
+
+                    if (di % 5 === 0) report(`🔄 Calibration: Analyzing date ${di + 1}/${calibrationDates.length} (${calDate})...`);
+
+                    // Slice lookback window: only bars <= calibration date, last 80
+                    multiDayCache = {};
+                    const calMarketData = {};
+                    for (const sym of universe) {
+                        const allBars = masterBars[sym];
+                        if (!allBars) continue;
+                        const windowBars = allBars.filter(b => b.t <= calTimestamp);
+                        if (windowBars.length < 10) continue;
+                        const sliced = windowBars.slice(-80);
+                        multiDayCache[sym] = sliced;
+                        const last = sliced[sliced.length - 1];
+                        const prev = sliced.length >= 2 ? sliced[sliced.length - 2] : last;
+                        calMarketData[sym] = {
+                            price: last.c,
+                            change: last.c - prev.c,
+                            changePercent: prev.c !== 0 ? ((last.c - prev.c) / prev.c) * 100 : 0
+                        };
+                    }
+
+                    // Build sector data for RS calculation
+                    const calStocksBySector = {};
+                    Object.entries(calMarketData).forEach(([sym, data]) => {
+                        const sector = stockSectors[sym] || 'Unknown';
+                        if (!calStocksBySector[sector]) calStocksBySector[sector] = [];
+                        calStocksBySector[sector].push({ symbol: sym, ...data });
+                    });
+
+                    // Sector rotation
+                    const calSectorRotation = detectSectorRotation(calMarketData);
+
+                    // Score every stock with FULL pipeline
+                    Object.entries(calMarketData).forEach(([sym, data]) => {
+                        const bars = multiDayCache[sym];
+                        if (!bars || bars.length < 10) return;
+
+                        const momentum = calculate5DayMomentum(data, sym);
+                        const sector = stockSectors[sym] || 'Unknown';
+                        const sectorData = calStocksBySector[sector] || [];
+                        const rs = calculateRelativeStrength(data, sectorData, sym);
+                        const struct = detectStructure(sym);
+                        const rsi = calculateRSI(bars);
+                        const macd = calculateMACD(bars);
+                        const sma20 = calculateSMA(bars, 20);
+                        const smaCross = calculateSMACrossover(bars);
+                        const sectorFlow = calSectorRotation[sector]?.moneyFlow || 'neutral';
+
+                        const scoreInputs = {
+                            momentumScore: momentum?.score || 0,
+                            rsNormalized: ((rs?.rsScore || 50) / 100) * 10,
+                            sectorFlow: sectorFlow,
+                            structureScore: struct?.structureScore ?? 0,
+                            isAccelerating: momentum?.isAccelerating,
+                            upDays: momentum?.upDays ?? 0,
+                            totalDays: momentum?.totalDays ?? 0,
+                            todayChange: momentum?.todayChange || data.changePercent || 0,
+                            totalReturn5d: momentum?.totalReturn5d ?? 0,
+                            rsi: rsi,
+                            macdCrossover: macd?.crossover,
+                            daysToCover: 0,
+                            signalAdjustments: signalAdj,
+                            volumeTrend: momentum?.volumeTrend ?? 1,
+                            fvg: struct?.fvg || 'none',
+                            sma20: sma20,
+                            currentPrice: data.price,
+                            smaCrossover: smaCross
+                        };
+                        const scoreResult = calculateCompositeScore(scoreInputs);
+
+                        // Look up forward returns from masterBars
+                        const futureBars = masterBars[sym]?.filter(b => b.t > calTimestamp) || [];
+                        futureBars.sort((a, b) => a.t - b.t);
+                        const price5d = futureBars.length >= 5 ? futureBars[4].c : null;
+                        const price10d = futureBars.length >= 10 ? futureBars[9].c : null;
+                        const return5d = price5d ? ((price5d - data.price) / data.price) * 100 : null;
+                        const return10d = price10d ? ((price10d - data.price) / data.price) * 100 : null;
+
+                        if (return10d != null) {
+                            allObservations.push({
+                                symbol: sym,
+                                date: calDate,
+                                isTraining: isTraining,
+                                scoreInputs: scoreInputs,
+                                score: scoreResult.total,
+                                breakdown: scoreResult.breakdown,
+                                return5d: return5d,
+                                return10d: return10d,
+                                vix: vixByDate[calDate] || null
+                            });
+                        }
+                    });
+                }
+            } finally {
+                // Always restore original multiDayCache
+                multiDayCache = savedMultiDayCache;
             }
 
-            // Sort bars by timestamp
-            Object.values(btBars).forEach(bars => bars.sort((a, b) => a.t - b.t));
+            report(`🔄 Calibration: Computing correlations from ${allObservations.length} observations...`);
 
-            // Get the stock universe from screenStocks
-            const stockUniverse = screenStocks();
-            const allSymbols = stockUniverse.flatMap(s => s.symbols).filter(sym => btBars[sym] && btBars[sym].length >= 20);
+            if (allObservations.length < 100) throw new Error(`Only ${allObservations.length} valid observations. Need at least 100.`);
 
-            // Build basic market data from last bar
-            const marketData = {};
-            allSymbols.forEach(sym => {
-                const bars = btBars[sym];
-                if (!bars || bars.length < 2) return;
-                const last = bars[bars.length - 1];
-                const prev = bars[bars.length - 2];
-                marketData[sym] = {
-                    price: last.c,
-                    change: last.c - prev.c,
-                    changePercent: ((last.c - prev.c) / prev.c) * 100
+            const trainingObs = allObservations.filter(o => o.isTraining);
+            const validationObs = allObservations.filter(o => !o.isTraining);
+
+            // Component-return correlation analysis (continuous components)
+            const componentKeys = [
+                'momentumContrib', 'rsContrib', 'structureBonus', 'accelBonus', 'consistencyBonus',
+                'rsiBonusPenalty', 'macdBonus', 'rsMeanRevPenalty', 'squeezeBonus', 'volumeBonus',
+                'fvgBonus', 'smaProximityBonus', 'smaCrossoverBonus', 'extensionPenalty',
+                'pullbackBonus', 'runnerPenalty', 'declinePenalty'
+            ];
+
+            const componentCorrelations = {};
+            const returns10d = trainingObs.map(o => o.return10d);
+
+            for (const key of componentKeys) {
+                const values = trainingObs.map(o => o.breakdown[key] || 0);
+                const corr = pearsonCorrelation(values, returns10d);
+
+                // Quintile analysis
+                const sorted = trainingObs.map((o, i) => ({ val: values[i], ret: o.return10d })).sort((a, b) => a.val - b.val);
+                const qSize = Math.floor(sorted.length / 5);
+                const quintiles = [];
+                for (let q = 0; q < 5; q++) {
+                    const start = q * qSize;
+                    const end = q === 4 ? sorted.length : (q + 1) * qSize;
+                    const slice = sorted.slice(start, end);
+                    quintiles.push(slice.length > 0 ? slice.reduce((s, x) => s + x.ret, 0) / slice.length : 0);
+                }
+
+                componentCorrelations[key] = {
+                    corr10d: parseFloat(corr.toFixed(4)),
+                    topQuintileAvg: parseFloat(quintiles[4].toFixed(2)),
+                    bottomQuintileAvg: parseFloat(quintiles[0].toFixed(2)),
+                    spread: parseFloat((quintiles[4] - quintiles[0]).toFixed(2))
                 };
-            });
+            }
 
-            // Calculate momentum for scoring
-            const signalAdj = getSignalAccuracyAdjustments();
-            const stockSectors = {};
-            const stocksBySector = {};
-            stockUniverse.forEach(s => {
-                s.symbols.forEach(sym => { stockSectors[sym] = s.sector; });
-            });
-            Object.entries(marketData).forEach(([sym, data]) => {
-                const sector = stockSectors[sym] || 'Unknown';
-                if (!stocksBySector[sector]) stocksBySector[sector] = [];
-                stocksBySector[sector].push({ symbol: sym, ...data });
-            });
+            // Derive calibrated weights (bounded, with shrinkage)
+            const SCALE_FACTOR = 2.0;
+            const MAX_CHANGE = 0.5; // ±50% from default
+            const shrinkage = Math.min(0.8, trainingObs.length / 10000);
 
-            // Score candidates
-            const scored = [];
-            Object.entries(marketData).forEach(([sym, data]) => {
-                const bars = btBars[sym];
-                if (!bars || bars.length < 5) return;
-                const closes5d = bars.slice(-6);
-                const ret5d = closes5d.length >= 2 ? ((closes5d[closes5d.length - 1].c - closes5d[0].c) / closes5d[0].c) * 100 : 0;
-                const rsi = calculateRSI(bars);
-                const macd = calculateMACD(bars);
-                const sma20 = calculateSMA(bars, 20);
-                const smaCrossover = calculateSMACrossover(bars);
+            // Map component correlations to weight keys
+            const componentToWeight = {
+                momentumContrib: 'momentumMultiplier',
+                rsContrib: 'rsMultiplier',
+                structureBonus: 'structureMultiplier',
+                accelBonus: 'accelBonus',
+                consistencyBonus: 'consistencyBonus',
+                smaProximityBonus: 'smaProxNear',
+                smaCrossoverBonus: 'smaCrossoverBullish',
+                rsiBonusPenalty: 'rsiOversold30',
+                macdBonus: 'macdBullish',
+                rsMeanRevPenalty: 'rsMeanRev95',
+                squeezeBonus: 'squeezeBonusHigh',
+                fvgBonus: 'fvgBullish'
+            };
 
-                const scoreResult = calculateCompositeScore({
-                    momentumScore: Math.min(10, Math.max(0, ret5d / 2 + 5)),
-                    rsNormalized: 5,
-                    sectorFlow: 'neutral',
-                    structureScore: 0,
-                    isAccelerating: false,
-                    upDays: 0,
-                    totalDays: 5,
-                    todayChange: data.changePercent || 0,
-                    totalReturn5d: ret5d,
-                    rsi: rsi,
-                    macdCrossover: macd?.crossover,
-                    daysToCover: 0,
-                    signalAdjustments: signalAdj,
-                    volumeTrend: 1,
-                    fvg: 'none',
-                    sma20: sma20,
-                    currentPrice: data.price,
-                    smaCrossover: smaCrossover
+            function calibrateWeightSet(observations) {
+                const weights = { ...DEFAULT_WEIGHTS };
+                const ret10dArr = observations.map(o => o.return10d);
+
+                for (const [compKey, weightKey] of Object.entries(componentToWeight)) {
+                    const vals = observations.map(o => o.breakdown[compKey] || 0);
+                    const corr = pearsonCorrelation(vals, ret10dArr);
+                    const adjustment = Math.max(-MAX_CHANGE, Math.min(MAX_CHANGE, corr * SCALE_FACTOR));
+                    const calibrated = DEFAULT_WEIGHTS[weightKey] * (1 + adjustment);
+                    weights[weightKey] = parseFloat((shrinkage * calibrated + (1 - shrinkage) * DEFAULT_WEIGHTS[weightKey]).toFixed(4));
+                }
+
+                // Propagate related weights proportionally
+                const ratios = {
+                    smaProxBelow: DEFAULT_WEIGHTS.smaProxBelow / DEFAULT_WEIGHTS.smaProxNear,
+                    smaProxFar15: DEFAULT_WEIGHTS.smaProxFar15 / DEFAULT_WEIGHTS.smaProxNear,
+                    smaProxFar10: DEFAULT_WEIGHTS.smaProxFar10 / DEFAULT_WEIGHTS.smaProxNear,
+                    smaCrossoverBearish: DEFAULT_WEIGHTS.smaCrossoverBearish / DEFAULT_WEIGHTS.smaCrossoverBullish,
+                    rsiOversold40: DEFAULT_WEIGHTS.rsiOversold40 / DEFAULT_WEIGHTS.rsiOversold30,
+                    rsiOversold50: DEFAULT_WEIGHTS.rsiOversold50 / DEFAULT_WEIGHTS.rsiOversold30,
+                    rsiOverbought70: DEFAULT_WEIGHTS.rsiOverbought70 / DEFAULT_WEIGHTS.rsiOversold30,
+                    rsiOverbought80: DEFAULT_WEIGHTS.rsiOverbought80 / DEFAULT_WEIGHTS.rsiOversold30,
+                    macdBearish: DEFAULT_WEIGHTS.macdBearish / DEFAULT_WEIGHTS.macdBullish,
+                    macdNone: DEFAULT_WEIGHTS.macdNone / DEFAULT_WEIGHTS.macdBullish,
+                    rsMeanRev90: DEFAULT_WEIGHTS.rsMeanRev90 / DEFAULT_WEIGHTS.rsMeanRev95,
+                    rsMeanRev85: DEFAULT_WEIGHTS.rsMeanRev85 / DEFAULT_WEIGHTS.rsMeanRev95,
+                    squeezeBonusMod: DEFAULT_WEIGHTS.squeezeBonusMod / DEFAULT_WEIGHTS.squeezeBonusHigh,
+                    fvgBearish: DEFAULT_WEIGHTS.fvgBearish / DEFAULT_WEIGHTS.fvgBullish,
+                    sectorModestInflow: DEFAULT_WEIGHTS.sectorModestInflow / DEFAULT_WEIGHTS.sectorInflow,
+                    sectorOutflow: DEFAULT_WEIGHTS.sectorOutflow / DEFAULT_WEIGHTS.sectorInflow
+                };
+
+                // Apply proportional scaling
+                if (weights.smaProxNear !== DEFAULT_WEIGHTS.smaProxNear) {
+                    weights.smaProxBelow = parseFloat((weights.smaProxNear * ratios.smaProxBelow).toFixed(4));
+                    weights.smaProxFar15 = parseFloat((weights.smaProxNear * ratios.smaProxFar15).toFixed(4));
+                    weights.smaProxFar10 = parseFloat((weights.smaProxNear * ratios.smaProxFar10).toFixed(4));
+                }
+                if (weights.smaCrossoverBullish !== DEFAULT_WEIGHTS.smaCrossoverBullish) {
+                    weights.smaCrossoverBearish = parseFloat((weights.smaCrossoverBullish * ratios.smaCrossoverBearish).toFixed(4));
+                }
+                if (weights.rsiOversold30 !== DEFAULT_WEIGHTS.rsiOversold30) {
+                    weights.rsiOversold40 = parseFloat((weights.rsiOversold30 * ratios.rsiOversold40).toFixed(4));
+                    weights.rsiOversold50 = parseFloat((weights.rsiOversold30 * ratios.rsiOversold50).toFixed(4));
+                    weights.rsiOverbought70 = parseFloat((weights.rsiOversold30 * ratios.rsiOverbought70).toFixed(4));
+                    weights.rsiOverbought80 = parseFloat((weights.rsiOversold30 * ratios.rsiOverbought80).toFixed(4));
+                }
+                if (weights.macdBullish !== DEFAULT_WEIGHTS.macdBullish) {
+                    weights.macdBearish = parseFloat((weights.macdBullish * ratios.macdBearish).toFixed(4));
+                    weights.macdNone = parseFloat((weights.macdBullish * ratios.macdNone).toFixed(4));
+                }
+                if (weights.rsMeanRev95 !== DEFAULT_WEIGHTS.rsMeanRev95) {
+                    weights.rsMeanRev90 = parseFloat((weights.rsMeanRev95 * ratios.rsMeanRev90).toFixed(4));
+                    weights.rsMeanRev85 = parseFloat((weights.rsMeanRev95 * ratios.rsMeanRev85).toFixed(4));
+                }
+                if (weights.squeezeBonusHigh !== DEFAULT_WEIGHTS.squeezeBonusHigh) {
+                    weights.squeezeBonusMod = parseFloat((weights.squeezeBonusHigh * ratios.squeezeBonusMod).toFixed(4));
+                }
+                if (weights.fvgBullish !== DEFAULT_WEIGHTS.fvgBullish) {
+                    weights.fvgBearish = parseFloat((weights.fvgBullish * ratios.fvgBearish).toFixed(4));
+                }
+                if (weights.sectorInflow !== DEFAULT_WEIGHTS.sectorInflow) {
+                    weights.sectorModestInflow = parseFloat((weights.sectorInflow * ratios.sectorModestInflow).toFixed(4));
+                    weights.sectorOutflow = parseFloat((weights.sectorInflow * ratios.sectorOutflow).toFixed(4));
+                }
+
+                // Entry multiplier: calibrate via pullback correlation
+                const pullbackCorr = componentCorrelations.pullbackBonus?.corr10d || 0;
+                if (pullbackCorr > 0.05) {
+                    weights.entryMultPullback = parseFloat(Math.min(1.5, DEFAULT_WEIGHTS.entryMultPullback * (1 + pullbackCorr)).toFixed(4));
+                }
+                const extensionCorr = componentCorrelations.extensionPenalty?.corr10d || 0;
+                if (extensionCorr < -0.05) {
+                    weights.entryMultExtreme = parseFloat(Math.max(0.15, DEFAULT_WEIGHTS.entryMultExtreme * (1 + extensionCorr)).toFixed(4));
+                    weights.entryMultExtended = parseFloat(Math.max(0.3, DEFAULT_WEIGHTS.entryMultExtended * (1 + extensionCorr)).toFixed(4));
+                }
+
+                return weights;
+            }
+
+            // Calibrate blended weights from training data
+            const calibratedWeights = calibrateWeightSet(trainingObs);
+
+            // Regime-segmented weights
+            const lowVixObs = trainingObs.filter(o => o.vix != null && o.vix < 20);
+            const highVixObs = trainingObs.filter(o => o.vix != null && o.vix >= 20);
+            const regimeWeights = {};
+            if (lowVixObs.length >= 50) regimeWeights.lowVix = calibrateWeightSet(lowVixObs);
+            if (highVixObs.length >= 50) regimeWeights.highVix = calibrateWeightSet(highVixObs);
+
+            // Out-of-sample validation: re-score validation obs with different weights, compare top-25 selection
+            function evaluateWithWeights(weightsToUse, observations) {
+                // Temporarily override portfolio.calibratedWeights so getActiveWeights() picks up the test weights
+                const savedCalibration = portfolio.calibratedWeights;
+                portfolio.calibratedWeights = weightsToUse === DEFAULT_WEIGHTS ? null : { weights: weightsToUse };
+                const activeW = getActiveWeights();
+                console.log(`📊 Validation: using ${weightsToUse === DEFAULT_WEIGHTS ? 'DEFAULT' : 'CALIBRATED'} weights (momentum=${activeW.momentumMultiplier}, structure=${activeW.structureMultiplier})`);
+                const dateGroups = {};
+                observations.forEach(o => {
+                    if (!dateGroups[o.date]) dateGroups[o.date] = [];
+                    dateGroups[o.date].push(o);
                 });
-                scored.push({ symbol: sym, score: scoreResult.total, price: data.price });
-            });
+                let totalReturn = 0, count = 0;
+                for (const obs of Object.values(dateGroups)) {
+                    // Re-score each observation with the given weights
+                    const rescored = obs.map(o => ({
+                        return10d: o.return10d,
+                        newScore: calculateCompositeScore(o.scoreInputs).total
+                    }));
+                    rescored.sort((a, b) => b.newScore - a.newScore);
+                    rescored.slice(0, 25).forEach(o => { totalReturn += o.return10d; count++; });
+                }
+                portfolio.calibratedWeights = savedCalibration;
+                return count > 0 ? totalReturn / count : 0;
+            }
 
-            scored.sort((a, b) => b.score - a.score);
-            const top25 = scored.slice(0, 25);
+            const defaultAvg10d = evaluateWithWeights(DEFAULT_WEIGHTS, validationObs);
+            const calibratedAvg10d = evaluateWithWeights(calibratedWeights, validationObs);
 
-            // Fetch actual prices 5/10/20 trading days after targetDate
-            const futureOffsets = [5, 10, 20];
-            const futureDates = [];
-            const fd = new Date(targetDate);
-            let tradingDaysAhead = 0;
-            while (tradingDaysAhead < 21) {
-                fd.setDate(fd.getDate() + 1);
-                if (fd.getDay() !== 0 && fd.getDay() !== 6) {
-                    tradingDaysAhead++;
-                    if (futureOffsets.includes(tradingDaysAhead)) {
-                        futureDates.push({ offset: tradingDaysAhead, date: `${fd.getFullYear()}-${String(fd.getMonth() + 1).padStart(2, '0')}-${String(fd.getDate()).padStart(2, '0')}` });
+            const improvement = calibratedAvg10d - defaultAvg10d;
+            const overfitWarning = improvement < -0.5;
+
+            // If overfitting detected, increase shrinkage toward defaults
+            let finalWeights = calibratedWeights;
+            let finalRegimeWeights = regimeWeights;
+            if (overfitWarning) {
+                report('⚠️ Overfitting detected — applying extra shrinkage (50/50 blend with defaults)');
+                finalWeights = {};
+                for (const key of Object.keys(DEFAULT_WEIGHTS)) {
+                    finalWeights[key] = parseFloat((0.5 * calibratedWeights[key] + 0.5 * DEFAULT_WEIGHTS[key]).toFixed(4));
+                }
+                if (regimeWeights.lowVix) {
+                    finalRegimeWeights.lowVix = {};
+                    for (const key of Object.keys(DEFAULT_WEIGHTS)) {
+                        finalRegimeWeights.lowVix[key] = parseFloat((0.5 * regimeWeights.lowVix[key] + 0.5 * DEFAULT_WEIGHTS[key]).toFixed(4));
+                    }
+                }
+                if (regimeWeights.highVix) {
+                    finalRegimeWeights.highVix = {};
+                    for (const key of Object.keys(DEFAULT_WEIGHTS)) {
+                        finalRegimeWeights.highVix[key] = parseFloat((0.5 * regimeWeights.highVix[key] + 0.5 * DEFAULT_WEIGHTS[key]).toFixed(4));
                     }
                 }
             }
 
-            // Fetch future prices from grouped daily
-            const futurePrices = {};
-            for (const { offset, date } of futureDates) {
-                try {
-                    const resp = await fetch(`https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${date}?adjusted=true&apiKey=${POLYGON_API_KEY}`);
-                    const data = await resp.json();
-                    if (data.results) {
-                        data.results.forEach(bar => {
-                            if (!futurePrices[bar.T]) futurePrices[bar.T] = {};
-                            futurePrices[bar.T][`day${offset}`] = bar.c;
-                        });
-                    }
-                } catch (e) { /* skip */ }
-                await new Promise(r => setTimeout(r, 100));
+            // Sort correlations by absolute value for reporting
+            const sortedCorr = Object.entries(componentCorrelations)
+                .sort((a, b) => Math.abs(b[1].corr10d) - Math.abs(a[1].corr10d));
+
+            // Build key weight changes for reporting
+            const weightChanges = {};
+            for (const key of Object.keys(DEFAULT_WEIGHTS)) {
+                const def = DEFAULT_WEIGHTS[key];
+                const cal = finalWeights[key];
+                const pctChange = def !== 0 ? ((cal - def) / Math.abs(def)) * 100 : 0;
+                if (Math.abs(pctChange) > 3) {
+                    weightChanges[key] = { from: def, to: cal, pct: parseFloat(pctChange.toFixed(1)) };
+                }
             }
 
-            // Compute hypothetical returns
+            // Save to portfolio
+            portfolio.calibratedWeights = {
+                timestamp: new Date().toISOString(),
+                sampledDates: calibrationDates.length,
+                dataPoints: allObservations.length,
+                dateRange: { start: calibrationDates[0], end: calibrationDates[calibrationDates.length - 1] },
+                weights: finalWeights,
+                regimeWeights: Object.keys(finalRegimeWeights).length > 0 ? finalRegimeWeights : null,
+                componentCorrelations: componentCorrelations,
+                validation: {
+                    calibratedAvg10d: parseFloat(calibratedAvg10d.toFixed(2)),
+                    defaultAvg10d: parseFloat(defaultAvg10d.toFixed(2)),
+                    improvement: parseFloat(improvement.toFixed(2)),
+                    overfitWarning: overfitWarning,
+                    trainingObs: trainingObs.length,
+                    validationObs: validationObs.length
+                }
+            };
+
+            savePortfolio(true);
+
+            report('✅ Calibration complete!');
+
+            return {
+                sampledDates: calibrationDates.length,
+                dataPoints: allObservations.length,
+                dateRange: { start: calibrationDates[0], end: calibrationDates[calibrationDates.length - 1] },
+                sortedCorr,
+                weightChanges,
+                validation: portfolio.calibratedWeights.validation,
+                regimeSplit: {
+                    lowVix: lowVixObs.length,
+                    highVix: highVixObs.length,
+                    hasLowVix: !!finalRegimeWeights.lowVix,
+                    hasHighVix: !!finalRegimeWeights.highVix
+                }
+            };
+        }
+
+        // Quick single-date backtest (uses current weights, calibrated or default)
+        async function runBacktest(targetDateStr) {
+            const targetDate = new Date(targetDateStr);
+            if (isNaN(targetDate.getTime())) throw new Error('Invalid date format. Use YYYY-MM-DD.');
+
+            console.log(`🧪 Backtest: simulating analysis for ${targetDateStr}`);
+
+            const lookbackDates = getWeekdaysBefore(targetDate, 80);
+            const forwardDates = getWeekdaysAfter(targetDate, 21);
+            const allDates = [...lookbackDates, ...forwardDates];
+
+            const btBars = {};
+            const universe = await screenStocks();
+            const universeSet = new Set(universe);
+            let datesProcessed = 0;
+            for (let i = 0; i < allDates.length; i += 10) {
+                const batch = allDates.slice(i, i + 10);
+                await Promise.all(batch.map(async (date) => {
+                    try {
+                        const resp = await fetch(`https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${date}?adjusted=true&apiKey=${POLYGON_API_KEY}`);
+                        const data = await resp.json();
+                        if (data.results) {
+                            data.results.forEach(bar => {
+                                if (!universeSet.has(bar.T)) return;
+                                if (!btBars[bar.T]) btBars[bar.T] = [];
+                                btBars[bar.T].push({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v, t: bar.t });
+                            });
+                            datesProcessed++;
+                        }
+                    } catch (e) { /* skip */ }
+                }));
+                if (i + 10 < allDates.length) await new Promise(r => setTimeout(r, 200));
+            }
+            Object.values(btBars).forEach(bars => bars.sort((a, b) => a.t - b.t));
+
+            const calTimestamp = new Date(targetDateStr + 'T23:59:59').getTime();
+            const savedCache = multiDayCache;
+            const scored = [];
+
+            try {
+                multiDayCache = {};
+                const md = {};
+                for (const sym of universe) {
+                    const allBars = btBars[sym];
+                    if (!allBars) continue;
+                    const windowBars = allBars.filter(b => b.t <= calTimestamp);
+                    if (windowBars.length < 10) continue;
+                    multiDayCache[sym] = windowBars.slice(-80);
+                    const last = windowBars[windowBars.length - 1];
+                    const prev = windowBars.length >= 2 ? windowBars[windowBars.length - 2] : last;
+                    md[sym] = { price: last.c, change: last.c - prev.c, changePercent: prev.c ? ((last.c - prev.c) / prev.c) * 100 : 0 };
+                }
+
+                const bySector = {};
+                Object.entries(md).forEach(([sym, data]) => {
+                    const sector = stockSectors[sym] || 'Unknown';
+                    if (!bySector[sector]) bySector[sector] = [];
+                    bySector[sector].push({ symbol: sym, ...data });
+                });
+                const sectorRot = detectSectorRotation(md);
+                const signalAdj = getSignalAccuracyAdjustments();
+
+                Object.entries(md).forEach(([sym, data]) => {
+                    const bars = multiDayCache[sym];
+                    if (!bars || bars.length < 10) return;
+                    const momentum = calculate5DayMomentum(data, sym);
+                    const sector = stockSectors[sym] || 'Unknown';
+                    const rs = calculateRelativeStrength(data, bySector[sector] || [], sym);
+                    const struct = detectStructure(sym);
+                    const scoreResult = calculateCompositeScore({
+                        momentumScore: momentum?.score || 0,
+                        rsNormalized: ((rs?.rsScore || 50) / 100) * 10,
+                        sectorFlow: sectorRot[sector]?.moneyFlow || 'neutral',
+                        structureScore: struct?.structureScore ?? 0,
+                        isAccelerating: momentum?.isAccelerating,
+                        upDays: momentum?.upDays ?? 0,
+                        totalDays: momentum?.totalDays ?? 0,
+                        todayChange: momentum?.todayChange || data.changePercent || 0,
+                        totalReturn5d: momentum?.totalReturn5d ?? 0,
+                        rsi: calculateRSI(bars),
+                        macdCrossover: calculateMACD(bars)?.crossover,
+                        daysToCover: 0,
+                        signalAdjustments: signalAdj,
+                        volumeTrend: momentum?.volumeTrend ?? 1,
+                        fvg: struct?.fvg || 'none',
+                        sma20: calculateSMA(bars, 20),
+                        currentPrice: data.price,
+                        smaCrossover: calculateSMACrossover(bars)
+                    });
+                    scored.push({ symbol: sym, score: scoreResult.total, price: data.price });
+                });
+            } finally {
+                multiDayCache = savedCache;
+            }
+
+            scored.sort((a, b) => b.score - a.score);
+            const top25 = scored.slice(0, 25);
+
+            // Compute forward returns
             const results = top25.map(({ symbol, score, price }) => {
-                const fp = futurePrices[symbol] || {};
+                const futureBars = btBars[symbol]?.filter(b => b.t > calTimestamp).sort((a, b) => a.t - b.t) || [];
                 return {
-                    symbol,
-                    score: score.toFixed(1),
-                    entryPrice: price.toFixed(2),
-                    return5d: fp.day5 ? (((fp.day5 - price) / price) * 100).toFixed(1) + '%' : 'N/A',
-                    return10d: fp.day10 ? (((fp.day10 - price) / price) * 100).toFixed(1) + '%' : 'N/A',
-                    return20d: fp.day20 ? (((fp.day20 - price) / price) * 100).toFixed(1) + '%' : 'N/A'
+                    symbol, score: score.toFixed(1), entryPrice: price.toFixed(2),
+                    return5d: futureBars[4] ? (((futureBars[4].c - price) / price) * 100).toFixed(1) + '%' : 'N/A',
+                    return10d: futureBars[9] ? (((futureBars[9].c - price) / price) * 100).toFixed(1) + '%' : 'N/A',
+                    return20d: futureBars[19] ? (((futureBars[19].c - price) / price) * 100).toFixed(1) + '%' : 'N/A'
                 };
             });
 
-            // Compute summary stats
-            const validReturns5d = results.filter(r => r.return5d !== 'N/A').map(r => parseFloat(r.return5d));
-            const validReturns10d = results.filter(r => r.return10d !== 'N/A').map(r => parseFloat(r.return10d));
-            const avgReturn5d = validReturns5d.length > 0 ? (validReturns5d.reduce((a, b) => a + b, 0) / validReturns5d.length).toFixed(1) : 'N/A';
-            const avgReturn10d = validReturns10d.length > 0 ? (validReturns10d.reduce((a, b) => a + b, 0) / validReturns10d.length).toFixed(1) : 'N/A';
-            const winRate5d = validReturns5d.length > 0 ? ((validReturns5d.filter(r => r > 0).length / validReturns5d.length) * 100).toFixed(0) : 'N/A';
-
-            // Save to portfolio
-            if (!portfolio.backtestResults) portfolio.backtestResults = [];
-            portfolio.backtestResults.push({
-                targetDate: targetDateStr,
-                runDate: new Date().toISOString(),
-                summary: { avgReturn5d, avgReturn10d, winRate5d, datesProcessed, symbolsScored: scored.length },
+            const valid5d = results.filter(r => r.return5d !== 'N/A').map(r => parseFloat(r.return5d));
+            const valid10d = results.filter(r => r.return10d !== 'N/A').map(r => parseFloat(r.return10d));
+            return {
+                targetDate: targetDateStr, datesProcessed, symbolsScored: scored.length,
+                avgReturn5d: valid5d.length ? (valid5d.reduce((a, b) => a + b, 0) / valid5d.length).toFixed(1) : 'N/A',
+                avgReturn10d: valid10d.length ? (valid10d.reduce((a, b) => a + b, 0) / valid10d.length).toFixed(1) : 'N/A',
+                winRate5d: valid5d.length ? ((valid5d.filter(r => r > 0).length / valid5d.length) * 100).toFixed(0) : 'N/A',
                 top25: results
-            });
-            while (portfolio.backtestResults.length > 20) portfolio.backtestResults.shift();
-            savePortfolio(true);
-
-            return { targetDate: targetDateStr, datesProcessed, symbolsScored: scored.length, avgReturn5d, avgReturn10d, winRate5d, top25: results };
+            };
         }
 
         async function sendMessage() {
@@ -13020,6 +13529,54 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Show typing indicator
             showTypingIndicator();
+
+            // Calibrate command handler
+            const calMatch = message.match(/^calibrate(?:\s+(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2}))?$/i);
+            if (calMatch) {
+                try {
+                    const startDate = calMatch[1] || null;
+                    const endDate = calMatch[2] || null;
+                    const rangeMsg = startDate ? `${startDate} to ${endDate}` : 'last 6 months';
+                    addChatMessage(`Starting calibration sweep (${rangeMsg}). This takes 2-5 minutes...`, 'agent');
+
+                    const progressCb = (msg) => {
+                        if (msg.startsWith('🔄') || msg.startsWith('✅') || msg.startsWith('⚠️')) {
+                            removeTypingIndicator();
+                            addChatMessage(msg, 'agent');
+                            showTypingIndicator();
+                        }
+                    };
+
+                    const result = await runCalibrationSweep(startDate, endDate, progressCb);
+                    removeTypingIndicator();
+
+                    let response = `**Calibration Results**\n`;
+                    response += `Data: ${result.sampledDates} dates, ${result.dataPoints} observations (${result.dateRange.start} to ${result.dateRange.end})\n`;
+                    response += `Validation: top-25 avg 10d return ${result.validation.calibratedAvg10d}% (calibrated) vs ${result.validation.defaultAvg10d}% (default)\n`;
+                    if (result.validation.overfitWarning) response += `**WARNING: Overfitting detected — extra shrinkage applied**\n`;
+                    response += `\n**Most predictive (10d):**\n`;
+                    result.sortedCorr.slice(0, 5).forEach(([key, data]) => {
+                        response += `  ${key}: r=${data.corr10d} (top quintile: ${data.topQuintileAvg}%, bottom: ${data.bottomQuintileAvg}%)\n`;
+                    });
+                    const changes = Object.entries(result.weightChanges);
+                    if (changes.length > 0) {
+                        response += `\n**Key weight changes:**\n`;
+                        changes.sort((a, b) => Math.abs(b[1].pct) - Math.abs(a[1].pct));
+                        changes.slice(0, 8).forEach(([key, data]) => {
+                            response += `  ${key}: ${data.from} → ${data.to} (${data.pct > 0 ? '+' : ''}${data.pct}%)\n`;
+                        });
+                    }
+                    if (result.regimeSplit.hasLowVix || result.regimeSplit.hasHighVix) {
+                        response += `\nRegime split: Low-VIX ${result.regimeSplit.lowVix} obs | High-VIX ${result.regimeSplit.highVix} obs`;
+                    }
+                    addChatMessage(response, 'agent');
+                } catch (e) {
+                    removeTypingIndicator();
+                    addChatMessage(`Calibration failed: ${e.message}`, 'agent');
+                }
+                isChatSending = false;
+                return;
+            }
 
             // Backtest command handler
             const btMatch = message.match(/^backtest\s+(\d{4}-\d{2}-\d{2})$/i);
@@ -13215,6 +13772,23 @@ Current Portfolio:
         function updateCandidateScorecard() {
             const container = document.getElementById('candidateScorecardContent');
             if (!container) return;
+
+            // Update scorecard header tag (calibrated vs default)
+            const scorecardTitle = document.querySelector('#candidateScorecardSection .chart-title');
+            if (scorecardTitle) {
+                const existingTag = scorecardTitle.querySelector('.calibration-tag');
+                if (existingTag) existingTag.remove();
+                const tag = document.createElement('span');
+                tag.className = 'calibration-tag';
+                if (portfolio.calibratedWeights?.weights) {
+                    tag.textContent = 'calibrated';
+                    tag.style.cssText = 'font-size:0.65em;background:#2ecc40;color:#000;padding:2px 7px;border-radius:8px;margin-left:8px;vertical-align:middle;font-weight:600;letter-spacing:0.5px;';
+                } else {
+                    tag.textContent = 'default weights';
+                    tag.style.cssText = 'font-size:0.65em;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);padding:2px 7px;border-radius:8px;margin-left:8px;vertical-align:middle;font-weight:500;letter-spacing:0.5px;';
+                }
+                scorecardTitle.appendChild(tag);
+            }
 
             const data = portfolio.lastCandidateScores;
             if (!data || !data.candidates || data.candidates.length === 0) {
