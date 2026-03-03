@@ -4224,18 +4224,18 @@
                     const sampleSyms = [...symbolSet].filter(s => multiDayCache[s]).slice(0, 5);
                     const avgBars = sampleSyms.length > 0 ? sampleSyms.reduce((sum, s) => sum + (multiDayCache[s]?.length || 0), 0) / sampleSyms.length : 0;
                     console.log(`📦 Restored ${hitCount}/${symbolSet.size} stocks from grouped daily cache (${Math.round((Date.now() - ts) / 60000)}min old, avg ${Math.round(avgBars)} bars)`);
-                    if (hitCount >= symbolSet.size * 0.8 && avgBars >= 35) return; // Good coverage AND depth
+                    if (hitCount >= symbolSet.size * 0.8 && avgBars >= 55) return; // Good coverage AND depth
                 }
             } catch { /* ignore cache errors */ }
 
             multiDayCache = {};
 
-            // Compute 48 most recent weekdays (skip Sat/Sun) — extra buffer for ~10 US holidays/year
-            // We need 40 actual trading days; holidays return 0 results and get skipped
+            // Compute 80 most recent weekdays (skip Sat/Sun) — extra buffer for ~10 US holidays/year
+            // We need ~65 actual trading days; holidays return 0 results and get skipped
             const tradingDates = [];
             const d = new Date();
             d.setHours(0, 0, 0, 0);
-            while (tradingDates.length < 48) {
+            while (tradingDates.length < 80) {
                 d.setDate(d.getDate() - 1);
                 const dow = d.getDay();
                 if (dow !== 0 && dow !== 6) { // Skip Sunday (0) and Saturday (6)
@@ -4423,6 +4423,84 @@
             };
         }
 
+        // SMA Crossover (20/50) — detects golden/death cross with spread
+        function calculateSMACrossover(bars) {
+            if (!bars || bars.length < 52) return null; // Need 50 for SMA50 + 1 for prev
+            const sma20Now = calculateSMA(bars, 20);
+            const sma50Now = calculateSMA(bars, 50);
+            if (sma20Now == null || sma50Now == null) return null;
+            const prevBars = bars.slice(0, -1);
+            const sma20Prev = calculateSMA(prevBars, 20);
+            const sma50Prev = calculateSMA(prevBars, 50);
+            if (sma20Prev == null || sma50Prev == null) return null;
+            let crossover = 'none';
+            if (sma20Prev <= sma50Prev && sma20Now > sma50Now) crossover = 'bullish';
+            else if (sma20Prev >= sma50Prev && sma20Now < sma50Now) crossover = 'bearish';
+            const spread = sma50Now !== 0 ? ((sma20Now - sma50Now) / sma50Now * 100) : 0;
+            return { sma50: sma50Now, crossover, spread: Math.round(spread * 100) / 100 };
+        }
+
+        // === SERVER-COMPUTED INDICATORS (RSI, MACD, SMA50 from Massive API) ===
+        let serverIndicatorCache = {};
+        let serverIndicatorTimestamp = 0;
+        const SERVER_INDICATOR_TTL = 15 * 60 * 1000; // 15 minutes
+
+        async function fetchServerIndicators(symbols) {
+            const now = Date.now();
+            // Return cache if fresh enough
+            if (now - serverIndicatorTimestamp < SERVER_INDICATOR_TTL && Object.keys(serverIndicatorCache).length > 0) {
+                console.log(`📊 Using cached server indicators (${Math.floor((now - serverIndicatorTimestamp) / 1000)}s old, ${Object.keys(serverIndicatorCache).length} symbols)`);
+                return serverIndicatorCache;
+            }
+
+            if (!POLYGON_API_KEY) return {};
+
+            console.log(`📊 Fetching server-computed indicators for ${symbols.length} symbols...`);
+            const BATCH = 25;
+            let fetched = 0;
+
+            for (let i = 0; i < symbols.length; i += BATCH) {
+                const batch = symbols.slice(i, i + BATCH);
+                await Promise.all(batch.map(async (symbol) => {
+                    try {
+                        const [rsiRes, macdRes, smaRes] = await Promise.all([
+                            fetch(`https://api.polygon.io/v1/indicators/rsi/${symbol}?timespan=day&window=14&series_type=close&limit=1&apiKey=${POLYGON_API_KEY}`).then(r => r.json()).catch(() => null),
+                            fetch(`https://api.polygon.io/v1/indicators/macd/${symbol}?timespan=day&short_window=12&long_window=26&signal_window=9&series_type=close&limit=1&apiKey=${POLYGON_API_KEY}`).then(r => r.json()).catch(() => null),
+                            fetch(`https://api.polygon.io/v1/indicators/sma/${symbol}?timespan=day&window=50&series_type=close&limit=1&apiKey=${POLYGON_API_KEY}`).then(r => r.json()).catch(() => null)
+                        ]);
+
+                        const entry = {};
+                        if (rsiRes?.results?.values?.[0]) {
+                            entry.serverRsi = Math.round(rsiRes.results.values[0].value * 100) / 100;
+                        }
+                        if (macdRes?.results?.values?.[0]) {
+                            const mv = macdRes.results.values[0];
+                            entry.serverMacd = {
+                                macd: Math.round((mv.value || 0) * 1000) / 1000,
+                                signal: Math.round((mv.signal || 0) * 1000) / 1000,
+                                histogram: Math.round((mv.histogram || 0) * 1000) / 1000
+                            };
+                        }
+                        if (smaRes?.results?.values?.[0]) {
+                            entry.serverSma50 = Math.round(smaRes.results.values[0].value * 100) / 100;
+                        }
+
+                        if (Object.keys(entry).length > 0) {
+                            serverIndicatorCache[symbol] = entry;
+                            fetched++;
+                        }
+                    } catch (err) {
+                        // Silently skip failed fetches
+                    }
+                }));
+                if (i + BATCH < symbols.length) await new Promise(r => setTimeout(r, 50));
+            }
+
+            serverIndicatorTimestamp = now;
+            console.log(`📊 Server indicators fetched: ${fetched}/${symbols.length} symbols`);
+            return serverIndicatorCache;
+        }
+
         // === TICKER DETAILS: Market Cap + SIC Description ===
         let tickerDetailsCache = {};
         const TICKER_DETAILS_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -4584,7 +4662,10 @@
                                     title: article.title,
                                     publishedUtc: article.published_utc,
                                     sentiment: insight?.sentiment || null,
-                                    sentimentReasoning: insight?.sentiment_reasoning || null
+                                    sentimentReasoning: insight?.sentiment_reasoning || null,
+                                    description: article.description || null,
+                                    publisher: article.publisher?.name || null,
+                                    tickers: article.tickers || []
                                 };
                             });
                             fetched++;
@@ -4999,7 +5080,7 @@
 
         // Shared scoring function — used by both runAIAnalysis and testDataFetch
         // rsNormalized: 0-10 scale (RS percentile / 10). Multiplied by 0.6 internally for 0-6 contribution.
-        function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, signalAdjustments }) {
+        function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, signalAdjustments, sma20, currentPrice, smaCrossover }) {
             // [1] Scale momentum + RS by 0.6 to reduce base dominance (0-12 instead of 0-20)
             const momentumContrib = momentumScore * 0.6;
             const rsContrib = rsNormalized * 0.6;
@@ -5054,11 +5135,30 @@
                 : 0;
 
             const vt = volumeTrend ?? 1;
-            const volumeBonus = vt > 1.2 ? 0.5 : vt < 0.8 ? -0.5 : 0;
+            // Enhanced volume analysis: divergences between momentum and volume
+            const volumeBonus = (momentumScore >= 7 && vt < 0.7) ? -2.0
+                : (momentumScore >= 7 && vt > 1.3) ? 1.0
+                : (momentumScore < 5 && vt > 1.5 && (structureScore ?? 0) >= 0) ? 1.5
+                : (vt > 1.2 ? 0.5 : vt < 0.8 ? -0.5 : 0);
 
             // FVG bonus: bullish FVG on pullback suggests a support zone
             const fvgBonus = (fvg === 'bullish' && ret5d < 0 && (structureScore ?? 0) >= 0) ? 0.5
                 : (fvg === 'bearish' && (structureScore ?? 0) < 0) ? -0.5
+                : 0;
+
+            // SMA20 proximity: near SMA20 = good entry, far above = extended
+            let smaProximityBonus = 0;
+            if (sma20 != null && currentPrice != null && sma20 > 0) {
+                const pctFromSMA20 = ((currentPrice - sma20) / sma20) * 100;
+                if (pctFromSMA20 >= 0 && pctFromSMA20 <= 3 && (structureScore ?? 0) >= 1) smaProximityBonus = 2.0;
+                else if (pctFromSMA20 < 0 && pctFromSMA20 >= -3 && (structureScore ?? 0) >= 1) smaProximityBonus = 1.0;
+                else if (pctFromSMA20 > 15) smaProximityBonus = -1.5;
+                else if (pctFromSMA20 > 10) smaProximityBonus = -0.5;
+            }
+
+            // SMA 20/50 crossover
+            const smaCrossoverBonus = smaCrossover?.crossover === 'bullish' ? 2.0
+                : smaCrossover?.crossover === 'bearish' ? -2.0
                 : 0;
 
             // Learned adjustments from trade history
@@ -5070,11 +5170,30 @@
                 if ((todayChange || 0) >= 5 && signalAdjustments.runnerExtraPenalty) learnedAdj += signalAdjustments.runnerExtraPenalty;
             }
 
-            const compositeScore = momentumContrib + rsContrib + sectorBonus + accelBonus + consistencyBonus
+            const additiveScore = momentumContrib + rsContrib + sectorBonus + accelBonus + consistencyBonus
                 + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + declinePenalty
-                + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus + learnedAdj;
+                + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus
+                + smaProximityBonus + smaCrossoverBonus + learnedAdj;
 
-            return compositeScore;
+            // Entry quality multiplier — penalize extended entries, reward pullbacks (only when score > 0)
+            let entryMultiplier = 1.0;
+            if (additiveScore > 0) {
+                if (rsi != null && rsi > 80 && momentumScore >= 9) entryMultiplier = 0.3;
+                else if ((rsi != null && rsi > 70) || momentumScore >= 9 || rsNormalized >= 9) entryMultiplier = 0.6;
+                else if (ret5d >= -8 && ret5d <= -1 && (structureScore ?? 0) >= 1) entryMultiplier = 1.3;
+            }
+
+            const compositeScore = additiveScore * entryMultiplier;
+
+            return {
+                total: compositeScore,
+                breakdown: {
+                    momentumContrib, rsContrib, sectorBonus, accelBonus, consistencyBonus,
+                    structureBonus, extensionPenalty, pullbackBonus, runnerPenalty, declinePenalty,
+                    rsiBonusPenalty, macdBonus, rsMeanRevPenalty, squeezeBonus, volumeBonus, fvgBonus,
+                    smaProximityBonus, smaCrossoverBonus, learnedAdj, entryMultiplier
+                }
+            };
         }
 
         // BULK SNAPSHOT: Fetch all tickers in ONE call instead of 300 individual calls
@@ -5136,6 +5255,7 @@
                             price: parseFloat(currentPrice),
                             change: parseFloat(change),
                             changePercent: parseFloat(changePercent),
+                            vwap: ticker.day?.vw ? parseFloat(ticker.day.vw) : null,
                             timestamp: new Date().toISOString(),
                             isReal: true,
                             note: marketOpen ? 'Real-time' : 'Market closed'
@@ -6148,11 +6268,19 @@
         function formatPerformanceInsights() {
             const rulesData = deriveTradingRules();
 
+            // Killer summary: prepend blunt directive when win rate is poor
+            const p2ClosedTrades = portfolio.closedTrades || [];
+            const p2Wins = p2ClosedTrades.filter(t => (t.returnPercent || 0) > 0).length;
+            const p2WinRate = p2ClosedTrades.length > 0 ? (p2Wins / p2ClosedTrades.length * 100) : 50;
+            const killerPrefix = (p2ClosedTrades.length >= 3 && p2WinRate < 40)
+                ? `\n⚠️ PORTFOLIO WIN RATE: ${p2WinRate.toFixed(0)}% — BELOW 40%. STOP chasing extended stocks. ONLY buy pullbacks with bullish structure, confirmed catalysts, and RSI <60. Quality over quantity — fewer trades, higher conviction.\n`
+                : '';
+
             if (rulesData.rules.length === 0) {
                 if (rulesData.summary.insufficientData) {
-                    return `\nTRADING RULES: Need more trade history (${rulesData.summary.totalTrades} trades so far, need 3+).\n`;
+                    return killerPrefix + `\nTRADING RULES: Need more trade history (${rulesData.summary.totalTrades} trades so far, need 3+).\n`;
                 }
-                return `\nTRADING RULES: No clear patterns yet from ${rulesData.summary.totalTrades} trades.\n`;
+                return killerPrefix + `\nTRADING RULES: No clear patterns yet from ${rulesData.summary.totalTrades} trades.\n`;
             }
 
             const s = rulesData.summary;
@@ -6160,7 +6288,7 @@
             const warnRules = rulesData.rules.filter(r => r.enforcement === 'warn' && r.type === 'avoid');
             const preferRules = rulesData.rules.filter(r => r.type === 'prefer');
 
-            let insights = `\nTRADING RULES (derived from your ${s.totalTrades}-trade history):\n\n`;
+            let insights = killerPrefix + `\nTRADING RULES (derived from your ${s.totalTrades}-trade history):\n\n`;
 
             if (blockRules.length > 0) {
                 insights += `ENFORCED (code-blocked — these trades will not execute):\n`;
@@ -6337,6 +6465,13 @@
             if (closedTrades.length < 3) return '';
 
             let insights = '\n📊 LEARNING FROM YOUR TRADE HISTORY:\n\n';
+
+            // Killer summary: blunt directive when win rate is poor
+            const p1Wins = closedTrades.filter(t => (t.returnPercent || 0) > 0).length;
+            const p1WinRate = closedTrades.length > 0 ? (p1Wins / closedTrades.length * 100) : 50;
+            if (p1WinRate < 40) {
+                insights += `⚠️ WIN RATE IS ${p1WinRate.toFixed(0)}% — BELOW 40%. Your primary job right now is STOP LOSING MONEY. Cut losers faster, hold winners longer. Every sell decision should ask: "Am I cutting a loser or selling a winner?" If it's a winner with intact thesis, HOLD. If it's a loser past -7%, SELL.\n\n`;
+            }
 
             // Portfolio health status (benchmark + drawdown)
             const health = portfolio.portfolioHealth;
@@ -6996,7 +7131,9 @@
                     const flow = sectorRotation[sector]?.moneyFlow;
                     const drBars = multiDayCache[symbol];
                     const drRsi = calculateRSI(drBars);
+                    const drSma20 = calculateSMA(drBars, 20);
                     const drMacd = calculateMACD(drBars);
+                    const drSmaCrossover = calculateSMACrossover(drBars);
                     const drDtc = shortInterestCache[symbol]?.daysToCover || 0;
                     const drStructScore = struct?.structureScore || 0;
                     // Use snapshot changePercent, but on weekends/closed (0%) fall back to last bar's return
@@ -7007,7 +7144,7 @@
                             dayChg = prev.c ? ((last.c - prev.c) / prev.c) * 100 : 0;
                         }
                     }
-                    const compositeScore = calculateCompositeScore({
+                    const scoreResult = calculateCompositeScore({
                         momentumScore: momScore,
                         rsNormalized: rsNorm,
                         sectorFlow: flow,
@@ -7022,10 +7159,14 @@
                         daysToCover: drDtc,
                         signalAdjustments: signalAdj,
                         volumeTrend: momentum?.volumeTrend ?? 1,
-                        fvg: struct?.fvg
+                        fvg: struct?.fvg,
+                        sma20: drSma20,
+                        currentPrice: data.price,
+                        smaCrossover: drSmaCrossover
                     });
+                    const compositeScore = scoreResult.total;
                     const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
-                    dryRunScored.push({ symbol, compositeScore, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null });
+                    dryRunScored.push({ symbol, compositeScore, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', scoreBreakdown: scoreResult.breakdown });
                 });
 
                 // Fetch news for top candidates + holdings
@@ -7621,11 +7762,12 @@
                     // Detect market structure (CHoCH, BOS, sweeps, FVG)
                     const marketStructure = detectStructure(symbol);
 
-                    // Technical indicators (RSI, SMA, MACD) from 40-bar data
+                    // Technical indicators (RSI, SMA, MACD, SMA crossover) from bar data
                     const bars = multiDayCache[symbol];
                     const rsi = calculateRSI(bars);
                     const sma20 = calculateSMA(bars, 20);
                     const macd = calculateMACD(bars);
+                    const smaCrossover = calculateSMACrossover(bars);
 
                     // Combine all data
                     enhancedMarketData[symbol] = {
@@ -7638,11 +7780,13 @@
                         rsi: rsi,
                         sma20: sma20,
                         macd: macd,
+                        smaCrossover: smaCrossover,
                         marketCap: tickerDetailsCache[symbol]?.marketCap || null,
                         companyName: tickerDetailsCache[symbol]?.name || null,
                         sicDescription: tickerDetailsCache[symbol]?.sicDescription || null,
                         shortInterest: shortInterestCache[symbol] || null,
-                        recentNews: newsCache[symbol] || null
+                        recentNews: newsCache[symbol] || null,
+                        priceVsVwap: data.vwap ? ((data.price - data.vwap) / data.vwap * 100) : null
                     };
                 });
 
@@ -7655,6 +7799,12 @@
                             if (thesis.entryMomentum == null) thesis.entryMomentum = emd.momentum?.score ?? null;
                             if (thesis.entryRS == null) thesis.entryRS = emd.relativeStrength?.rsScore ?? null;
                             if (thesis.entrySectorFlow == null) thesis.entrySectorFlow = emd.sectorRotation?.moneyFlow ?? null;
+                            // Update high-water mark
+                            const currentPrice = emd.price || 0;
+                            if (currentPrice > (thesis.peakPrice || 0)) {
+                                thesis.peakPrice = currentPrice;
+                                thesis.peakDate = new Date().toISOString();
+                            }
                         }
                     });
                 }
@@ -7672,7 +7822,7 @@
 
                 // 1. Score every stock with a composite ranking
                 const scoredStocks = Object.entries(enhancedMarketData).map(([symbol, data]) => {
-                    const compositeScore = calculateCompositeScore({
+                    const scoreResult = calculateCompositeScore({
                         momentumScore: data.momentum?.score || 0,
                         rsNormalized: ((data.relativeStrength?.rsScore || 50) / 100) * 10,
                         sectorFlow: data.sectorRotation?.moneyFlow,
@@ -7687,9 +7837,13 @@
                         daysToCover: data.shortInterest?.daysToCover || 0,
                         volumeTrend: data.momentum?.volumeTrend ?? 1,
                         fvg: data.marketStructure?.fvg,
-                        signalAdjustments: signalAdj
+                        signalAdjustments: signalAdj,
+                        sma20: data.sma20,
+                        currentPrice: data.price,
+                        smaCrossover: data.smaCrossover
                     });
-                    return { symbol, compositeScore, data };
+                    const compositeScore = scoreResult.total;
+                    return { symbol, compositeScore, data, scoreBreakdown: scoreResult.breakdown };
                 });
                 
                 // Write compositeScore back to enhancedMarketData so matchesPattern('low_composite') can access it
@@ -7728,7 +7882,10 @@
                             macdHistogram: s.data.macd?.histogram ?? null,
                             marketCap: s.data.marketCap,
                             daysToCover: s.data.shortInterest?.daysToCover || 0,
-                            name: tickerDetailsCache[s.symbol]?.name || null
+                            name: tickerDetailsCache[s.symbol]?.name || null,
+                            sma50: s.data.smaCrossover?.sma50 ?? null,
+                            smaCrossover: s.data.smaCrossover?.crossover || 'none',
+                            scoreBreakdown: s.scoreBreakdown || null
                         };
                     })
                 };
@@ -7856,6 +8013,24 @@
                     }
                 });
 
+                // Fetch server-computed indicators for candidates (RSI, MACD, SMA50 from Massive API)
+                thinkingDetail.textContent = `Fetching server indicators for ${[...topCandidates].length} stocks...`;
+                try {
+                    const serverData = await fetchServerIndicators([...topCandidates]);
+                    let injected = 0;
+                    Object.entries(serverData).forEach(([sym, indicators]) => {
+                        if (enhancedMarketData[sym]) {
+                            if (indicators.serverRsi != null) enhancedMarketData[sym].serverRsi = indicators.serverRsi;
+                            if (indicators.serverMacd) enhancedMarketData[sym].serverMacd = indicators.serverMacd;
+                            if (indicators.serverSma50 != null) enhancedMarketData[sym].serverSma50 = indicators.serverSma50;
+                            injected++;
+                        }
+                    });
+                    if (injected > 0) console.log(`📊 Injected server indicators for ${injected} candidates`);
+                } catch (e) {
+                    console.warn('Server indicator fetch failed (non-fatal):', e.message);
+                }
+
                 // Build TOP BUY OPPORTUNITIES summary for Phase 1 (opportunity cost awareness)
                 // Phase 1 only sees holdings — without this, it can't weigh "hold mediocre position" vs "sell and buy something better"
                 const topBuyOpportunities = scoredStocks
@@ -7896,17 +8071,10 @@
                     
                     const p1Data = await fetchAnthropicStreaming({
                             model: 'claude-sonnet-4-6',
-                            max_tokens: 6000,
-                            tools: [{
-                                type: "web_search_20250305",
-                                name: "web_search",
-                                max_uses: 3,
-                                allowed_domains: ["investing.com", "bloomberg.com", "cnbc.com", "finance.yahoo.com", "seekingalpha.com", "benzinga.com", "tradingview.com"]
-                            }],
-                            messages: [{ role: 'user', content: `You are APEX, an AI trading agent. PHASE 1: HOLDINGS REVIEW ONLY.
-Today: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
+                            max_tokens: 8000,
+                            system: `You are APEX, an AI trading agent. PHASE 1: HOLDINGS REVIEW ONLY.
 
-OBJECTIVE: Maximize portfolio returns. Your job is to protect capital by exiting broken setups and preserve winners by holding strong positions. Every dollar tied up in a weak holding is a dollar not working toward better opportunities.
+OBJECTIVE: Maximize portfolio returns. Protect capital by exiting broken setups. Preserve winners by holding strong positions. Every dollar in a weak holding is a dollar not working toward better opportunities.
 
 TASK: Review each holding → decide SELL or HOLD. NO BUY decisions.
 
@@ -7929,14 +8097,37 @@ HOLD DURATION DISCIPLINE — You are a SWING TRADER. Minimum expected hold: 5 tr
 - Positions 5+ days: Normal evaluation — full sell criteria apply.
 "The stock went down today" is NEVER sufficient reason to sell. Swing trades need time to work.
 
-SEARCH STRATEGY: You have pre-loaded recentNews with recent headlines + machine sentiment for each holding.
-${vixCache ? 'VIX level is pre-loaded below — no need to search for it.\n' : ''}Scan recentNews FIRST, then use web search for:
-1. One market regime search${vixCache ? ' — broader context beyond VIX (e.g. SPY trend, macro headlines)' : ' (required — include VIX level, SPY trend, macro headlines)'}
-2. If ANY holding has EMPTY or STALE recentNews (no articles, or all articles older than 7 days), search for recent news on those holdings — news gaps are blind spots that could hide sell signals. Search: "SYMBOL stock news this week site:investing.com OR site:reuters.com OR site:marketwatch.com"
-3. Deep dive on a holding if recentNews shows a potentially alarming headline that needs verification
+STOP-LOSS DISCIPLINE — Non-negotiable risk management:
+- -5% (WATCH): Flag for close monitoring. Check if thesis still holds.
+- -7% (SELL_CANDIDATE): Default to SELL unless compelling reason to hold (very recent entry <3d with intact thesis AND bullish structure).
+- -10% (URGENT_SELL): SELL with conviction 8+. Only exception: catastrophic market-wide event affecting all holdings equally AND bullish structure intact.
+- -15% (CRITICAL_DRAWDOWN): MANDATORY SELL. No exceptions. This is a risk management failure that must be corrected immediately.
+Each holding has a stopLossStatus field — you MUST address every holding with CRITICAL_DRAWDOWN or URGENT_SELL status explicitly.
+
+SEARCH STRATEGY: Scan pre-loaded recentNews FIRST, then use web search for:
+1. One market regime search (broader context — SPY trend, macro headlines)
+2. If ANY holding has EMPTY or STALE recentNews (no articles, or all >7 days old), search for news — gaps are blind spots. Search: "SYMBOL stock news this week site:investing.com OR site:reuters.com OR site:marketwatch.com"
+3. Deep dive on a holding if recentNews shows a potentially alarming headline
 Pre-loaded news coverage varies by ticker — do NOT assume silence means safety.
 
-SEARCH RECENCY RULE: Today is the ONLY date that matters. Search results older than 2 trading days may reflect outdated conditions (e.g. "tech selloff" that has since reversed). When search results conflict with the real-time price/momentum/RS data provided below, ALWAYS trust the quantitative data — it is live. Note the date of any search result you cite and discount stale narratives. Include "today" or "this week" in search queries to get current results.
+SEARCH RECENCY RULE: Today is the ONLY date that matters. Results older than 2 trading days may reflect outdated conditions. When narratives conflict with the real-time quantitative data, ALWAYS trust the quantitative data. Note dates and discount stale narratives. Include "today" or "this week" in queries.
+
+ANTI-WHIPSAW: Do NOT sell stocks bought today (same calendar day). Do NOT contradict recent decisions.
+
+OPPORTUNITY COST CHURN — OUR #1 PERFORMANCE KILLER:
+Do NOT sell a holding to "free up cash" unless the holding has a BROKEN thesis (CHoCH, failed catalyst, structural breakdown). "Something else scores higher" is NOT a valid sell reason. Holding a mediocre position is better than churning into a new one.
+
+JSON ONLY response:
+{ "decisions": [{ "action": "SELL" or "HOLD", "symbol": "X", "shares": N, "conviction": 1-10, "reasoning": "..." }], "holdings_summary": "...", "market_regime": "bull/bear/choppy" }
+Include a decision for EVERY holding.`,
+                            tools: [{
+                                type: "web_search_20250305",
+                                name: "web_search",
+                                max_uses: 3,
+                                allowed_domains: ["investing.com", "bloomberg.com", "cnbc.com", "finance.yahoo.com", "seekingalpha.com", "benzinga.com", "tradingview.com"]
+                            }],
+                            messages: [{ role: 'user', content: `Today: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
+${vixCache ? 'VIX level is pre-loaded below — no need to search for it.' : ''}
 
 Portfolio Cash: $${portfolio.cash.toFixed(2)}
 ${vixCache ? `VIX: ${vixCache.level.toFixed(1)} (${vixCache.interpretation}${vixCache.trend !== 'stable' ? ', ' + vixCache.trend : ''})` : ''}
@@ -7954,8 +8145,11 @@ Holdings: ${(() => {
         const hd = fb ? Math.floor((Date.now() - new Date(fb.timestamp).getTime()) / 86400000) : 0;
         const hh = fb ? Math.floor((Date.now() - new Date(fb.timestamp).getTime()) / 3600000) : 0;
         const th = (portfolio.holdingTheses || {})[sym];
-        eh[sym] = { shares: sh, avgCost: '$' + ac.toFixed(2), price: '$' + cp.toFixed(2), PL: uPL.toFixed(1) + '%', held: hd >= 1 ? hd + 'd' : hh + 'h',
+        const stopLossStatus = uPL <= -15 ? 'CRITICAL_DRAWDOWN' : uPL <= -10 ? 'URGENT_SELL' : uPL <= -7 ? 'SELL_CANDIDATE' : uPL <= -5 ? 'WATCH' : 'OK';
+        const drawdownFromPeak = th && th.peakPrice && cp > 0 ? ((cp - th.peakPrice) / th.peakPrice * 100) : null;
+        eh[sym] = { shares: sh, avgCost: '$' + ac.toFixed(2), price: '$' + cp.toFixed(2), PL: uPL.toFixed(1) + '%', held: hd >= 1 ? hd + 'd' : hh + 'h', stopLossStatus,
             ORIGINAL_THESIS: th ? { catalyst: th.originalCatalyst, entryConviction: th.entryConviction, entryPrice: '$' + th.entryPrice.toFixed(2), entryDate: th.entryDate.split('T')[0], entryMomentum: th.entryMomentum, entryRS: th.entryRS, entrySectorFlow: th.entrySectorFlow } : 'No thesis recorded',
+            EXIT_PLAN: th ? { targetPrice: th.targetPrice || null, stopPrice: th.stopPrice || null, timeHorizon: th.timeHorizon || null, drawdownFromPeak: drawdownFromPeak != null ? drawdownFromPeak.toFixed(1) + '%' : null } : null,
             CURRENT_INDICATORS: {
                 sector: holdingsData[sym]?.sector || 'Unknown',
                 momentum: holdingsData[sym]?.momentum?.score ?? null,
@@ -7965,13 +8159,14 @@ Holdings: ${(() => {
                 structureSignals: {
                     choch: holdingsData[sym]?.marketStructure?.choch ?? null,
                     bos: holdingsData[sym]?.marketStructure?.bos ?? null,
-                    liquiditySweep: holdingsData[sym]?.marketStructure?.liquiditySweep ?? false,
-                    fvgCount: holdingsData[sym]?.marketStructure?.fvgs?.length ?? 0
+                    sweep: holdingsData[sym]?.marketStructure?.sweep ?? 'none',
+                    fvg: holdingsData[sym]?.marketStructure?.fvg ?? 'none'
                 },
                 rsi: holdingsData[sym]?.rsi ?? null,
+                sma20: holdingsData[sym]?.sma20 ?? null,
                 macdSignal: holdingsData[sym]?.macd?.crossover ?? 'none',
                 shortInterest: holdingsData[sym]?.shortInterest ? { daysToCover: holdingsData[sym].shortInterest.daysToCover } : null,
-                recentNews: (holdingsData[sym]?.recentNews || []).slice(0, 2).map(n => ({ title: n.title, sentiment: n.sentiment }))
+                recentNews: (holdingsData[sym]?.recentNews || []).slice(0, 2).map(n => ({ title: n.title, sentiment: n.sentiment, description: n.description, publisher: n.publisher }))
             } };
         const buyDateET = new Date(buys[0].timestamp).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
         const todayET = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
@@ -8000,19 +8195,10 @@ Recent Transactions: ${(() => {
     return r.length === 0 ? 'None' : r.map(t => t.type + ' ' + t.shares + ' ' + t.symbol + ' @ $' + t.price.toFixed(2) + ' ' + new Date(t.timestamp).toLocaleDateString()).join('; ');
 })()}
 
-⚠️ ANTI-WHIPSAW: Do NOT sell stocks bought today (same calendar day). Do NOT contradict recent decisions.
-
 💡 OPPORTUNITY COST CONTEXT (for reference, NOT a sell trigger):
 ${topBuyOpportunities.join('\\n')}
 These candidates exist in Phase 2. Only consider selling to fund them if a holding's thesis is BROKEN (not just underperforming).
-
-⚠️ OPPORTUNITY COST CHURN — OUR #1 PERFORMANCE KILLER:
-32% of exits were "opportunity cost" sells, and they are essentially random outcomes (coin flip).
-RULE: Do NOT sell a holding to "free up cash" unless the holding has a BROKEN thesis (CHoCH, failed catalyst, structural breakdown). "Something else scores higher" is NOT a valid sell reason. Holding a mediocre position is better than churning into a new one that statistically won't outperform.
-${formatPhase1Insights()}
-JSON ONLY response:
-{ "decisions": [{ "action": "SELL" or "HOLD", "symbol": "X", "shares": N, "conviction": 1-10, "reasoning": "..." }], "holdings_summary": "...", "market_regime": "bull/bear/choppy" }
-Include a decision for EVERY holding.` }]
+${formatPhase1Insights()}` }]
                     });
                     if (p1Data.type === 'error' || p1Data.error) {
                         const em = p1Data.error?.message || 'Phase 1 error';
@@ -8322,6 +8508,41 @@ Include a decision for EVERY holding.` }]
                 const data = await fetchAnthropicStreaming({
                         model: 'claude-sonnet-4-6',
                         max_tokens: 10000,
+                        system: `You are APEX, an AGGRESSIVE AI trading agent and passionate teacher. You maximize returns while educating your user about WHY you make each decision.
+
+CORE IDENTITY: Catalyst-first aggressive swing trader. Find stocks BEFORE they move (predictive), not AFTER (reactive). Catalysts drive moves; technical/fundamental/sector CONFIRM.
+
+SEARCH PHILOSOPHY: You have pre-loaded recentNews with recent headlines + machine sentiment for each candidate. Use web search to VERIFY and QUANTIFY the most promising catalyst headlines, not for broad discovery. Do 2-3 focused searches total.
+
+SEARCH RECENCY: Include "today" or "this week" in queries. Results older than 2 trading days may be stale. When narratives conflict with real-time quantitative data, ALWAYS trust the data. Only cite 2025-2026 data.
+
+CONVICTION CALIBRATION — USE THE FULL 1-10 SCALE:
+- 9-10: RARE (≤20% of buys) — only when ALL factors align
+- 7-8: COMMON for solid setups
+- 5-6: Speculative entries
+- <5: PASS (don't buy)
+
+POSITION SIZING (code-enforced caps):
+- Conviction 9-10: up to 15% of portfolio
+- Conviction 7-8: 8-12% of portfolio
+- Conviction 5-6: 5-8% of portfolio
+- <5: Don't trade
+
+STOP-LOSS DISCIPLINE:
+- -7%: Default SELL unless very recent entry <3d with intact thesis
+- -10%: SELL with conviction 8+
+- -15%: MANDATORY SELL, no exceptions
+
+WINNER MANAGEMENT: If still in BULLISH structure → DO NOT SELL. Only sell winners if CHoCH to bearish OR catalyst fully played out AND momentum reversing.
+
+EXIT PLANNING (required for every BUY):
+- targetPrice: Where you expect the stock to reach
+- stopPrice: Where thesis breaks
+- timeHorizon: Expected hold duration
+
+ANTI-WHIPSAW: Do NOT recommend buying recently-sold symbols unless citing a specific NEW catalyst.
+
+Phase 1 handles all HOLD/SELL decisions. You output BUY decisions ONLY (may add to existing holding if setup is exceptional).`,
                         tools: [{
                             type: "web_search_20250305",
                             name: "web_search",
@@ -8330,7 +8551,7 @@ Include a decision for EVERY holding.` }]
                         }],
                         messages: [{
                             role: 'user',
-                            content: `You are APEX, an AGGRESSIVE AI trading agent who's also a passionate teacher. You maximize returns while educating your user about WHY you make each decision.
+                            content: `
 
 IMPORTANT DATE CONTEXT:
 Today's date is ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
@@ -8928,9 +9149,10 @@ Stock down 8%+ AND:
 POSITION SIZING - HARD CAP 15% PER POSITION:
 ────────────────────────────────────────────────────────────────
 
-Code enforces a 15% max position size. Plan your share counts accordingly.
-No single stock should exceed 15% of total portfolio value (existing + new shares).
-This cap cannot be overridden regardless of conviction level.
+Code enforces conviction-based position caps. Plan your share counts accordingly.
+Conviction 9-10: max 15%, 7-8: max 12%, 5-6: max 8%, <5: max 5%.
+No single stock should exceed its conviction cap of total portfolio value (existing + new shares).
+Additionally, no sector may exceed 35% of portfolio, and max 12 holdings total.
 
 If 3+ positions in same sector totaling >60%:
   "📊 Portfolio would be 70% in semiconductors (NVDA, AMD, AVGO)
@@ -9077,10 +9299,18 @@ HOW TO USE STRUCTURE DATA:
   → daysToCover >3 + catalyst = heightened squeeze potential
   → High short interest adds upside convexity if catalyst triggers covering
 
-• recentNews: [{ title, publishedUtc, sentiment, sentimentReasoning }] (up to 3 recent articles)
+• recentNews: [{ title, publishedUtc, sentiment, sentimentReasoning, description, publisher, tickers }] (up to 3 recent articles)
   → Machine-scored sentiment from Polygon (positive/negative/neutral)
   → Use as catalyst CLUES — verify important headlines with web search
   → Pre-loaded headlines save you search time; deep dive on the most promising ones
+
+• priceVsVwap: percentage distance from today's VWAP (positive = above, negative = below)
+  → Above VWAP = buyers in control today, below = sellers in control
+
+• serverRsi, serverMacd, serverSma50: Server-computed indicators from full price history (more accurate than client-side approximations)
+  → When available, prefer serverRsi over rsi for qualitative RSI assessment
+  → serverMacd: { macd, signal, histogram } — full-history MACD values
+  → serverSma50: 50-day SMA from server — compare with current price for trend assessment
 
 CRITICAL REMINDERS:
 • Catalyst is the gate - without it (8+/10), don't trade
@@ -9585,13 +9815,21 @@ CRITICAL JSON RULES:
       Entry: When, price, original thesis
       Changed: What broke — catalyst played out, technicals, news
       Status: Current price vs entry, P&L, momentum/RS now
-      Capital: Where freed cash goes"
+      Capital: Where freed cash goes",
+      "targetPrice": NUMBER (BUY only — your price target based on catalyst/technical analysis),
+      "stopPrice": NUMBER (BUY only — price level where thesis is broken, must exit),
+      "timeHorizon": "STRING (BUY only — expected hold duration, e.g. '5-10 days', '2-3 weeks')"
     }
   ],
   "overall_reasoning": "Confident 150-250 word summary with teaching element covering: (1) Market regime + approach, (2) Key trades and why (sells: entry→thesis→exit; buys: catalyst + setup), (3) One teaching insight for the user.",
 
   "research_summary": "Bullet-point findings from your web searches. One line per finding, cite specific numbers + dates. Only 2025-2026 data."
 }
+
+EXIT PLANNING (required for every BUY):
+- targetPrice: Where you expect the stock to reach based on your analysis (resistance level, catalyst completion, etc.)
+- stopPrice: Where the thesis breaks — the price where you'd recommend selling to limit losses
+- timeHorizon: How long you expect this trade to take to play out
 
 CONVICTION SCORING (must be research-backed):
 - 9-10: Strong fundamental catalyst + positive technical setup + sector tailwind
@@ -9963,13 +10201,41 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 });
             }
 
-            // Step 2c: Enforce maximum position size (15% of portfolio value)
-            const MAX_POSITION_PCT = 15;
+            // Step 2c: Catalyst freshness gate — block extended stocks without fresh positive catalyst
+            const now48h = Date.now() - 48 * 60 * 60 * 1000;
+            buyDecisionsAll = buyDecisionsAll.filter(d => {
+                const data = marketData[d.symbol];
+                const ret5d = data?.momentum?.totalReturn5d ?? 0;
+                if (ret5d > 10) {
+                    const news = data?.recentNews || [];
+                    const hasFreshCatalyst = news.some(n =>
+                        n.sentiment === 'positive' && n.publishedUtc && new Date(n.publishedUtc).getTime() > now48h
+                    );
+                    if (!hasFreshCatalyst) {
+                        const msg = `BLOCKED: ${d.symbol} — up ${ret5d.toFixed(1)}% in 5d with no fresh positive catalyst`;
+                        console.warn(msg);
+                        addActivity(msg, 'warning');
+                        if (!portfolio.blockedTrades) portfolio.blockedTrades = [];
+                        portfolio.blockedTrades.push({
+                            symbol: d.symbol, timestamp: new Date().toISOString(),
+                            ruleId: 'catalyst_freshness', ruleLabel: 'No fresh catalyst for extended mover',
+                            winRate: 0, price: data?.price || 0
+                        });
+                        while (portfolio.blockedTrades.length > 50) portfolio.blockedTrades.shift();
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            // Step 2d: Conviction-based position sizing
             const estimatedPortfolioValue = portfolio.cash + Object.entries(portfolio.holdings).reduce((sum, [sym, shares]) => {
                 return sum + (marketData[sym]?.price || 0) * shares;
             }, 0);
-            const maxPositionValue = estimatedPortfolioValue * (MAX_POSITION_PCT / 100);
             buyDecisionsAll = buyDecisionsAll.filter(d => {
+                const conviction = d.conviction || 5;
+                const maxPct = conviction >= 9 ? 15 : conviction >= 7 ? 12 : conviction >= 5 ? 8 : 5;
+                const maxPositionValue = estimatedPortfolioValue * (maxPct / 100);
                 const price = marketData[d.symbol]?.price || 0;
                 const currentValue = (portfolio.holdings[d.symbol] || 0) * price;
                 const addedValue = price * d.shares;
@@ -9977,13 +10243,58 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const allowedShares = Math.floor((maxPositionValue - currentValue) / price);
                     if (allowedShares > 0) {
                         d.shares = allowedShares;
-                        d.reasoning = (d.reasoning || '') + ` (capped to ${allowedShares} shares — ${MAX_POSITION_PCT}% max position)`;
-                        addActivity(`📏 ${d.symbol} capped to ${allowedShares} shares (${MAX_POSITION_PCT}% position limit)`, 'warning');
+                        d.reasoning = (d.reasoning || '') + ` (capped to ${allowedShares} shares — ${maxPct}% max for conviction ${conviction})`;
+                        addActivity(`📏 ${d.symbol} capped to ${allowedShares} shares (${maxPct}% position limit, conviction ${conviction})`, 'warning');
                         return true;
                     }
-                    addActivity(`📏 ${d.symbol} blocked — would exceed ${MAX_POSITION_PCT}% position limit`, 'warning');
+                    addActivity(`📏 ${d.symbol} blocked — would exceed ${maxPct}% position limit (conviction ${conviction})`, 'warning');
                     return false;
                 }
+                return true;
+            });
+
+            // Step 2d: Sector concentration cap (35% max per sector)
+            const SECTOR_CAP_PCT = 35;
+            const sectorExposure = {};
+            Object.entries(portfolio.holdings).forEach(([sym, shares]) => {
+                const sector = marketData[sym]?.sector || 'Unknown';
+                sectorExposure[sector] = (sectorExposure[sector] || 0) + (marketData[sym]?.price || 0) * shares;
+            });
+            buyDecisionsAll = buyDecisionsAll.filter(d => {
+                const sector = marketData[d.symbol]?.sector || 'Unknown';
+                const price = marketData[d.symbol]?.price || 0;
+                const addedValue = price * d.shares;
+                const currentSectorValue = sectorExposure[sector] || 0;
+                const maxSectorValue = estimatedPortfolioValue * (SECTOR_CAP_PCT / 100);
+                if (currentSectorValue + addedValue > maxSectorValue && maxSectorValue > 0) {
+                    const allowedValue = maxSectorValue - currentSectorValue;
+                    const allowedShares = Math.floor(allowedValue / price);
+                    if (allowedShares > 0) {
+                        d.shares = allowedShares;
+                        d.reasoning = (d.reasoning || '') + ` (sector-capped to ${allowedShares} shares — ${sector} at ${SECTOR_CAP_PCT}% limit)`;
+                        addActivity(`📏 ${d.symbol} sector-capped to ${allowedShares} shares (${sector} at ${SECTOR_CAP_PCT}% limit)`, 'warning');
+                        sectorExposure[sector] = currentSectorValue + price * allowedShares;
+                        return true;
+                    }
+                    addActivity(`📏 ${d.symbol} blocked — ${sector} sector would exceed ${SECTOR_CAP_PCT}% cap`, 'warning');
+                    return false;
+                }
+                sectorExposure[sector] = currentSectorValue + addedValue;
+                return true;
+            });
+
+            // Step 2e: Max holdings cap (12 positions)
+            const MAX_HOLDINGS = 12;
+            const currentHoldingsCount = Object.keys(portfolio.holdings).length;
+            let newPositionCount = 0;
+            buyDecisionsAll = buyDecisionsAll.filter(d => {
+                const alreadyHeld = portfolio.holdings[d.symbol] > 0;
+                if (alreadyHeld) return true; // Add-to-position always allowed
+                if (currentHoldingsCount + newPositionCount >= MAX_HOLDINGS) {
+                    addActivity(`📏 ${d.symbol} blocked — at ${MAX_HOLDINGS} holdings cap`, 'warning');
+                    return false;
+                }
+                newPositionCount++;
                 return true;
             });
 
@@ -10239,7 +10550,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             marketCap: marketData[symbol].marketCap ?? null,
                             compositeScore: null, // populated below from lastCandidateScores
                             vixLevel: vixCache?.level ?? null,
-                            vixInterpretation: vixCache?.interpretation ?? null
+                            vixInterpretation: vixCache?.interpretation ?? null,
+                            sma20: marketData[symbol].sma20 ?? null,
+                            volumeTrend: marketData[symbol].momentum?.volumeTrend ?? null,
+                            fvg: marketData[symbol].marketStructure?.fvg || null,
+                            newsSentiment: (marketData[symbol].recentNews || []).find(n => n.sentiment)?.sentiment || null,
+                            priceVsVwap: marketData[symbol].priceVsVwap ?? null,
+                            sma50: marketData[symbol].smaCrossover?.sma50 ?? null,
+                            smaCrossover: marketData[symbol].smaCrossover?.crossover || null
                         },
 
                         // Market context at entry
@@ -10276,7 +10594,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             entryDTC: marketData[symbol].shortInterest?.daysToCover ?? null,
                             entryCompositeScore: null,
                             entryVIX: vixCache?.level ?? null,
-                            entryVIXInterpretation: vixCache?.interpretation ?? null
+                            entryVIXInterpretation: vixCache?.interpretation ?? null,
+                            entrySMA20: marketData[symbol].sma20 ?? null,
+                            peakPrice: price,
+                            peakDate: new Date().toISOString(),
+                            targetPrice: decision.targetPrice || null,
+                            stopPrice: decision.stopPrice || null,
+                            timeHorizon: decision.timeHorizon || null
                         };
                         const candidateEntry = (portfolio.lastCandidateScores?.candidates || []).find(c => c.symbol === symbol);
                         if (candidateEntry) portfolio.holdingTheses[symbol].entryCompositeScore = candidateEntry.compositeScore;
@@ -12462,6 +12786,189 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('chatInput').focus();
         }
 
+        // === BACKTESTING FRAMEWORK ===
+        async function runBacktest(targetDateStr) {
+            const targetDate = new Date(targetDateStr);
+            if (isNaN(targetDate.getTime())) throw new Error('Invalid date format. Use YYYY-MM-DD.');
+
+            console.log(`🧪 Backtest: simulating analysis for ${targetDateStr}`);
+
+            // Compute 80 weekdays ending at targetDate (separate from live cache)
+            const tradingDates = [];
+            const d = new Date(targetDate);
+            d.setHours(0, 0, 0, 0);
+            while (tradingDates.length < 80) {
+                d.setDate(d.getDate() - 1);
+                const dow = d.getDay();
+                if (dow !== 0 && dow !== 6) {
+                    const yyyy = d.getFullYear();
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    tradingDates.push(`${yyyy}-${mm}-${dd}`);
+                }
+            }
+            tradingDates.reverse();
+
+            // Fetch historical grouped daily bars (separate cache key to avoid corrupting live data)
+            const btBars = {};
+            const BATCH_SIZE = 5;
+            let datesProcessed = 0;
+            for (let i = 0; i < tradingDates.length; i += BATCH_SIZE) {
+                const batch = tradingDates.slice(i, i + BATCH_SIZE);
+                await Promise.all(batch.map(async (date) => {
+                    try {
+                        const resp = await fetch(`https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${date}?adjusted=true&apiKey=${POLYGON_API_KEY}`);
+                        const data = await resp.json();
+                        if (data.results) {
+                            data.results.forEach(bar => {
+                                const sym = bar.T;
+                                if (!btBars[sym]) btBars[sym] = [];
+                                btBars[sym].push({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v, t: bar.t });
+                            });
+                            datesProcessed++;
+                        }
+                    } catch (e) { /* skip failed dates */ }
+                }));
+                if (i + BATCH_SIZE < tradingDates.length) await new Promise(r => setTimeout(r, 100));
+            }
+
+            // Sort bars by timestamp
+            Object.values(btBars).forEach(bars => bars.sort((a, b) => a.t - b.t));
+
+            // Get the stock universe from screenStocks
+            const stockUniverse = screenStocks();
+            const allSymbols = stockUniverse.flatMap(s => s.symbols).filter(sym => btBars[sym] && btBars[sym].length >= 20);
+
+            // Build basic market data from last bar
+            const marketData = {};
+            allSymbols.forEach(sym => {
+                const bars = btBars[sym];
+                if (!bars || bars.length < 2) return;
+                const last = bars[bars.length - 1];
+                const prev = bars[bars.length - 2];
+                marketData[sym] = {
+                    price: last.c,
+                    change: last.c - prev.c,
+                    changePercent: ((last.c - prev.c) / prev.c) * 100
+                };
+            });
+
+            // Calculate momentum for scoring
+            const signalAdj = getSignalAccuracyAdjustments();
+            const stockSectors = {};
+            const stocksBySector = {};
+            stockUniverse.forEach(s => {
+                s.symbols.forEach(sym => { stockSectors[sym] = s.sector; });
+            });
+            Object.entries(marketData).forEach(([sym, data]) => {
+                const sector = stockSectors[sym] || 'Unknown';
+                if (!stocksBySector[sector]) stocksBySector[sector] = [];
+                stocksBySector[sector].push({ symbol: sym, ...data });
+            });
+
+            // Score candidates
+            const scored = [];
+            Object.entries(marketData).forEach(([sym, data]) => {
+                const bars = btBars[sym];
+                if (!bars || bars.length < 5) return;
+                const closes5d = bars.slice(-6);
+                const ret5d = closes5d.length >= 2 ? ((closes5d[closes5d.length - 1].c - closes5d[0].c) / closes5d[0].c) * 100 : 0;
+                const rsi = calculateRSI(bars);
+                const macd = calculateMACD(bars);
+                const sma20 = calculateSMA(bars, 20);
+                const smaCrossover = calculateSMACrossover(bars);
+
+                const scoreResult = calculateCompositeScore({
+                    momentumScore: Math.min(10, Math.max(0, ret5d / 2 + 5)),
+                    rsNormalized: 5,
+                    sectorFlow: 'neutral',
+                    structureScore: 0,
+                    isAccelerating: false,
+                    upDays: 0,
+                    totalDays: 5,
+                    todayChange: data.changePercent || 0,
+                    totalReturn5d: ret5d,
+                    rsi: rsi,
+                    macdCrossover: macd?.crossover,
+                    daysToCover: 0,
+                    signalAdjustments: signalAdj,
+                    volumeTrend: 1,
+                    fvg: 'none',
+                    sma20: sma20,
+                    currentPrice: data.price,
+                    smaCrossover: smaCrossover
+                });
+                scored.push({ symbol: sym, score: scoreResult.total, price: data.price });
+            });
+
+            scored.sort((a, b) => b.score - a.score);
+            const top25 = scored.slice(0, 25);
+
+            // Fetch actual prices 5/10/20 trading days after targetDate
+            const futureOffsets = [5, 10, 20];
+            const futureDates = [];
+            const fd = new Date(targetDate);
+            let tradingDaysAhead = 0;
+            while (tradingDaysAhead < 21) {
+                fd.setDate(fd.getDate() + 1);
+                if (fd.getDay() !== 0 && fd.getDay() !== 6) {
+                    tradingDaysAhead++;
+                    if (futureOffsets.includes(tradingDaysAhead)) {
+                        futureDates.push({ offset: tradingDaysAhead, date: `${fd.getFullYear()}-${String(fd.getMonth() + 1).padStart(2, '0')}-${String(fd.getDate()).padStart(2, '0')}` });
+                    }
+                }
+            }
+
+            // Fetch future prices from grouped daily
+            const futurePrices = {};
+            for (const { offset, date } of futureDates) {
+                try {
+                    const resp = await fetch(`https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${date}?adjusted=true&apiKey=${POLYGON_API_KEY}`);
+                    const data = await resp.json();
+                    if (data.results) {
+                        data.results.forEach(bar => {
+                            if (!futurePrices[bar.T]) futurePrices[bar.T] = {};
+                            futurePrices[bar.T][`day${offset}`] = bar.c;
+                        });
+                    }
+                } catch (e) { /* skip */ }
+                await new Promise(r => setTimeout(r, 100));
+            }
+
+            // Compute hypothetical returns
+            const results = top25.map(({ symbol, score, price }) => {
+                const fp = futurePrices[symbol] || {};
+                return {
+                    symbol,
+                    score: score.toFixed(1),
+                    entryPrice: price.toFixed(2),
+                    return5d: fp.day5 ? (((fp.day5 - price) / price) * 100).toFixed(1) + '%' : 'N/A',
+                    return10d: fp.day10 ? (((fp.day10 - price) / price) * 100).toFixed(1) + '%' : 'N/A',
+                    return20d: fp.day20 ? (((fp.day20 - price) / price) * 100).toFixed(1) + '%' : 'N/A'
+                };
+            });
+
+            // Compute summary stats
+            const validReturns5d = results.filter(r => r.return5d !== 'N/A').map(r => parseFloat(r.return5d));
+            const validReturns10d = results.filter(r => r.return10d !== 'N/A').map(r => parseFloat(r.return10d));
+            const avgReturn5d = validReturns5d.length > 0 ? (validReturns5d.reduce((a, b) => a + b, 0) / validReturns5d.length).toFixed(1) : 'N/A';
+            const avgReturn10d = validReturns10d.length > 0 ? (validReturns10d.reduce((a, b) => a + b, 0) / validReturns10d.length).toFixed(1) : 'N/A';
+            const winRate5d = validReturns5d.length > 0 ? ((validReturns5d.filter(r => r > 0).length / validReturns5d.length) * 100).toFixed(0) : 'N/A';
+
+            // Save to portfolio
+            if (!portfolio.backtestResults) portfolio.backtestResults = [];
+            portfolio.backtestResults.push({
+                targetDate: targetDateStr,
+                runDate: new Date().toISOString(),
+                summary: { avgReturn5d, avgReturn10d, winRate5d, datesProcessed, symbolsScored: scored.length },
+                top25: results
+            });
+            while (portfolio.backtestResults.length > 20) portfolio.backtestResults.shift();
+            savePortfolio(true);
+
+            return { targetDate: targetDateStr, datesProcessed, symbolsScored: scored.length, avgReturn5d, avgReturn10d, winRate5d, top25: results };
+        }
+
         async function sendMessage() {
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
@@ -12490,6 +12997,29 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Show typing indicator
             showTypingIndicator();
+
+            // Backtest command handler
+            const btMatch = message.match(/^backtest\s+(\d{4}-\d{2}-\d{2})$/i);
+            if (btMatch) {
+                try {
+                    addChatMessage(`Running backtest for ${btMatch[1]}... This may take a minute.`, 'agent');
+                    const result = await runBacktest(btMatch[1]);
+                    let response = `**Backtest Results: ${result.targetDate}**\n\n`;
+                    response += `Dates processed: ${result.datesProcessed} | Symbols scored: ${result.symbolsScored}\n`;
+                    response += `Avg 5d return: ${result.avgReturn5d}% | Avg 10d: ${result.avgReturn10d}% | 5d Win Rate: ${result.winRate5d}%\n\n`;
+                    response += `**Top 10 Picks:**\n`;
+                    result.top25.slice(0, 10).forEach((r, i) => {
+                        response += `${i + 1}. ${r.symbol} (score ${r.score}) @ $${r.entryPrice} → 5d: ${r.return5d}, 10d: ${r.return10d}, 20d: ${r.return20d}\n`;
+                    });
+                    removeTypingIndicator();
+                    addChatMessage(response, 'agent');
+                } catch (e) {
+                    removeTypingIndicator();
+                    addChatMessage(`Backtest failed: ${e.message}`, 'agent');
+                }
+                isChatSending = false;
+                return;
+            }
 
             try {
                 // Get portfolio context
@@ -12703,10 +13233,35 @@ Current Portfolio:
                 const dtcVal = c.daysToCover || 0;
                 const dtcClass = dtcVal > 5 ? 'dtc-squeeze' : dtcVal > 3 ? 'dtc-elevated' : '';
 
+                // Build score breakdown tooltip
+                let scoreTooltip = '';
+                const bd = c.scoreBreakdown;
+                if (bd) {
+                    const parts = [];
+                    if (bd.momentumContrib) parts.push(`Mom: ${bd.momentumContrib >= 0 ? '+' : ''}${bd.momentumContrib.toFixed(1)}`);
+                    if (bd.rsContrib) parts.push(`RS: ${bd.rsContrib >= 0 ? '+' : ''}${bd.rsContrib.toFixed(1)}`);
+                    if (bd.sectorBonus) parts.push(`Sector: ${bd.sectorBonus >= 0 ? '+' : ''}${bd.sectorBonus.toFixed(1)}`);
+                    if (bd.structureBonus) parts.push(`Struct: ${bd.structureBonus >= 0 ? '+' : ''}${bd.structureBonus.toFixed(1)}`);
+                    if (bd.pullbackBonus) parts.push(`Pullback: +${bd.pullbackBonus.toFixed(1)}`);
+                    if (bd.extensionPenalty) parts.push(`Extension: ${bd.extensionPenalty.toFixed(1)}`);
+                    if (bd.rsiBonusPenalty) parts.push(`RSI: ${bd.rsiBonusPenalty >= 0 ? '+' : ''}${bd.rsiBonusPenalty.toFixed(1)}`);
+                    if (bd.macdBonus) parts.push(`MACD: ${bd.macdBonus >= 0 ? '+' : ''}${bd.macdBonus.toFixed(1)}`);
+                    if (bd.smaProximityBonus) parts.push(`SMA20: ${bd.smaProximityBonus >= 0 ? '+' : ''}${bd.smaProximityBonus.toFixed(1)}`);
+                    if (bd.smaCrossoverBonus) parts.push(`SMAx: ${bd.smaCrossoverBonus >= 0 ? '+' : ''}${bd.smaCrossoverBonus.toFixed(1)}`);
+                    if (bd.volumeBonus) parts.push(`Vol: ${bd.volumeBonus >= 0 ? '+' : ''}${bd.volumeBonus.toFixed(1)}`);
+                    if (bd.rsMeanRevPenalty) parts.push(`RSrev: ${bd.rsMeanRevPenalty.toFixed(1)}`);
+                    if (bd.runnerPenalty) parts.push(`Runner: ${bd.runnerPenalty.toFixed(1)}`);
+                    if (bd.squeezeBonus) parts.push(`Squeeze: +${bd.squeezeBonus.toFixed(1)}`);
+                    if (bd.accelBonus) parts.push(`Accel: +${bd.accelBonus.toFixed(1)}`);
+                    if (bd.learnedAdj) parts.push(`Learned: ${bd.learnedAdj >= 0 ? '+' : ''}${bd.learnedAdj.toFixed(1)}`);
+                    if (bd.entryMultiplier !== 1.0) parts.push(`EntryMult: ×${bd.entryMultiplier.toFixed(1)}`);
+                    scoreTooltip = parts.join(' | ');
+                }
+
                 html += `<tr>
                     <td class="scorecard-rank">${i + 1}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
-                    <td><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span></div></td>
+                    <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span></div></td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td>${(c.momentum || 0).toFixed(1)}</td>
                     <td>${(c.rs || 0).toFixed(0)}</td>
