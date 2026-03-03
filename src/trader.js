@@ -1910,7 +1910,28 @@
             else if (score <= 4) trend = 'steady-down';
             return { score: Math.round(score * 10) / 10, trend, totalReturn5d: Math.round(totalReturn * 100) / 100, todayChange: priceData?.changePercent || 0, upDays, totalDays: bars.length - 1, isAccelerating, volumeTrend: Math.round(volumeTrend * 100) / 100, basis: '5-day-real' };
         }
-        
+
+        // Calculate today's volume vs 20-day average volume from bar data
+        // Returns { ratio, todayVolume, avgVolume } or null if insufficient data
+        function calculateVolumeRatio(symbol) {
+            const bars = multiDayCache[symbol];
+            if (!bars || bars.length < 6) return null; // need at least 5 historical + 1 current
+            const todayBar = bars[bars.length - 1];
+            const todayVol = todayBar.v;
+            if (!todayVol || todayVol <= 0) return null;
+            // Use up to 20 bars before today for average (take what we have, min 5)
+            const histBars = bars.slice(-21, -1);
+            if (histBars.length < 5) return null;
+            const validBars = histBars.filter(b => b.v > 0);
+            if (validBars.length < 5) return null;
+            const avgVol = validBars.reduce((s, b) => s + b.v, 0) / validBars.length;
+            return {
+                ratio: Math.round((todayVol / avgVol) * 100) / 100,
+                todayVolume: todayVol,
+                avgVolume: Math.round(avgVol)
+            };
+        }
+
         // Calculate relative strength vs sector using MULTI-DAY data
         function calculateRelativeStrength(stockData, sectorData, symbol) {
             if (!stockData || !sectorData || sectorData.length === 0) return { rsScore: 50, strength: 'neutral' };
@@ -4301,7 +4322,7 @@
                     });
                     const compositeScore = scoreResult.total;
                     const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
-                    dryRunScored.push({ symbol, compositeScore, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', scoreBreakdown: scoreResult.breakdown });
+                    dryRunScored.push({ symbol, compositeScore, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', volumeRatio: calculateVolumeRatio(symbol)?.ratio ?? null, scoreBreakdown: scoreResult.breakdown });
                 });
 
                 // Fetch news for top candidates + holdings
@@ -4939,6 +4960,7 @@
                         sma20: sma20,
                         macd: macd,
                         smaCrossover: smaCrossover,
+                        volumeRatio: calculateVolumeRatio(symbol),
                         marketCap: tickerDetailsCache[symbol]?.marketCap || null,
                         companyName: tickerDetailsCache[symbol]?.name || null,
                         sicDescription: tickerDetailsCache[symbol]?.sicDescription || null,
@@ -5043,6 +5065,7 @@
                             name: tickerDetailsCache[s.symbol]?.name || null,
                             sma50: s.data.smaCrossover?.sma50 ?? null,
                             smaCrossover: s.data.smaCrossover?.crossover || 'none',
+                            volumeRatio: calculateVolumeRatio(s.symbol)?.ratio ?? null,
                             scoreBreakdown: s.scoreBreakdown || null
                         };
                     })
@@ -6399,6 +6422,10 @@ Each stock includes:
   → isAccelerating: true if recent half outperformed first half (momentum building)
   → totalReturn5d: actual 5-day cumulative return. basis: '5-day-real' or '1-day-fallback'
   → volumeTrend: ratio of recent volume to early volume. >1.2 = rising (confirms momentum), <0.8 = declining (fragile)
+• volumeRatio: { ratio, todayVolume, avgVolume } — today's volume vs 20-day average. CRITICAL for trade execution:
+  → Breakout entries (momentum ≥5): HARD GATE requires ratio ≥1.5 (volume confirms breakout). Buys below this are VETOED by code.
+  → Pullback entries (momentum <5): HARD GATE requires ratio ≤0.7 (seller exhaustion). Buys above this are VETOED by code.
+  → Factor this into your recommendations — suggesting a buy that will be vetoed wastes a decision slot.
 • relativeStrength: { rsScore: 0-100, strength, stockReturn5d, sectorAvg5d, relativePerformance }
   → Based on 5-day returns vs sector 5-day average (not single-day!)
   → 70+ = outperforming sector over 5 days, 30- = underperforming
@@ -7386,7 +7413,45 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 return true;
             });
 
-            // Step 2d: Conviction-based position sizing
+            // Step 2d: Volume gate — hard veto based on volume confirmation
+            // Breakout entries (momentum ≥ 5) need volume ≥ 1.5x 20-day avg (conviction behind the move)
+            // Pullback entries (momentum < 5) need volume ≤ 0.7x 20-day avg (sellers exhausted)
+            buyDecisionsAll = buyDecisionsAll.filter(d => {
+                const data = marketData[d.symbol];
+                const volRatio = data?.volumeRatio;
+                if (!volRatio) return true; // insufficient data — don't block
+                const momentumScore = data?.momentum?.score ?? 5;
+                const ratio = volRatio.ratio;
+                if (momentumScore >= 5 && ratio < 1.5) {
+                    const msg = `VOLUME GATE: ${d.symbol} — breakout entry needs vol ≥1.5x avg, got ${ratio}x`;
+                    console.warn(msg);
+                    addActivity(msg, 'warning');
+                    if (!portfolio.blockedTrades) portfolio.blockedTrades = [];
+                    portfolio.blockedTrades.push({
+                        symbol: d.symbol, timestamp: new Date().toISOString(),
+                        ruleId: 'volume_gate_breakout', ruleLabel: `Breakout without volume (${ratio}x vs 1.5x required)`,
+                        winRate: 0, price: data?.price || 0
+                    });
+                    while (portfolio.blockedTrades.length > 50) portfolio.blockedTrades.shift();
+                    return false;
+                }
+                if (momentumScore < 5 && ratio > 0.7) {
+                    const msg = `VOLUME GATE: ${d.symbol} — pullback entry needs vol ≤0.7x avg, got ${ratio}x`;
+                    console.warn(msg);
+                    addActivity(msg, 'warning');
+                    if (!portfolio.blockedTrades) portfolio.blockedTrades = [];
+                    portfolio.blockedTrades.push({
+                        symbol: d.symbol, timestamp: new Date().toISOString(),
+                        ruleId: 'volume_gate_pullback', ruleLabel: `Pullback without volume dry-up (${ratio}x vs ≤0.7x required)`,
+                        winRate: 0, price: data?.price || 0
+                    });
+                    while (portfolio.blockedTrades.length > 50) portfolio.blockedTrades.shift();
+                    return false;
+                }
+                return true;
+            });
+
+            // Step 2e: Conviction-based position sizing
             const estimatedPortfolioValue = portfolio.cash + Object.entries(portfolio.holdings).reduce((sum, [sym, shares]) => {
                 return sum + (marketData[sym]?.price || 0) * shares;
             }, 0);
@@ -7411,7 +7476,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 return true;
             });
 
-            // Step 2d: Sector concentration cap (35% max per sector)
+            // Step 2f: Sector concentration cap (35% max per sector)
             const SECTOR_CAP_PCT = 35;
             const sectorExposure = {};
             Object.entries(portfolio.holdings).forEach(([sym, shares]) => {
@@ -7441,7 +7506,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 return true;
             });
 
-            // Step 2e: Max holdings cap (12 positions)
+            // Step 2g: Max holdings cap (12 positions)
             const MAX_HOLDINGS = 12;
             const currentHoldingsCount = Object.keys(portfolio.holdings).length;
             let newPositionCount = 0;
@@ -7711,6 +7776,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             vixInterpretation: vixCache?.interpretation ?? null,
                             sma20: marketData[symbol].sma20 ?? null,
                             volumeTrend: marketData[symbol].momentum?.volumeTrend ?? null,
+                            volumeRatio: marketData[symbol].volumeRatio?.ratio ?? null,
                             fvg: marketData[symbol].marketStructure?.fvg || null,
                             newsSentiment: (marketData[symbol].recentNews || []).find(n => n.sentiment)?.sentiment || null,
                             priceVsVwap: marketData[symbol].priceVsVwap ?? null,
@@ -10926,7 +10992,7 @@ Current Portfolio:
             const holdingSymbols = new Set(Object.keys(portfolio.holdings));
 
             let html = '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
-                '<th>#</th><th>Symbol</th><th>Score</th><th>Day</th><th>Mom</th><th>RS</th><th>RSI</th><th>MACD</th><th>Sector</th><th>Structure</th><th>DTC</th><th>MCap</th>' +
+                '<th>#</th><th>Symbol</th><th>Score</th><th>Day</th><th>Mom</th><th>RS</th><th>RSI</th><th>MACD</th><th>Sector</th><th>Structure</th><th>DTC</th><th>Vol</th><th>MCap</th>' +
                 '</tr></thead><tbody>';
 
             data.candidates.forEach((c, i) => {
@@ -10994,6 +11060,7 @@ Current Portfolio:
                     <td>${c.sector || '--'}</td>
                     <td style="font-size:10px;text-transform:capitalize">${structLabel}</td>
                     <td class="${dtcClass}">${dtcVal > 0 ? dtcVal.toFixed(1) : '--'}</td>
+                    <td class="${c.volumeRatio != null ? (c.volumeRatio >= 1.5 ? 'vol-high' : c.volumeRatio <= 0.7 ? 'vol-low' : '') : ''}">${c.volumeRatio != null ? c.volumeRatio.toFixed(1) + 'x' : '--'}</td>
                     <td class="mcap-cell">${formatMarketCap(c.marketCap)}</td>
                 </tr>`;
             });

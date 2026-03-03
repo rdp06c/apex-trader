@@ -63,6 +63,7 @@ Entry conditions stored in `holdingTheses` so Phase 1 can compare original thesi
 - **Max holdings**: 12 concurrent positions
 - **Budget threshold**: If trimmed buys total <25% of original plan, skip all buys
 - **Catalyst freshness gate**: Blocks buys on stocks up >10% today without fresh positive catalyst
+- **Volume gate**: Hard veto based on today's volume vs 20-day average (`calculateVolumeRatio`). Breakout entries (momentum ≥5) require ≥1.5x avg volume; pullback entries (momentum <5) require ≤0.7x avg volume. Blocked trades logged to `portfolio.blockedTrades`.
 - **Derived trading rules**: Auto-learned from `closedTrades` — `block` (hard reject), `warn` (badge), `observe` (track only)
 
 ## Key Subsystems
