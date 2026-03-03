@@ -6472,7 +6472,65 @@
                 insights += '\n';
             }
 
+            // Calibration insights (shared with Phase 1)
+            insights += formatCalibrationInsights();
+
             return insights;
+        }
+
+        // Calibration insights for AI prompts — concise summary of what historical data says works
+        function formatCalibrationInsights() {
+            const cal = portfolio.calibratedWeights;
+            if (!cal?.componentCorrelations) return '';
+
+            const corrs = cal.componentCorrelations;
+            const sortedPositive = Object.entries(corrs)
+                .filter(([, v]) => v.corr10d > 0.02)
+                .sort((a, b) => b[1].corr10d - a[1].corr10d);
+            const sortedNegative = Object.entries(corrs)
+                .filter(([, v]) => v.corr10d < -0.02)
+                .sort((a, b) => a[1].corr10d - b[1].corr10d);
+
+            const labelMap = {
+                momentumContrib: 'Momentum', rsContrib: 'Relative Strength',
+                structureBonus: 'Market Structure', rsiBonusPenalty: 'RSI zone',
+                macdBonus: 'MACD crossover', pullbackBonus: 'Pullback setup',
+                smaProximityBonus: 'SMA20 proximity', smaCrossoverBonus: 'SMA crossover',
+                fvgBonus: 'Fair Value Gap', runnerPenalty: 'Runner penalty',
+                rsMeanRevPenalty: 'RS mean-reversion', squeezeBonus: 'Short squeeze',
+                extensionPenalty: 'Extension penalty', sectorBonus: 'Sector flow',
+                accelBonus: 'Acceleration', consistencyBonus: 'Consistency'
+            };
+
+            let text = `\nCALIBRATION INSIGHTS (${(cal.dataPoints || 0).toLocaleString()} observations, ${cal.dateRange?.start} to ${cal.dateRange?.end}):\n`;
+
+            if (sortedPositive.length > 0) {
+                text += 'TRUST these signals (predict higher 10d returns): ';
+                text += sortedPositive.slice(0, 3).map(([k, v]) =>
+                    `${labelMap[k] || k} (top quintile avg ${v.topQuintileAvg?.toFixed(1)}%)`
+                ).join(', ') + '\n';
+            }
+
+            if (sortedNegative.length > 0) {
+                text += 'DISCOUNT these signals (anti-predictive or noise): ';
+                text += sortedNegative.slice(0, 3).map(([k, v]) =>
+                    `${labelMap[k] || k} (r=${v.corr10d.toFixed(3)})`
+                ).join(', ') + '\n';
+            }
+
+            // Regime note
+            if (cal.regimeWeights?.lowVix && cal.regimeWeights?.highVix) {
+                const lowObs = cal.validation?.trainingObs ? '' : '';
+                text += `Regime-aware weights active (VIX-based). `;
+                const vix = portfolio.lastVIX?.level;
+                if (vix != null) {
+                    text += `Current VIX ${vix.toFixed(1)} → using ${vix < 20 ? 'low' : 'high'}-VIX weight set.\n`;
+                } else {
+                    text += 'VIX unknown — using blended weights.\n';
+                }
+            }
+
+            return text;
         }
 
         // Phase 1 learning context — concise exit/hold insights for sell/hold decisions
@@ -6571,6 +6629,9 @@
                 }
                 insights += '\n';
             }
+
+            // Calibration insights (shared with Phase 2)
+            insights += formatCalibrationInsights();
 
             insights += '\n';
             return insights;
@@ -12419,14 +12480,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const cal = portfolio.calibratedWeights;
             if (cal?.weights) {
                 const calDate = new Date(cal.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                const ageDays = Math.floor((Date.now() - new Date(cal.timestamp).getTime()) / (1000 * 60 * 60 * 24));
                 const improv = cal.validation?.improvement;
                 const improvStr = improv != null ? (improv >= 0 ? `+${improv}%` : `${improv}%`) : '';
                 const improvColor = improv >= 0 ? '#2ecc40' : '#ff6b6b';
                 const regime = cal.regimeWeights ? ' | regime-aware' : '';
                 const warn = cal.validation?.overfitWarning ? ' | <span style="color:#ff6b6b">overfit guard active</span>' : '';
-                html += `<div style="background:rgba(46,204,64,0.1);border:1px solid rgba(46,204,64,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85em;">
+                const stale = ageDays > 60 ? ' | <span style="color:#ff6b6b;font-weight:600">stale — recalibrate now</span>'
+                    : ageDays > 30 ? ' | <span style="color:#f39c12">consider recalibrating</span>'
+                    : '';
+                const borderColor = ageDays > 60 ? 'rgba(255,107,107,0.3)' : ageDays > 30 ? 'rgba(243,156,18,0.3)' : 'rgba(46,204,64,0.3)';
+                const bgColor = ageDays > 60 ? 'rgba(255,107,107,0.1)' : ageDays > 30 ? 'rgba(243,156,18,0.1)' : 'rgba(46,204,64,0.1)';
+                html += `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85em;">
                     <span style="color:#2ecc40;font-weight:600;">&#x1f4ca; Calibrated Weights Active</span>
-                    <span style="color:rgba(255,255,255,0.7);margin-left:6px;">— ${calDate} (${cal.dataPoints.toLocaleString()} obs, <span style="color:${improvColor}">${improvStr} validation improvement</span>${regime}${warn})</span>
+                    <span style="color:rgba(255,255,255,0.7);margin-left:6px;">— ${calDate} (${ageDays}d ago, ${cal.dataPoints.toLocaleString()} obs, <span style="color:${improvColor}">${improvStr} validation improvement</span>${regime}${warn}${stale})</span>
                 </div>`;
             } else {
                 html += `<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85em;">
@@ -12911,13 +12978,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         async function runCalibrationSweep(startDateStr, endDateStr, progressCallback) {
             const report = (msg) => { console.log(msg); if (progressCallback) progressCallback(msg); };
 
-            // Default date range: 6 months ago to 21 trading days ago (need forward data)
+            // Default date range: 12 months ago to 21 trading days ago (need forward data)
             const today = new Date();
             const endDefault = new Date(today);
             let forwardBuffer = 0;
             while (forwardBuffer < 21) { endDefault.setDate(endDefault.getDate() - 1); if (endDefault.getDay() !== 0 && endDefault.getDay() !== 6) forwardBuffer++; }
             const startDefault = new Date(endDefault);
-            startDefault.setMonth(startDefault.getMonth() - 6);
+            startDefault.setMonth(startDefault.getMonth() - 12);
 
             const rangeStart = startDateStr ? new Date(startDateStr) : startDefault;
             const rangeEnd = endDateStr ? new Date(endDateStr) : endDefault;
@@ -13537,7 +13604,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 try {
                     const startDate = calMatch[1] || null;
                     const endDate = calMatch[2] || null;
-                    const rangeMsg = startDate ? `${startDate} to ${endDate}` : 'last 6 months';
+                    const rangeMsg = startDate ? `${startDate} to ${endDate}` : 'last 12 months';
                     addChatMessage(`Starting calibration sweep (${rangeMsg}). This takes 2-5 minutes...`, 'agent');
 
                     const progressCb = (msg) => {

@@ -149,8 +149,9 @@ Tracks performance patterns from `closedTrades`:
 - **Benchmark & Drawdown** – SPY price tracked via `portfolio.spyBaseline`/`spyCurrent`. Portfolio health computed each cycle: return vs SPY (alpha), drawdown from peak. Stored in `portfolio.portfolioHealth`.
 
 These insights are injected into both phases' prompts so Claude can learn from past decisions:
-- **Phase 1** receives concise learning context via `formatPhase1Insights()`: portfolio health (return vs SPY, alpha, drawdown), exit patterns (from `analyzeExitTiming`), hold accuracy by conviction/RSI zone (from `analyzeHoldAccuracy`), regime context with regime-specific hold accuracy (from `analyzeRegimeTransitions`), W-L track record (from `deriveTradingRules` summary), and post-exit quality (from `summarizePostExitQuality`). ~300-450 tokens when fully populated, empty when <3 trades.
-- **Phase 2** receives rich learning context via `formatPerformanceInsights()`: portfolio health (return, SPY, alpha, drawdown), trading rules, exit timing (best hold period, avg winner return, dominant exit reason from `analyzeExitTiming`), post-exit quality, hold accuracy, regime context, sector/stock history and behavioral patterns (from `analyzePerformanceHistory`), conviction calibration, and signal accuracy. Additionally, regime-adaptive deployment guidance is injected after the regime section when regime-specific win rate data is available.
+- **Phase 1** receives concise learning context via `formatPhase1Insights()`: portfolio health (return vs SPY, alpha, drawdown), exit patterns (from `analyzeExitTiming`), hold accuracy by conviction/RSI zone (from `analyzeHoldAccuracy`), regime context with regime-specific hold accuracy (from `analyzeRegimeTransitions`), W-L track record (from `deriveTradingRules` summary), post-exit quality (from `summarizePostExitQuality`), and calibration insights (from `formatCalibrationInsights()`). ~300-500 tokens when fully populated, empty when <3 trades.
+- **Phase 2** receives rich learning context via `formatPerformanceInsights()`: portfolio health (return, SPY, alpha, drawdown), trading rules, exit timing (best hold period, avg winner return, dominant exit reason from `analyzeExitTiming`), post-exit quality, hold accuracy, regime context, sector/stock history and behavioral patterns (from `analyzePerformanceHistory`), conviction calibration, signal accuracy, and calibration insights (from `formatCalibrationInsights()`). Additionally, regime-adaptive deployment guidance is injected after the regime section when regime-specific win rate data is available.
+- **Calibration insights** (`formatCalibrationInsights()`): When calibrated weights exist, injects a concise block into both phases listing which scoring signals are predictive (trust) and anti-predictive (discount) based on historical correlation analysis, plus regime-aware weight selection status.
 
 Insights are also surfaced in the Learning Insights UI via `updateLearningInsightsDisplay()`, which renders 7 analytics panels: Risk/Reward Profile, Hold Time Comparison, Streaks, Conviction Accuracy, Signal Accuracy, Exit Analysis, and Post-Exit Tracking. Each panel has a minimum data threshold and won't render with insufficient trades.
 
@@ -161,7 +162,9 @@ Data-driven weight optimization for `calculateCompositeScore`. All scoring weigh
 - **Weight derivation** – `calibratedWeight = default × (1 + clamp(correlation × 2, -0.5, +0.5))`. Bounded: no weight changes more than ±50% from default. Shrinkage: `min(0.8, observations/10000)` blend between calibrated and default weights.
 - **Regime segmentation** – Separate weight sets for low-VIX (<20) and high-VIX (≥20) markets. `getActiveWeights()` selects appropriate set at runtime based on current VIX.
 - **Out-of-sample validation** – 70/30 train/validation split. Reports avg 10d return of top-25 picks under calibrated vs default weights. Auto-applies extra shrinkage if overfitting detected.
-- **Persistence** – Saved to `portfolio.calibratedWeights`. Loaded on page init via `activeCalibration`. Chat command: `calibrate` or `calibrate YYYY-MM-DD YYYY-MM-DD`.
+- **Persistence** – Saved to `portfolio.calibratedWeights`. Loaded on page init. Chat command: `calibrate` (default 12-month rolling window) or `calibrate YYYY-MM-DD YYYY-MM-DD`.
+- **Staleness tracking** – Learning Insights banner shows calibration age. Green when fresh, yellow warning at >30 days, red "recalibrate now" at >60 days.
+- **Prompt injection** – `formatCalibrationInsights()` injects top predictive and anti-predictive signals into both Phase 1 and Phase 2 prompts so the AI's qualitative decisions align with quantitative calibration findings.
 
 ### Derived Trading Rules (in `src/trader.js`)
 Auto-learns from `closedTrades` to prevent repeating mistakes:
@@ -309,6 +312,7 @@ All functions live in `src/trader.js`. Use `grep` or your editor's search to fin
 | `recordRegimeTransition` | Tracks market regime changes over time |
 | `formatPerformanceInsights` | Formats ML insights for Phase 2 prompt (rules, exit timing, sectors, behavior, conviction, signals) |
 | `formatPhase1Insights` | Formats ML insights for Phase 1 prompt (portfolio health, exit patterns, hold accuracy, regime, track record, post-exit quality) |
+| `formatCalibrationInsights` | Formats calibration findings for AI prompts (predictive/anti-predictive signals, regime status) |
 | `summarizePostExitQuality` | Aggregates post-exit tracking data (1wk/1mo price moves after sells) for prompt injection |
 | `calculatePortfolioValue` | Current total value calculation |
 | `updateUI` | Refreshes all dashboard elements |
