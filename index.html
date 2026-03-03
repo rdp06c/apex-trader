@@ -12978,11 +12978,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         async function runCalibrationSweep(startDateStr, endDateStr, progressCallback) {
             const report = (msg) => { console.log(msg); if (progressCallback) progressCallback(msg); };
 
-            // Default date range: 12 months ago to 21 trading days ago (need forward data)
+            // Default date range: 12 months ago to 12 trading days ago (need 10d forward data + buffer)
             const today = new Date();
             const endDefault = new Date(today);
             let forwardBuffer = 0;
-            while (forwardBuffer < 21) { endDefault.setDate(endDefault.getDate() - 1); if (endDefault.getDay() !== 0 && endDefault.getDay() !== 6) forwardBuffer++; }
+            while (forwardBuffer < 12) { endDefault.setDate(endDefault.getDate() - 1); if (endDefault.getDay() !== 0 && endDefault.getDay() !== 6) forwardBuffer++; }
             const startDefault = new Date(endDefault);
             startDefault.setMonth(startDefault.getMonth() - 12);
 
@@ -12996,10 +12996,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const allWeekdays = generateWeekdays(rangeStart, rangeEnd);
             const NUM_DATES = Math.min(40, allWeekdays.length);
             if (NUM_DATES < 5) throw new Error(`Only ${allWeekdays.length} trading days in range. Need at least 5.`);
-            const step = Math.max(1, Math.floor(allWeekdays.length / NUM_DATES));
             const calibrationDates = [];
-            for (let i = 0; i < allWeekdays.length && calibrationDates.length < NUM_DATES; i += step) {
-                calibrationDates.push(allWeekdays[i]);
+            for (let i = 0; i < NUM_DATES; i++) {
+                const idx = Math.round(i * (allWeekdays.length - 1) / (NUM_DATES - 1));
+                calibrationDates.push(allWeekdays[idx]);
             }
 
             report(`📊 Calibration: ${calibrationDates.length} dates from ${calibrationDates[0]} to ${calibrationDates[calibrationDates.length - 1]}`);
