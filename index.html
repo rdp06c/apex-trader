@@ -5123,12 +5123,10 @@
 
             const chg = todayChange || 0;
             const runnerPenalty = chg >= 15 ? -3 : chg >= 10 ? -2 : chg >= 7 ? -1 : chg >= 5 ? -0.5 : 0;
-            const ss = structureScore ?? 0;
-            const declinePenalty = ss >= 1
-                ? (chg <= -8 ? -1 : 0)                                          // Bullish: only extreme drops
-                : ss <= -1
-                    ? (chg <= -5 ? -3 : chg <= -3 ? -2 : chg <= -2 ? -1 : 0)  // Bearish: full graduated penalty
-                    : 0;                                                         // Neutral: no decline penalty
+            // Decline penalty removed: calibration data (r=-0.08 to -0.11, 17K obs across 13 months)
+            // showed it was anti-predictive at ALL structure levels. Declining stocks mean-revert.
+            // Other components (structureBonus, MACD, RSI, sector) already handle genuinely weak stocks.
+            const declinePenalty = 0;
 
             const extensionPenalty = (momentumScore >= 9 && rsNormalized >= 8.5) ? -5
                 : (momentumScore >= 9 || rsNormalized >= 8.5) ? -3.5
