@@ -70,7 +70,7 @@ Browser (index.html)
    - **Squeeze bonus**: Days-to-cover > 5 + bullish structure + non-outflow sector → +1.5
    - **Extension penalty**: Graduated dampening when momentum OR RS very high. Prevents runners from monopolizing top slots.
    - **Pullback bonus** (5 tiers): Deep pullback + strong reversal structure → +5, deep pullback + bullish structure + good sector → +4, mild pullback + bullish structure → +3, deep pullback + neutral structure → +2, mild pullback + neutral → +1
-   - **Decline penalty**: Only applies when structure is NOT bullish. Stocks with bullish structure (score ≥ 1) get no penalty for dipping — these are healthy pullbacks, not breakdowns. Extreme single-day drops (>8%) still get mild -1 even with bullish structure.
+   - **Decline penalty**: Three-tier structure gating. Bullish structure (≥1): only extreme single-day drops (>8%) get mild -1 penalty. Neutral structure (0): no decline penalty — calibration data (r=-0.08, 17K obs) showed penalizing neutral-structure drops was the strongest anti-predictive signal; these are mean-reversion candidates. Bearish structure (≤-1): full graduated penalty (>5% → -3, >3% → -2, >2% → -1) since declines in confirmed downtrends are real breakdowns.
    - **RS mean-reversion penalty**: RS ≥ 95 → -6, RS ≥ 90 → -4, RS ≥ 85 → -2. Doubled from original values after portfolio analysis showed RS 100 entries had 18% win rate (mean-reversion trap).
    - **Runner penalty**: Scaled proportionally with 0.6 base — up >15% today → -3, up 10-15% → -2, up 7-10% → -1, up 5-7% → -0.5
    - **SMA20 proximity bonus**: Price near SMA20 (within 2%) → +2.0, price far below → -2.0

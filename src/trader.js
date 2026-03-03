@@ -2172,9 +2172,12 @@
 
             const chg = todayChange || 0;
             const runnerPenalty = chg >= 15 ? -3 : chg >= 10 ? -2 : chg >= 7 ? -1 : chg >= 5 ? -0.5 : 0;
-            const declinePenalty = (structureScore ?? 0) >= 1
-                ? (chg <= -8 ? -1 : 0)
-                : (chg <= -5 ? -3 : chg <= -3 ? -2 : chg <= -2 ? -1 : 0);
+            const ss = structureScore ?? 0;
+            const declinePenalty = ss >= 1
+                ? (chg <= -8 ? -1 : 0)                                          // Bullish: only extreme drops
+                : ss <= -1
+                    ? (chg <= -5 ? -3 : chg <= -3 ? -2 : chg <= -2 ? -1 : 0)  // Bearish: full graduated penalty
+                    : 0;                                                         // Neutral: no decline penalty
 
             const extensionPenalty = (momentumScore >= 9 && rsNormalized >= 8.5) ? -5
                 : (momentumScore >= 9 || rsNormalized >= 8.5) ? -3.5
@@ -10897,6 +10900,7 @@ Current Portfolio:
                     if (bd.volumeBonus) parts.push(`Vol: ${bd.volumeBonus >= 0 ? '+' : ''}${bd.volumeBonus.toFixed(1)}`);
                     if (bd.rsMeanRevPenalty) parts.push(`RSrev: ${bd.rsMeanRevPenalty.toFixed(1)}`);
                     if (bd.runnerPenalty) parts.push(`Runner: ${bd.runnerPenalty.toFixed(1)}`);
+                    if (bd.declinePenalty) parts.push(`Decline: ${bd.declinePenalty.toFixed(1)}`);
                     if (bd.squeezeBonus) parts.push(`Squeeze: +${bd.squeezeBonus.toFixed(1)}`);
                     if (bd.accelBonus) parts.push(`Accel: +${bd.accelBonus.toFixed(1)}`);
                     if (bd.learnedAdj) parts.push(`Learned: ${bd.learnedAdj >= 0 ? '+' : ''}${bd.learnedAdj.toFixed(1)}`);
