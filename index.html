@@ -7077,8 +7077,8 @@
                 const snapshotTime = performance.now();
                 console.log(`⏱️ Snapshot phase: ${((snapshotTime - startTime) / 1000).toFixed(2)}s`);
                 
-                // Step 2: Fetch 40-day grouped daily bars + ticker details + short interest
-                thinkingDetail.textContent = `🧪 Fetching 40-day grouped daily bars + details...`;
+                // Step 2: Fetch ~65-day grouped daily bars + ticker details + short interest
+                thinkingDetail.textContent = `🧪 Fetching ~65-day grouped daily bars + details...`;
                 try {
                     await Promise.all([
                         fetchGroupedDailyBars(new Set(symbols)),
@@ -7092,7 +7092,7 @@
                 }
                 const historyTime = performance.now();
                 console.log(`⏱️ History phase: ${((historyTime - snapshotTime) / 1000).toFixed(2)}s`);
-                console.log(`✅ 40-day history cached for ${Object.keys(multiDayCache).length}/${symbols.length} stocks`);
+                console.log(`✅ ~65-day history cached for ${Object.keys(multiDayCache).length}/${symbols.length} stocks`);
                 
                 // Step 3: Run enhanced analysis (momentum, RS, structure)
                 thinkingDetail.textContent = `🧪 Running momentum, RS, and structure analysis...`;
@@ -7176,6 +7176,29 @@
                     ...Object.keys(portfolio.holdings)
                 ])];
                 await fetchNewsForStocks(drNewsSymbols);
+
+                // Fetch server-computed indicators for top candidates (RSI, MACD, SMA50 from Massive API)
+                const drServerSymbols = [...new Set([
+                    ...dryRunScored.slice(0, 25).map(s => s.symbol),
+                    ...Object.keys(portfolio.holdings)
+                ])];
+                thinkingDetail.textContent = `🧪 Fetching server indicators for ${drServerSymbols.length} stocks...`;
+                try {
+                    const drServerData = await fetchServerIndicators(drServerSymbols);
+                    let drInjected = 0;
+                    Object.entries(drServerData).forEach(([sym, indicators]) => {
+                        const scored = dryRunScored.find(s => s.symbol === sym);
+                        if (scored) {
+                            if (indicators.serverRsi != null) scored.serverRsi = indicators.serverRsi;
+                            if (indicators.serverMacd) scored.serverMacd = indicators.serverMacd;
+                            if (indicators.serverSma50 != null) scored.serverSma50 = indicators.serverSma50;
+                            drInjected++;
+                        }
+                    });
+                    if (drInjected > 0) console.log(`📊 Injected server indicators for ${drInjected} candidates`);
+                } catch (e) {
+                    console.warn('Server indicator fetch failed (non-fatal):', e.message);
+                }
 
                 // Persist candidate scores from dry run
                 portfolio.lastCandidateScores = {
@@ -7284,7 +7307,7 @@
 
                 showResultModal('Dry Run Complete', [
                     { label: 'Prices Fetched', value: `${Object.keys(marketData).length} / ${symbols.length}`, cls: 'success' },
-                    { label: 'Price Histories', value: `${Object.keys(multiDayCache).length} (40-day bars)` },
+                    { label: 'Price Histories', value: `${Object.keys(multiDayCache).length} (~65-day bars)` },
                     { label: 'Ticker Details', value: `${detailsCount} (market cap)` },
                     { label: 'Short Interest', value: `${shortIntCount} with DTC` },
                     { label: 'News Headlines', value: `${newsCount} stocks` },
@@ -7683,7 +7706,7 @@
                 }
 
                 // === ENHANCED MARKET ANALYSIS ===
-                thinkingDetail.textContent = 'Fetching 40-day grouped daily bars + ticker details + short interest...';
+                thinkingDetail.textContent = 'Fetching ~65-day grouped daily bars + ticker details + short interest...';
                 console.log('🧠 Running enhanced market analysis...');
 
                 // 0. Fetch data in parallel: grouped daily bars, ticker details, short interest
@@ -9252,7 +9275,7 @@ A stock flat today but up 8% over 5 days → HIGH momentum.
 A stock up 5% today but down over 5 days → MODERATE momentum (spike, weak trend).
 
 • marketStructure: { structure, structureSignal, structureScore, choch, chochType, bos, bosType, sweep, fvg, lastSwingHigh, lastSwingLow }
-  → Based on 40-day price bars. Detects swing highs/lows and structural shifts.
+  → Based on ~65-day price bars. Detects swing highs/lows and structural shifts.
   → structure: 'bullish' (HH+HL), 'bearish' (LH+LL), 'ranging', 'contracting'
   → choch: true if Change of Character detected (trend reversal starting)
     • chochType 'bearish' = was bullish, now broke structure down. EXIT SIGNAL for longs.
@@ -9272,7 +9295,7 @@ HOW TO USE STRUCTURE DATA:
 - fvg: 'bullish' (gap up = potential support zone on pullback) or 'bearish' (gap down = potential resistance)
 - Bullish FVG on pullback = potential entry zone. Use as timing refinement, not primary signal.
 
-• rsi: 0-100 (RSI-14, Wilder's smoothing from 40-day bars)
+• rsi: 0-100 (RSI-14, Wilder's smoothing from ~65-day bars)
   → <30 = oversold (potential bounce setup if structure bullish)
   → 30-70 = neutral zone
   → >70 = overbought (caution — wait for pullback unless fresh catalyst)
