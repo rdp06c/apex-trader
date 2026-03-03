@@ -57,7 +57,7 @@ Entry conditions stored in `holdingTheses` so Phase 1 can compare original thesi
 
 ## Budget & Risk Controls (code-enforced)
 
-- **Regime-based cash reserve**: bull=10%, choppy=20%, bear=30%
+- **Regime-based cash reserve**: bull=5%, choppy=10%, bear=15%. Conviction 7+ trades bypass reserves entirely (full cash available).
 - **Position sizing by conviction**: 9-10→15%, 7-8→12%, 5-6→8%, <5→5% of portfolio
 - **Sector concentration cap**: 35% per sector
 - **Max holdings**: 12 concurrent positions

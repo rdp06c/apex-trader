@@ -1558,8 +1558,8 @@
             font-size: 13px;
             line-height: 1.6;
             overflow: hidden;
-            transition: max-height 0.2s ease, opacity 0.15s;
-            max-height: 500px;
+            transition: max-height 0.3s ease, opacity 0.15s;
+            max-height: 5000px;
         }
 
         .decision-thoughts.collapsed .decision-thoughts-text {

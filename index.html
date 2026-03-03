@@ -1571,8 +1571,8 @@
             font-size: 13px;
             line-height: 1.6;
             overflow: hidden;
-            transition: max-height 0.2s ease, opacity 0.15s;
-            max-height: 500px;
+            transition: max-height 0.3s ease, opacity 0.15s;
+            max-height: 5000px;
         }
 
         .decision-thoughts.collapsed .decision-thoughts-text {
@@ -10487,18 +10487,25 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             });
 
             // Enforce regime-based minimum cash reserve
+            // Conviction 7+ trades bypass reserves entirely (high-conviction = real catalyst, not noise)
             const regime = portfolio.lastMarketRegime?.regime || 'choppy';
-            const minCashPct = regime === 'bull' ? 10 : regime === 'choppy' ? 20 : 30; // bear = 30%
+            const minCashPct = regime === 'bull' ? 5 : regime === 'choppy' ? 10 : 15;
             const minCashReserve = estimatedPortfolioValue * (minCashPct / 100);
             const deployableCash = Math.max(0, portfolio.cash - minCashReserve);
             if (portfolio.cash > minCashReserve) {
                 console.log(`💰 Regime ${regime}: reserving $${minCashReserve.toFixed(2)} (${minCashPct}%), deployable: $${deployableCash.toFixed(2)}`);
             } else {
-                console.log(`💰 Regime ${regime}: cash $${portfolio.cash.toFixed(2)} already below ${minCashPct}% reserve ($${minCashReserve.toFixed(2)}) — no new buys`);
-                if (buyDecisionsAll.length > 0) {
-                    addActivity(`💰 ${regime.toUpperCase()} regime: holding cash (${minCashPct}% reserve). Skipping ${buyDecisionsAll.length} buy(s).`, 'info');
-                    buyDecisionsAll = [];
+                // Split buys: conviction 7+ bypass reserve, lower conviction blocked
+                const highConviction = buyDecisionsAll.filter(d => (d.conviction || 0) >= 7);
+                const lowConviction = buyDecisionsAll.filter(d => (d.conviction || 0) < 7);
+                if (lowConviction.length > 0) {
+                    console.log(`💰 Regime ${regime}: cash $${portfolio.cash.toFixed(2)} below ${minCashPct}% reserve ($${minCashReserve.toFixed(2)}) — blocking ${lowConviction.length} low-conviction buy(s)`);
+                    addActivity(`💰 ${regime.toUpperCase()} regime: blocking ${lowConviction.length} buy(s) below conviction 7 (${minCashPct}% reserve).`, 'info');
                 }
+                if (highConviction.length > 0) {
+                    console.log(`💰 Conviction override: ${highConviction.length} buy(s) at conviction 7+ bypass reserve (full cash $${portfolio.cash.toFixed(2)} available)`);
+                }
+                buyDecisionsAll = highConviction;
             }
 
             let totalCost = 0;
@@ -10512,7 +10519,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
 
             // Check against deployable cash (respecting regime reserve)
-            const effectiveBudget = Math.min(portfolio.cash, deployableCash > 0 ? deployableCash : portfolio.cash);
+            // When cash > reserve: budget is deployable cash (reserve preserved)
+            // When cash < reserve but conviction 7+ bypassed: full cash available
+            const effectiveBudget = deployableCash > 0 ? deployableCash : (buyDecisionsAll.length > 0 ? portfolio.cash : 0);
             if (totalCost > effectiveBudget) {
                 budgetWarning = `⚠️ APEX's original plan required $${totalCost.toFixed(2)} but only $${effectiveBudget.toFixed(2)} deployable (${regime} regime ${minCashPct}% reserve). Adjusting trades...`;
                 addActivity(budgetWarning, 'warning');
