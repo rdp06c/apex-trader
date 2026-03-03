@@ -2138,6 +2138,10 @@
 
         // Derive scoring adjustments from historical trade signal accuracy
         // Capped at +/-1 to prevent feedback loops where penalties lock in permanently
+        // When fresh calibrated weights exist (≤60 days), these adjustments are suppressed
+        // in calculateCompositeScore — calibration captures the same signals from a much
+        // larger dataset. These still run so prompt injection (formatPerformanceInsights)
+        // can surface portfolio-specific patterns to the AI.
         function getSignalAccuracyAdjustments() {
             const techData = analyzeTechnicalAccuracy();
             if (!techData.hasData) return {};
@@ -2228,8 +2232,13 @@
                 : smaCrossover?.crossover === 'bearish' ? w.smaCrossoverBearish
                 : 0;
 
+            // Learning-based score adjustments — suppressed when fresh calibration exists
+            // (calibration captures these signals from 17K+ obs; learning has ~30 trades).
+            // Still computed for prompt injection via formatPerformanceInsights().
             let learnedAdj = 0;
-            if (signalAdjustments) {
+            const calTimestamp = portfolio.calibratedWeights?.timestamp;
+            const calFresh = calTimestamp && (Date.now() - new Date(calTimestamp).getTime()) < 60 * 24 * 60 * 60 * 1000;
+            if (signalAdjustments && !calFresh) {
                 if (rsi > 70 && signalAdjustments.overboughtRsiExtraPenalty) learnedAdj += signalAdjustments.overboughtRsiExtraPenalty;
                 if (macdCrossover === 'bullish' && signalAdjustments.bullishMacdExtraBonus) learnedAdj += signalAdjustments.bullishMacdExtraBonus;
                 if ((structureScore ?? 0) < 0 && signalAdjustments.bearishStructureExtraPenalty) learnedAdj += signalAdjustments.bearishStructureExtraPenalty;
