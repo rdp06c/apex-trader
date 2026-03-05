@@ -2623,7 +2623,6 @@
 
             <!-- Action Buttons -->
             <div class="sidebar-actions">
-                <button onclick="runAIAnalysis()">Run AI Analysis</button>
                 <button onclick="testDataFetch()" class="secondary">Dry Run</button>
                 <div style="display:flex;gap:6px">
                     <button onclick="refreshPrices()" class="secondary" style="flex:1">Refresh Prices</button>
@@ -11872,10 +11871,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const timestamp = new Date(dateStr + 'T12:00:00').toISOString();
 
             if (manualTradeMode === 'buy') {
-                if (portfolio.cash < cost) {
-                    statusEl.textContent = `Insufficient cash: need $${cost.toFixed(2)}, have $${portfolio.cash.toFixed(2)}`;
-                    return;
-                }
 
                 statusEl.textContent = 'Fetching historical signals...';
                 document.getElementById('manualTradeSubmit').disabled = true;

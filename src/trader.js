@@ -8846,10 +8846,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const timestamp = new Date(dateStr + 'T12:00:00').toISOString();
 
             if (manualTradeMode === 'buy') {
-                if (portfolio.cash < cost) {
-                    statusEl.textContent = `Insufficient cash: need $${cost.toFixed(2)}, have $${portfolio.cash.toFixed(2)}`;
-                    return;
-                }
 
                 statusEl.textContent = 'Fetching historical signals...';
                 document.getElementById('manualTradeSubmit').disabled = true;
