@@ -8981,14 +8981,25 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 portfolio.cash -= cost;
                 portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
 
+                // Enrich with live cache data when available (same-day trades)
+                const liveData = marketData[symbol];
+                const cachedScores = portfolio.lastCandidateScores?.candidates?.find(c => c.symbol === symbol);
+                const shortInt = shortInterestCache[symbol];
+                const details = tickerDetailsCache[symbol];
+                const volRatio = calculateVolumeRatio(symbol);
+                const news = newsCache[symbol];
+                const sector = stockSectors[symbol];
+                const sectorRot = portfolio.lastSectorRotation?.[sector];
+                const vix = vixCache?.level ?? portfolio.lastVIX ?? null;
+
                 const entryTechnicals = signals ? {
                     momentumScore: signals.momentumScore,
-                    todayChange: null,
+                    todayChange: liveData?.changePercent ?? null,
                     totalReturn5d: signals.totalReturn5d,
                     isAccelerating: signals.isAccelerating,
                     upDays: signals.upDays,
-                    rsScore: null, // RS requires full market context, can't reconstruct for single stock
-                    sectorRotation: null,
+                    rsScore: cachedScores?.rsScore ?? null,
+                    sectorRotation: sectorRot || null,
                     structureScore: signals.structure?.structureScore ?? null,
                     structure: signals.structure?.structure || null,
                     choch: signals.structure?.choch || null,
@@ -8999,16 +9010,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     rsi: signals.rsi ?? null,
                     macdCrossover: signals.macd?.crossover || null,
                     macdHistogram: signals.macd?.histogram ?? null,
-                    daysToCover: null,
-                    marketCap: null,
-                    compositeScore: null,
-                    vixLevel: null,
+                    daysToCover: shortInt?.daysToCover ?? null,
+                    marketCap: details?.marketCap ?? null,
+                    compositeScore: cachedScores?.compositeScore ?? null,
+                    vixLevel: vix,
                     sma20: signals.sma20 ?? null,
                     volumeTrend: signals.volumeTrend ?? null,
-                    volumeRatio: null,
+                    volumeRatio: volRatio?.ratio ?? null,
                     fvg: signals.structure?.fvg || null,
-                    newsSentiment: null,
-                    priceVsVwap: null,
+                    newsSentiment: news?.length > 0 ? (news.filter(n => n.sentiment === 'positive').length > news.filter(n => n.sentiment === 'negative').length ? 'positive' : news.filter(n => n.sentiment === 'negative').length > 0 ? 'negative' : 'neutral') : null,
+                    priceVsVwap: liveData?.vwap ? ((price - liveData.vwap) / liveData.vwap * 100) : null,
                     sma50: signals.smaCrossover?.sma50 ?? null,
                     smaCrossover: signals.smaCrossover?.crossover || null
                 } : {};
@@ -9025,29 +9036,30 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     entryTechnicals,
                     entryMarketRegime: portfolio.lastMarketRegime?.regime || null,
                     entryHoldingsCount: Object.keys(portfolio.holdings).length,
-                    positionSizePercent: null,
-                    portfolioValueAtEntry: null,
+                    positionSizePercent: portfolio.performanceHistory?.length > 0 ? (cost / portfolio.performanceHistory[portfolio.performanceHistory.length - 1].value * 100) : null,
+                    portfolioValueAtEntry: portfolio.performanceHistory?.length > 0 ? portfolio.performanceHistory[portfolio.performanceHistory.length - 1].value : null,
                     manual: true
                 });
 
                 // Store thesis
                 if (!portfolio.holdingTheses) portfolio.holdingTheses = {};
                 if (!portfolio.holdingTheses[symbol]) {
+                    const vixInterp = vix != null ? (vix < 15 ? 'complacent' : vix <= 20 ? 'normal' : vix <= 30 ? 'elevated' : 'panic') : null;
                     portfolio.holdingTheses[symbol] = {
                         originalCatalyst: reason || 'Manual entry',
                         entryConviction: null,
                         entryPrice: price,
                         entryDate: timestamp,
                         entryMomentum: signals?.momentumScore ?? null,
-                        entryRS: null,
-                        entrySectorFlow: null,
+                        entryRS: cachedScores?.rsScore ?? null,
+                        entrySectorFlow: sectorRot || null,
                         entryRSI: signals?.rsi ?? null,
                         entryMACDCrossover: signals?.macd?.crossover || null,
                         entryStructure: signals?.structure?.structure || null,
-                        entryDTC: null,
-                        entryCompositeScore: null,
-                        entryVIX: null,
-                        entryVIXInterpretation: null,
+                        entryDTC: shortInt?.daysToCover ?? null,
+                        entryCompositeScore: cachedScores?.compositeScore ?? null,
+                        entryVIX: vix,
+                        entryVIXInterpretation: vixInterp,
                         entrySMA20: signals?.sma20 ?? null,
                         peakPrice: price,
                         peakDate: timestamp,
