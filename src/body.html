@@ -5,7 +5,7 @@
                 <div class="header-branding">
                     <div class="header-subtitle">Powered by ARC Investments</div>
                     <h1>APEX</h1>
-                    <p class="header-tagline">Autonomous Portfolio EXpert</p>
+                    <p class="header-tagline">Scorecard-Guided Trading</p>
                 </div>
                 <div class="header-actions">
                     <div id="cloudSyncStatus" class="sync-status" onclick="handleCloudSyncClick()">
@@ -55,8 +55,8 @@
             </div>
 
             <div class="ai-thinking" id="aiThinking">
-                <div class="thinking-text pulse">APEX is analyzing the markets...</div>
-                <div class="thinking-detail" id="thinkingDetail">Reading the charts and making moves...</div>
+                <div class="thinking-text pulse">Scanning markets...</div>
+                <div class="thinking-detail" id="thinkingDetail">Fetching prices, bars, and indicators...</div>
             </div>
 
             <!-- Account Controls (collapsible) -->
@@ -237,10 +237,6 @@
                         <div class="sub-stat-label">Total Trades</div>
                         <div class="sub-stat-value" id="totalTrades">0</div>
                     </div>
-                    <div class="sub-stat-card">
-                        <div class="sub-stat-label">Drawdown</div>
-                        <div class="sub-stat-value" id="drawdownValue">--</div>
-                    </div>
                 </div>
             </div>
 
@@ -263,7 +259,7 @@
             <div class="regime-banner" id="regimeBanner" style="display: none;" aria-live="polite">
                 <div class="regime-banner-inner">
                     <div class="regime-label" id="regimeLabel">--</div>
-                    <div class="regime-description" id="regimeDescription">Run AI Analysis to detect market regime</div>
+                    <div class="regime-description" id="regimeDescription">Run Scan Market to detect regime</div>
                     <div class="regime-timestamp" id="regimeTimestamp"></div>
                     <div class="regime-vix" id="regimeVIX"></div>
                 </div>
@@ -295,7 +291,7 @@
                 </div>
                 <div class="section-body collapsed" id="candidateScorecardBody">
                     <div id="candidateScorecardContent">
-                        <div class="empty-state">Run AI Analysis to see scored candidates</div>
+                        <div class="empty-state">Run Scan Market to see scored candidates</div>
                     </div>
                 </div>
             </div>
@@ -308,7 +304,20 @@
                 </div>
                 <div class="section-body collapsed" id="sectorRotationBody">
                     <div id="sectorRotationContent">
-                        <div class="empty-state">Run AI Analysis to see sector rotation data</div>
+                        <div class="empty-state">Run Scan Market to see sector rotation data</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stock Universe (collapsible, collapsed by default) -->
+            <div class="card collapsible-section" id="stockUniverseSection">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="stockUniverseBody" onclick="toggleSection('stockUniverse')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('stockUniverse')}">
+                    <h2 class="chart-title">Stock Universe</h2>
+                    <span class="toggle-icon collapsed" id="stockUniverseToggle">&#9662;</span>
+                </div>
+                <div class="section-body collapsed" id="stockUniverseBody">
+                    <div id="stockUniverseContent">
+                        <div class="empty-state">Run Scan Market to see all scanned stocks</div>
                     </div>
                 </div>
             </div>
@@ -371,7 +380,7 @@
                         <div class="message-avatar">A</div>
                         <div class="message-content">
                             <div class="message-name">APEX</div>
-                            <div class="message-text">APEX online. I'm your AI trading agent — I make the moves and explain the thinking behind them. Ask me about your portfolio, any stock, market conditions, or trading concepts. I'll give you the real answer and teach you something along the way.</div>
+                            <div class="message-text">APEX online. Ask me about your portfolio, any stock, market conditions, or trading concepts. I can help you analyze setups and understand the signals behind the scorecard.</div>
                         </div>
                     </div>
                 </div>

@@ -2386,6 +2386,72 @@
         .scorecard-table-wrap::-webkit-scrollbar-track { background: transparent; }
         .scorecard-table-wrap::-webkit-scrollbar-thumb { background: var(--border-medium); border-radius: 10px; }
 
+        /* ── Stock Universe ────────────────────────────────── */
+        .universe-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .universe-sector-filter {
+            background: var(--bg-inset);
+            color: var(--text-primary);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .universe-pagination {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .universe-pagination button {
+            background: var(--bg-raised);
+            color: var(--text-primary);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-sm);
+            padding: 5px 12px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .universe-pagination button:hover:not(:disabled) {
+            background: var(--bg-hover);
+            border-color: var(--accent);
+        }
+
+        .universe-pagination button:disabled {
+            opacity: 0.35;
+            cursor: default;
+        }
+
+        .universe-page-info {
+            font-size: 11px;
+            color: var(--text-muted);
+            min-width: 90px;
+            text-align: center;
+        }
+
+        .universe-table th.sortable-th {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .universe-table th.sortable-th:hover {
+            color: var(--accent-light);
+        }
+
+        .universe-held {
+            background: rgba(245, 158, 11, 0.04);
+        }
+
         /* ── Sector Rotation Heatmap ─────────────────────── */
         .rotation-grid {
             display: grid;

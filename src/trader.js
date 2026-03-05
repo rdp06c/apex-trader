@@ -955,9 +955,9 @@
                     preventAutoSave = false;
                     
                     const holdingsCount = Object.keys(portfolio.holdings).length;
-                    status.textContent = `✅ Portfolio restored from ${file.name}! $${portfolio.cash.toFixed(2)} cash, ${holdingsCount} positions. Reloading...`;
+                    status.textContent = `✅ Portfolio restored from ${file.name}! ${holdingsCount} positions. Reloading...`;
                     status.style.color = '#34d399';
-                    addActivity(`💾 Portfolio restored from local file "${file.name}" - $${portfolio.cash.toFixed(2)} cash, ${holdingsCount} positions`, 'success');
+                    addActivity(`💾 Portfolio restored from local file "${file.name}" - ${holdingsCount} positions`, 'success');
                     
                     setTimeout(() => { location.reload(); }, 2000);
                     
@@ -7991,11 +7991,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 (dailyGain >= 0 ? '+' : '') + '$' + dailyGain.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('dailyPerformanceDollar').className = 'index-change ' + (dailyGain >= 0 ? 'positive' : 'negative');
                 
-            // Calculate cost basis of current holdings (not a running BUY-SELL net, which goes negative on profit)
+            // Calculate cost basis of current holdings (avg buy price × current shares)
             let totalInvested = 0;
-            for (const symbol of Object.keys(portfolio.holdings)) {
+            for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
                 const buys = getCurrentPositionBuys(symbol);
-                totalInvested += buys.reduce((sum, t) => sum + (t.price * t.shares), 0);
+                if (buys.length > 0) {
+                    const totalCost = buys.reduce((sum, t) => sum + (t.price * t.shares), 0);
+                    const totalShares = buys.reduce((sum, t) => sum + t.shares, 0);
+                    totalInvested += totalShares > 0 ? (totalCost / totalShares) * shares : 0;
+                }
             }
 
             document.getElementById('portfolioValue').textContent = '$' + totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -8341,7 +8345,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // Load portfolio from localStorage
-        function loadPortfolio() {
+        async function loadPortfolio() {
             const saved = localStorage.getItem('aiTradingPortfolio');
             if (saved) {
                 try {
@@ -8590,7 +8594,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         if (nCache && Date.now() - nTs < 60 * 60 * 1000) newsCache = JSON.parse(nCache);
                     } catch {}
 
-                    updateUI();
+                    await updateUI();
                     addActivity(`Portfolio loaded from localStorage - ${Object.keys(portfolio.holdings).length} positions`, 'init');
                 } catch (error) {
                     console.error('Error parsing localStorage portfolio:', error);
@@ -8829,7 +8833,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 // Execute the buy
-                portfolio.cash -= cost;
                 portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
 
                 // Enrich with live cache data when available (same-day trades)
@@ -8945,7 +8948,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 // Get buy transactions BEFORE recording sell (sell changes lastFullSellIdx)
                 const buyTransactions = getCurrentPositionBuys(symbol);
 
-                portfolio.cash += revenue;
                 portfolio.holdings[symbol] -= shares;
 
                 // Record the sell transaction
@@ -9050,7 +9052,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('undoTradeContainer').style.display = 'none';
         }
 
-        function undoLastTrade() {
+        async function undoLastTrade() {
             if (!undoData) return;
 
             const txs = portfolio.transactions || [];
@@ -9063,8 +9065,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (!confirm(`Undo ${desc}?`)) return;
 
             if (lastTx.type === 'BUY') {
-                // Reverse buy: restore cash, remove shares
-                portfolio.cash += lastTx.cost || (lastTx.price * lastTx.shares);
+                // Reverse buy: remove shares
                 portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) - lastTx.shares;
                 if (portfolio.holdings[symbol] <= 0) {
                     delete portfolio.holdings[symbol];
@@ -9078,9 +9079,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     delete portfolio.holdingTheses[symbol];
                 }
             } else if (lastTx.type === 'SELL') {
-                // Reverse sell: deduct cash, restore shares
-                const revenue = lastTx.revenue || (lastTx.price * lastTx.shares);
-                portfolio.cash -= revenue;
+                // Reverse sell: restore shares
                 portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + lastTx.shares;
 
                 // Remove the closedTrade entry that was created by this sell
@@ -9115,7 +9114,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             txs.pop();
 
             savePortfolio();
-            updateUI();
+            await updateUI();
             updatePerformanceAnalytics();
             addActivity(`↩ Undo: ${desc}`, 'init');
             hideUndoButton();
@@ -9159,10 +9158,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // Initialize on load
-        window.onload = function() {
+        window.onload = async function() {
             initGdriveConfig(); // Initialize Google Drive config with stored keys
             initChart();
-            loadPortfolio();
+            await loadPortfolio();
             // Log calibrated weights if available
             if (portfolio.calibratedWeights?.weights) {
                 console.log(`📊 Loaded calibrated weights from ${portfolio.calibratedWeights.timestamp} (${portfolio.calibratedWeights.dataPoints} observations)`);
@@ -9914,11 +9913,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 ? performanceHistory[performanceHistory.length - 1].value
                 : 0;
 
-            // Cost basis of current holdings
+            // Cost basis of current holdings (avg buy price × current shares)
             let costBasis = 0;
-            for (const symbol of Object.keys(portfolio.holdings)) {
+            for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
                 const buys = getCurrentPositionBuys(symbol);
-                costBasis += buys.reduce((sum, t) => sum + (t.price * t.shares), 0);
+                if (buys.length > 0) {
+                    const totalCost = buys.reduce((sum, t) => sum + (t.price * t.shares), 0);
+                    const totalShares = buys.reduce((sum, t) => sum + t.shares, 0);
+                    costBasis += totalShares > 0 ? (totalCost / totalShares) * shares : 0;
+                }
             }
 
             // Total Return = (Holdings Value - Cost Basis) / Cost Basis
@@ -10015,15 +10018,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 document.getElementById('spyReturn').textContent = 'Run analysis to track';
             }
 
-            // Drawdown from peak
-            if (health && health.drawdownPct != null) {
-                const dd = health.drawdownPct;
-                document.getElementById('drawdownValue').textContent = dd.toFixed(1) + '%';
-                document.getElementById('drawdownValue').style.color = dd > -5 ? '#34d399' : dd > -15 ? '#fbbf24' : '#f87171';
-            } else {
-                document.getElementById('drawdownValue').textContent = '--';
-            }
-
             // Update Trade Insights Display
             updateLearningInsightsDisplay();
 
@@ -10033,6 +10027,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Update new analytics modules (non-async, use persisted data)
             updateRegimeBanner();
             updateCandidateScorecard();
+            updateStockUniverse();
             updateSectorRotationHeatmap();
 
             // Close any expanded analytics panels on data refresh
@@ -11407,7 +11402,7 @@ Current Portfolio:
 
             const data = portfolio.lastCandidateScores;
             if (!data || !data.candidates || data.candidates.length === 0) {
-                container.innerHTML = '<div class="empty-state">Run AI Analysis to see scored candidates</div>';
+                container.innerHTML = '<div class="empty-state">Run Scan Market to see scored candidates</div>';
                 return;
             }
 
@@ -11537,6 +11532,130 @@ Current Portfolio:
             container.innerHTML = html;
         }
 
+        // Module 2b: Stock Universe (paginated, all scanned stocks)
+        const universeState = { page: 1, sortCol: 'change', sortAsc: false, filterSector: '' };
+        const UNIVERSE_PAGE_SIZE = 40;
+
+        function universeSetSort(col) {
+            if (universeState.sortCol === col) universeState.sortAsc = !universeState.sortAsc;
+            else { universeState.sortCol = col; universeState.sortAsc = false; }
+            updateStockUniverse();
+        }
+
+        function universeSetSector(val) {
+            universeState.filterSector = val;
+            updateStockUniverse(1);
+        }
+
+        function updateStockUniverse(page) {
+            const container = document.getElementById('stockUniverseContent');
+            if (!container) return;
+
+            if (page != null) universeState.page = page;
+
+            // Build universe from priceCache + stockSectors
+            const allSymbols = Object.keys(stockSectors);
+            let stocks = allSymbols.map(symbol => {
+                const cached = priceCache[symbol] || bulkSnapshotCache[symbol];
+                const scored = portfolio.lastCandidateScores?.candidates?.find(c => c.symbol === symbol);
+                return {
+                    symbol,
+                    name: stockNames[symbol] || '',
+                    sector: stockSectors[symbol] || 'Unknown',
+                    price: cached?.price ?? null,
+                    change: cached?.changePercent ?? null,
+                    score: scored?.compositeScore ?? null,
+                    held: !!portfolio.holdings[symbol]
+                };
+            });
+
+            // Only show stocks we have price data for
+            const hasData = stocks.some(s => s.price != null);
+            if (!hasData) {
+                container.innerHTML = '<div class="empty-state">Run Scan Market to see all scanned stocks</div>';
+                return;
+            }
+
+            // Sector filter dropdown (compute counts before filtering)
+            const sectors = [...new Set(allSymbols.map(s => stockSectors[s]))].sort();
+            const sectorCounts = {};
+            stocks.forEach(s => { sectorCounts[s.sector] = (sectorCounts[s.sector] || 0) + 1; });
+            const totalCount = stocks.length;
+
+            // Filter by sector
+            if (universeState.filterSector) {
+                stocks = stocks.filter(s => s.sector === universeState.filterSector);
+            }
+
+            // Sort
+            stocks.sort((a, b) => {
+                let va = a[universeState.sortCol], vb = b[universeState.sortCol];
+                if (va == null && vb == null) return 0;
+                if (va == null) return 1;
+                if (vb == null) return -1;
+                if (typeof va === 'string') return universeState.sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+                return universeState.sortAsc ? va - vb : vb - va;
+            });
+
+            const totalPages = Math.ceil(stocks.length / UNIVERSE_PAGE_SIZE);
+            if (universeState.page > totalPages) universeState.page = totalPages;
+            if (universeState.page < 1) universeState.page = 1;
+            const start = (universeState.page - 1) * UNIVERSE_PAGE_SIZE;
+            const pageStocks = stocks.slice(start, start + UNIVERSE_PAGE_SIZE);
+
+            let html = '<div class="universe-controls">';
+            html += `<select onchange="universeSetSector(this.value)" class="universe-sector-filter">`;
+            html += `<option value="">All Sectors (${totalCount})</option>`;
+            sectors.forEach(s => {
+                html += `<option value="${s}"${universeState.filterSector === s ? ' selected' : ''}>${s} (${sectorCounts[s] || 0})</option>`;
+            });
+            html += '</select>';
+
+            // Pagination controls
+            html += `<div class="universe-pagination">`;
+            html += `<button onclick="updateStockUniverse(${universeState.page - 1})"${universeState.page <= 1 ? ' disabled' : ''}>&laquo; Prev</button>`;
+            html += `<span class="universe-page-info">Page ${universeState.page} of ${totalPages}</span>`;
+            html += `<button onclick="updateStockUniverse(${universeState.page + 1})"${universeState.page >= totalPages ? ' disabled' : ''}">Next &raquo;</button>`;
+            html += '</div></div>';
+
+            // Sortable column headers
+            const cols = [
+                { key: 'symbol', label: 'Symbol' },
+                { key: 'sector', label: 'Sector' },
+                { key: 'price', label: 'Price' },
+                { key: 'change', label: 'Day %' },
+                { key: 'score', label: 'Score' }
+            ];
+            html += '<div class="scorecard-table-wrap"><table class="scorecard-table universe-table"><thead><tr>';
+            cols.forEach(col => {
+                const arrow = universeState.sortCol === col.key ? (universeState.sortAsc ? ' ▲' : ' ▼') : '';
+                html += `<th class="sortable-th" onclick="universeSetSort('${col.key}')">${col.label}${arrow}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            pageStocks.forEach(s => {
+                const chgClass = s.change > 0 ? 'positive' : s.change < 0 ? 'negative' : '';
+                const scoreClass = s.score != null ? (s.score >= 12 ? 'score-high' : s.score >= 8 ? 'score-mid' : s.score >= 4 ? 'score-low' : 'score-poor') : '';
+                html += `<tr${s.held ? ' class="universe-held"' : ''}>`;
+                html += `<td><span class="scorecard-symbol">${s.symbol}</span>${s.held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${s.name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${escapeHtml(s.name)}</div>` : ''}</td>`;
+                html += `<td style="font-size:11px">${s.sector}</td>`;
+                html += `<td style="font-size:11px">${s.price != null ? '$' + s.price.toFixed(2) : '--'}</td>`;
+                html += `<td class="${chgClass}" style="font-size:11px">${s.change != null ? (s.change >= 0 ? '+' : '') + s.change.toFixed(2) + '%' : '--'}</td>`;
+                html += `<td class="${scoreClass}" style="font-size:11px;font-weight:600">${s.score != null ? s.score.toFixed(1) : '--'}</td>`;
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+
+            // Timestamp
+            const cacheDate = localStorage.getItem('priceCacheDate');
+            if (cacheDate) {
+                html += `<div style="font-size:10px;color:var(--text-faint);margin-top:6px">Prices from: ${cacheDate} — ${allSymbols.length} stocks tracked</div>`;
+            }
+
+            container.innerHTML = html;
+        }
+
         // Module 3: Sector Rotation Heatmap
         function updateSectorRotationHeatmap() {
             const container = document.getElementById('sectorRotationContent');
@@ -11544,7 +11663,7 @@ Current Portfolio:
 
             const data = portfolio.lastSectorRotation;
             if (!data || !data.sectors) {
-                container.innerHTML = '<div class="empty-state">Run AI Analysis to see sector rotation data</div>';
+                container.innerHTML = '<div class="empty-state">Run Scan Market to see sector rotation data</div>';
                 return;
             }
 
