@@ -4324,7 +4324,7 @@
                     });
                     const compositeScore = scoreResult.total;
                     const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
-                    dryRunScored.push({ symbol, compositeScore, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', volumeRatio: calculateVolumeRatio(symbol)?.ratio ?? null, scoreBreakdown: scoreResult.breakdown });
+                    dryRunScored.push({ symbol, compositeScore, price: data.price || null, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', volumeRatio: calculateVolumeRatio(symbol)?.ratio ?? null, scoreBreakdown: scoreResult.breakdown });
                 });
 
                 // Fetch news for top candidates + holdings
@@ -5052,6 +5052,7 @@
                         return {
                             symbol: s.symbol,
                             compositeScore: s.compositeScore,
+                            price: s.data.price || null,
                             momentum: s.data.momentum?.score || 0,
                             rs: s.data.relativeStrength?.rsScore || 0,
                             sector: s.data.sector || 'Unknown',
@@ -11003,7 +11004,7 @@ Current Portfolio:
             const holdingSymbols = new Set(Object.keys(portfolio.holdings));
 
             let html = '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
-                '<th>#</th><th>Symbol</th><th>Score</th><th>Day</th><th>Mom</th><th>RS</th><th>RSI</th><th>MACD</th><th>Sector</th><th>Structure</th><th>DTC</th><th>Vol</th><th>MCap</th>' +
+                '<th>#</th><th>Symbol</th><th>Score</th><th>Price</th><th>Day</th><th>Mom</th><th>Vol</th><th>RS</th><th>RSI</th><th>MACD</th><th>Structure</th><th>DTC</th><th>Sector</th><th>MCap</th>' +
                 '</tr></thead><tbody>';
 
             data.candidates.forEach((c, i) => {
@@ -11059,19 +11060,22 @@ Current Portfolio:
                     scoreTooltip = parts.join(' | ');
                 }
 
+                const priceStr = c.price != null ? '$' + c.price.toFixed(2) : '--';
+
                 html += `<tr>
                     <td class="scorecard-rank">${i + 1}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
                     <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span></div></td>
+                    <td style="font-size:11px">${priceStr}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td>${(c.momentum || 0).toFixed(1)}</td>
+                    <td class="${c.volumeRatio != null ? (c.volumeRatio >= 1.5 ? 'vol-high' : c.volumeRatio <= 0.7 ? 'vol-low' : '') : ''}">${c.volumeRatio != null ? c.volumeRatio.toFixed(1) + 'x' : '--'}</td>
                     <td>${(c.rs || 0).toFixed(0)}</td>
                     <td class="${rsiClass}">${rsiVal != null ? Math.round(rsiVal) : '--'}</td>
                     <td class="${macdClass}">${macdArrow}</td>
-                    <td>${c.sector || '--'}</td>
                     <td style="font-size:10px;text-transform:capitalize">${structLabel}</td>
                     <td class="${dtcClass}">${dtcVal > 0 ? dtcVal.toFixed(1) : '--'}</td>
-                    <td class="${c.volumeRatio != null ? (c.volumeRatio >= 1.5 ? 'vol-high' : c.volumeRatio <= 0.7 ? 'vol-low' : '') : ''}">${c.volumeRatio != null ? c.volumeRatio.toFixed(1) + 'x' : '--'}</td>
+                    <td>${c.sector || '--'}</td>
                     <td class="mcap-cell">${formatMarketCap(c.marketCap)}</td>
                 </tr>`;
             });
