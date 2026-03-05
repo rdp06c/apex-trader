@@ -51,6 +51,10 @@
                 <button onclick="refreshPrices()" class="secondary">Refresh Prices</button>
                 <button onclick="openManualTradeModal()" class="secondary">Manual Trade</button>
             </div>
+            <div id="undoTradeContainer" class="undo-trade-container" style="display:none">
+                <button onclick="undoLastTrade()" class="undo-trade-btn">Undo Last Trade</button>
+                <span id="undoTradeLabel" class="undo-trade-label"></span>
+            </div>
 
             <div class="ai-thinking" id="aiThinking">
                 <div class="thinking-text pulse">APEX is analyzing the markets...</div>

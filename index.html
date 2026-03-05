@@ -384,6 +384,38 @@
             text-align: center;
         }
 
+        .undo-trade-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0 8px;
+        }
+
+        .undo-trade-btn {
+            background: rgba(248, 113, 113, 0.15);
+            border: 1px solid rgba(248, 113, 113, 0.4);
+            color: #f87171;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .undo-trade-btn:hover {
+            background: rgba(248, 113, 113, 0.25);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .undo-trade-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         /* ── Section Titles ────────────────────────────────── */
         .chart-title {
             font-size: 16px;
@@ -2617,6 +2649,10 @@
                 <button onclick="refreshPrices()" class="secondary">Refresh Prices</button>
                 <button onclick="openManualTradeModal()" class="secondary">Manual Trade</button>
             </div>
+            <div id="undoTradeContainer" class="undo-trade-container" style="display:none">
+                <button onclick="undoLastTrade()" class="undo-trade-btn">Undo Last Trade</button>
+                <span id="undoTradeLabel" class="undo-trade-label"></span>
+            </div>
 
             <div class="ai-thinking" id="aiThinking">
                 <div class="thinking-text pulse">APEX is analyzing the markets...</div>
@@ -3665,40 +3701,6 @@
                             pointHoverBorderColor: '#fff',
                             pointHoverBorderWidth: 2
                         },
-                        {
-                            label: 'Trading P&L (excl. deposits)',
-                            data: [],
-                            borderColor: '#34d399',
-                            backgroundColor: 'transparent',
-                            borderWidth: 1.5,
-                            borderDash: [6, 3],
-                            tension: 0.35,
-                            fill: false,
-                            pointStyle: 'dash',
-                            pointRadius: 0,
-                            pointHoverRadius: 4,
-                            pointHoverBackgroundColor: '#34d399',
-                            pointHoverBorderColor: '#fff',
-                            pointHoverBorderWidth: 2
-                        },
-                        {
-                            label: 'Deposits',
-                            data: [],
-                            borderColor: 'transparent',
-                            backgroundColor: '#60a5fa',
-                            pointRadius: [],
-                            pointStyle: 'rectRot',
-                            pointBackgroundColor: '#60a5fa',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 1.5,
-                            pointHoverStyle: 'rectRot',
-                            pointHoverBackgroundColor: '#60a5fa',
-                            pointHoverBorderColor: '#fff',
-                            pointHoverBorderWidth: 2,
-                            pointHoverRadius: 8,
-                            showLine: false,
-                            order: 0
-                        }
                     ]
                 },
                 options: {
@@ -3710,21 +3712,7 @@
                     },
                     plugins: {
                         legend: {
-                            display: true,
-                            position: 'top',
-                            align: 'end',
-                            labels: {
-                                color: '#a8a8a0',
-                                font: {
-                                    family: "'Inter', sans-serif",
-                                    size: 11,
-                                    weight: '500'
-                                },
-                                usePointStyle: true,
-                                pointStyleWidth: 18,
-                                boxHeight: 7,
-                                padding: 16
-                            }
+                            display: false
                         },
                         tooltip: {
                             backgroundColor: 'rgba(22, 22, 25, 0.95)',
@@ -3747,18 +3735,6 @@
                             boxWidth: 8,
                             boxHeight: 8,
                             boxPadding: 4,
-                            callbacks: {
-                                afterBody: function(tooltipItems) {
-                                    const idx = tooltipItems[0]?.dataIndex;
-                                    if (idx !== undefined && performanceChart._depositAmounts && performanceChart._depositAmounts[idx]) {
-                                        return '💰 Deposit: +$' + performanceChart._depositAmounts[idx].toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                                    }
-                                    return '';
-                                }
-                            },
-                            filter: function(tooltipItem) {
-                                return tooltipItem.datasetIndex !== 2;
-                            }
                         }
                     },
                     scales: {
@@ -3897,90 +3873,9 @@
                 return `${dateStr} ${timeStr}`;
             });
             
-            // Dataset 1: Raw portfolio value
-            const rawValues = portfolio.performanceHistory.map(h => h.value);
-            performanceChart.data.datasets[0].data = rawValues;
-            
-            // Dataset 2: Trading P&L (value minus cumulative deposits at each point)
-            // Walk the history and track how much cash has been deposited up to each point.
-            // The first entry is always the initial balance (a deposit itself).
-            // Subsequent entries flagged with {deposit: amount} add to the running total.
-            // P&L = value - cumulativeDeposits  (starts at $0, shows pure trading gains/losses)
+            // Dataset: Portfolio value
+            performanceChart.data.datasets[0].data = portfolio.performanceHistory.map(h => h.value);
 
-            const initialBal = portfolio.initialBalance || 0;
-            const totalDeps = portfolio.totalDeposits || initialBal;
-
-            // Build deposit timeline from flagged entries
-            const depositTimeline = []; // [{index, amount}]
-            portfolio.performanceHistory.forEach((h, i) => {
-                if (h.deposit) {
-                    depositTimeline.push({ index: i, amount: h.deposit, flagged: true });
-                }
-            });
-
-            // Check if flagged deposits account for all known deposits
-            const flaggedTotal = depositTimeline.reduce((s, d) => s + d.amount, 0);
-            const unaccounted = totalDeps - initialBal - flaggedTotal;
-
-            // If deposits are missing flags (added before tracking), detect them as value jumps
-            if (unaccounted > 50) {
-                console.log(`📊 ${unaccounted.toFixed(0)} in deposits missing flags — scanning for value jumps`);
-                let remaining = unaccounted;
-                for (let i = 1; i < rawValues.length && remaining > 50; i++) {
-                    // Skip points that already have a flagged deposit
-                    if (depositTimeline.find(d => d.index === i)) continue;
-                    const prev = rawValues[i - 1];
-                    const curr = rawValues[i];
-                    if (prev && curr && prev > 0) {
-                        const jump = curr - prev;
-                        // A deposit looks like a sudden jump > $50 and > 5% of previous value
-                        if (jump > 50 && (jump / prev) > 0.05) {
-                            const amount = Math.min(jump, remaining);
-                            depositTimeline.push({ index: i, amount, detected: true });
-                            remaining -= amount;
-                            console.log(`📊 Detected unflagged deposit at point ${i}: +$${amount.toFixed(2)}`);
-                            // Backfill the flag so future renders don't need detection
-                            portfolio.performanceHistory[i].deposit = amount;
-                        }
-                    }
-                }
-                if (remaining > 50) {
-                    console.log(`📊 Still $${remaining.toFixed(0)} unaccounted — may be spread across small increments`);
-                }
-                // Sort by index after adding detected deposits
-                depositTimeline.sort((a, b) => a.index - b.index);
-            }
-
-            // Build cumulative deposits at each point
-            // Start with initialBalance (the first deposit), then add flagged deposits
-            let cumDeposits = initialBal;
-            const adjustedValues = rawValues.map((val, i) => {
-                const depositAtPoint = depositTimeline.find(d => d.index === i);
-                if (depositAtPoint) {
-                    cumDeposits += depositAtPoint.amount;
-                }
-                return val - cumDeposits;
-            });
-
-            console.log(`📊 Chart: raw last=$${rawValues[rawValues.length-1]?.toFixed(2)}, P&L last=$${adjustedValues[adjustedValues.length-1]?.toFixed(2)}, deposits found=${depositTimeline.length}, totalDeposits=$${cumDeposits}`);
-            
-            performanceChart.data.datasets[1].data = adjustedValues;
-            
-            // Dataset 3: Deposit markers (yellow triangles)
-            // Also store deposit amounts for tooltip display
-            const depositAmounts = {};
-            depositTimeline.forEach(d => {
-                depositAmounts[d.index] = d.amount;
-            });
-            performanceChart._depositAmounts = depositAmounts;
-            
-            const depositMarkers = rawValues.map((val, i) => {
-                return depositTimeline.find(d => d.index === i) ? val : null;
-            });
-            const depositPointRadii = depositMarkers.map(v => v !== null ? 8 : 0);
-            performanceChart.data.datasets[2].data = depositMarkers;
-            performanceChart.data.datasets[2].pointRadius = depositPointRadii;
-            
             performanceChart.update();
         }
 
@@ -7165,6 +7060,7 @@
                 return;
             }
             isAnalysisRunning = true;
+            hideUndoButton();
             const thinking = document.getElementById('aiThinking');
             const thinkingDetail = document.getElementById('thinkingDetail');
             thinking.classList.add('active');
@@ -11344,11 +11240,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
 
             // Update chart
-            // Throttle performanceHistory: at most one entry per 15 minutes (unless deposit marker)
+            // Throttle performanceHistory: at most one entry per 15 minutes
             const now = new Date();
             const lastEntry = portfolio.performanceHistory[portfolio.performanceHistory.length - 1];
             const timeSinceLast = lastEntry ? (now - new Date(lastEntry.timestamp)) : Infinity;
-            if (timeSinceLast >= 15 * 60 * 1000 || !lastEntry || lastEntry.deposit) {
+            if (timeSinceLast >= 15 * 60 * 1000 || !lastEntry) {
                 portfolio.performanceHistory.push({
                     timestamp: now.toISOString(),
                     value: totalValue
@@ -11359,16 +11255,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 lastEntry.timestamp = now.toISOString();
             }
 
-            // Hard cap: keep at most 3000 entries (prune oldest, but preserve deposit markers)
+            // Hard cap: keep at most 3000 entries
             if (portfolio.performanceHistory.length > 3000) {
-                const excess = portfolio.performanceHistory.length - 3000;
-                let removed = 0;
-                portfolio.performanceHistory = portfolio.performanceHistory.filter((entry, i) => {
-                    if (removed >= excess) return true; // done pruning
-                    if (entry.deposit) return true; // preserve deposit markers
-                    removed++;
-                    return false;
-                });
+                portfolio.performanceHistory = portfolio.performanceHistory.slice(-3000);
             }
 
             await updatePerformanceChart();
@@ -12075,6 +11964,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 addActivity(`Manual BUY: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${signals ? ` (MOM:${signals.momentumScore} RSI:${signals.rsi != null ? Math.round(signals.rsi) : '--'} Struct:${signals.structure?.structure || '??'})` : ''}`, 'buy');
                 statusEl.textContent = 'Buy recorded successfully!';
                 statusEl.style.color = 'var(--green)';
+                showUndoButton(`BUY ${shares} ${symbol} @ $${price.toFixed(2)}`);
                 setTimeout(closeManualTradeModal, 1500);
 
             } else if (manualTradeMode === 'sell') {
@@ -12176,10 +12066,98 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 addActivity(`Manual SELL: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${plStr}`, 'sell');
                 statusEl.textContent = 'Sell recorded successfully!';
                 statusEl.style.color = 'var(--green)';
+                showUndoButton(`SELL ${shares} ${symbol} @ $${price.toFixed(2)}`);
                 setTimeout(closeManualTradeModal, 1500);
             }
 
             document.getElementById('manualTradeSubmit').disabled = false;
+        }
+
+        // Undo Last Trade
+        let undoData = null;
+
+        function showUndoButton(label) {
+            undoData = { timestamp: Date.now() };
+            const container = document.getElementById('undoTradeContainer');
+            document.getElementById('undoTradeLabel').textContent = label;
+            container.style.display = 'flex';
+        }
+
+        function hideUndoButton() {
+            undoData = null;
+            document.getElementById('undoTradeContainer').style.display = 'none';
+        }
+
+        function undoLastTrade() {
+            if (!undoData) return;
+
+            const txs = portfolio.transactions || [];
+            if (txs.length === 0) { hideUndoButton(); return; }
+
+            const lastTx = txs[txs.length - 1];
+            const symbol = lastTx.symbol;
+            const desc = `${lastTx.type} ${lastTx.shares} ${symbol} @ $${lastTx.price.toFixed(2)}`;
+
+            if (!confirm(`Undo ${desc}?`)) return;
+
+            if (lastTx.type === 'BUY') {
+                // Reverse buy: restore cash, remove shares
+                portfolio.cash += lastTx.cost || (lastTx.price * lastTx.shares);
+                portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) - lastTx.shares;
+                if (portfolio.holdings[symbol] <= 0) {
+                    delete portfolio.holdings[symbol];
+                }
+
+                // Remove holdingTheses if this was the only buy for this symbol
+                const remainingBuys = txs.slice(0, -1).filter(t => t.type === 'BUY' && t.symbol === symbol);
+                const remainingSells = txs.slice(0, -1).filter(t => t.type === 'SELL' && t.symbol === symbol);
+                // Simple check: if no other buys or position is now 0, clean up thesis
+                if (!portfolio.holdings[symbol] && portfolio.holdingTheses?.[symbol]) {
+                    delete portfolio.holdingTheses[symbol];
+                }
+            } else if (lastTx.type === 'SELL') {
+                // Reverse sell: deduct cash, restore shares
+                const revenue = lastTx.revenue || (lastTx.price * lastTx.shares);
+                portfolio.cash -= revenue;
+                portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + lastTx.shares;
+
+                // Remove the closedTrade entry that was created by this sell
+                const closedTrades = portfolio.closedTrades || [];
+                // Find the last closedTrade for this symbol with matching sell date
+                for (let i = closedTrades.length - 1; i >= 0; i--) {
+                    if (closedTrades[i].symbol === symbol && closedTrades[i].sellDate === lastTx.timestamp) {
+                        closedTrades.splice(i, 1);
+                        break;
+                    }
+                }
+
+                // Restore holdingTheses from the original buy if needed
+                if (!portfolio.holdingTheses?.[symbol]) {
+                    const buys = txs.slice(0, -1).filter(t => t.type === 'BUY' && t.symbol === symbol);
+                    if (buys.length > 0) {
+                        const origBuy = buys[buys.length - 1];
+                        portfolio.holdingTheses = portfolio.holdingTheses || {};
+                        portfolio.holdingTheses[symbol] = {
+                            originalCatalyst: origBuy.reasoning || 'Restored after undo',
+                            entryConviction: origBuy.conviction || null,
+                            entryPrice: origBuy.price,
+                            entryDate: origBuy.timestamp,
+                            peakPrice: origBuy.price,
+                            peakDate: origBuy.timestamp
+                        };
+                    }
+                }
+            }
+
+            // Remove the transaction
+            txs.pop();
+
+            savePortfolio();
+            updateUI();
+            updatePerformanceAnalytics();
+            addActivity(`↩ Undo: ${desc}`, 'init');
+            hideUndoButton();
+            console.log(`✅ Undid last trade: ${desc}`);
         }
 
         // Reset account
@@ -13320,40 +13298,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 </div>`;
             }
 
-            // ── Section C: Hold Decision Accuracy ──
-            const holdStats = analyzeHoldAccuracy();
-            if (holdStats) {
-                const accColor = holdStats.overall.accuracy >= 60 ? 'var(--green)' : holdStats.overall.accuracy >= 45 ? 'var(--yellow)' : 'var(--red)';
-                const avgColor = holdStats.overall.avgChange >= 0 ? 'var(--green)' : 'var(--red)';
-
-                html += `<div class="analytics-panel">
-                    <div class="analytics-panel-title">Hold Decision Accuracy</div>
-                    <div class="insight-panel-body">
-                        <div class="rr-stats-row">
-                            <div class="rr-stat">
-                                <div class="rr-stat-value" style="color: ${accColor};">${holdStats.overall.accuracy.toFixed(0)}%</div>
-                                <div class="rr-stat-label">Correct (${holdStats.overall.total} holds)</div>
-                            </div>
-                            <div class="rr-stat">
-                                <div class="rr-stat-value" style="color: ${avgColor};">${holdStats.overall.avgChange >= 0 ? '+' : ''}${holdStats.overall.avgChange.toFixed(2)}%</div>
-                                <div class="rr-stat-label">Avg Next-Cycle Change</div>
-                            </div>`;
-
-                for (const [bucket, label] of [['high', 'High Conv'], ['medium', 'Med Conv'], ['low', 'Low Conv']]) {
-                    if (holdStats.byConviction[bucket]) {
-                        const bc = holdStats.byConviction[bucket];
-                        const bColor = bc.accuracy >= 60 ? 'var(--green)' : bc.accuracy >= 45 ? 'var(--yellow)' : 'var(--red)';
-                        html += `<div class="rr-stat">
-                                <div class="rr-stat-value" style="color: ${bColor};">${bc.accuracy.toFixed(0)}%</div>
-                                <div class="rr-stat-label">${label} (${bc.total})</div>
-                            </div>`;
-                    }
-                }
-
-                html += `</div></div></div>`;
-            }
-
-            // ── Section E: Regime History ──
+            // ── Section C: Regime History ──
             const regimeStats = analyzeRegimeTransitions();
             if (regimeStats) {
                 const regimeColors = { bull: 'var(--green)', bear: 'var(--red)', choppy: 'var(--yellow)' };
@@ -13405,27 +13350,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 html += `</div></div>`;
             }
 
-            // ── Section F: Conviction Accuracy ──
-            const convictionData = analyzeConvictionAccuracy();
-            if (convictionData.hasData) {
-                html += `<div class="analytics-panel">
-                    <div class="analytics-panel-title">Conviction Calibration</div>
-                    <div class="insight-panel-body">
-                        <div class="rr-stats-row">`;
-                for (const [level, stats] of Object.entries(convictionData.analysis)) {
-                    const wrColor = stats.winRate >= 60 ? 'var(--green)' : stats.winRate >= 40 ? 'var(--yellow)' : 'var(--red)';
-                    const calLabel = stats.calibration === 'well-calibrated' ? 'Calibrated' : 'Overconfident';
-                    const calColor = stats.calibration === 'well-calibrated' ? 'var(--green)' : 'var(--red)';
-                    html += `<div class="rr-stat">
-                            <div class="rr-stat-value" style="color: ${wrColor};">${stats.winRate.toFixed(0)}%</div>
-                            <div class="rr-stat-label">Conv ${level} (${stats.count})</div>
-                            <div class="rr-stat-label" style="color: ${calColor}; font-size: 10px;">${calLabel} · ${stats.avgReturn >= 0 ? '+' : ''}${stats.avgReturn.toFixed(1)}%</div>
-                        </div>`;
-                }
-                html += `</div></div></div>`;
-            }
-
-            // ── Section G: Signal Accuracy ──
+            // ── Section D: Signal Accuracy ──
             const techData = analyzeTechnicalAccuracy();
             if (techData.hasData) {
                 html += `<div class="analytics-panel">
