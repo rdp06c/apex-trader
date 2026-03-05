@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>APEX Candidate Scorecard - Field Guide</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 850px; margin: 40px auto; padding: 0 20px; color: #222; line-height: 1.6; }
+  h1 { color: #1a73e8; border-bottom: 3px solid #1a73e8; padding-bottom: 10px; }
+  h2 { color: #333; margin-top: 36px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+  h3 { color: #1a73e8; margin-top: 24px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: #f0f4ff; font-weight: 600; }
+  tr:nth-child(even) { background: #fafafa; }
+  .positive { color: #0d8a0d; font-weight: 600; }
+  .negative { color: #c62828; font-weight: 600; }
+  .neutral { color: #666; }
+  .callout { background: #e8f0fe; border-left: 4px solid #1a73e8; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+  .warning { background: #fef7e0; border-left: 4px solid #f9a825; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+  .key-insight { background: #e6f4ea; border-left: 4px solid #0d8a0d; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+  code { background: #f1f3f4; padding: 2px 6px; border-radius: 3px; font-size: 0.95em; }
+  ol.priority li { margin-bottom: 8px; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd; color: #888; font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<h1>APEX Candidate Scorecard - Field Guide</h1>
+<p>A comprehensive guide to understanding the scoring fields on the APEX Candidate Scorecard, what differentiates stocks on the list, and what signals the best buy opportunities.</p>
+
+<h2>Scorecard Column Order</h2>
+<p><code># | Symbol | Score | Price | Day | 5D | Mom | Vol | RS | RSI | MACD | Structure | DTC | Sector | MCap</code></p>
+<p>Columns are grouped by function: <strong>Price action</strong> (Price, Day, 5D), <strong>Trend</strong> (Mom, Vol, RS), <strong>Oscillators</strong> (RSI, MACD), <strong>Context</strong> (Structure, DTC), <strong>Reference</strong> (Sector, MCap). Color coding on each value reflects its score impact &mdash; green means it's helping, red means it's hurting, gray is neutral.</p>
+
+<h2>Field-by-Field Breakdown</h2>
+
+<h3>5D (5-Day Return)</h3>
+<p>Cumulative return over the last 5 trading days. This is one of the most impactful signals &mdash; it drives the pullback bonus (up to +5 points) and the 1.3x entry multiplier, which together can add 10+ points to a score.</p>
+
+<table>
+<tr><th>5D Range</th><th>Label</th><th>Score Impact</th></tr>
+<tr><td>-2% to -8%</td><td>Pullback sweet spot</td><td class="positive"><strong>+2 to +5</strong> pullback bonus (depends on structure &amp; sector) <strong>AND 1.3x</strong> entry multiplier</td></tr>
+<tr><td>-5% to 0%</td><td>Mild dip</td><td class="positive"><strong>+1 to +3</strong> with structure support</td></tr>
+<tr><td>0% to +8%</td><td>Neutral/rising</td><td class="neutral">No pullback bonus</td></tr>
+<tr><td>&gt; +8%</td><td>Overextended</td><td class="negative">Likely triggering extension penalty via high MOM/RS</td></tr>
+<tr><td>&lt; -8%</td><td>Oversold</td><td class="neutral">Still gets +2 pullback bonus but may indicate deeper problems</td></tr>
+</table>
+
+<div class="key-insight">
+<strong>The 1.3x multiplier is the biggest hidden lever in the system.</strong> A stock scoring 14 from its additive components becomes 18.2 with the pullback multiplier. It requires 5D return between -1% and -8% AND structure &ge; 1. This is why a dipping Bullish stock can dramatically outscore a surging one.
+</div>
+
+<h3>MOM (Momentum Score) &mdash; Range: 0 to 10</h3>
+<p>Raw momentum rating based on recent price action (trend strength, acceleration). Gets multiplied by <code>0.6</code> in the composite score, so a MOM of 6.5 contributes ~3.9 points while a MOM of 2.5 contributes ~1.5.</p>
+
+<div class="warning">
+<strong>The sweet spot is roughly 3.0&ndash;7.0.</strong> Extremely high momentum (&ge;9) triggers an <strong>extension penalty</strong> of -3.5 points and also reduces the entry multiplier to 0.6x. You want strong enough trend to show direction, but not so hot that you're buying the top.
+</div>
+
+<table>
+<tr><th>MOM Range</th><th>Interpretation</th><th>Score Effect</th></tr>
+<tr><td>0&ndash;3</td><td>Weak/no trend</td><td class="neutral">Low contribution but no penalties</td></tr>
+<tr><td>3&ndash;7</td><td>Healthy trend (sweet spot)</td><td class="positive">Good contribution, no penalties</td></tr>
+<tr><td>7&ndash;8.5</td><td>Strong trend</td><td class="neutral">Good contribution, mild extension risk</td></tr>
+<tr><td>9+</td><td>Extreme momentum</td><td class="negative">Extension penalty (-3.5) and entry multiplier drops to 0.6x</td></tr>
+</table>
+
+<h3>VOL (Volume Ratio)</h3>
+<p>Today's volume divided by the 20-day average volume. A ratio of 1.0x means average volume. This field has <strong>two separate effects</strong> and should always be read alongside MOM:</p>
+
+<h4>1. Score Component (Volume Bonus)</h4>
+<table>
+<tr><th>Condition</th><th>Score Impact</th><th>Interpretation</th></tr>
+<tr><td>High MOM (&ge;7) + low volume (&lt;0.7x)</td><td class="negative"><strong>-2.0</strong></td><td>Rally on no volume = suspicious</td></tr>
+<tr><td>High MOM (&ge;7) + high volume (&gt;1.3x)</td><td class="positive"><strong>+1.0</strong></td><td>Confirmed breakout</td></tr>
+<tr><td>Low MOM (&lt;5) + high volume (&gt;1.5x) + okay structure</td><td class="positive"><strong>+1.5</strong></td><td>Accumulation signal</td></tr>
+<tr><td>Volume &gt; 1.2x (general)</td><td class="positive"><strong>+0.5</strong></td><td>Mild confirmation</td></tr>
+<tr><td>Volume &lt; 0.8x (general)</td><td class="negative"><strong>-0.5</strong></td><td>Lack of participation</td></tr>
+</table>
+
+<h4>2. Hard Volume Gate (Pre-Scoring Veto)</h4>
+<p>Before a stock even gets scored, it must pass the volume gate or the trade is <strong>blocked entirely</strong>:</p>
+<table>
+<tr><th>Entry Type</th><th>Volume Requirement</th><th>Logic</th></tr>
+<tr><td>Breakout (MOM &ge; 5)</td><td>&ge; 1.5x average</td><td>Breakouts need volume confirmation</td></tr>
+<tr><td>Pullback (MOM &lt; 5)</td><td>&le; 0.7x average</td><td>Pullbacks should be on declining volume</td></tr>
+</table>
+
+<div class="warning">
+<strong>Stocks with 0.5x&ndash;0.6x volume and moderate momentum</strong> may look good on the scorecard but get vetoed by the hard gate when it comes time to actually execute the trade.
+</div>
+
+<h3>RS (Relative Strength) &mdash; Displayed: 0 to 100, Internal: 0 to 10</h3>
+<p>How the stock performs versus the broader market. Displayed as a percentile rank (0&ndash;100), internally normalized to 0&ndash;10 and multiplied by <code>0.6</code>.</p>
+
+<div class="warning">
+<strong>Mean reversion trap:</strong> High RS values trigger penalties designed to avoid buying at the top of relative performance.
+</div>
+
+<table>
+<tr><th>RS (normalized)</th><th>Mean Reversion Penalty</th></tr>
+<tr><td>&lt; 8.5</td><td class="positive">No penalty</td></tr>
+<tr><td>8.5&ndash;9.0</td><td class="negative">-2.0 points</td></tr>
+<tr><td>9.0&ndash;9.5</td><td class="negative">-4.0 points</td></tr>
+<tr><td>9.5+</td><td class="negative">-6.0 points</td></tr>
+</table>
+
+<p>When <strong>both</strong> MOM &ge; 9 and RS &ge; 8.5 (normalized), the extension penalty jumps to <strong>-5.0</strong>. The system explicitly penalizes stocks at the top of both rankings because they tend to revert.</p>
+
+<h3>RSI (Relative Strength Index) &mdash; Range: 0 to 100</h3>
+<p>Classic overbought/oversold oscillator. The scoring is <strong>heavily asymmetric</strong> &mdash; the penalty for being overbought is far larger than the bonus for being oversold:</p>
+
+<table>
+<tr><th>RSI Range</th><th>Label</th><th>Score Impact</th></tr>
+<tr><td>&lt; 30</td><td>Deeply oversold</td><td class="positive"><strong>+2.5</strong> (great entry signal)</td></tr>
+<tr><td>30&ndash;40</td><td>Oversold</td><td class="positive"><strong>+1.5</strong></td></tr>
+<tr><td>40&ndash;50</td><td>Mildly oversold</td><td class="positive"><strong>+0.5</strong></td></tr>
+<tr><td>50&ndash;70</td><td>Neutral</td><td class="neutral">0</td></tr>
+<tr><td>70&ndash;80</td><td>Overbought</td><td class="negative"><strong>-3.0</strong></td></tr>
+<tr><td>&gt; 80</td><td>Extremely overbought</td><td class="negative"><strong>-5.0</strong> AND entry multiplier drops to 0.3x</td></tr>
+</table>
+
+<div class="key-insight">
+<strong>Key insight:</strong> Low RSI is one of the single biggest scoring advantages. A stock with RSI of 32 is getting +1.5 points that a stock at RSI 55 doesn't get. That alone can shift a stock up several ranking positions.
+</div>
+
+<h3>MACD (Moving Average Convergence/Divergence)</h3>
+<p>Three possible states, shown as icons on the scorecard:</p>
+
+<table>
+<tr><th>Icon</th><th>State</th><th>Score Impact</th></tr>
+<tr><td>&#9650; (green up arrow)</td><td>Bullish crossover</td><td class="positive"><strong>+2.5</strong></td></tr>
+<tr><td>&#9660; Cross</td><td>Bearish crossover</td><td class="negative"><strong>-2.0</strong></td></tr>
+<tr><td>&#9660; (red down arrow)</td><td>Bearish (no crossover)</td><td class="negative"><strong>-0.5</strong></td></tr>
+</table>
+
+<div class="callout">
+<strong>This is a 4.5-point swing</strong> between a bullish crossover (+2.5) and a bearish crossover (-2.0). It's one of the single biggest differentiators in the composite score. A stock with modest momentum but bullish MACD can easily outrank a stronger-trending stock with bearish MACD.
+</div>
+
+<h3>Structure &mdash; Bullish / Ranging / Bearish</h3>
+<p>ICT/Smart Money Concepts (SMC) analysis of market structure based on swing highs/lows, change of character (CHoCH), break of structure (BOS), and liquidity sweeps. The raw structure score gets multiplied by <code>1.25</code> &mdash; the <strong>highest multiplier</strong> of the three main components.</p>
+
+<table>
+<tr><th>Structure</th><th>Approximate Raw Score</th><th>&times; 1.25 Contribution</th></tr>
+<tr><td>Bullish</td><td>+2 to +3</td><td class="positive">+2.5 to +3.75</td></tr>
+<tr><td>Ranging</td><td>0 to +1</td><td class="neutral">0 to +1.25</td></tr>
+<tr><td>Bearish</td><td>-1 to -3</td><td class="negative">-1.25 to -3.75</td></tr>
+</table>
+
+<div class="key-insight">
+<strong>Structure is a gatekeeper.</strong> Beyond its own point contribution, Bullish structure <strong>unlocks</strong> several conditional bonuses that Ranging/Bearish stocks cannot access:
+<ul>
+<li><strong>Pullback bonus</strong> (up to +5 points) &mdash; requires structure &ge; 1 or 2</li>
+<li><strong>Squeeze bonus</strong> from DTC &mdash; requires structure &ge; 1</li>
+<li><strong>SMA proximity bonus</strong> (+2.0) &mdash; requires structure &ge; 1</li>
+<li><strong>Entry multiplier of 1.3x</strong> on the entire score &mdash; requires structure &ge; 1</li>
+</ul>
+A Ranging stock misses most of these even if every other indicator is favorable.
+</div>
+
+<h3>DTC (Days to Cover)</h3>
+<p>Short interest metric: how many days of average volume it would take to cover all short positions. Higher DTC means more short sellers are exposed, increasing potential for a short squeeze.</p>
+
+<table>
+<tr><th>DTC</th><th>Conditions Required</th><th>Squeeze Bonus</th></tr>
+<tr><td>&gt; 5</td><td>Structure &ge; 1 AND sector not in outflow</td><td class="positive"><strong>+1.5</strong></td></tr>
+<tr><td>&gt; 3</td><td>Structure &ge; 1</td><td class="positive"><strong>+0.75</strong></td></tr>
+<tr><td>&le; 3</td><td>&mdash;</td><td class="neutral">0</td></tr>
+</table>
+
+<div class="callout">
+<strong>Structure gates this bonus.</strong> A stock with DTC of 11.7 but Ranging structure gets nothing. A stock with DTC of 5.1 and Bullish structure gets the full +1.5. Always read DTC in combination with the Structure column.
+</div>
+
+<h2>Hidden Score Components (Not Shown on Scorecard)</h2>
+<p>Several important scoring factors are calculated but not displayed as individual columns:</p>
+
+<table>
+<tr><th>Component</th><th>Max Impact</th><th>Description</th></tr>
+<tr><td><strong>Entry Multiplier</strong></td><td class="positive">1.3x entire score</td><td>Applied to pullback entries with structure &ge; 1 (or 0.3x&ndash;0.6x for overextended stocks)</td></tr>
+<tr><td><strong>Extension Penalty</strong></td><td class="negative">-5.0</td><td>When both MOM &ge; 9 and RS &ge; 8.5 (normalized)</td></tr>
+<tr><td><strong>Runner Penalty</strong></td><td class="negative">-3.0</td><td>Stocks up &ge;15% today; scales from -0.5 at +5%</td></tr>
+<tr><td><strong>SMA Proximity</strong></td><td class="positive">+2.0</td><td>Price within 3% above SMA20 with bullish structure</td></tr>
+<tr><td><strong>SMA Crossover</strong></td><td class="positive">+2.0 / -2.0</td><td>Bullish or bearish SMA crossover</td></tr>
+<tr><td><strong>Sector Flow</strong></td><td class="positive">+2.0 / -1.0</td><td>Sector rotation: inflow, modest inflow, or outflow</td></tr>
+<tr><td><strong>FVG (Fair Value Gap)</strong></td><td>&plusmn;0.5</td><td>Bullish FVG during pullback, bearish FVG with bad structure</td></tr>
+<tr><td><strong>Acceleration Bonus</strong></td><td class="positive">+1.5</td><td>Momentum accelerating AND MOM &ge; 6</td></tr>
+<tr><td><strong>Consistency Bonus</strong></td><td class="positive">+1.0</td><td>3+ up days out of last 4+</td></tr>
+</table>
+
+<hr>
+
+<h2>What Signals the Best Buys?</h2>
+<p>Ranked by score impact, from most to least influential:</p>
+
+<ol class="priority">
+<li><strong>RSI below 40</strong> (+1.5 to +2.5) &mdash; Single biggest unconditional bonus. No conditions required.</li>
+<li><strong>MACD bullish crossover</strong> (+2.5) &mdash; Nearly as large. A 4.5-point swing versus bearish crossover.</li>
+<li><strong>Pullback into Bullish structure</strong> (up to +5 AND 1.3x multiplier) &mdash; The entry multiplier on the entire score is the real killer feature. A score of 12 becomes 15.6.</li>
+<li><strong>Bullish structure</strong> (+2.5 to +3.75 directly, plus unlocks conditional bonuses) &mdash; The gatekeeper for DTC, SMA, pullback, and entry multiplier bonuses.</li>
+<li><strong>High DTC with Bullish structure</strong> (+1.5 squeeze bonus) &mdash; Only fires when structure is there to support it.</li>
+<li><strong>Volume confirming the thesis</strong> (+1.0 to +1.5, and avoids the hard veto gate) &mdash; Won't make a bad stock good, but will block a good stock if absent.</li>
+<li><strong>Moderate MOM/RS</strong> (contributes points without triggering extension or mean-reversion penalties) &mdash; The 3&ndash;7 sweet spot.</li>
+</ol>
+
+<div class="key-insight">
+<strong>Cheat Sheet &mdash; The Ideal Entry</strong><br><br>
+<strong style="color:#0d8a0d">Bullish MACD Cross</strong> + <strong style="color:#0d8a0d">RSI &lt; 40</strong> + <strong style="color:#0d8a0d">Bullish Structure</strong> + <strong style="color:#0d8a0d">5D return -2% to -8%</strong><br><br>
+This combo triggers the pullback bonus (+5) and the 1.3x score multiplier. A stock matching all four can score 20+ easily.
+<br><br>
+<strong>The system's philosophy:</strong> It fundamentally prefers <em>dips in structurally sound stocks</em> over <em>surges in hot stocks</em>. The extension penalty, mean reversion penalty, overbought penalty, and runner penalty all punish chasing. The pullback bonus, oversold bonus, and 1.3x entry multiplier all reward buying weakness with structural support.
+</div>
+
+<hr>
+
+<h2>What Signals a Sell? (When the Setup Breaks)</h2>
+<p>The scorecard is designed for entry signals. Sell decisions happen in Phase 1, where the AI compares each holding's <strong>original entry thesis</strong> against <strong>current indicators</strong>. Here's what it looks for:</p>
+
+<h3>Hard Stop-Loss Levels (Code-Enforced)</h3>
+<p>These are non-negotiable risk management thresholds based on unrealized P&amp;L from your average cost:</p>
+
+<table>
+<tr><th>Drawdown</th><th>Status</th><th>Action</th></tr>
+<tr><td>-5%</td><td>WATCH</td><td class="neutral">Flagged for close monitoring. Check if thesis still holds.</td></tr>
+<tr><td>-7%</td><td>SELL_CANDIDATE</td><td class="negative">Default to SELL unless very recent entry (&lt;3 days) with intact thesis AND bullish structure.</td></tr>
+<tr><td>-10%</td><td>URGENT_SELL</td><td class="negative"><strong>SELL with conviction 8+.</strong> Only exception: market-wide crash affecting everything equally with bullish structure intact.</td></tr>
+<tr><td>-15%</td><td>CRITICAL_DRAWDOWN</td><td class="negative"><strong>MANDATORY SELL. No exceptions.</strong> This is a risk management failure.</td></tr>
+</table>
+
+<h3>Thesis Breakdown Signals</h3>
+<p>The AI compares what was true at entry vs what's true now. A sell is triggered when the original reasons for buying are no longer valid:</p>
+
+<table>
+<tr><th>Signal</th><th>What It Means</th><th>Severity</th></tr>
+<tr><td><strong>Structure flips Bearish</strong></td><td>The market structure that supported your entry has reversed. Especially dangerous if a CHoCH (Change of Character) is detected &mdash; this signals a trend reversal.</td><td class="negative">High</td></tr>
+<tr><td><strong>Bearish MACD Cross</strong></td><td>Momentum has shifted against you. If you entered on a bullish crossover and it's now crossed bearish, the entry signal is broken.</td><td class="negative">High</td></tr>
+<tr><td><strong>RSI climbs above 80</strong></td><td>The stock is extremely overbought. Even if you're profitable, this signals exhaustion. Consider taking profits.</td><td class="negative">Medium-High</td></tr>
+<tr><td><strong>Sector rotation to outflow</strong></td><td>Money is leaving your stock's sector. If you entered on sector inflow, the tailwind is now a headwind.</td><td class="negative">Medium</td></tr>
+<tr><td><strong>Momentum fading</strong></td><td>Entry MOM was 5+ but has dropped to &lt;3. The trend that justified the entry is gone.</td><td class="negative">Medium</td></tr>
+<tr><td><strong>RS dropping significantly</strong></td><td>Stock was outperforming its sector/market at entry but is now underperforming. Relative weakness emerging.</td><td class="negative">Medium</td></tr>
+<tr><td><strong>Catalyst played out or failed</strong></td><td>The specific event you bought for (earnings, product launch, etc.) has either happened and been priced in, or didn't materialize.</td><td class="negative">High</td></tr>
+<tr><td><strong>Liquidity sweep detected</strong></td><td>Smart money has swept stop-losses below a key level. Can signal a reversal if combined with structure breakdown.</td><td class="neutral">Context-dependent</td></tr>
+</table>
+
+<h3>Hold Duration Discipline</h3>
+<p>APEX is a <strong>swing trader</strong> with a minimum expected hold of 5 trading days. The sell logic adjusts based on how long you've held:</p>
+
+<table>
+<tr><th>Hold Period</th><th>Sell Threshold</th></tr>
+<tr><td>&lt; 3 days</td><td class="positive">Do NOT sell unless thesis is <strong>clearly broken</strong> (CHoCH, catastrophic news). A red day is NOT a broken thesis.</td></tr>
+<tr><td>3&ndash;5 days</td><td class="neutral">Sell only with conviction 8+ and clear structural breakdown.</td></tr>
+<tr><td>5+ days</td><td>Normal evaluation &mdash; full sell criteria apply.</td></tr>
+</table>
+
+<div class="warning">
+<strong>"The stock went down today" is NEVER sufficient reason to sell.</strong> Swing trades need time to work. The system explicitly protects against panic selling, which has been identified as a top performance killer.
+</div>
+
+<h3>Anti-Churn Protection</h3>
+<p>Opportunity cost churn &mdash; selling a mediocre position to buy something that scores higher &mdash; has been identified as the <strong>#1 performance killer</strong>. The system enforces:</p>
+<ul>
+<li><strong>Same-day sell block</strong>: Cannot sell stocks bought today</li>
+<li><strong>5-day re-buy cooldown</strong>: Cannot re-buy a stock within 5 days of selling it</li>
+<li>"Something else scores higher" is <strong>NOT a valid sell reason</strong>. Only a broken thesis justifies a sell.</li>
+</ul>
+
+<div class="key-insight">
+<strong>Cheat Sheet &mdash; The Sell Decision</strong><br><br>
+Ask yourself: <em>"Would I buy this stock TODAY at the current price with current indicators?"</em><br><br>
+If the answer is no because the <strong>structure has flipped</strong>, the <strong>MACD has crossed bearish</strong>, the <strong>sector is in outflow</strong>, or the <strong>catalyst has failed</strong> &mdash; that's a sell.<br><br>
+If the answer is no just because it's down a couple percent or something else looks shinier &mdash; that's a hold. Give the trade time to work.
+</div>
+
+<div class="footer">
+<p>APEX Scoring Guide &mdash; Updated March 2026<br>
+Based on <code>calculateCompositeScore</code> and Phase 1 sell logic in <code>src/trader.js</code> with calibrated weights.</p>
+</div>
+
+</body>
+</html>
