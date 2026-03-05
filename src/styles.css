@@ -2269,6 +2269,10 @@
             border-bottom: 1px solid var(--border-medium);
         }
 
+        .scorecard-table th[title] {
+            cursor: help;
+        }
+
         .scorecard-table td {
             padding: 7px 10px;
             border-bottom: 1px solid var(--border-subtle);

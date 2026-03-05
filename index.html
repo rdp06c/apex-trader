@@ -2282,6 +2282,10 @@
             border-bottom: 1px solid var(--border-medium);
         }
 
+        .scorecard-table th[title] {
+            cursor: help;
+        }
+
         .scorecard-table td {
             padding: 7px 10px;
             border-bottom: 1px solid var(--border-subtle);
@@ -13960,7 +13964,19 @@ Current Portfolio:
             const holdingSymbols = new Set(Object.keys(portfolio.holdings));
 
             let html = '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
-                '<th>#</th><th>Symbol</th><th>Score</th><th>Price</th><th>Day</th><th>Mom</th><th>Vol</th><th>RS</th><th>RSI</th><th>MACD</th><th>Structure</th><th>DTC</th><th>Sector</th><th>MCap</th>' +
+                '<th>#</th><th>Symbol</th>' +
+                '<th title="Composite score from ~15 weighted signals. Higher is better. Hover over a stock\'s score to see the full breakdown.">Score</th>' +
+                '<th title="Current stock price (last trade or regular session close).">Price</th>' +
+                '<th title="Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.">Day</th>' +
+                '<th title="Momentum (0-10). Sweet spot is 3-7: strong trend without penalties. 9+ triggers extension penalty (-3.5) and reduces entry multiplier to 0.6x.">Mom</th>' +
+                '<th title="Volume ratio vs 20-day avg. Read with Mom: high Mom + low Vol (-2.0 penalty, fake rally). Low Mom + high Vol (+1.5, accumulation). Hard gate: breakouts need ≥1.5x, pullbacks need ≤0.7x or trade is vetoed.">Vol</th>' +
+                '<th title="Relative Strength vs market (0-100). Mid-range is ideal. RS 85+ triggers mean-reversion penalties up to -6.0. When both Mom ≥9 and RS ≥85, extension penalty jumps to -5.0.">RS</th>' +
+                '<th title="RSI oscillator (0-100). Below 40 is a strong buy signal (+1.5 to +2.5). Above 70 is danger (-3.0). Above 80 is severe (-5.0 and entry multiplier drops to 0.3x). Biggest single unconditional bonus in the system.">RSI</th>' +
+                '<th title="MACD crossover state. Bullish ▲ = +2.5, Bearish ▼ Cross = -2.0, Bearish ▼ = -0.5. A 4.5-point swing between bullish and bearish crossover — one of the largest score differentiators.">MACD</th>' +
+                '<th title="Market structure (ICT/SMC). Bullish is best: adds +2.5 to +3.75 AND unlocks pullback bonus (up to +5), squeeze bonus, SMA bonus, and 1.3x entry multiplier. Ranging misses most conditional bonuses.">Structure</th>' +
+                '<th title="Days to Cover (short interest). DTC >5 with Bullish structure = +1.5 squeeze bonus. DTC >3 with structure = +0.75. High DTC without Bullish structure gets nothing — structure is the gatekeeper.">DTC</th>' +
+                '<th title="Sector classification. Sector rotation (inflow/outflow) affects score: inflow +2.0, modest inflow +1.0, outflow -1.0. 35% sector concentration cap enforced.">Sector</th>' +
+                '<th title="Market capitalization.">MCap</th>' +
                 '</tr></thead><tbody>';
 
             data.candidates.forEach((c, i) => {
