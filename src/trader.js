@@ -4324,7 +4324,7 @@
                     });
                     const compositeScore = scoreResult.total;
                     const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
-                    dryRunScored.push({ symbol, compositeScore, price: data.price || null, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', volumeRatio: calculateVolumeRatio(symbol)?.ratio ?? null, scoreBreakdown: scoreResult.breakdown });
+                    dryRunScored.push({ symbol, compositeScore, price: data.price || null, return5d: momentum?.totalReturn5d ?? null, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', volumeRatio: calculateVolumeRatio(symbol)?.ratio ?? null, scoreBreakdown: scoreResult.breakdown });
                 });
 
                 // Fetch news for top candidates + holdings
@@ -5053,6 +5053,7 @@
                             symbol: s.symbol,
                             compositeScore: s.compositeScore,
                             price: s.data.price || null,
+                            return5d: s.data.momentum?.totalReturn5d ?? null,
                             momentum: s.data.momentum?.score || 0,
                             rs: s.data.relativeStrength?.rsScore || 0,
                             sector: s.data.sector || 'Unknown',
@@ -11008,6 +11009,7 @@ Current Portfolio:
                 '<th title="Composite score from ~15 weighted signals. Higher is better. Hover over a stock\'s score to see the full breakdown.">Score</th>' +
                 '<th title="Current stock price (last trade or regular session close).">Price</th>' +
                 '<th title="Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.">Day</th>' +
+                '<th title="5-day cumulative return. Sweet spot is -2% to -8% with Bullish structure: triggers pullback bonus (up to +5) and 1.3x entry multiplier on the entire score. The biggest hidden score amplifier.">5D</th>' +
                 '<th title="Momentum (0-10). Sweet spot is 3-7: strong trend without penalties. 9+ triggers extension penalty (-3.5) and reduces entry multiplier to 0.6x.">Mom</th>' +
                 '<th title="Volume ratio vs 20-day avg. Read with Mom: high Mom + low Vol (-2.0 penalty, fake rally). Low Mom + high Vol (+1.5, accumulation). Hard gate: breakouts need ≥1.5x, pullbacks need ≤0.7x or trade is vetoed.">Vol</th>' +
                 '<th title="Relative Strength vs market (0-100). Mid-range is ideal. RS 85+ triggers mean-reversion penalties up to -6.0. When both Mom ≥9 and RS ≥85, extension penalty jumps to -5.0.">RS</th>' +
@@ -11092,6 +11094,10 @@ Current Portfolio:
                 const rsVal = c.rs || 0;
                 const rsClass = rsVal >= 95 ? 'sig-red' : rsVal >= 85 ? 'sig-warn' : '';
 
+                // 5D return color: green for pullback sweet spot, red for overextended
+                const ret5d = c.return5d;
+                const ret5dClass = ret5d != null ? (ret5d <= -2 && ret5d >= -8 ? 'sig-green' : ret5d < -8 ? 'sig-red' : ret5d > 8 ? 'sig-warn' : '') : '';
+
                 // Structure color
                 const structClass = (c.structure === 'bullish' || c.structure === 'bullish_continuation') ? 'sig-green'
                     : (c.structure === 'bearish' || c.structure === 'bearish_continuation') ? 'sig-red' : '';
@@ -11102,6 +11108,7 @@ Current Portfolio:
                     <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span></div></td>
                     <td style="font-size:11px">${priceStr}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
+                    <td class="${ret5dClass}" style="font-size:11px">${ret5d != null ? (ret5d >= 0 ? '+' : '') + ret5d.toFixed(2) + '%' : '--'}</td>
                     <td class="${momClass}">${mom.toFixed(1)}</td>
                     <td class="${volClass}">${vr != null ? vr.toFixed(1) + 'x' : '--'}</td>
                     <td class="${rsClass}">${rsVal.toFixed(0)}</td>
@@ -11116,6 +11123,7 @@ Current Portfolio:
 
             html += '</tbody></table></div>';
             html += `<div style="font-size:10px;color:var(--text-faint);margin-top:8px">Last scored: ${new Date(data.timestamp).toLocaleString()} — Top ${data.candidates.length} of ~300 screened</div>`;
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent)">Ideal entry: <strong style="color:var(--green)">Bullish MACD Cross</strong> + <strong style="color:var(--green)">RSI &lt; 40</strong> + <strong style="color:var(--green)">Bullish Structure</strong> + <strong style="color:var(--green)">5D return -2% to -8%</strong> &mdash; triggers pullback bonus (+5) and 1.3x score multiplier</div>`;
             container.innerHTML = html;
         }
 
