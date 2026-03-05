@@ -1037,6 +1037,23 @@
             max-width: 440px;
         }
 
+        .manual-trade-tab {
+            flex: 1;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid var(--border-medium);
+            background: var(--bg-main);
+            color: var(--text-muted);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+        }
+        .manual-trade-tab.active {
+            background: var(--accent);
+            color: var(--bg-main);
+            border-color: var(--accent);
+        }
+
         .result-modal-title {
             font-size: 16px;
             font-weight: 700;
@@ -2611,7 +2628,10 @@
             <div class="sidebar-actions">
                 <button onclick="runAIAnalysis()">Run AI Analysis</button>
                 <button onclick="testDataFetch()" class="secondary">Dry Run</button>
-                <button onclick="refreshPrices()" class="secondary">Refresh Prices</button>
+                <div style="display:flex;gap:6px">
+                    <button onclick="refreshPrices()" class="secondary" style="flex:1">Refresh Prices</button>
+                    <button onclick="openManualTradeModal()" class="secondary" style="flex:1">Manual Trade</button>
+                </div>
             </div>
 
             <div class="ai-thinking" id="aiThinking">
@@ -2954,6 +2974,48 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Manual Trade Modal -->
+    <div class="modal" id="manualTradeModal" onclick="if(event.target===this)closeManualTradeModal()">
+        <div class="modal-content modal-narrow">
+            <h3 id="manualTradeTitle" style="margin:0 0 16px;color:var(--text-primary)">Manual Buy</h3>
+            <div id="manualTradeForm">
+                <div style="display:flex;gap:8px;margin-bottom:10px">
+                    <button id="manualBuyTab" class="manual-trade-tab active" onclick="switchManualTradeTab('buy')">Buy</button>
+                    <button id="manualSellTab" class="manual-trade-tab" onclick="switchManualTradeTab('sell')">Sell</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Symbol</label>
+                        <input type="text" id="manualTradeSymbol" placeholder="e.g. AAPL" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;text-transform:uppercase" />
+                    </div>
+                    <div style="display:flex;gap:10px">
+                        <div style="flex:1">
+                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Shares</label>
+                            <input type="number" id="manualTradeShares" placeholder="10" min="1" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
+                        </div>
+                        <div style="flex:1">
+                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Price per share</label>
+                            <input type="number" id="manualTradePrice" placeholder="150.00" min="0.01" step="0.01" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Date</label>
+                        <input type="date" id="manualTradeDate" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
+                    </div>
+                    <div id="manualTradeReasonWrap">
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Reason (optional)</label>
+                        <input type="text" id="manualTradeReason" placeholder="e.g. Bullish MACD cross + RSI pullback" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
+                    </div>
+                </div>
+                <div id="manualTradeStatus" style="font-size:11px;margin-top:8px;min-height:16px;color:var(--text-muted)"></div>
+                <div style="display:flex;gap:8px;margin-top:14px">
+                    <button id="manualTradeSubmit" onclick="submitManualTrade()" style="flex:1">Submit Buy</button>
+                    <button onclick="closeManualTradeModal()" class="secondary" style="flex:1">Cancel</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Result Modal -->
@@ -11656,6 +11718,385 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             await updateUI();
 
             addActivity('✅ Prices refreshed!', 'success');
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // MANUAL TRADE: Buy/Sell with historical signal reconstruction
+        // ══════════════════════════════════════════════════════════════
+
+        let manualTradeMode = 'buy';
+
+        function openManualTradeModal() {
+            const modal = document.getElementById('manualTradeModal');
+            modal.classList.add('active');
+            // Default date to today
+            document.getElementById('manualTradeDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('manualTradeSymbol').value = '';
+            document.getElementById('manualTradeShares').value = '';
+            document.getElementById('manualTradePrice').value = '';
+            document.getElementById('manualTradeReason').value = '';
+            document.getElementById('manualTradeStatus').textContent = '';
+            document.getElementById('manualTradeStatus').style.color = 'var(--text-muted)';
+            switchManualTradeTab('buy');
+            document.getElementById('manualTradeSymbol').focus();
+        }
+
+        function closeManualTradeModal() {
+            document.getElementById('manualTradeModal').classList.remove('active');
+        }
+
+        function switchManualTradeTab(mode) {
+            manualTradeMode = mode;
+            document.getElementById('manualBuyTab').classList.toggle('active', mode === 'buy');
+            document.getElementById('manualSellTab').classList.toggle('active', mode === 'sell');
+            document.getElementById('manualTradeTitle').textContent = mode === 'buy' ? 'Manual Buy' : 'Manual Sell';
+            document.getElementById('manualTradeSubmit').textContent = mode === 'buy' ? 'Submit Buy' : 'Submit Sell';
+            document.getElementById('manualTradeSubmit').style.background = mode === 'buy' ? '' : 'var(--red)';
+
+            // For sell, populate symbol dropdown from holdings
+            if (mode === 'sell') {
+                const holdingSymbols = Object.keys(portfolio.holdings);
+                if (holdingSymbols.length === 0) {
+                    document.getElementById('manualTradeStatus').textContent = 'No holdings to sell.';
+                }
+            } else {
+                document.getElementById('manualTradeStatus').textContent = '';
+            }
+        }
+
+        // Fetch historical bars for a symbol up to a specific date
+        async function fetchHistoricalBars(symbol, entryDate) {
+            const to = new Date(entryDate);
+            const from = new Date(to);
+            from.setDate(from.getDate() - 100); // ~65 trading days
+            const fromStr = from.toISOString().split('T')[0];
+            const toStr = to.toISOString().split('T')[0];
+            try {
+                const response = await fetch(
+                    `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${fromStr}/${toStr}?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`
+                );
+                const data = await response.json();
+                if ((data.status === 'OK' || data.status === 'DELAYED') && data.results && data.results.length >= 5) {
+                    return data.results;
+                }
+                return null;
+            } catch (e) {
+                console.warn(`Failed to fetch historical bars for ${symbol}:`, e.message);
+                return null;
+            }
+        }
+
+        // Reconstruct signals as of a specific date from historical bars
+        function reconstructSignals(symbol, bars, entryDate) {
+            if (!bars || bars.length < 5) return null;
+
+            // Trim bars to only include those on or before entryDate
+            const entryTs = new Date(entryDate + 'T23:59:59').getTime();
+            const trimmed = bars.filter(b => b.t <= entryTs);
+            if (trimmed.length < 5) return null;
+
+            // Compute all signals using existing functions
+            const rsi = calculateRSI(trimmed);
+            const macd = calculateMACD(trimmed);
+            const sma20 = calculateSMA(trimmed, 20);
+            const smaCrossover = calculateSMACrossover(trimmed);
+            const structure = detectStructure(symbol);
+
+            // Momentum from last 5 bars
+            const last5 = trimmed.slice(-6); // need 6 bars to get 5 returns
+            let momentumScore = 0, totalReturn5d = 0, upDays = 0, isAccelerating = false, volumeTrend = 1;
+            if (last5.length >= 2) {
+                const first = last5[0].c;
+                const last = last5[last5.length - 1].c;
+                totalReturn5d = first > 0 ? ((last - first) / first) * 100 : 0;
+
+                // Count up days and compute daily returns
+                const dailyReturns = [];
+                for (let i = 1; i < last5.length; i++) {
+                    const ret = (last5[i].c - last5[i - 1].c) / last5[i - 1].c * 100;
+                    dailyReturns.push(ret);
+                    if (ret > 0) upDays++;
+                }
+
+                // Simple momentum score (0-10 scale)
+                const absReturn = Math.abs(totalReturn5d);
+                momentumScore = Math.min(10, Math.max(0, absReturn * (totalReturn5d >= 0 ? 1.2 : 0.3)));
+
+                // Acceleration: later returns > earlier returns
+                if (dailyReturns.length >= 4) {
+                    const firstHalf = dailyReturns.slice(0, Math.floor(dailyReturns.length / 2));
+                    const secondHalf = dailyReturns.slice(Math.floor(dailyReturns.length / 2));
+                    const avgFirst = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+                    const avgSecond = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+                    isAccelerating = avgSecond > avgFirst && avgSecond > 0;
+                }
+
+                // Volume trend
+                const vols = last5.map(b => b.v || 0);
+                if (vols.length >= 4) {
+                    const earlyVol = vols.slice(0, Math.floor(vols.length / 2)).reduce((a, b) => a + b, 0);
+                    const lateVol = vols.slice(Math.floor(vols.length / 2)).reduce((a, b) => a + b, 0);
+                    volumeTrend = earlyVol > 0 ? lateVol / earlyVol : 1;
+                }
+            }
+
+            return {
+                momentumScore: Math.round(momentumScore * 10) / 10,
+                totalReturn5d: Math.round(totalReturn5d * 100) / 100,
+                upDays,
+                totalDays: Math.min(last5.length - 1, 5),
+                isAccelerating,
+                volumeTrend: Math.round(volumeTrend * 100) / 100,
+                rsi,
+                macd,
+                sma20,
+                smaCrossover,
+                structure,
+                entryPrice: trimmed[trimmed.length - 1].c,
+                bars: trimmed
+            };
+        }
+
+        async function submitManualTrade() {
+            const symbol = document.getElementById('manualTradeSymbol').value.trim().toUpperCase();
+            const shares = parseInt(document.getElementById('manualTradeShares').value);
+            const price = parseFloat(document.getElementById('manualTradePrice').value);
+            const dateStr = document.getElementById('manualTradeDate').value;
+            const reason = document.getElementById('manualTradeReason').value.trim();
+            const statusEl = document.getElementById('manualTradeStatus');
+
+            // Validation
+            if (!symbol) { statusEl.textContent = 'Symbol is required.'; return; }
+            if (!shares || shares <= 0) { statusEl.textContent = 'Shares must be > 0.'; return; }
+            if (!price || price <= 0) { statusEl.textContent = 'Price must be > 0.'; return; }
+            if (!dateStr) { statusEl.textContent = 'Date is required.'; return; }
+
+            const cost = price * shares;
+            const timestamp = new Date(dateStr + 'T12:00:00').toISOString();
+
+            if (manualTradeMode === 'buy') {
+                if (portfolio.cash < cost) {
+                    statusEl.textContent = `Insufficient cash: need $${cost.toFixed(2)}, have $${portfolio.cash.toFixed(2)}`;
+                    return;
+                }
+
+                statusEl.textContent = 'Fetching historical signals...';
+                document.getElementById('manualTradeSubmit').disabled = true;
+
+                // Fetch historical bars and reconstruct signals
+                let signals = null;
+                try {
+                    const bars = await fetchHistoricalBars(symbol, dateStr);
+                    if (bars) {
+                        // Temporarily inject into multiDayCache for detectStructure
+                        const prevCache = multiDayCache[symbol];
+                        const trimmedBars = bars.filter(b => b.t <= new Date(dateStr + 'T23:59:59').getTime());
+                        multiDayCache[symbol] = trimmedBars;
+                        signals = reconstructSignals(symbol, bars, dateStr);
+                        // Restore cache
+                        if (prevCache) multiDayCache[symbol] = prevCache;
+                        else delete multiDayCache[symbol];
+                        if (signals) {
+                            statusEl.textContent = `Signals captured: MOM ${signals.momentumScore}, RSI ${signals.rsi != null ? Math.round(signals.rsi) : '--'}, MACD ${signals.macd?.crossover || 'none'}, Structure ${signals.structure?.structure || 'unknown'}`;
+                        } else {
+                            statusEl.textContent = 'Insufficient bar data for signal reconstruction. Proceeding without signals.';
+                        }
+                    } else {
+                        statusEl.textContent = 'Could not fetch historical data. Proceeding without signals.';
+                    }
+                } catch (e) {
+                    console.warn('Signal reconstruction failed:', e.message);
+                    statusEl.textContent = 'Signal fetch failed. Proceeding without signals.';
+                }
+
+                // Execute the buy
+                portfolio.cash -= cost;
+                portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
+
+                const entryTechnicals = signals ? {
+                    momentumScore: signals.momentumScore,
+                    todayChange: null,
+                    totalReturn5d: signals.totalReturn5d,
+                    isAccelerating: signals.isAccelerating,
+                    upDays: signals.upDays,
+                    rsScore: null, // RS requires full market context, can't reconstruct for single stock
+                    sectorRotation: null,
+                    structureScore: signals.structure?.structureScore ?? null,
+                    structure: signals.structure?.structure || null,
+                    choch: signals.structure?.choch || null,
+                    chochType: signals.structure?.chochType || null,
+                    bos: signals.structure?.bos || null,
+                    bosType: signals.structure?.bosType || null,
+                    sweep: signals.structure?.sweep || null,
+                    rsi: signals.rsi ?? null,
+                    macdCrossover: signals.macd?.crossover || null,
+                    macdHistogram: signals.macd?.histogram ?? null,
+                    daysToCover: null,
+                    marketCap: null,
+                    compositeScore: null,
+                    vixLevel: null,
+                    sma20: signals.sma20 ?? null,
+                    volumeTrend: signals.volumeTrend ?? null,
+                    volumeRatio: null,
+                    fvg: signals.structure?.fvg || null,
+                    newsSentiment: null,
+                    priceVsVwap: null,
+                    sma50: signals.smaCrossover?.sma50 ?? null,
+                    smaCrossover: signals.smaCrossover?.crossover || null
+                } : {};
+
+                portfolio.transactions.push({
+                    type: 'BUY',
+                    symbol,
+                    shares,
+                    price,
+                    timestamp,
+                    cost,
+                    conviction: null,
+                    reasoning: reason || 'Manual entry',
+                    entryTechnicals,
+                    entryMarketRegime: portfolio.lastMarketRegime?.regime || null,
+                    entryHoldingsCount: Object.keys(portfolio.holdings).length,
+                    positionSizePercent: null,
+                    portfolioValueAtEntry: null,
+                    manual: true
+                });
+
+                // Store thesis
+                if (!portfolio.holdingTheses) portfolio.holdingTheses = {};
+                if (!portfolio.holdingTheses[symbol]) {
+                    portfolio.holdingTheses[symbol] = {
+                        originalCatalyst: reason || 'Manual entry',
+                        entryConviction: null,
+                        entryPrice: price,
+                        entryDate: timestamp,
+                        entryMomentum: signals?.momentumScore ?? null,
+                        entryRS: null,
+                        entrySectorFlow: null,
+                        entryRSI: signals?.rsi ?? null,
+                        entryMACDCrossover: signals?.macd?.crossover || null,
+                        entryStructure: signals?.structure?.structure || null,
+                        entryDTC: null,
+                        entryCompositeScore: null,
+                        entryVIX: null,
+                        entryVIXInterpretation: null,
+                        entrySMA20: signals?.sma20 ?? null,
+                        peakPrice: price,
+                        peakDate: timestamp,
+                        targetPrice: null,
+                        stopPrice: null,
+                        timeHorizon: null
+                    };
+                }
+
+                savePortfolio();
+                await updateUI();
+                addActivity(`Manual BUY: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${signals ? ` (MOM:${signals.momentumScore} RSI:${signals.rsi != null ? Math.round(signals.rsi) : '--'} Struct:${signals.structure?.structure || '??'})` : ''}`, 'buy');
+                statusEl.textContent = 'Buy recorded successfully!';
+                statusEl.style.color = 'var(--green)';
+                setTimeout(closeManualTradeModal, 1500);
+
+            } else if (manualTradeMode === 'sell') {
+                const currentShares = portfolio.holdings[symbol] || 0;
+                if (currentShares <= 0) {
+                    statusEl.textContent = `You don't hold any ${symbol}.`;
+                    return;
+                }
+                if (shares > currentShares) {
+                    statusEl.textContent = `You only hold ${currentShares} shares of ${symbol}.`;
+                    return;
+                }
+
+                const revenue = price * shares;
+                portfolio.cash += revenue;
+                portfolio.holdings[symbol] -= shares;
+
+                // Record the sell transaction
+                portfolio.transactions.push({
+                    type: 'SELL',
+                    symbol,
+                    shares,
+                    price,
+                    timestamp,
+                    revenue,
+                    reasoning: reason || 'Manual sell',
+                    manual: true
+                });
+
+                // Build closed trade record
+                const buyTransactions = getCurrentPositionBuys(symbol);
+                if (buyTransactions.length > 0) {
+                    const totalBuyCost = buyTransactions.reduce((sum, t) => sum + t.cost, 0);
+                    const totalBuyShares = buyTransactions.reduce((sum, t) => sum + t.shares, 0);
+                    const avgBuyPrice = totalBuyShares > 0 ? totalBuyCost / totalBuyShares : 0;
+                    const profitLoss = avgBuyPrice > 0 ? (price - avgBuyPrice) * shares : 0;
+                    const returnPercent = avgBuyPrice > 0 ? ((price - avgBuyPrice) / avgBuyPrice) * 100 : 0;
+                    const originalBuyTx = buyTransactions[0];
+
+                    let exitReason = 'manual';
+                    if (returnPercent >= 2) exitReason = 'profit_target';
+                    else if (returnPercent <= -8) exitReason = 'stop_loss';
+                    else if (reason) {
+                        const rl = reason.toLowerCase();
+                        if (rl.includes('stop') || rl.includes('loss')) exitReason = 'stop_loss';
+                        else if (rl.includes('catalyst') || rl.includes('thesis') || rl.includes('broke')) exitReason = 'catalyst_failure';
+                        else if (returnPercent < 0) exitReason = 'catalyst_failure';
+                        else exitReason = 'profit_target';
+                    }
+
+                    portfolio.closedTrades = portfolio.closedTrades || [];
+                    portfolio.closedTrades.push({
+                        symbol,
+                        sector: stockSectors[symbol] || 'Unknown',
+                        buyPrice: avgBuyPrice,
+                        sellPrice: price,
+                        shares,
+                        profitLoss,
+                        returnPercent,
+                        buyDate: buyTransactions[0].timestamp,
+                        sellDate: timestamp,
+                        holdTime: new Date(timestamp).getTime() - new Date(buyTransactions[0].timestamp).getTime(),
+                        entryConviction: originalBuyTx.conviction || null,
+                        entryTechnicals: originalBuyTx.entryTechnicals || {},
+                        entryMarketRegime: originalBuyTx.entryMarketRegime || null,
+                        entryHoldingsCount: originalBuyTx.entryHoldingsCount || null,
+                        exitReason,
+                        exitReasoning: reason || 'Manual sell',
+                        exitConviction: null,
+                        exitMarketRegime: portfolio.lastMarketRegime?.regime || null,
+                        exitHoldingsCount: Object.keys(portfolio.holdings).length,
+                        exitTechnicals: {},
+                        positionSizePercent: originalBuyTx.positionSizePercent || null,
+                        tracking: { priceAfter1Week: null, priceAfter1Month: null, tracked: false },
+                        manual: true
+                    });
+                }
+
+                // Clean up if fully sold
+                if (portfolio.holdings[symbol] <= 0) {
+                    delete portfolio.holdings[symbol];
+                    if (portfolio.holdingTheses?.[symbol]) delete portfolio.holdingTheses[symbol];
+                } else if (portfolio.holdingTheses?.[symbol]) {
+                    portfolio.holdingTheses[symbol].lastTrimDate = timestamp;
+                    portfolio.holdingTheses[symbol].lastTrimPrice = price;
+                    portfolio.holdingTheses[symbol].lastTrimShares = shares;
+                    portfolio.holdingTheses[symbol].lastTrimReason = reason || 'Manual sell';
+                }
+
+                savePortfolio();
+                await updateUI();
+                const plStr = buyTransactions.length > 0 ? (() => {
+                    const avg = buyTransactions.reduce((s, t) => s + t.cost, 0) / buyTransactions.reduce((s, t) => s + t.shares, 0);
+                    const ret = ((price - avg) / avg * 100);
+                    return ` (${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%)`;
+                })() : '';
+                addActivity(`Manual SELL: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${plStr}`, 'sell');
+                statusEl.textContent = 'Sell recorded successfully!';
+                statusEl.style.color = 'var(--green)';
+                setTimeout(closeManualTradeModal, 1500);
+            }
+
+            document.getElementById('manualTradeSubmit').disabled = false;
         }
 
         // Reset account

@@ -52,7 +52,10 @@
             <div class="sidebar-actions">
                 <button onclick="runAIAnalysis()">Run AI Analysis</button>
                 <button onclick="testDataFetch()" class="secondary">Dry Run</button>
-                <button onclick="refreshPrices()" class="secondary">Refresh Prices</button>
+                <div style="display:flex;gap:6px">
+                    <button onclick="refreshPrices()" class="secondary" style="flex:1">Refresh Prices</button>
+                    <button onclick="openManualTradeModal()" class="secondary" style="flex:1">Manual Trade</button>
+                </div>
             </div>
 
             <div class="ai-thinking" id="aiThinking">
@@ -395,6 +398,48 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Manual Trade Modal -->
+    <div class="modal" id="manualTradeModal" onclick="if(event.target===this)closeManualTradeModal()">
+        <div class="modal-content modal-narrow">
+            <h3 id="manualTradeTitle" style="margin:0 0 16px;color:var(--text-primary)">Manual Buy</h3>
+            <div id="manualTradeForm">
+                <div style="display:flex;gap:8px;margin-bottom:10px">
+                    <button id="manualBuyTab" class="manual-trade-tab active" onclick="switchManualTradeTab('buy')">Buy</button>
+                    <button id="manualSellTab" class="manual-trade-tab" onclick="switchManualTradeTab('sell')">Sell</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Symbol</label>
+                        <input type="text" id="manualTradeSymbol" placeholder="e.g. AAPL" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;text-transform:uppercase" />
+                    </div>
+                    <div style="display:flex;gap:10px">
+                        <div style="flex:1">
+                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Shares</label>
+                            <input type="number" id="manualTradeShares" placeholder="10" min="1" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
+                        </div>
+                        <div style="flex:1">
+                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Price per share</label>
+                            <input type="number" id="manualTradePrice" placeholder="150.00" min="0.01" step="0.01" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Date</label>
+                        <input type="date" id="manualTradeDate" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
+                    </div>
+                    <div id="manualTradeReasonWrap">
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Reason (optional)</label>
+                        <input type="text" id="manualTradeReason" placeholder="e.g. Bullish MACD cross + RSI pullback" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
+                    </div>
+                </div>
+                <div id="manualTradeStatus" style="font-size:11px;margin-top:8px;min-height:16px;color:var(--text-muted)"></div>
+                <div style="display:flex;gap:8px;margin-top:14px">
+                    <button id="manualTradeSubmit" onclick="submitManualTrade()" style="flex:1">Submit Buy</button>
+                    <button onclick="closeManualTradeModal()" class="secondary" style="flex:1">Cancel</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Result Modal -->
