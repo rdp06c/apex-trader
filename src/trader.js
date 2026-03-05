@@ -9986,6 +9986,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Update Trade Insights Display
             updateLearningInsightsDisplay();
 
+            // Update Trade History
+            updateTradeHistory();
+
             // Update new analytics modules (non-async, use persisted data)
             updateRegimeBanner();
             updateCandidateScorecard();
@@ -10000,6 +10003,47 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             });
         }
         
+        // Update Trade History table
+        function updateTradeHistory() {
+            const container = document.getElementById('tradeHistory');
+            const closedTrades = portfolio.closedTrades || [];
+
+            if (closedTrades.length === 0) {
+                container.innerHTML = '<div class="empty-state">No closed trades yet</div>';
+                return;
+            }
+
+            // Most recent first
+            const sorted = [...closedTrades].reverse();
+
+            let html = `<table class="signal-accuracy-table">
+                <thead><tr>
+                    <th>Symbol</th><th>Buy</th><th>Sell</th><th>Shares</th><th>P&L</th><th>Return</th><th>Hold</th>
+                </tr></thead><tbody>`;
+
+            for (const t of sorted) {
+                const plColor = t.profitLoss >= 0 ? 'var(--green)' : 'var(--red)';
+                const plSign = t.profitLoss >= 0 ? '+' : '';
+                const buyDate = t.buyDate ? new Date(t.buyDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--';
+                const sellDate = t.sellDate ? new Date(t.sellDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--';
+                const holdDays = t.holdTime ? Math.max(0, Math.floor(t.holdTime / 86400000)) : '--';
+                const holdStr = holdDays === '--' ? '--' : holdDays <= 1 ? '<1d' : holdDays + 'd';
+
+                html += `<tr>
+                    <td style="font-weight:600;">${escapeHtml(t.symbol)}</td>
+                    <td>${buyDate}</td>
+                    <td>${sellDate}</td>
+                    <td>${t.shares}</td>
+                    <td style="color:${plColor};font-weight:600;">${plSign}$${t.profitLoss.toFixed(2)}</td>
+                    <td style="color:${plColor};">${plSign}${t.returnPercent.toFixed(1)}%</td>
+                    <td>${holdStr}</td>
+                </tr>`;
+            }
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
         // Update Trade Insights Display
         function updateLearningInsightsDisplay() {
             const container = document.getElementById('learningInsights');
@@ -10163,28 +10207,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 </div>`;
             }
 
-            // ── Section C: Blocked Trades ──
-            const blockedTrades = portfolio.blockedTrades || [];
-            if (blockedTrades.length > 0) {
-                html += `<div class="analytics-panel">
-                    <div class="analytics-panel-title">Blocked Trades</div>
-                    <div class="insight-panel-body">
-                        <div class="blocked-trades-list">`;
-                // Show most recent first, up to 10
-                const recentBlocked = blockedTrades.slice(-10).reverse();
-                for (const bt of recentBlocked) {
-                    const timeAgo = formatTimeAgo(bt.timestamp);
-                    html += `<div class="blocked-trade-row">
-                        <span class="blocked-trade-symbol">${escapeHtml(bt.symbol)}</span>
-                        <span class="blocked-trade-rule">${escapeHtml(bt.ruleLabel)}</span>
-                        <span class="blocked-trade-stat">${bt.winRate.toFixed(0)}% win rate</span>
-                        <span class="blocked-trade-time">${timeAgo}</span>
-                    </div>`;
-                }
-                html += `</div></div></div>`;
-            }
-
-            // ── Section D: Hold Decision Accuracy ──
+            // ── Section C: Hold Decision Accuracy ──
             const holdStats = analyzeHoldAccuracy();
             if (holdStats) {
                 const accColor = holdStats.overall.accuracy >= 60 ? 'var(--green)' : holdStats.overall.accuracy >= 45 ? 'var(--yellow)' : 'var(--red)';

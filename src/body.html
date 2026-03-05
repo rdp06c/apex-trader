@@ -342,6 +342,21 @@
                 </div>
             </div>
 
+            <!-- Trade History (collapsible, collapsed by default) -->
+            <div class="card collapsible-section" id="tradeHistorySection">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="tradeHistoryBody" onclick="toggleSection('tradeHistory')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('tradeHistory')}">
+                    <h2 class="chart-title">Trade History</h2>
+                    <span class="toggle-icon collapsed" id="tradeHistoryToggle">&#9662;</span>
+                </div>
+                <div class="section-body collapsed" id="tradeHistoryBody">
+                    <div id="tradeHistory">
+                        <div class="empty-state">
+                            No closed trades yet
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Chat with APEX -->
             <div class="chat-section card">
                 <h2 class="chart-title">Chat with APEX</h2>
