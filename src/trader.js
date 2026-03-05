@@ -8652,14 +8652,41 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         async function refreshPrices() {
             console.log('🔄 Manual price refresh requested');
             addActivity('🔄 Refreshing all prices...', 'general');
-            
+
             // Clear entire price cache to force fresh fetches
             Object.keys(priceCache).forEach(key => delete priceCache[key]);
+            bulkSnapshotTimestamp = 0;
             console.log('Price cache cleared');
-            
-            // Update UI which will fetch fresh prices
+
+            // Update scorecard prices from fresh snapshot
+            const candidates = portfolio.lastCandidateScores?.candidates;
+            if (candidates && candidates.length > 0) {
+                try {
+                    const symbols = candidates.map(c => c.symbol);
+                    const snapshots = await fetchBulkSnapshot(symbols);
+                    let updated = 0;
+                    candidates.forEach(c => {
+                        const snap = snapshots[c.symbol];
+                        if (snap) {
+                            const oldPrice = c.price;
+                            c.price = snap.price;
+                            c.dayChange = snap.changePercent != null ? parseFloat(snap.changePercent.toFixed(2)) : c.dayChange;
+                            if (oldPrice !== c.price) updated++;
+                        }
+                    });
+                    if (updated > 0) {
+                        portfolio.lastCandidateScores.timestamp = new Date().toISOString();
+                        savePortfolio();
+                        console.log(`📊 Scorecard prices updated for ${updated}/${candidates.length} candidates`);
+                    }
+                } catch (e) {
+                    console.warn('Scorecard price refresh failed (non-fatal):', e.message);
+                }
+            }
+
+            // Update UI which will fetch fresh prices for holdings
             await updateUI();
-            
+
             addActivity('✅ Prices refreshed!', 'success');
         }
 
