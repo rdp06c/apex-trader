@@ -7873,7 +7873,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         // Calculate total portfolio value and return price data
         async function calculatePortfolioValue() {
-            let total = portfolio.cash;
+            let total = 0;
             const priceData = {}; // Store prices for reuse
             const holdingSymbols = Object.keys(portfolio.holdings);
 
@@ -7999,7 +7999,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
 
             document.getElementById('portfolioValue').textContent = '$' + totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            document.getElementById('cashValue').textContent = '$' + portfolio.cash.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('investedValue').textContent = '$' + totalInvested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('positionsCount').textContent = Object.keys(portfolio.holdings).length;
 
@@ -8235,7 +8234,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 addActivity('⚠️ Error updating display - some data may be stale. Try refreshing the page.', 'error');
                 // Still show what we can
                 document.getElementById('portfolioValue').textContent = 'Error';
-                document.getElementById('cashValue').textContent = '$' + portfolio.cash.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             }
         }
 
@@ -9910,35 +9908,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         // Calculate and update performance analytics
         function updatePerformanceAnalytics() {
-            // Safety checks for undefined portfolio fields
+            // Holdings value from latest performance snapshot (no cash)
             const performanceHistory = portfolio.performanceHistory || [];
-            const totalValue = performanceHistory.length > 0 
-                ? performanceHistory[performanceHistory.length - 1].value 
-                : (portfolio.initialBalance || 0);
-            
-            // Calculate TRUE Total Return based on gains, not deposits
-            // Total Return = (Current Value - Total Invested) / Total Invested
-            // This way, adding cash doesn't inflate returns
-            
-            // Calculate total invested (cost basis from transactions)
-            let totalInvested = 0;
-            portfolio.transactions.forEach(transaction => {
-                if (transaction.type === 'BUY') {
-                    totalInvested += transaction.cost;
-                } else if (transaction.type === 'SELL') {
-                    totalInvested -= (transaction.shares * transaction.price);
-                }
-            });
-            
-            // Current holdings value (from latest performance snapshot)
-            const currentHoldingsValue = totalValue - portfolio.cash;
-            
-            // Actual gains/losses = Current Holdings Value - Total Invested
-            const actualGains = currentHoldingsValue - totalInvested;
-            
-            // Return % = Gains / Total Invested (not initial balance!)
-            const totalReturn = totalInvested > 0 
-                ? (actualGains / totalInvested) * 100 
+            const holdingsValue = performanceHistory.length > 0
+                ? performanceHistory[performanceHistory.length - 1].value
+                : 0;
+
+            // Cost basis of current holdings
+            let costBasis = 0;
+            for (const symbol of Object.keys(portfolio.holdings)) {
+                const buys = getCurrentPositionBuys(symbol);
+                costBasis += buys.reduce((sum, t) => sum + (t.price * t.shares), 0);
+            }
+
+            // Total Return = (Holdings Value - Cost Basis) / Cost Basis
+            const actualGains = holdingsValue - costBasis;
+            const totalReturn = costBasis > 0
+                ? (actualGains / costBasis) * 100
                 : 0;
             const returnDollar = actualGains;
             
