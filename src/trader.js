@@ -8962,6 +8962,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                 savePortfolio();
                 await updateUI();
+                updatePerformanceAnalytics();
                 addActivity(`Manual BUY: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${signals ? ` (MOM:${signals.momentumScore} RSI:${signals.rsi != null ? Math.round(signals.rsi) : '--'} Struct:${signals.structure?.structure || '??'})` : ''}`, 'buy');
                 statusEl.textContent = 'Buy recorded successfully!';
                 statusEl.style.color = 'var(--green)';
@@ -9056,6 +9057,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                 savePortfolio();
                 await updateUI();
+                updatePerformanceAnalytics();
                 const plStr = buyTransactions.length > 0 ? (() => {
                     const avg = buyTransactions.reduce((s, t) => s + t.cost, 0) / buyTransactions.reduce((s, t) => s + t.shares, 0);
                     const ret = ((price - avg) / avg * 100);
