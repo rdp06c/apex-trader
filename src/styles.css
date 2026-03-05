@@ -372,11 +372,7 @@
             text-overflow: ellipsis;
         }
 
-        .sidebar-actions button:first-child {
-            flex: 1 1 100%;
-        }
-
-        .sidebar-actions button:not(:first-child) {
+        .sidebar-actions button {
             flex: 1 1 0;
         }
 

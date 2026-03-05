@@ -47,11 +47,9 @@
 
             <!-- Action Buttons -->
             <div class="sidebar-actions">
-                <button onclick="testDataFetch()" class="secondary">Dry Run</button>
-                <div style="display:flex;gap:6px">
-                    <button onclick="refreshPrices()" class="secondary" style="flex:1">Refresh Prices</button>
-                    <button onclick="openManualTradeModal()" class="secondary" style="flex:1">Manual Trade</button>
-                </div>
+                <button onclick="testDataFetch()" class="secondary">Scan Market</button>
+                <button onclick="refreshPrices()" class="secondary">Refresh Prices</button>
+                <button onclick="openManualTradeModal()" class="secondary">Manual Trade</button>
             </div>
 
             <div class="ai-thinking" id="aiThinking">
@@ -128,19 +126,6 @@
                             API Calls: 0 used today | Unlimited remaining
                         </div>
                     </div>
-
-                    <div class="controls-grid">
-                        <div class="control-group">
-                            <label for="initialBalance">Initial Balance ($)</label>
-                            <input type="number" id="initialBalance" value="10000" step="1000">
-                        </div>
-                        <div class="control-group">
-                            <label for="weeklyFunding">Weekly Funding ($)</label>
-                            <input type="number" id="weeklyFunding" value="1000" step="100">
-                        </div>
-                    </div>
-                    <button onclick="initializeAccount()">Initialize Account</button>
-                    <button onclick="addWeeklyFunding()" class="secondary">Add Weekly Funding</button>
 
                     <!-- Portfolio Backup & Recovery -->
                     <div class="backup-panel">
@@ -300,21 +285,6 @@
                 </div>
             </div>
 
-            <!-- Decision Reasoning (collapsible) -->
-            <div class="chart-card card collapsible-section" id="decisionReasoningSection">
-                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="decisionReasoningBody" onclick="toggleSection('decisionReasoning')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('decisionReasoning')}">
-                    <h2 class="chart-title">APEX's Decision Reasoning</h2>
-                    <span class="toggle-icon" id="decisionReasoningToggle">&#9662;</span>
-                </div>
-                <div class="section-body" id="decisionReasoningBody">
-                    <div id="decisionReasoning">
-                        <div class="empty-state">
-                            No trades yet. Run AI Analysis to see APEX's reasoning!
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Candidate Scorecard (collapsible, collapsed by default) -->
             <div class="card collapsible-section" id="candidateScorecardSection">
                 <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="candidateScorecardBody" onclick="toggleSection('candidateScorecard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('candidateScorecard')}">
@@ -341,13 +311,13 @@
                 </div>
             </div>
 
-            <!-- Learning Insights Section (collapsible) -->
+            <!-- Trade Insights Section (collapsible) -->
             <div class="card collapsible-section" id="learningInsightsSection">
-                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="learningInsightsBody" onclick="toggleSection('learningInsights')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('learningInsights')}">
-                    <h2 class="chart-title">Learning Insights</h2>
-                    <span class="toggle-icon collapsed" id="learningInsightsToggle">&#9662;</span>
+                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="learningInsightsBody" onclick="toggleSection('learningInsights')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('learningInsights')}">
+                    <h2 class="chart-title">Trade Insights</h2>
+                    <span class="toggle-icon" id="learningInsightsToggle">&#9662;</span>
                 </div>
-                <div class="section-body collapsed" id="learningInsightsBody">
+                <div class="section-body" id="learningInsightsBody">
                     <div class="learning-tag">Rules derived from trade history</div>
                     <div id="learningInsights">
                         <div class="empty-state">

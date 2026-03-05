@@ -4158,7 +4158,7 @@
             document.getElementById('resultModal').classList.add('active');
         }
 
-        // DRY RUN: Test data fetching without calling Claude API
+        // SCAN MARKET: Fetch data and update scorecard without calling Claude API
         async function testDataFetch() {
             if (isAnalysisRunning) {
                 addActivity('Analysis already in progress — please wait', 'warning');
@@ -4168,9 +4168,9 @@
             const thinking = document.getElementById('aiThinking');
             const thinkingDetail = document.getElementById('thinkingDetail');
             thinking.classList.add('active');
-            thinkingDetail.textContent = '🧪 DRY RUN: Testing data fetch...';
+            thinkingDetail.textContent = '🔍 Scanning market data...';
 
-            console.log('=== DRY RUN TEST STARTED ===');
+            console.log('=== MARKET SCAN STARTED ===');
             const startTime = performance.now();
 
             try {
@@ -4263,7 +4263,7 @@
                 });
                 const sectorRotation = detectSectorRotation(marketData);
 
-                // Persist sector rotation from dry run
+                // Persist sector rotation from scan
                 portfolio.lastSectorRotation = { timestamp: new Date().toISOString(), sectors: sectorRotation };
 
                 const signalAdj = getSignalAccuracyAdjustments();
@@ -4359,19 +4359,19 @@
                     console.warn('Server indicator fetch failed (non-fatal):', e.message);
                 }
 
-                // Persist candidate scores from dry run
+                // Persist candidate scores from scan
                 portfolio.lastCandidateScores = {
                     timestamp: new Date().toISOString(),
                     candidates: dryRunScored.slice(0, 40)
                 };
 
-                // Persist VIX from dry run + infer market regime if not yet set
+                // Persist VIX from scan + infer market regime if not yet set
                 if (vixCache) {
                     portfolio.lastVIX = { ...vixCache, fetchedAt: new Date().toISOString() };
                     if (!portfolio.lastMarketRegime) {
                         const vixRegime = vixCache.level > 30 ? 'bear' : vixCache.level > 25 ? 'choppy' : 'bull';
                         portfolio.lastMarketRegime = { regime: vixRegime, timestamp: new Date().toISOString() };
-                        console.log(`📊 Dry run inferred market regime from VIX ${vixCache.level.toFixed(1)}: ${vixRegime}`);
+                        console.log(`📊 Scan inferred market regime from VIX ${vixCache.level.toFixed(1)}: ${vixRegime}`);
                     }
                 }
 
@@ -4424,7 +4424,7 @@
                 const duration = ((endTime - startTime) / 1000).toFixed(2);
                 
                 // Success report
-                console.log(`\n✅ DRY RUN COMPLETE in ${duration}s`);
+                console.log(`\n✅ MARKET SCAN COMPLETE in ${duration}s`);
                 console.log(`📊 Data: ${Object.keys(marketData).length} prices, ${Object.keys(multiDayCache).length} histories`);
                 console.log(`📈 Structure: ${structureStats.bullish} bullish, ${structureStats.bearish} bearish, ${structureStats.choch} CHoCH, ${structureStats.bos} BOS, ${structureStats.sweeps} sweeps, ${structureStats.fvg} FVG`);
                 
@@ -4453,18 +4453,18 @@
                 console.log(`  - Input tokens: ~${estimatedTokens.toLocaleString()} (×2 phases)`);
                 console.log(`  - Output tokens: ~${estimatedOutputTokens.toLocaleString()} (×2 phases)`);
                 console.log(`  - Estimated cost: ~$${estimatedCost.toFixed(4)}`);
-                console.log(`  - You saved: $${estimatedCost.toFixed(4)} by using Dry Run! 🎉`);
+                console.log(`  - You saved: $${estimatedCost.toFixed(4)} by using Scan Market! 🎉`);
                 
-                console.log('\n=== DRY RUN TEST COMPLETE ===');
+                console.log('\n=== MARKET SCAN COMPLETE ===');
                 
                 thinking.classList.remove('active');
-                addActivity(`✅ DRY RUN: ${Object.keys(marketData).length} prices + ${Object.keys(multiDayCache).length} histories in ${duration}s. Structure: ${structureStats.choch} CHoCH, ${structureStats.bos} BOS. Console for details!`, 'success');
+                addActivity(`✅ SCAN: ${Object.keys(marketData).length} prices + ${Object.keys(multiDayCache).length} histories in ${duration}s. Structure: ${structureStats.choch} CHoCH, ${structureStats.bos} BOS. Console for details!`, 'success');
                 
                 const detailsCount = Object.keys(tickerDetailsCache).length;
                 const shortIntCount = Object.values(shortInterestCache).filter(v => v && v.daysToCover > 0).length;
                 const newsCount = Object.values(newsCache).filter(v => v && v.length > 0).length;
 
-                showResultModal('Dry Run Complete', [
+                showResultModal('Market Scan Complete', [
                     { label: 'Prices Fetched', value: `${Object.keys(marketData).length} / ${symbols.length}`, cls: 'success' },
                     { label: 'Price Histories', value: `${Object.keys(multiDayCache).length} (~65-day bars)` },
                     { label: 'Ticker Details', value: `${detailsCount} (market cap)` },
@@ -4482,10 +4482,10 @@
                 ], 'Check console (F12) for detailed results');
                 
             } catch (error) {
-                console.error('❌ DRY RUN FAILED:', error);
+                console.error('❌ SCAN FAILED:', error);
                 thinking.classList.remove('active');
-                addActivity('❌ DRY RUN ERROR: ' + error.message, 'error');
-                showResultModal('Dry Run Failed', [
+                addActivity('❌ SCAN ERROR: ' + error.message, 'error');
+                showResultModal('Market Scan Failed', [
                     { label: 'Error', value: error.message, cls: 'error' },
                 ], 'Check console (F12) for details');
             } finally {
@@ -9983,7 +9983,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 document.getElementById('drawdownValue').textContent = '--';
             }
 
-            // Update Learning Insights Display
+            // Update Trade Insights Display
             updateLearningInsightsDisplay();
 
             // Update new analytics modules (non-async, use persisted data)
@@ -10000,7 +10000,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             });
         }
         
-        // Update Learning Insights Display
+        // Update Trade Insights Display
         function updateLearningInsightsDisplay() {
             const container = document.getElementById('learningInsights');
             const rulesData = deriveTradingRules();
