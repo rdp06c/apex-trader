@@ -2299,8 +2299,9 @@
         
         async function fetchBulkSnapshot(symbols) {
             const now = Date.now();
-            // Only refetch if cache is >15 seconds old (real-time data)
-            if (now - bulkSnapshotTimestamp < 15000 && Object.keys(bulkSnapshotCache).length > 0) {
+            // Only refetch if cache is >15 seconds old AND contains all requested symbols
+            const allCached = symbols.every(s => bulkSnapshotCache[s]);
+            if (now - bulkSnapshotTimestamp < 15000 && allCached) {
                 console.log('Using cached bulk snapshot (' + Math.floor((now - bulkSnapshotTimestamp) / 1000) + 's old)');
                 return bulkSnapshotCache;
             }
@@ -2362,7 +2363,7 @@
                         priceCache[symbol] = result[symbol];
                     });
                     
-                    bulkSnapshotCache = result;
+                    Object.assign(bulkSnapshotCache, result);
                     bulkSnapshotTimestamp = now;
                     apiCallsToday++;
                     saveApiUsage();
