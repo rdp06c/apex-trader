@@ -2386,8 +2386,8 @@
         .scorecard-table-wrap::-webkit-scrollbar-track { background: transparent; }
         .scorecard-table-wrap::-webkit-scrollbar-thumb { background: var(--border-medium); border-radius: 10px; }
 
-        /* ── Stock Universe ────────────────────────────────── */
-        .universe-controls {
+        /* ── Scorecard Pagination ──────────────────────────── */
+        .scorecard-controls {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -2396,7 +2396,7 @@
             flex-wrap: wrap;
         }
 
-        .universe-sector-filter {
+        .scorecard-sector-filter {
             background: var(--bg-inset);
             color: var(--text-primary);
             border: 1px solid var(--border-medium);
@@ -2406,13 +2406,13 @@
             cursor: pointer;
         }
 
-        .universe-pagination {
+        .scorecard-pagination {
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-        .universe-pagination button {
+        .scorecard-pagination button {
             background: var(--bg-raised);
             color: var(--text-primary);
             border: 1px solid var(--border-medium);
@@ -2422,34 +2422,21 @@
             cursor: pointer;
         }
 
-        .universe-pagination button:hover:not(:disabled) {
+        .scorecard-pagination button:hover:not(:disabled) {
             background: var(--bg-hover);
             border-color: var(--accent);
         }
 
-        .universe-pagination button:disabled {
+        .scorecard-pagination button:disabled {
             opacity: 0.35;
             cursor: default;
         }
 
-        .universe-page-info {
+        .scorecard-page-info {
             font-size: 11px;
             color: var(--text-muted);
             min-width: 90px;
             text-align: center;
-        }
-
-        .universe-table th.sortable-th {
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .universe-table th.sortable-th:hover {
-            color: var(--accent-light);
-        }
-
-        .universe-held {
-            background: rgba(245, 158, 11, 0.04);
         }
 
         /* ── Sector Rotation Heatmap ─────────────────────── */
