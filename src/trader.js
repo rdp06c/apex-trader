@@ -8976,6 +8976,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 const revenue = price * shares;
+
+                // Get buy transactions BEFORE recording sell (sell changes lastFullSellIdx)
+                const buyTransactions = getCurrentPositionBuys(symbol);
+
                 portfolio.cash += revenue;
                 portfolio.holdings[symbol] -= shares;
 
@@ -8990,9 +8994,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     reasoning: reason || 'Manual sell',
                     manual: true
                 });
-
-                // Build closed trade record
-                const buyTransactions = getCurrentPositionBuys(symbol);
                 if (buyTransactions.length > 0) {
                     const totalBuyCost = buyTransactions.reduce((sum, t) => sum + t.cost, 0);
                     const totalBuyShares = buyTransactions.reduce((sum, t) => sum + t.shares, 0);
