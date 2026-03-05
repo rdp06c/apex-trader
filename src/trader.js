@@ -8621,6 +8621,107 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         }
                     }
 
+                    // MIGRATION: Backfill closedTrades from orphaned SELL transactions
+                    // Bug caused manual sells before fix to skip closedTrades.push when
+                    // getCurrentPositionBuys returned empty (ordering issue, now fixed).
+                    if (!portfolio._backfillClosedV1) {
+                        portfolio.closedTrades = portfolio.closedTrades || [];
+                        const existingClosed = new Set(
+                            portfolio.closedTrades.map(ct => `${ct.symbol}|${ct.sellDate}`)
+                        );
+                        const txs = portfolio.transactions || [];
+                        let backfilled = 0;
+
+                        for (let i = 0; i < txs.length; i++) {
+                            const sell = txs[i];
+                            if (sell.type !== 'SELL') continue;
+
+                            // Check if this sell already has a closedTrade
+                            const sellDate = sell.timestamp;
+                            const key = `${sell.symbol}|${sellDate}`;
+                            if (existingClosed.has(key)) continue;
+
+                            // Walk backwards from this sell to find matching buys
+                            // Track running shares to find the position window
+                            let sharesNeeded = sell.shares;
+                            const matchedBuys = [];
+                            let runningShares = 0;
+                            let windowStart = 0;
+
+                            // Find the last full-sell before this sell for this symbol
+                            for (let j = 0; j < i; j++) {
+                                const t = txs[j];
+                                if (t.symbol !== sell.symbol) continue;
+                                if (t.type === 'BUY') runningShares += t.shares;
+                                if (t.type === 'SELL') {
+                                    runningShares -= t.shares;
+                                    if (runningShares <= 0) {
+                                        windowStart = j + 1;
+                                        runningShares = 0;
+                                    }
+                                }
+                            }
+
+                            // Collect buys in this position window
+                            for (let j = windowStart; j < i; j++) {
+                                const t = txs[j];
+                                if (t.symbol === sell.symbol && t.type === 'BUY') {
+                                    matchedBuys.push(t);
+                                }
+                            }
+
+                            if (matchedBuys.length === 0) continue;
+
+                            const totalBuyCost = matchedBuys.reduce((s, t) => s + (t.cost || t.price * t.shares), 0);
+                            const totalBuyShares = matchedBuys.reduce((s, t) => s + t.shares, 0);
+                            const avgBuyPrice = totalBuyShares > 0 ? totalBuyCost / totalBuyShares : 0;
+                            const profitLoss = avgBuyPrice > 0 ? (sell.price - avgBuyPrice) * sell.shares : 0;
+                            const returnPercent = avgBuyPrice > 0 ? ((sell.price - avgBuyPrice) / avgBuyPrice) * 100 : 0;
+
+                            let exitReason = 'manual';
+                            if (returnPercent >= 2) exitReason = 'profit_target';
+                            else if (returnPercent <= -8) exitReason = 'stop_loss';
+                            else if (returnPercent < 0) exitReason = 'catalyst_failure';
+
+                            portfolio.closedTrades.push({
+                                symbol: sell.symbol,
+                                sector: stockSectors[sell.symbol] || 'Unknown',
+                                buyPrice: avgBuyPrice,
+                                sellPrice: sell.price,
+                                shares: sell.shares,
+                                profitLoss,
+                                returnPercent,
+                                buyDate: matchedBuys[0].timestamp,
+                                sellDate,
+                                holdTime: new Date(sellDate).getTime() - new Date(matchedBuys[0].timestamp).getTime(),
+                                entryConviction: matchedBuys[0].conviction || null,
+                                entryTechnicals: matchedBuys[0].entryTechnicals || {},
+                                entryMarketRegime: matchedBuys[0].entryMarketRegime || null,
+                                entryHoldingsCount: matchedBuys[0].entryHoldingsCount || null,
+                                exitReason,
+                                exitReasoning: sell.reasoning || 'Manual sell',
+                                exitConviction: null,
+                                exitMarketRegime: null,
+                                exitHoldingsCount: null,
+                                exitTechnicals: {},
+                                positionSizePercent: matchedBuys[0].positionSizePercent || null,
+                                tracking: { priceAfter1Week: null, priceAfter1Month: null, tracked: false },
+                                manual: true,
+                                backfilled: true
+                            });
+                            existingClosed.add(key);
+                            backfilled++;
+                        }
+
+                        // Sort closedTrades by sell date
+                        portfolio.closedTrades.sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+                        portfolio._backfillClosedV1 = true;
+                        if (backfilled > 0) {
+                            console.log(`✅ Migration: Backfilled ${backfilled} missing closedTrades from transaction history`);
+                            savePortfolio(true);
+                        }
+                    }
+
                     // Restore data caches so holdings cards show indicators + news on page load
                     try {
                         const mdCache = localStorage.getItem('multiDayCache');
@@ -8639,7 +8740,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     } catch {}
 
                     updateUI();
-                    addActivity(`Portfolio loaded from localStorage - $${portfolio.cash.toFixed(2)} cash, ${Object.keys(portfolio.holdings).length} positions`, 'init');
+                    addActivity(`Portfolio loaded from localStorage - ${Object.keys(portfolio.holdings).length} positions`, 'init');
                 } catch (error) {
                     console.error('Error parsing localStorage portfolio:', error);
                     addActivity('⚠️ Error loading saved portfolio', 'error');
