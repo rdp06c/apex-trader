@@ -11030,7 +11030,7 @@ Current Portfolio:
 
                 const name = stockNames[c.symbol] || '';
                 const rsiVal = c.rsi;
-                const rsiClass = rsiVal != null ? (rsiVal < 30 ? 'rsi-oversold' : rsiVal > 70 ? 'rsi-overbought' : '') : '';
+                const rsiClass = rsiVal != null ? (rsiVal > 80 ? 'rsi-overbought' : rsiVal > 70 ? 'sig-red' : rsiVal < 30 ? 'rsi-oversold' : rsiVal < 40 ? 'sig-green' : '') : '';
                 const macdCross = c.macdCrossover || 'none';
                 let macdHist = c.macdHistogram;
                 // Fallback: compute from cached bars if histogram wasn't persisted (old data)
@@ -11074,18 +11074,40 @@ Current Portfolio:
 
                 const priceStr = c.price != null ? '$' + c.price.toFixed(2) : '--';
 
+                // MOM color: green for sweet spot, red for penalty zone
+                const mom = c.momentum || 0;
+                const momClass = mom >= 9 ? 'sig-red' : mom >= 7.5 ? 'sig-warn' : mom >= 3 ? 'sig-green' : '';
+
+                // VOL color: based on MOM+VOL interaction (actual score impact)
+                const vr = c.volumeRatio;
+                let volClass = '';
+                if (vr != null) {
+                    if (mom >= 7 && vr < 0.7) volClass = 'sig-red';           // -2.0 fake rally
+                    else if (mom >= 7 && vr > 1.3) volClass = 'sig-green';     // +1.0 confirmed breakout
+                    else if (mom < 5 && vr > 1.5) volClass = 'sig-green';      // +1.5 accumulation
+                    else if (vr > 1.2 || vr < 0.8) volClass = '';              // +/-0.5 neutral
+                }
+
+                // RS color: red for mean-reversion penalty zone
+                const rsVal = c.rs || 0;
+                const rsClass = rsVal >= 95 ? 'sig-red' : rsVal >= 85 ? 'sig-warn' : '';
+
+                // Structure color
+                const structClass = (c.structure === 'bullish' || c.structure === 'bullish_continuation') ? 'sig-green'
+                    : (c.structure === 'bearish' || c.structure === 'bearish_continuation') ? 'sig-red' : '';
+
                 html += `<tr>
                     <td class="scorecard-rank">${i + 1}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
                     <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span></div></td>
                     <td style="font-size:11px">${priceStr}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
-                    <td>${(c.momentum || 0).toFixed(1)}</td>
-                    <td class="${c.volumeRatio != null ? (c.volumeRatio >= 1.5 ? 'vol-high' : c.volumeRatio <= 0.7 ? 'vol-low' : '') : ''}">${c.volumeRatio != null ? c.volumeRatio.toFixed(1) + 'x' : '--'}</td>
-                    <td>${(c.rs || 0).toFixed(0)}</td>
+                    <td class="${momClass}">${mom.toFixed(1)}</td>
+                    <td class="${volClass}">${vr != null ? vr.toFixed(1) + 'x' : '--'}</td>
+                    <td class="${rsClass}">${rsVal.toFixed(0)}</td>
                     <td class="${rsiClass}">${rsiVal != null ? Math.round(rsiVal) : '--'}</td>
                     <td class="${macdClass}">${macdArrow}</td>
-                    <td style="font-size:10px;text-transform:capitalize">${structLabel}</td>
+                    <td class="${structClass}" style="font-size:10px;text-transform:capitalize">${structLabel}</td>
                     <td class="${dtcClass}">${dtcVal > 0 ? dtcVal.toFixed(1) : '--'}</td>
                     <td>${c.sector || '--'}</td>
                     <td class="mcap-cell">${formatMarketCap(c.marketCap)}</td>
