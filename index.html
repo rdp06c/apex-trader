@@ -12457,18 +12457,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
             }
 
-            // Add cash as a category
-            const cashValue = portfolio.cash;
-            sectorValues['Cash'] = cashValue;
-            
-            // Total portfolio value = holdings + cash
-            const totalPortfolioValue = totalHoldingsValue + cashValue;
-
-            // Convert to percentages (based on total portfolio)
+            // Convert to percentages (based on total holdings value)
             const sectorPercentages = {};
-            if (totalPortfolioValue > 0) {
+            if (totalHoldingsValue > 0) {
                 for (const [sector, value] of Object.entries(sectorValues)) {
-                    sectorPercentages[sector] = (value / totalPortfolioValue) * 100;
+                    sectorPercentages[sector] = (value / totalHoldingsValue) * 100;
                 }
             }
 
