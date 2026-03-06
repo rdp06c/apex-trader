@@ -9009,6 +9009,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 // Execute the buy
+                try {
                 portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
 
                 // Enrich with live cache data when available (same-day trades)
@@ -9107,6 +9108,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 setTimeout(closeManualTradeModal, 2000);
                 // Update display in background (fetches prices, may take a moment)
                 updateUI().then(() => updatePerformanceAnalytics());
+                } catch (buyErr) {
+                    console.error('Manual buy execution error:', buyErr);
+                    statusEl.textContent = `Buy saved but display error: ${buyErr.message}`;
+                    statusEl.style.color = 'var(--orange, orange)';
+                    // Holdings already updated, save what we have
+                    savePortfolio();
+                    setTimeout(closeManualTradeModal, 3000);
+                }
 
             } else if (manualTradeMode === 'sell') {
                 const currentShares = portfolio.holdings[symbol] || 0;
@@ -9119,6 +9128,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     return;
                 }
 
+                try {
                 const revenue = price * shares;
 
                 // Get buy transactions BEFORE recording sell (sell changes lastFullSellIdx)
@@ -9208,6 +9218,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 setTimeout(closeManualTradeModal, 2000);
                 // Update display in background (fetches prices, may take a moment)
                 updateUI().then(() => updatePerformanceAnalytics());
+                } catch (sellErr) {
+                    console.error('Manual sell execution error:', sellErr);
+                    statusEl.textContent = `Sell error: ${sellErr.message}`;
+                    statusEl.style.color = 'var(--orange, orange)';
+                    setTimeout(closeManualTradeModal, 3000);
+                }
             }
 
             document.getElementById('manualTradeSubmit').disabled = false;
