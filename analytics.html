@@ -226,7 +226,7 @@
     <canvas id="perfChart"></canvas>
   </div>
 
-  <!-- Post-Mortems: 4 bar charts -->
+  <!-- Post-Mortems: 3 bar charts -->
   <div class="grid">
     <div class="card">
       <div class="chart-title">Win Rate by Day of Week</div>
@@ -243,18 +243,6 @@
       <div class="section-sub">How long should trades be held?</div>
       <canvas id="holdChart"></canvas>
     </div>
-    <div class="card">
-      <div class="chart-title">Win Rate by Entry Conviction</div>
-      <div class="section-sub">Does higher conviction mean better outcomes?</div>
-      <canvas id="convictionBarChart"></canvas>
-    </div>
-  </div>
-
-  <!-- Conviction vs Outcome Scatter -->
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Conviction vs. Outcome</div>
-    <div class="section-sub">Does higher conviction correlate with better returns? Green = win, Red = loss, Size = position size</div>
-    <canvas id="scatterChart"></canvas>
   </div>
 
   <!-- Exit Timing -->
@@ -298,18 +286,18 @@
     <canvas id="cumulativePL"></canvas>
   </div>
 
-  <!-- Conviction Delta -->
+  <!-- Composite Score vs Outcome -->
   <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Conviction Delta: Entry vs. Exit</div>
-    <div class="section-sub">How much did APEX's conviction change before selling? Bigger drops = faster thesis breakdown</div>
-    <canvas id="convictionDelta"></canvas>
+    <div class="chart-title">Composite Score vs. Outcome</div>
+    <div class="section-sub">Do higher-scored trades perform better? Run Scan Market before entering trades for data.</div>
+    <canvas id="compositeScatter"></canvas>
   </div>
 
-  <!-- Position Size vs Outcome -->
+  <!-- Rolling Win Rate -->
   <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Position Size vs. Outcome</div>
-    <div class="section-sub">Do larger positions perform worse?</div>
-    <canvas id="positionScatter"></canvas>
+    <div class="chart-title">Rolling Win Rate</div>
+    <div class="section-sub">Win rate over the last 10 trades — are you improving?</div>
+    <canvas id="rollingWinRate"></canvas>
   </div>
 
   <!-- Trading Rules -->
@@ -542,16 +530,14 @@ function renderAll() {
   renderDayChart();
   renderSectorChart();
   renderHoldChart();
-  renderConvictionBarChart();
-  renderScatterChart();
   renderExitSummary();
   renderExitReasonChart();
-  renderPositionScatter();
+  renderCompositeScatter();
+  renderRollingWinRate();
   renderPostExitChart();
   renderRSIScatter();
   renderExitReasonPL();
   renderCumulativePL();
-  renderConvictionDelta();
   renderRules();
   renderHoldings();
 }
@@ -831,150 +817,6 @@ function renderHoldChart() {
   });
 }
 
-/* ── Win Rate by Entry Conviction ─────────────────────── */
-function renderConvictionBarChart() {
-  const buckets = {};
-  data.closedTrades.forEach(t => {
-    const c = t.entryConviction;
-    if (c == null) return;
-    if (!buckets[c]) buckets[c] = { wins: 0, total: 0 };
-    buckets[c].total++;
-    if (t.profitLoss > 0) buckets[c].wins++;
-  });
-
-  const keys = Object.keys(buckets).sort((a, b) => a - b);
-
-  new Chart(document.getElementById('convictionBarChart'), {
-    type: 'bar',
-    data: {
-      labels: keys.map(k => k + '/10'),
-      datasets: [{
-        data: keys.map(k => (buckets[k].wins / buckets[k].total * 100)),
-        backgroundColor: keys.map(k => (buckets[k].wins / buckets[k].total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
-        borderColor: keys.map(k => (buckets[k].wins / buckets[k].total >= 0.5) ? COLORS.win : COLORS.loss),
-        borderWidth: 1,
-        borderRadius: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
-        x: { grid: { display: false } }
-      },
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const b = buckets[keys[ctx.dataIndex]];
-              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
-            }
-          }
-        }
-      }
-    },
-    plugins: [countLabelPlugin]
-  });
-}
-
-/* ── Conviction vs Outcome Scatter ────────────────────── */
-function renderScatterChart() {
-  const points = data.closedTrades
-    .filter(t => t.entryConviction != null)
-    .map(t => ({
-      x: t.entryConviction + (Math.random() - 0.5) * 0.4,
-      y: t.returnPercent,
-      r: Math.max(4, Math.min(20, (t.positionSizePercent || 10) / 2)),
-      symbol: t.symbol,
-      conviction: t.entryConviction,
-      ret: t.returnPercent,
-      exitReason: t.exitReason,
-      buyDate: t.buyDate,
-      sellDate: t.sellDate,
-      win: t.profitLoss > 0
-    }));
-
-  new Chart(document.getElementById('scatterChart'), {
-    type: 'bubble',
-    data: {
-      datasets: [
-        {
-          label: 'Wins',
-          data: points.filter(p => p.win),
-          backgroundColor: COLORS.win + '88',
-          borderColor: COLORS.win,
-          borderWidth: 1
-        },
-        {
-          label: 'Losses',
-          data: points.filter(p => !p.win),
-          backgroundColor: COLORS.loss + '88',
-          borderColor: COLORS.loss,
-          borderWidth: 1
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: {
-          boxPadding: 6,
-          borderColor: ctx => {
-            if (ctx.tooltip.dataPoints && ctx.tooltip.dataPoints.length) {
-              const dp = ctx.tooltip.dataPoints[0];
-              return dp.dataset.label === 'Wins' ? COLORS.win + '55' : COLORS.loss + '55';
-            }
-            return 'rgba(245, 158, 11, 0.20)';
-          },
-          callbacks: {
-            label: ctx => {
-              const p = ctx.raw;
-              return [
-                `${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`,
-                `Conviction: ${p.conviction}/10`,
-                `Exit: ${(p.exitReason || '').replace(/_/g, ' ')}`,
-                `${new Date(p.buyDate).toLocaleDateString()} → ${new Date(p.sellDate).toLocaleDateString()}`
-              ];
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          title: { display: true, text: 'Entry Conviction', color: COLORS.muted },
-          min: 6, max: 11,
-          ticks: { stepSize: 1, callback: v => v <= 10 ? v : '' },
-          grid: { color: COLORS.gridLine }
-        },
-        y: {
-          title: { display: true, text: 'Return %', color: COLORS.muted },
-          grid: { color: COLORS.gridLine },
-          ticks: { callback: v => v + '%' }
-        }
-      }
-    },
-    plugins: [{
-      id: 'zeroLine',
-      beforeDraw(chart) {
-        const yScale = chart.scales.y;
-        const ctx = chart.ctx;
-        const y = yScale.getPixelForValue(0);
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(chart.chartArea.left, y);
-        ctx.lineTo(chart.chartArea.right, y);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }]
-  });
-}
-
-
 /* ── Exit Timing Summary ──────────────────────────────── */
 function renderExitSummary() {
   const trades = data.closedTrades.filter(t =>
@@ -1076,19 +918,33 @@ function renderExitReasonChart() {
   });
 }
 
-/* ── Position Size vs Outcome ─────────────────────────── */
-function renderPositionScatter() {
+/* ── Composite Score vs Outcome ───────────────────────── */
+function renderCompositeScatter() {
   const points = data.closedTrades
-    .filter(t => t.positionSizePercent != null)
+    .filter(t => t.entryTechnicals?.compositeScore != null)
     .map(t => ({
-      x: t.positionSizePercent,
+      x: t.entryTechnicals.compositeScore,
       y: t.returnPercent,
       r: 6,
       symbol: t.symbol,
+      score: t.entryTechnicals.compositeScore,
+      ret: t.returnPercent,
+      exitReason: t.exitReason,
+      buyDate: t.buyDate,
+      sellDate: t.sellDate,
       win: t.profitLoss > 0
     }));
 
-  new Chart(document.getElementById('positionScatter'), {
+  if (!points.length) {
+    const ctx = document.getElementById('compositeScatter').getContext('2d');
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "13px 'Inter', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('No composite score data yet. Run Scan Market before entering trades.', ctx.canvas.width / 2, 80);
+    return;
+  }
+
+  new Chart(document.getElementById('compositeScatter'), {
     type: 'bubble',
     data: {
       datasets: [
@@ -1122,16 +978,20 @@ function renderPositionScatter() {
           callbacks: {
             label: ctx => {
               const p = ctx.raw;
-              return [`${p.symbol}: ${p.y > 0 ? '+' : ''}${p.y.toFixed(1)}%`, `Position: ${p.x.toFixed(1)}% of portfolio`];
+              return [
+                `${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`,
+                `Score: ${p.score.toFixed(1)}`,
+                `Exit: ${(p.exitReason || '').replace(/_/g, ' ')}`,
+                `${new Date(p.buyDate).toLocaleDateString()} → ${new Date(p.sellDate).toLocaleDateString()}`
+              ];
             }
           }
         }
       },
       scales: {
         x: {
-          title: { display: true, text: 'Position Size (% of portfolio)', color: COLORS.muted },
-          grid: { color: COLORS.gridLine },
-          ticks: { callback: v => v + '%' }
+          title: { display: true, text: 'Composite Score', color: COLORS.muted },
+          grid: { color: COLORS.gridLine }
         },
         y: {
           title: { display: true, text: 'Return %', color: COLORS.muted },
@@ -1155,20 +1015,92 @@ function renderPositionScatter() {
         ctx.lineTo(chart.chartArea.right, y);
         ctx.stroke();
         ctx.restore();
+      }
+    }]
+  });
+}
 
-        // 15% vertical threshold line
-        const xScale = chart.scales.x;
-        const x15 = xScale.getPixelForValue(15);
-        ctx.strokeStyle = 'rgba(248, 113, 113, 0.30)';
-        ctx.setLineDash([5, 3]);
+/* ── Rolling Win Rate ────────────────────────────────── */
+function renderRollingWinRate() {
+  const WINDOW = 10;
+  const sorted = [...data.closedTrades].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+
+  if (sorted.length < WINDOW) {
+    const ctx = document.getElementById('rollingWinRate').getContext('2d');
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "13px 'Inter', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(`Need ${WINDOW} closed trades for rolling window (have ${sorted.length}).`, ctx.canvas.width / 2, 80);
+    return;
+  }
+
+  const labels = [];
+  const rates = [];
+
+  for (let i = WINDOW - 1; i < sorted.length; i++) {
+    const window = sorted.slice(i - WINDOW + 1, i + 1);
+    const wins = window.filter(t => t.profitLoss > 0).length;
+    const rate = (wins / WINDOW) * 100;
+    labels.push(sorted[i].symbol + ' (#' + (i + 1) + ')');
+    rates.push(rate);
+  }
+
+  new Chart(document.getElementById('rollingWinRate'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Win Rate (last 10)',
+        data: rates,
+        borderColor: COLORS.accent,
+        backgroundColor: COLORS.accent + '18',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointBackgroundColor: rates.map(r => r >= 50 ? COLORS.win : COLORS.loss),
+        pointBorderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.parsed.y.toFixed(0)}% win rate (last ${WINDOW} trades)`
+          }
+        }
+      },
+      scales: {
+        y: {
+          min: 0, max: 100,
+          ticks: { callback: v => v + '%', stepSize: 20 },
+          grid: { color: COLORS.gridLine },
+          title: { display: true, text: 'Win Rate %', color: COLORS.muted }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { maxRotation: 45, font: { size: 10 } }
+        }
+      }
+    },
+    plugins: [{
+      id: 'fiftyLine',
+      beforeDraw(chart) {
+        const yScale = chart.scales.y;
+        const ctx = chart.ctx;
+        const y = yScale.getPixelForValue(50);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 200, 100, 0.20)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
         ctx.beginPath();
-        ctx.moveTo(x15, chart.chartArea.top);
-        ctx.lineTo(x15, chart.chartArea.bottom);
+        ctx.moveTo(chart.chartArea.left, y);
+        ctx.lineTo(chart.chartArea.right, y);
         ctx.stroke();
-
-        ctx.fillStyle = 'rgba(248, 113, 113, 0.50)';
+        ctx.fillStyle = 'rgba(255, 200, 100, 0.40)';
         ctx.font = "10px 'Inter', sans-serif";
-        ctx.fillText('15% threshold', x15 + 4, chart.chartArea.top + 12);
+        ctx.fillText('50%', chart.chartArea.left + 4, y - 6);
         ctx.restore();
       }
     }]
@@ -1525,75 +1457,6 @@ function renderCumulativePL() {
         ctx.restore();
       }
     }]
-  });
-}
-
-/* ── Conviction Delta: Entry vs Exit ─────────────────── */
-function renderConvictionDelta() {
-  const trades = data.closedTrades
-    .filter(t => t.entryConviction != null && t.exitConviction != null)
-    .sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
-
-  if (!trades.length) return;
-
-  const labels = trades.map(t => t.symbol);
-  const entryVals = trades.map(t => t.entryConviction);
-  const exitVals = trades.map(t => t.exitConviction);
-  const deltas = trades.map(t => t.exitConviction - t.entryConviction);
-
-  new Chart(document.getElementById('convictionDelta'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Entry Conviction',
-          data: entryVals,
-          backgroundColor: COLORS.accent + '66',
-          borderColor: COLORS.accent,
-          borderWidth: 1,
-          borderRadius: 3
-        },
-        {
-          label: 'Exit Conviction',
-          data: exitVals,
-          backgroundColor: exitVals.map((v, i) => v < entryVals[i] ? COLORS.loss + '66' : COLORS.win + '66'),
-          borderColor: exitVals.map((v, i) => v < entryVals[i] ? COLORS.loss : COLORS.win),
-          borderWidth: 1,
-          borderRadius: 3
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: {
-          boxPadding: 6,
-          callbacks: {
-            afterBody: ctx => {
-              const i = ctx[0].dataIndex;
-              const d = deltas[i];
-              const t = trades[i];
-              return [
-                `Change: ${d > 0 ? '+' : ''}${d} (${t.entryConviction} → ${t.exitConviction})`,
-                `Return: ${t.returnPercent > 0 ? '+' : ''}${t.returnPercent.toFixed(1)}%`,
-                `Exit: ${(t.exitReason || '').replace(/_/g, ' ')}`
-              ];
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          min: 0, max: 10,
-          ticks: { stepSize: 2, callback: v => v + '/10' },
-          grid: { color: COLORS.gridLine },
-          title: { display: true, text: 'Conviction Score', color: COLORS.muted }
-        },
-        x: { grid: { display: false } }
-      }
-    }
   });
 }
 
