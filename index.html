@@ -12071,7 +12071,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (!dateStr) { statusEl.textContent = 'Date is required.'; return; }
 
             const cost = price * shares;
-            const timestamp = new Date(dateStr + 'T12:00:00').toISOString();
+            // Use current time if trade date is today, otherwise default to noon
+            const now = new Date();
+            const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+            const timestamp = dateStr === todayStr
+                ? now.toISOString()
+                : new Date(dateStr + 'T12:00:00').toISOString();
 
             if (manualTradeMode === 'buy') {
 
