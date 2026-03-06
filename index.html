@@ -7414,28 +7414,57 @@
                 ])];
                 await fetchNewsForStocks(drNewsSymbols);
 
-                // Fetch server-computed indicators for top candidates + holdings only
-                // (540 × 3 calls = 1,620 API requests takes 7+ min due to browser's 6-connection limit)
+                // Inject server indicators: prefer lastCandidateScores from Pi server scan,
+                // then fall back to fetching from Polygon API for uncovered symbols.
+                // This avoids 1,620 browser API calls (540×3) that took 7+ min due to
+                // the browser's 6-connection-per-host limit.
+                let drInjected = 0;
+                const serverScoreMap = {};
+                (portfolio.lastCandidateScores?.candidates || []).forEach(c => {
+                    if (c.serverRsi != null || c.serverMacd || c.serverSma50 != null) {
+                        serverScoreMap[c.symbol] = c;
+                    }
+                });
+
+                // Inject from server scan cache first
+                dryRunScored.forEach(scored => {
+                    const cached = serverScoreMap[scored.symbol];
+                    if (cached) {
+                        if (cached.serverRsi != null) scored.serverRsi = cached.serverRsi;
+                        if (cached.serverMacd) scored.serverMacd = cached.serverMacd;
+                        if (cached.serverSma50 != null) scored.serverSma50 = cached.serverSma50;
+                        drInjected++;
+                    }
+                });
+                if (drInjected > 0) console.log(`📊 Injected server indicators for ${drInjected} stocks from server scan cache`);
+
+                // Fetch remaining from Polygon API (top candidates + holdings not covered by server scan)
+                const coveredSymbols = new Set(Object.keys(serverScoreMap));
                 const drServerSymbols = [...new Set([
                     ...dryRunScored.slice(0, 50).map(s => s.symbol),
                     ...Object.keys(portfolio.holdings)
-                ])];
-                thinkingDetail.textContent = `🧪 Fetching server indicators for ${drServerSymbols.length} stocks...`;
-                try {
-                    const drServerData = await fetchServerIndicators(drServerSymbols);
-                    let drInjected = 0;
-                    Object.entries(drServerData).forEach(([sym, indicators]) => {
-                        const scored = dryRunScored.find(s => s.symbol === sym);
-                        if (scored) {
-                            if (indicators.serverRsi != null) scored.serverRsi = indicators.serverRsi;
-                            if (indicators.serverMacd) scored.serverMacd = indicators.serverMacd;
-                            if (indicators.serverSma50 != null) scored.serverSma50 = indicators.serverSma50;
-                            drInjected++;
-                        }
-                    });
-                    if (drInjected > 0) console.log(`📊 Injected server indicators for ${drInjected} candidates`);
-                } catch (e) {
-                    console.warn('Server indicator fetch failed (non-fatal):', e.message);
+                ])].filter(s => !coveredSymbols.has(s));
+
+                if (drServerSymbols.length > 0) {
+                    thinkingDetail.textContent = `🧪 Fetching server indicators for ${drServerSymbols.length} uncached stocks...`;
+                    try {
+                        const drServerData = await fetchServerIndicators(drServerSymbols);
+                        let apiFetched = 0;
+                        Object.entries(drServerData).forEach(([sym, indicators]) => {
+                            const scored = dryRunScored.find(s => s.symbol === sym);
+                            if (scored) {
+                                if (indicators.serverRsi != null) scored.serverRsi = indicators.serverRsi;
+                                if (indicators.serverMacd) scored.serverMacd = indicators.serverMacd;
+                                if (indicators.serverSma50 != null) scored.serverSma50 = indicators.serverSma50;
+                                apiFetched++;
+                            }
+                        });
+                        if (apiFetched > 0) console.log(`📊 Fetched server indicators for ${apiFetched} stocks from Polygon API`);
+                    } catch (e) {
+                        console.warn('Server indicator fetch failed (non-fatal):', e.message);
+                    }
+                } else {
+                    console.log('📊 All server indicators covered by server scan cache — no API calls needed');
                 }
 
                 // Persist candidate scores from scan (all stocks for universe view)

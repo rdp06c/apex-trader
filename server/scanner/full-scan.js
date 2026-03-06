@@ -220,7 +220,10 @@ async function runFullScan({ force = false } = {}) {
                 sma50: smaCrossover?.sma50 ?? si.serverSma50 ?? null,
                 smaCrossover: smaCrossover?.crossover || 'none',
                 volumeRatio: volRatio?.ratio ?? null,
-                scoreBreakdown: score.breakdown
+                scoreBreakdown: score.breakdown,
+                serverRsi: si.serverRsi ?? null,
+                serverMacd: si.serverMacd ?? null,
+                serverSma50: si.serverSma50 ?? null
             });
             scored++;
         }
