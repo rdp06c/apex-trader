@@ -2958,11 +2958,6 @@
                     <div class="holdings-detail-grid" id="holdingsDetailGrid">
                         <div class="empty-state">No positions yet</div>
                     </div>
-                    <!-- Shared catalyst popover -->
-                    <div class="catalyst-popover" id="catalystPopover">
-                        <div class="catalyst-popover-title">Catalyst</div>
-                        <div class="catalyst-popover-text" id="catalystPopoverText"></div>
-                    </div>
                 </div>
             </div>
 
@@ -11449,9 +11444,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const stockSector = stockSectors[symbol] || 'Unknown';
 
                     // Thesis data (momentum, RS, sector flow at entry)
+                    // Fall back to entryTechnicals or live candidate scores if thesis values are null
                     const thesis = (portfolio.holdingTheses || {})[symbol];
-                    const entryMomentum = thesis?.entryMomentum;
-                    const entryRS = thesis?.entryRS;
+                    const _et = thesis?.entryTechnicals || buyTxns?.[0]?.entryTechnicals;
+                    const _cs = portfolio.lastCandidateScores?.candidates?.find(c => c.symbol === symbol);
+                    const entryMomentum = thesis?.entryMomentum ?? _et?.momentumScore ?? _cs?.momentum ?? null;
+                    const entryRS = thesis?.entryRS ?? _et?.rsScore ?? _cs?.rs ?? null;
 
                     // Conviction emoji
                     const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : '';
@@ -11548,8 +11546,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 <div><span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${earliestDate ? earliestDate.toLocaleDateString() + ' ' + earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span></div>
                             </div>
                             <div class="holding-card-levels">
-                                ${_atrStop ? '<span class="level-item"><span class="holding-card-footer-label">ATR Stop:</span> <span class="holding-card-footer-value ' + (stockPrice.price <= _atrStop ? 'negative' : '') + '">$' + _atrStop.toFixed(2) + '</span></span>' : ''}
-                                ${_fib?.type === 'bullish' ? '<span class="level-item"><span class="holding-card-footer-label">Fib Target:</span> <span class="holding-card-footer-value ' + (stockPrice.price >= _fib.fib1272 ? 'positive' : '') + '">$' + _fib.fib1272.toFixed(2) + '</span> · <span class="holding-card-footer-value ' + (stockPrice.price >= _fib.fib1618 ? 'positive' : '') + '">$' + _fib.fib1618.toFixed(2) + '</span></span>' : ''}
+                                <div>${_atrStop ? '<span class="holding-card-footer-label">ATR Stop:</span> <span class="holding-card-footer-value ' + (stockPrice.price <= _atrStop ? 'negative' : '') + '">$' + _atrStop.toFixed(2) + '</span>' : ''}</div>
+                                <div>${_fib?.type === 'bullish' ? '<span class="holding-card-footer-label">Fib Target:</span> <span class="holding-card-footer-value ' + (stockPrice.price >= _fib.fib1272 ? 'positive' : '') + '">$' + _fib.fib1272.toFixed(2) + '</span> · <span class="holding-card-footer-value ' + (stockPrice.price >= _fib.fib1618 ? 'positive' : '') + '">$' + _fib.fib1618.toFixed(2) + '</span>' : ''}</div>
+                                <div></div>
                             </div>
                             ${(() => {
                                 const articles = newsCache[symbol];
@@ -12226,7 +12225,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     totalReturn5d: signals.totalReturn5d,
                     isAccelerating: signals.isAccelerating,
                     upDays: signals.upDays,
-                    rsScore: cachedScores?.rsScore ?? null,
+                    rsScore: cachedScores?.rs ?? null,
                     sectorRotation: sectorRot || null,
                     structureScore: signals.structure?.structureScore ?? null,
                     structure: signals.structure?.structure || null,
@@ -12272,39 +12271,46 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     manual: true
                 });
 
-                // Store thesis
+                // Store thesis (create new or backfill null fields on existing)
                 if (!portfolio.holdingTheses) portfolio.holdingTheses = {};
+                const vixInterp = vix != null ? (vix < 15 ? 'complacent' : vix <= 20 ? 'normal' : vix <= 30 ? 'elevated' : 'panic') : null;
+                const newThesis = {
+                    originalCatalyst: reason || 'Manual entry',
+                    entryConviction: null,
+                    entryPrice: price,
+                    entryDate: timestamp,
+                    entryMomentum: signals?.momentumScore ?? cachedScores?.momentum ?? null,
+                    entryRS: cachedScores?.rs ?? null,
+                    entrySectorFlow: sectorRot || null,
+                    entryRSI: signals?.rsi ?? null,
+                    entryMACDCrossover: signals?.macd?.crossover || null,
+                    entryStructure: signals?.structure?.structure || null,
+                    entryDTC: shortInt?.daysToCover ?? null,
+                    entryCompositeScore: cachedScores?.compositeScore ?? null,
+                    entryVIX: vix,
+                    entryVIXInterpretation: vixInterp,
+                    entrySMA20: signals?.sma20 ?? null,
+                    peakPrice: price,
+                    peakDate: timestamp,
+                    entryATR: entryBars ? calculateATR(entryBars) : null,
+                    targetPrice: (() => {
+                        const fib = entryBars ? calculateFibTargets(entryBars) : null;
+                        return fib?.type === 'bullish' ? fib.fib1272 : null;
+                    })(),
+                    stopPrice: (() => {
+                        const atr = entryBars ? calculateATR(entryBars) : null;
+                        return atr ? Math.round((price - 2 * atr) * 100) / 100 : null;
+                    })(),
+                    timeHorizon: null
+                };
                 if (!portfolio.holdingTheses[symbol]) {
-                    const vixInterp = vix != null ? (vix < 15 ? 'complacent' : vix <= 20 ? 'normal' : vix <= 30 ? 'elevated' : 'panic') : null;
-                    portfolio.holdingTheses[symbol] = {
-                        originalCatalyst: reason || 'Manual entry',
-                        entryConviction: null,
-                        entryPrice: price,
-                        entryDate: timestamp,
-                        entryMomentum: signals?.momentumScore ?? null,
-                        entryRS: cachedScores?.rsScore ?? null,
-                        entrySectorFlow: sectorRot || null,
-                        entryRSI: signals?.rsi ?? null,
-                        entryMACDCrossover: signals?.macd?.crossover || null,
-                        entryStructure: signals?.structure?.structure || null,
-                        entryDTC: shortInt?.daysToCover ?? null,
-                        entryCompositeScore: cachedScores?.compositeScore ?? null,
-                        entryVIX: vix,
-                        entryVIXInterpretation: vixInterp,
-                        entrySMA20: signals?.sma20 ?? null,
-                        peakPrice: price,
-                        peakDate: timestamp,
-                        entryATR: entryBars ? calculateATR(entryBars) : null,
-                        targetPrice: (() => {
-                            const fib = entryBars ? calculateFibTargets(entryBars) : null;
-                            return fib?.type === 'bullish' ? fib.fib1272 : null;
-                        })(),
-                        stopPrice: (() => {
-                            const atr = entryBars ? calculateATR(entryBars) : null;
-                            return atr ? Math.round((price - 2 * atr) * 100) / 100 : null;
-                        })(),
-                        timeHorizon: null
-                    };
+                    portfolio.holdingTheses[symbol] = newThesis;
+                } else {
+                    // Backfill null fields on existing thesis
+                    const existing = portfolio.holdingTheses[symbol];
+                    for (const [k, v] of Object.entries(newThesis)) {
+                        if (existing[k] == null && v != null) existing[k] = v;
+                    }
                 }
 
                 savePortfolio();
@@ -15175,60 +15181,6 @@ Current Portfolio:
                         if (_popoverAbort) { _popoverAbort.abort(); _popoverAbort = null; }
                     }
                 }, { signal: _popoverAbort.signal });
-            }, 0);
-        }
-
-        // Catalyst popover for holding cards
-        let _catalystAbort = null;
-
-        function showCatalystPopover(el, symbol) {
-            const popover = document.getElementById('catalystPopover');
-            const wasOpen = popover.classList.contains('open') && popover.dataset.symbol === symbol;
-
-            // Abort previous listeners
-            if (_catalystAbort) { _catalystAbort.abort(); _catalystAbort = null; }
-            popover.classList.remove('open');
-
-            if (wasOpen) return;
-
-            // Populate
-            const fullText = el.getAttribute('data-full-catalyst');
-            document.getElementById('catalystPopoverText').textContent = fullText;
-            popover.dataset.symbol = symbol;
-
-            // Position near the clicked element using fixed positioning
-            const rect = el.getBoundingClientRect();
-            let top = rect.bottom + 6;
-            let left = rect.left;
-
-            const popoverWidth = 520;
-            if (left + popoverWidth > window.innerWidth - 16) {
-                left = window.innerWidth - popoverWidth - 16;
-            }
-            if (left < 16) left = 16;
-            if (top + 300 > window.innerHeight) {
-                top = rect.top - 306;
-            }
-
-            popover.style.top = top + 'px';
-            popover.style.left = left + 'px';
-            popover.classList.add('open');
-            requestAnimationFrame(() => { popover.scrollTop = 0; });
-
-            // Close on outside click or scroll
-            _catalystAbort = new AbortController();
-            const closeCatalyst = () => {
-                popover.classList.remove('open');
-                if (_catalystAbort) { _catalystAbort.abort(); _catalystAbort = null; }
-            };
-
-            setTimeout(() => {
-                document.addEventListener('click', (e) => {
-                    if (!popover.contains(e.target) && !el.contains(e.target)) closeCatalyst();
-                }, { signal: _catalystAbort.signal });
-                window.addEventListener('scroll', (e) => {
-                    if (!popover.contains(e.target)) closeCatalyst();
-                }, { signal: _catalystAbort.signal, capture: true });
             }, 0);
         }
 
