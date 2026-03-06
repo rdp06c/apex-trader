@@ -34,6 +34,18 @@ if (AUTH_USER && AUTH_PASS) {
 app.use(express.json({ limit: '2mb' }));
 app.use('/api', portfolioRoutes);
 
+// Serve API keys to authenticated browsers (no more manual Settings entry)
+app.get('/api/config', (req, res) => {
+    const config = {};
+    if (process.env.MASSIVE_API_KEY && process.env.MASSIVE_API_KEY !== 'your_api_key_here') {
+        config.polygonApiKey = process.env.MASSIVE_API_KEY;
+    }
+    if (process.env.ANTHROPIC_API_URL) {
+        config.anthropicApiUrl = process.env.ANTHROPIC_API_URL;
+    }
+    res.json(config);
+});
+
 // Scanner status endpoint
 app.get('/api/scanner/status', (req, res) => {
     res.json(scanner.getStatus());

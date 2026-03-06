@@ -12401,6 +12401,24 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             initGdriveConfig(); // Initialize Google Drive config with stored keys
             initChart();
             await loadPortfolio();
+            // Fetch API keys from server if available (no more manual Settings entry)
+            if (portfolioStorage._serverAvailable) {
+                try {
+                    const configRes = await fetch('/api/config');
+                    if (configRes.ok) {
+                        const config = await configRes.json();
+                        if (config.polygonApiKey) {
+                            POLYGON_API_KEY = config.polygonApiKey;
+                            localStorage.setItem('polygon_api_key', config.polygonApiKey);
+                        }
+                        if (config.anthropicApiUrl) {
+                            ANTHROPIC_API_URL = config.anthropicApiUrl;
+                            localStorage.setItem('anthropic_api_url', config.anthropicApiUrl);
+                        }
+                        console.log('API keys loaded from server');
+                    }
+                } catch (e) { /* server config unavailable — use localStorage */ }
+            }
             // Log calibrated weights if available
             if (portfolio.calibratedWeights?.weights) {
                 console.log(`📊 Loaded calibrated weights from ${portfolio.calibratedWeights.timestamp} (${portfolio.calibratedWeights.dataPoints} observations)`);
