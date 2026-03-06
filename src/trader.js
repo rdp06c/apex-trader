@@ -9153,51 +9153,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const smaCrossover = calculateSMACrossover(trimmed);
             const structure = detectStructure(symbol);
 
-            // Momentum from last 5 bars
-            const last5 = trimmed.slice(-6); // need 6 bars to get 5 returns
-            let momentumScore = 0, totalReturn5d = 0, upDays = 0, isAccelerating = false, volumeTrend = 1;
-            if (last5.length >= 2) {
-                const first = last5[0].c;
-                const last = last5[last5.length - 1].c;
-                totalReturn5d = first > 0 ? ((last - first) / first) * 100 : 0;
-
-                // Count up days and compute daily returns
-                const dailyReturns = [];
-                for (let i = 1; i < last5.length; i++) {
-                    const ret = (last5[i].c - last5[i - 1].c) / last5[i - 1].c * 100;
-                    dailyReturns.push(ret);
-                    if (ret > 0) upDays++;
-                }
-
-                // Simple momentum score (0-10 scale)
-                const absReturn = Math.abs(totalReturn5d);
-                momentumScore = Math.min(10, Math.max(0, absReturn * (totalReturn5d >= 0 ? 1.2 : 0.3)));
-
-                // Acceleration: later returns > earlier returns
-                if (dailyReturns.length >= 4) {
-                    const firstHalf = dailyReturns.slice(0, Math.floor(dailyReturns.length / 2));
-                    const secondHalf = dailyReturns.slice(Math.floor(dailyReturns.length / 2));
-                    const avgFirst = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
-                    const avgSecond = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
-                    isAccelerating = avgSecond > avgFirst && avgSecond > 0;
-                }
-
-                // Volume trend
-                const vols = last5.map(b => b.v || 0);
-                if (vols.length >= 4) {
-                    const earlyVol = vols.slice(0, Math.floor(vols.length / 2)).reduce((a, b) => a + b, 0);
-                    const lateVol = vols.slice(Math.floor(vols.length / 2)).reduce((a, b) => a + b, 0);
-                    volumeTrend = earlyVol > 0 ? lateVol / earlyVol : 1;
-                }
-            }
+            // Momentum: use the same calculate5DayMomentum logic via trimmed bars
+            // Temporarily swap multiDayCache so calculate5DayMomentum reads our trimmed bars
+            const originalCache = multiDayCache[symbol];
+            multiDayCache[symbol] = trimmed;
+            const momentum = calculate5DayMomentum(null, symbol);
+            multiDayCache[symbol] = originalCache;
 
             return {
-                momentumScore: Math.round(momentumScore * 10) / 10,
-                totalReturn5d: Math.round(totalReturn5d * 100) / 100,
-                upDays,
-                totalDays: Math.min(last5.length - 1, 5),
-                isAccelerating,
-                volumeTrend: Math.round(volumeTrend * 100) / 100,
+                momentumScore: momentum.score,
+                totalReturn5d: momentum.totalReturn5d ?? 0,
+                upDays: momentum.upDays ?? 0,
+                totalDays: momentum.totalDays ?? 0,
+                isAccelerating: momentum.isAccelerating ?? false,
+                volumeTrend: momentum.volumeTrend ?? 1,
                 rsi,
                 macd,
                 sma20,
