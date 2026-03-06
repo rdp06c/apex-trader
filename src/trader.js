@@ -8336,7 +8336,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     // Thesis data (momentum, RS, sector flow at entry)
                     // Fall back to entryTechnicals or live candidate scores if thesis values are null
                     const thesis = (portfolio.holdingTheses || {})[symbol];
-                    const _et = thesis?.entryTechnicals || buyTxns?.[0]?.entryTechnicals;
+                    const _et = thesis?.entryTechnicals || buyTransactions?.[0]?.entryTechnicals;
                     const _cs = portfolio.lastCandidateScores?.candidates?.find(c => c.symbol === symbol);
                     const entryMomentum = thesis?.entryMomentum ?? _et?.momentumScore ?? _cs?.momentum ?? null;
                     const entryRS = thesis?.entryRS ?? _et?.rsScore ?? _cs?.rs ?? null;
