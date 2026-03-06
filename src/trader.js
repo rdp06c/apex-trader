@@ -9100,13 +9100,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 savePortfolio();
-                await updateUI();
-                updatePerformanceAnalytics();
-                addActivity(`Manual BUY: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${signals ? ` (MOM:${signals.momentumScore} RSI:${signals.rsi != null ? Math.round(signals.rsi) : '--'} Struct:${signals.structure?.structure || '??'})` : ''}`, 'buy');
-                statusEl.textContent = 'Buy recorded successfully!';
+                statusEl.textContent = `BUY ${shares} ${symbol} @ $${price.toFixed(2)} recorded!`;
                 statusEl.style.color = 'var(--green)';
+                addActivity(`Manual BUY: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${signals ? ` (MOM:${signals.momentumScore} RSI:${signals.rsi != null ? Math.round(signals.rsi) : '--'} Struct:${signals.structure?.structure || '??'})` : ''}`, 'buy');
                 showUndoButton(`BUY ${shares} ${symbol} @ $${price.toFixed(2)}`);
-                setTimeout(closeManualTradeModal, 1500);
+                setTimeout(closeManualTradeModal, 2000);
+                // Update display in background (fetches prices, may take a moment)
+                updateUI().then(() => updatePerformanceAnalytics());
 
             } else if (manualTradeMode === 'sell') {
                 const currentShares = portfolio.holdings[symbol] || 0;
@@ -9196,18 +9196,18 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 savePortfolio();
-                await updateUI();
-                updatePerformanceAnalytics();
                 const plStr = buyTransactions.length > 0 ? (() => {
                     const avg = buyTransactions.reduce((s, t) => s + (t.cost || t.price * t.shares), 0) / buyTransactions.reduce((s, t) => s + t.shares, 0);
                     const ret = ((price - avg) / avg * 100);
                     return ` (${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%)`;
                 })() : '';
-                addActivity(`Manual SELL: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${plStr}`, 'sell');
-                statusEl.textContent = 'Sell recorded successfully!';
+                statusEl.textContent = `SELL ${shares} ${symbol} @ $${price.toFixed(2)}${plStr} recorded!`;
                 statusEl.style.color = 'var(--green)';
+                addActivity(`Manual SELL: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${plStr}`, 'sell');
                 showUndoButton(`SELL ${shares} ${symbol} @ $${price.toFixed(2)}`);
-                setTimeout(closeManualTradeModal, 1500);
+                setTimeout(closeManualTradeModal, 2000);
+                // Update display in background (fetches prices, may take a moment)
+                updateUI().then(() => updatePerformanceAnalytics());
             }
 
             document.getElementById('manualTradeSubmit').disabled = false;
