@@ -740,32 +740,57 @@
         function initChart() {
             if (performanceChart) return; // Prevent double initialization
             const ctx = document.getElementById('performanceChart').getContext('2d');
-            // Build gradient fill for portfolio line
-            const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
-            gradient.addColorStop(0, 'rgba(245, 158, 11, 0.25)');
-            gradient.addColorStop(0.6, 'rgba(245, 158, 11, 0.06)');
-            gradient.addColorStop(1, 'rgba(245, 158, 11, 0)');
 
             performanceChart = new Chart(ctx, {
-                type: 'line',
+                type: 'bar',
                 data: {
                     labels: [],
                     datasets: [
                         {
-                            label: 'Portfolio Value',
+                            label: 'Daily Return',
+                            data: [],
+                            backgroundColor: [],
+                            borderColor: [],
+                            borderWidth: 1,
+                            borderRadius: 2,
+                            yAxisID: 'y',
+                            order: 2
+                        },
+                        {
+                            label: 'Total Return',
+                            type: 'line',
                             data: [],
                             borderColor: '#f59e0b',
-                            backgroundColor: gradient,
+                            backgroundColor: 'transparent',
                             borderWidth: 2.5,
                             tension: 0.35,
-                            fill: true,
-                            pointStyle: 'line',
+                            fill: false,
                             pointRadius: 0,
                             pointHoverRadius: 5,
                             pointHoverBackgroundColor: '#f59e0b',
                             pointHoverBorderColor: '#fff',
-                            pointHoverBorderWidth: 2
+                            pointHoverBorderWidth: 2,
+                            yAxisID: 'y1',
+                            order: 1
                         },
+                        {
+                            label: 'SPY Return',
+                            type: 'line',
+                            data: [],
+                            borderColor: '#60a5fa',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            borderDash: [6, 3],
+                            tension: 0.35,
+                            fill: false,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            pointHoverBackgroundColor: '#60a5fa',
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2,
+                            yAxisID: 'y1',
+                            order: 0
+                        }
                     ]
                 },
                 options: {
@@ -777,7 +802,15 @@
                     },
                     plugins: {
                         legend: {
-                            display: false
+                            display: true,
+                            labels: {
+                                color: '#a8a8a0',
+                                font: { family: "'Inter', sans-serif", size: 11 },
+                                boxWidth: 12,
+                                boxHeight: 12,
+                                padding: 16,
+                                usePointStyle: true
+                            }
                         },
                         tooltip: {
                             backgroundColor: 'rgba(22, 22, 25, 0.95)',
@@ -787,37 +820,39 @@
                             borderWidth: 1,
                             padding: 12,
                             cornerRadius: 8,
-                            titleFont: {
-                                family: "'Inter', sans-serif",
-                                size: 12,
-                                weight: '600'
-                            },
-                            bodyFont: {
-                                family: "'Inter', sans-serif",
-                                size: 12
-                            },
+                            titleFont: { family: "'Inter', sans-serif", size: 12, weight: '600' },
+                            bodyFont: { family: "'Inter', sans-serif", size: 12 },
                             displayColors: true,
                             boxWidth: 8,
                             boxHeight: 8,
                             boxPadding: 4,
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.parsed.y;
+                                    if (val == null) return null;
+                                    const sign = val >= 0 ? '+' : '';
+                                    return ` ${context.dataset.label}: ${sign}${val.toFixed(2)}%`;
+                                }
+                            }
                         }
                     },
                     scales: {
                         y: {
-                            beginAtZero: false,
-                            grace: '5%',
-                            border: {
-                                display: false
+                            position: 'left',
+                            beginAtZero: true,
+                            border: { display: false },
+                            title: {
+                                display: true,
+                                text: 'Daily %',
+                                color: '#78786e',
+                                font: { family: "'Inter', sans-serif", size: 10 }
                             },
                             ticks: {
                                 color: '#78786e',
-                                font: {
-                                    family: "'Inter', sans-serif",
-                                    size: 11
-                                },
+                                font: { family: "'Inter', sans-serif", size: 11 },
                                 padding: 8,
                                 callback: function(value) {
-                                    return '$' + value.toLocaleString();
+                                    return value.toFixed(1) + '%';
                                 }
                             },
                             grid: {
@@ -825,22 +860,34 @@
                                 drawTicks: false
                             }
                         },
-                        x: {
-                            border: {
-                                display: false
+                        y1: {
+                            position: 'right',
+                            border: { display: false },
+                            title: {
+                                display: true,
+                                text: 'Cumulative %',
+                                color: '#78786e',
+                                font: { family: "'Inter', sans-serif", size: 10 }
                             },
                             ticks: {
                                 color: '#78786e',
-                                font: {
-                                    family: "'Inter', sans-serif",
-                                    size: 10
-                                },
+                                font: { family: "'Inter', sans-serif", size: 11 },
+                                padding: 8,
+                                callback: function(value) {
+                                    return value.toFixed(1) + '%';
+                                }
+                            },
+                            grid: { display: false }
+                        },
+                        x: {
+                            border: { display: false },
+                            ticks: {
+                                color: '#78786e',
+                                font: { family: "'Inter', sans-serif", size: 10 },
                                 padding: 6,
                                 maxRotation: 0
                             },
-                            grid: {
-                                display: false
-                            }
+                            grid: { display: false }
                         }
                     }
                 }
@@ -912,34 +959,108 @@
 
         async function updatePerformanceChart() {
             if (!performanceChart || portfolio.performanceHistory.length === 0) return;
-            
-            // Update labels
-            performanceChart.data.labels = portfolio.performanceHistory.map(h => {
-                const date = new Date(h.timestamp);
-                const today = new Date();
-                const yesterday = new Date(today);
-                yesterday.setDate(yesterday.getDate() - 1);
-                
-                let dateStr;
-                if (date.toDateString() === today.toDateString()) {
-                    dateStr = 'Today';
-                } else if (date.toDateString() === yesterday.toDateString()) {
-                    dateStr = 'Yesterday';
-                } else {
-                    dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+            // Aggregate performanceHistory to daily: last value per day, sum deposits
+            const dailyMap = {};
+            for (const entry of portfolio.performanceHistory) {
+                const date = new Date(entry.timestamp).toISOString().split('T')[0];
+                if (!dailyMap[date]) dailyMap[date] = { value: entry.value, deposits: 0 };
+                if (entry.value != null) dailyMap[date].value = entry.value;
+                if (entry.deposit) dailyMap[date].deposits += entry.deposit;
+            }
+
+            const dates = Object.keys(dailyMap).sort();
+            if (dates.length < 1) return;
+
+            // Compute daily returns and cumulative returns (deposit-adjusted)
+            const dailyReturns = [];
+            const cumulativeReturns = [];
+            let runningDeposits = 0;
+
+            for (let i = 0; i < dates.length; i++) {
+                const day = dailyMap[dates[i]];
+                runningDeposits += day.deposits;
+
+                if (i === 0) {
+                    // First day: value IS the initial deposit if no explicit deposit marker
+                    if (runningDeposits === 0) runningDeposits = day.value;
+                    dailyReturns.push(0);
+                    cumulativeReturns.push(0);
+                    continue;
                 }
-                
-                const timeStr = date.toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
-                    minute: '2-digit',
-                    hour12: true 
-                });
-                
-                return `${dateStr} ${timeStr}`;
+
+                const prevDay = dailyMap[dates[i - 1]];
+
+                // Daily return: (value - prev_value - new_deposits) / prev_value
+                const dailyReturn = prevDay.value > 0
+                    ? ((day.value - prevDay.value - day.deposits) / prevDay.value) * 100
+                    : 0;
+                dailyReturns.push(Math.round(dailyReturn * 100) / 100);
+
+                // Cumulative return: (current_value - total_deposits) / total_deposits
+                const cumReturn = runningDeposits > 0
+                    ? ((day.value - runningDeposits) / runningDeposits) * 100
+                    : 0;
+                cumulativeReturns.push(Math.round(cumReturn * 100) / 100);
+            }
+
+            // Fetch SPY data for comparison
+            let spyReturns = new Array(dates.length).fill(null);
+            try {
+                const spyBars = await fetchSPYForChart(dates[0]);
+                if (spyBars && spyBars.length > 0) {
+                    // Build date -> close price map
+                    const spyByDate = {};
+                    for (const bar of spyBars) {
+                        const d = new Date(bar.t).toISOString().split('T')[0];
+                        spyByDate[d] = bar.c;
+                    }
+                    // Find baseline: SPY close on or before the first portfolio date
+                    let baselinePrice = null;
+                    for (const bar of spyBars) {
+                        const d = new Date(bar.t).toISOString().split('T')[0];
+                        if (d <= dates[0]) baselinePrice = bar.c;
+                        else break;
+                    }
+                    if (!baselinePrice) baselinePrice = spyBars[0].c;
+
+                    // For each portfolio date, find closest SPY price on or before that date
+                    let lastSPYPrice = baselinePrice;
+                    for (let i = 0; i < dates.length; i++) {
+                        if (spyByDate[dates[i]]) lastSPYPrice = spyByDate[dates[i]];
+                        spyReturns[i] = Math.round(((lastSPYPrice - baselinePrice) / baselinePrice) * 100 * 100) / 100;
+                    }
+                }
+            } catch (e) {
+                console.warn('SPY chart data unavailable:', e.message);
+            }
+
+            // Format date labels
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const labels = dates.map(d => {
+                const date = new Date(d + 'T12:00:00');
+                if (date.toDateString() === today.toDateString()) return 'Today';
+                if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             });
-            
-            // Dataset: Portfolio value
-            performanceChart.data.datasets[0].data = portfolio.performanceHistory.map(h => h.value);
+
+            // Update chart data
+            performanceChart.data.labels = labels;
+
+            // Daily return bars with green/red per value
+            performanceChart.data.datasets[0].data = dailyReturns;
+            performanceChart.data.datasets[0].backgroundColor = dailyReturns.map(v =>
+                v >= 0 ? 'rgba(52, 211, 153, 0.7)' : 'rgba(248, 113, 113, 0.7)');
+            performanceChart.data.datasets[0].borderColor = dailyReturns.map(v =>
+                v >= 0 ? 'rgba(52, 211, 153, 0.9)' : 'rgba(248, 113, 113, 0.9)');
+
+            // Cumulative total return line
+            performanceChart.data.datasets[1].data = cumulativeReturns;
+
+            // SPY cumulative return line
+            performanceChart.data.datasets[2].data = spyReturns;
 
             performanceChart.update();
         }
@@ -1179,6 +1300,7 @@
         // Cache for 5-day price history (fetched once per analysis run)
         let multiDayCache = {};
         const MULTIDAY_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+        let spyChartBars = null; // { bars: [...], fetchedAt: timestamp }
         
         // Fetch 5-day price history from Polygon aggregate bars
         async function fetch5DayHistory(symbol) {
@@ -1380,6 +1502,28 @@
                 localStorage.setItem('multiDayCache', JSON.stringify(multiDayCache));
                 localStorage.setItem('multiDayCacheTs', String(Date.now()));
             } catch (e) { console.warn('Could not persist grouped daily cache:', e.message); }
+        }
+
+        // Fetch SPY daily bars for the performance chart comparison
+        async function fetchSPYForChart(fromDate) {
+            const SPY_CHART_TTL = 30 * 60 * 1000;
+            if (spyChartBars && Date.now() - spyChartBars.fetchedAt < SPY_CHART_TTL) {
+                return spyChartBars.bars;
+            }
+            if (!POLYGON_API_KEY) return null;
+            try {
+                const toStr = new Date().toISOString().split('T')[0];
+                const resp = await fetch(
+                    `https://api.polygon.io/v2/aggs/ticker/SPY/range/1/day/${fromDate}/${toStr}?adjusted=true&sort=asc&limit=50000&apiKey=${POLYGON_API_KEY}`
+                );
+                if (!resp.ok) return null;
+                const data = await resp.json();
+                if (data.results && data.results.length > 0) {
+                    spyChartBars = { bars: data.results, fetchedAt: Date.now() };
+                    return data.results;
+                }
+            } catch (e) { console.warn('SPY chart fetch failed:', e.message); }
+            return null;
         }
 
         // === TECHNICAL INDICATORS (Client-Side from 40-bar data) ===
@@ -2335,6 +2479,9 @@
 
         // Scanner readings from Pi server (ATR, volume divergence, fib targets)
         let scannerReadings = {};
+
+        // Cached holding data for sort-only re-renders (avoids refetching prices)
+        let lastHoldingDataArray = [];
         
         async function fetchBulkSnapshot(symbols) {
             const now = Date.now();
@@ -8176,6 +8323,119 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // Update UI
+        function sortAndRenderHoldings(dataArray) {
+            const sortMode = document.getElementById('holdingsSortSelect')?.value || 'dateAdded';
+            const sorted = [...dataArray];
+            switch (sortMode) {
+                case 'totalPL':
+                    sorted.sort((a, b) => b.gainLossPercent - a.gainLossPercent);
+                    break;
+                case 'dailyChange':
+                    sorted.sort((a, b) => b.stockPrice.changePercent - a.stockPrice.changePercent);
+                    break;
+                case 'positionSize':
+                    sorted.sort((a, b) => b.currentValue - a.currentValue);
+                    break;
+                case 'dateAdded':
+                default:
+                    sorted.sort((a, b) => a.insertionOrder - b.insertionOrder);
+                    break;
+            }
+
+            const holdingsList = document.getElementById('holdingsList');
+            const holdingsDetailGrid = document.getElementById('holdingsDetailGrid');
+            let compactHtml = '';
+            let detailHtml = '';
+            for (const h of sorted) {
+                compactHtml += `
+                    <div class="sidebar-holding-compact">
+                        <div class="compact-left">
+                            <span class="compact-symbol">${h.symbol}</span>
+                            <span class="compact-shares">${h.shares} shares</span>
+                        </div>
+                        <div class="compact-right">
+                            <span class="compact-price">$${h.stockPrice.price.toFixed(2)}</span>
+                            <span class="compact-daily ${h.changeClass}">${h.stockPrice.changePercent >= 0 ? '+' : ''}${h.stockPrice.changePercent.toFixed(2)}%</span>
+                        </div>
+                    </div>
+                `;
+
+                detailHtml += `
+                    <div class="holding-item holding-card">
+                        <div class="holding-card-header">
+                            <div>
+                                <div class="holding-card-symbol">${h.symbol}</div>
+                                <div class="holding-card-name">${h.stockName} <span class="holding-card-sector">· ${h.stockSector}</span></div>
+                                <div class="holding-card-shares">${h.shares} shares · ${h.positionSizePercent.toFixed(1)}% of portfolio</div>
+                            </div>
+                            <div>
+                                <div class="holding-card-value">$${h.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                <div class="holding-card-gainloss ${h.gainLossClass}">${h.gainLoss >= 0 ? '+' : ''}$${Math.abs(h.gainLoss).toFixed(2)} (${h.gainLossPercent >= 0 ? '+' : ''}${h.gainLossPercent.toFixed(2)}%)</div>
+                                <div class="holding-card-daily ${h.dailyClass}">
+                                    ${h.daysHeld === 0
+                                        ? `Since entry: ${h.gainLossPercent >= 0 ? '+' : ''}${h.gainLossPercent.toFixed(2)}% · ${h.gainLoss >= 0 ? '+' : ''}$${h.gainLoss.toFixed(2)}`
+                                        : `Today: ${h.stockPrice.changePercent >= 0 ? '+' : ''}${h.stockPrice.changePercent.toFixed(2)}% · ${h.stockPrice.change >= 0 ? '+' : ''}$${(h.stockPrice.change * h.shares).toFixed(2)}`
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        ${h._profitSignals.length >= 2 || h._lossSignals.length >= 1 ? `
+                        <div class="holding-card-action ${h._lossSignals.length >= 2 ? 'action-sell' : h._lossSignals.length >= 1 ? 'action-warning' : 'action-profit'}">
+                            ${h._lossSignals.length >= 1
+                                ? '<strong>SELL SIGNAL ' + h._lossSignals.length + '/' + (h._lossSignals.length + h._profitSignals.length || 1) + ':</strong> ' + h._lossSignals.join(', ')
+                                : '<strong>TAKE PROFIT ' + h._profitSignals.length + '/5:</strong> ' + h._profitSignals.join(', ')
+                            }
+                        </div>` : ''}
+                        <div class="holding-card-indicators">
+                            <strong>${h.daysHeld === 0 ? 'Bought today' : `Held ${h.daysHeld}d`}</strong>
+                            ${h.isPastTimeframe ? '<span class="holding-card-timeframe-warning">OVERDUE</span>' : ''}
+                            <span class="text-muted">·</span>
+                            Mtm: <strong>${h.entryMomentum != null ? h.entryMomentum.toFixed(1) : '--'}</strong>
+                            · RS: <strong>${h.entryRS != null ? h.entryRS.toFixed(0) : '--'}</strong>
+                            ${h._rsiVal != null ? '· RSI: <strong class="' + (h._rsiVal < 30 ? 'rsi-oversold' : h._rsiVal > 70 ? 'rsi-overbought' : '') + '">' + Math.round(h._rsiVal) + '</strong>' : ''}
+                            ${h._macdResult ? '· MACD: <strong class="' + (h._macdResult.crossover === 'bullish' ? 'macd-bullish' : h._macdResult.crossover === 'bearish' ? 'macd-bearish' : h._macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish') + '">' + (h._macdResult.crossover === 'bullish' ? '▲ Cross' : h._macdResult.crossover === 'bearish' ? '▼ Cross' : h._macdResult.histogram >= 0 ? '▲' : '▼') + '</strong>' : ''}
+                            ${h._dtcVal && h._dtcVal > 0 ? '· DTC: <strong class="' + (h._dtcVal > 5 ? 'dtc-squeeze' : h._dtcVal > 3 ? 'dtc-elevated' : '') + '">' + h._dtcVal.toFixed(1) + '</strong>' : ''}
+                            ${h._struct?.choch ? '· CHoCH: <strong class="' + (h._struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._struct.chochType === 'bullish' ? '▲' : '▼') + '</strong>' : ''}
+                            ${h._volDiv?.divergence ? '· <span class="' + (h._volDiv.direction === 'bearish' ? 'negative' : 'positive') + '" style="font-weight:600">Vol ' + h._volDiv.direction + '</span>' : ''}
+                        </div>
+                        <div class="holding-card-footer">
+                            <div><span class="holding-card-footer-label">Avg Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
+                            <div><span class="holding-card-footer-label">Current:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span> <span class="stat-change ${h.changeClass}">${h.stockPrice.changePercent >= 0 ? '+' : ''}${h.stockPrice.changePercent.toFixed(2)}%</span></div>
+                            <div><span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString() + ' ' + h.earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span></div>
+                        </div>
+                        <div class="holding-card-levels">
+                            <div>${h._atrStop ? '<span class="holding-card-footer-label">ATR Stop:</span> <span class="holding-card-footer-value ' + (h.stockPrice.price <= h._atrStop ? 'negative' : '') + '">$' + h._atrStop.toFixed(2) + '</span>' : ''}</div>
+                            <div>${h._fib?.type === 'bullish' ? '<span class="holding-card-footer-label">Fib Target:</span> <span class="holding-card-footer-value ' + (h.stockPrice.price >= h._fib.fib1272 ? 'positive' : '') + '">$' + h._fib.fib1272.toFixed(2) + '</span> · <span class="holding-card-footer-value ' + (h.stockPrice.price >= h._fib.fib1618 ? 'positive' : '') + '">$' + h._fib.fib1618.toFixed(2) + '</span>' : ''}</div>
+                            <div></div>
+                        </div>
+                        ${(() => {
+                            const articles = newsCache[h.symbol];
+                            if (!articles || articles.length === 0) return '';
+                            const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+                            const recent = articles.filter(a => new Date(a.published_utc || a.publishedUtc).getTime() > sevenDaysAgo);
+                            if (recent.length === 0) return '';
+                            const top2 = recent.slice(0, 2);
+                            return '<div class="holding-card-news">' + top2.map(a => {
+                                const title = escapeHtml((a.title || '').length > 70 ? a.title.substring(0, 67) + '...' : a.title || '');
+                                const sent = (a.sentiment || 'neutral').toLowerCase();
+                                const sentClass = sent === 'positive' ? 'positive' : sent === 'negative' ? 'negative' : 'neutral';
+                                const timeAgo = formatTimeAgo(a.published_utc || a.publishedUtc);
+                                return `<div class="news-item"><span class="news-time">${timeAgo}</span><span class="news-title">${title}</span><span class="news-sentiment ${sentClass}">${sent}</span></div>`;
+                            }).join('') + '</div>';
+                        })()}
+                    </div>
+                `;
+            }
+            if (holdingsList) holdingsList.innerHTML = compactHtml;
+            if (holdingsDetailGrid) holdingsDetailGrid.innerHTML = detailHtml;
+        }
+
+        function applyHoldingsSort() {
+            if (lastHoldingDataArray.length > 0) {
+                sortAndRenderHoldings(lastHoldingDataArray);
+            }
+        }
+
         async function updateUI() {
             try {
                 const { total: totalValue, priceData } = await calculatePortfolioValue();
@@ -8272,15 +8532,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 holdingsList.innerHTML = '<div class="empty-state">No positions yet</div>';
                 if (holdingsDetailGrid) holdingsDetailGrid.innerHTML = '<div class="empty-state">No positions yet</div>';
             } else {
-                let compactHtml = '';
-                let detailHtml = '';
+                // Phase 1: Collect holding data into sortable array
+                const holdingDataArray = [];
+                let insertionOrder = 0;
                 for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
-                    // Use priceData passed from calculatePortfolioValue - no API call!
                     const stockPrice = priceData[symbol] || { price: 0, change: 0, changePercent: 0 };
                     const currentValue = stockPrice.price * shares;
                     const changeClass = stockPrice.change >= 0 ? 'positive' : 'negative';
 
-                    // Find purchase info from CURRENT position only (excludes prior closed positions)
                     const buyTransactions = getCurrentPositionBuys(symbol);
                     let avgPurchasePrice = 0;
                     let earliestDate = null;
@@ -8293,12 +8552,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         const totalShares = buyTransactions.reduce((sum, t) => sum + t.shares, 0);
                         avgPurchasePrice = totalCost / totalShares;
                         earliestDate = new Date(buyTransactions[0].timestamp);
-
-                        // Get conviction and reasoning from first buy of CURRENT position
                         conviction = buyTransactions[0].conviction || null;
                         reasoning = buyTransactions[0].reasoning || '';
-
-                        // Calculate calendar days held (not elapsed time)
                         const nowDate = new Date();
                         const todayStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
                         const buyDayStart = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), earliestDate.getDate());
@@ -8307,13 +8562,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                     const gainLoss = currentValue - (avgPurchasePrice * shares);
                     const gainLossPercent = avgPurchasePrice > 0 ? ((stockPrice.price - avgPurchasePrice) / avgPurchasePrice) * 100 : 0;
-                    const gainLossClass = gainLoss >= 0 ? 'positive' : 'negative';
-
-                    // Calculate position size as % of total portfolio
                     const positionSizePercent = totalValue > 0 ? (currentValue / totalValue) * 100 : 0;
 
-                    // Determine expected timeframe based on catalyst keywords
-                    let expectedDays = { min: 7, max: 14, label: '1-2 weeks' }; // Default
+                    let expectedDays = { min: 7, max: 14, label: '1-2 weeks' };
                     const reasoningLower = reasoning.toLowerCase();
                     if (reasoningLower.includes('earnings') || reasoningLower.includes('guidance')) {
                         expectedDays = { min: 7, max: 14, label: '1-2 weeks' };
@@ -8325,58 +8576,32 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         expectedDays = { min: 7, max: 14, label: '1-2 weeks' };
                     }
 
-                    // Check if past expected timeframe
                     const isPastTimeframe = daysHeld > expectedDays.max;
-                    const daysRemaining = expectedDays.max - daysHeld;
-
-                    // Get stock name and sector from mappings
                     const stockName = stockNames[symbol] || symbol;
                     const stockSector = stockSectors[symbol] || 'Unknown';
 
-                    // Thesis data (momentum, RS, sector flow at entry)
-                    // Fall back to entryTechnicals or live candidate scores if thesis values are null
                     const thesis = (portfolio.holdingTheses || {})[symbol];
                     const _et = thesis?.entryTechnicals || buyTransactions?.[0]?.entryTechnicals;
                     const _cs = portfolio.lastCandidateScores?.candidates?.find(c => c.symbol === symbol);
                     const entryMomentum = thesis?.entryMomentum ?? _et?.momentumScore ?? _cs?.momentum ?? null;
                     const entryRS = thesis?.entryRS ?? _et?.rsScore ?? _cs?.rs ?? null;
 
-                    // Conviction emoji
-                    const convictionEmoji = conviction >= 9 ? '🔥' : conviction >= 7 ? '💪' : '';
-
+                    const gainLossClass = gainLoss >= 0 ? 'positive' : 'negative';
                     const dailyClass = daysHeld === 0
                         ? (gainLossPercent >= 0 ? 'positive' : 'negative')
                         : (stockPrice.changePercent >= 0 ? 'positive' : 'negative');
 
-                    // Compact row for sidebar
-                    compactHtml += `
-                        <div class="sidebar-holding-compact">
-                            <div class="compact-left">
-                                <span class="compact-symbol">${symbol}</span>
-                                <span class="compact-shares">${shares} shares</span>
-                            </div>
-                            <div class="compact-right">
-                                <span class="compact-price">$${stockPrice.price.toFixed(2)}</span>
-                                <span class="compact-daily ${changeClass}">${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}%</span>
-                            </div>
-                        </div>
-                    `;
-
-                    // Compute sell signals before building the card
                     const _sr = scannerReadings[symbol];
                     const _bars = multiDayCache[symbol];
                     const _atr = _sr?.atr ?? calculateATR(_bars);
                     const _atrStop = _sr?.atrStop ?? (_atr && avgPurchasePrice > 0 ? Math.round((avgPurchasePrice - 2 * _atr) * 100) / 100 : null);
                     const _volDiv = _sr?.volumeDivergence ?? detectVolumeDivergence(_bars);
                     const _fib = _sr?.fibTargets ?? calculateFibTargets(_bars);
-
-                    // Compute current indicators
                     const _rsiVal = _bars && _bars.length >= 14 ? calculateRSI(_bars) : null;
                     const _macdResult = _bars && _bars.length >= 14 ? calculateMACD(_bars) : null;
                     const _dtcVal = shortInterestCache[symbol]?.daysToCover;
                     const _struct = _bars && _bars.length >= 5 ? detectStructure(_bars) : null;
 
-                    // Profit signal scoring (0-5): how many conditions say "take profit"
                     const _profitSignals = [];
                     if (_fib?.type === 'bullish' && stockPrice.price >= _fib.fib1272) _profitSignals.push('Fib target');
                     if (_rsiVal != null && _rsiVal > 70) _profitSignals.push('RSI overbought');
@@ -8384,82 +8609,25 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (_volDiv?.divergence && _volDiv.direction === 'bearish') _profitSignals.push('Vol divergence');
                     if (isPastTimeframe) _profitSignals.push('Past timeframe');
 
-                    // Loss signal scoring
                     const _lossSignals = [];
                     if (_atrStop && stockPrice.price <= _atrStop) _lossSignals.push('ATR stop breached');
                     if (_struct?.choch && _struct.chochType === 'bearish') _lossSignals.push('Bearish CHoCH');
                     if (_struct?.structure === 'bearish') _lossSignals.push('Bearish structure');
                     if (gainLossPercent <= -10) _lossSignals.push('Down 10%+');
 
-                    // Full detail card for main area
-                    detailHtml += `
-                        <div class="holding-item holding-card">
-                            <div class="holding-card-header">
-                                <div>
-                                    <div class="holding-card-symbol">${symbol}</div>
-                                    <div class="holding-card-name">${stockName} <span class="holding-card-sector">· ${stockSector}</span></div>
-                                    <div class="holding-card-shares">${shares} shares · ${positionSizePercent.toFixed(1)}% of portfolio</div>
-                                </div>
-                                <div>
-                                    <div class="holding-card-value">$${currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                                    <div class="holding-card-gainloss ${gainLossClass}">${gainLoss >= 0 ? '+' : ''}$${Math.abs(gainLoss).toFixed(2)} (${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}%)</div>
-                                    <div class="holding-card-daily ${dailyClass}">
-                                        ${daysHeld === 0
-                                            ? `Since entry: ${gainLossPercent >= 0 ? '+' : ''}${gainLossPercent.toFixed(2)}% · ${gainLoss >= 0 ? '+' : ''}$${gainLoss.toFixed(2)}`
-                                            : `Today: ${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}% · ${stockPrice.change >= 0 ? '+' : ''}$${(stockPrice.change * shares).toFixed(2)}`
-                                        }
-                                    </div>
-                                </div>
-                            </div>
-                            ${_profitSignals.length >= 2 || _lossSignals.length >= 1 ? `
-                            <div class="holding-card-action ${_lossSignals.length >= 2 ? 'action-sell' : _lossSignals.length >= 1 ? 'action-warning' : 'action-profit'}">
-                                ${_lossSignals.length >= 1
-                                    ? '<strong>SELL SIGNAL ' + _lossSignals.length + '/' + (_lossSignals.length + _profitSignals.length || 1) + ':</strong> ' + _lossSignals.join(', ')
-                                    : '<strong>TAKE PROFIT ' + _profitSignals.length + '/5:</strong> ' + _profitSignals.join(', ')
-                                }
-                            </div>` : ''}
-                            <div class="holding-card-indicators">
-                                <strong>${daysHeld === 0 ? 'Bought today' : `Held ${daysHeld}d`}</strong>
-                                ${isPastTimeframe ? '<span class="holding-card-timeframe-warning">OVERDUE</span>' : ''}
-                                <span class="text-muted">·</span>
-                                Mtm: <strong>${entryMomentum != null ? entryMomentum.toFixed(1) : '--'}</strong>
-                                · RS: <strong>${entryRS != null ? entryRS.toFixed(0) : '--'}</strong>
-                                ${_rsiVal != null ? '· RSI: <strong class="' + (_rsiVal < 30 ? 'rsi-oversold' : _rsiVal > 70 ? 'rsi-overbought' : '') + '">' + Math.round(_rsiVal) + '</strong>' : ''}
-                                ${_macdResult ? '· MACD: <strong class="' + (_macdResult.crossover === 'bullish' ? 'macd-bullish' : _macdResult.crossover === 'bearish' ? 'macd-bearish' : _macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish') + '">' + (_macdResult.crossover === 'bullish' ? '▲ Cross' : _macdResult.crossover === 'bearish' ? '▼ Cross' : _macdResult.histogram >= 0 ? '▲' : '▼') + '</strong>' : ''}
-                                ${_dtcVal && _dtcVal > 0 ? '· DTC: <strong class="' + (_dtcVal > 5 ? 'dtc-squeeze' : _dtcVal > 3 ? 'dtc-elevated' : '') + '">' + _dtcVal.toFixed(1) + '</strong>' : ''}
-                                ${_struct?.choch ? '· CHoCH: <strong class="' + (_struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (_struct.chochType === 'bullish' ? '▲' : '▼') + '</strong>' : ''}
-                                ${_volDiv?.divergence ? '· <span class="' + (_volDiv.direction === 'bearish' ? 'negative' : 'positive') + '" style="font-weight:600">Vol ' + _volDiv.direction + '</span>' : ''}
-                            </div>
-                            <div class="holding-card-footer">
-                                <div><span class="holding-card-footer-label">Avg Cost:</span> <span class="holding-card-footer-value">$${avgPurchasePrice.toFixed(2)}</span></div>
-                                <div><span class="holding-card-footer-label">Current:</span> <span class="holding-card-footer-value">$${stockPrice.price.toFixed(2)}</span> <span class="stat-change ${changeClass}">${stockPrice.changePercent >= 0 ? '+' : ''}${stockPrice.changePercent.toFixed(2)}%</span></div>
-                                <div><span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${earliestDate ? earliestDate.toLocaleDateString() + ' ' + earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span></div>
-                            </div>
-                            <div class="holding-card-levels">
-                                <div>${_atrStop ? '<span class="holding-card-footer-label">ATR Stop:</span> <span class="holding-card-footer-value ' + (stockPrice.price <= _atrStop ? 'negative' : '') + '">$' + _atrStop.toFixed(2) + '</span>' : ''}</div>
-                                <div>${_fib?.type === 'bullish' ? '<span class="holding-card-footer-label">Fib Target:</span> <span class="holding-card-footer-value ' + (stockPrice.price >= _fib.fib1272 ? 'positive' : '') + '">$' + _fib.fib1272.toFixed(2) + '</span> · <span class="holding-card-footer-value ' + (stockPrice.price >= _fib.fib1618 ? 'positive' : '') + '">$' + _fib.fib1618.toFixed(2) + '</span>' : ''}</div>
-                                <div></div>
-                            </div>
-                            ${(() => {
-                                const articles = newsCache[symbol];
-                                if (!articles || articles.length === 0) return '';
-                                const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-                                const recent = articles.filter(a => new Date(a.published_utc || a.publishedUtc).getTime() > sevenDaysAgo);
-                                if (recent.length === 0) return '';
-                                const top2 = recent.slice(0, 2);
-                                return '<div class="holding-card-news">' + top2.map(a => {
-                                    const title = escapeHtml((a.title || '').length > 70 ? a.title.substring(0, 67) + '...' : a.title || '');
-                                    const sent = (a.sentiment || 'neutral').toLowerCase();
-                                    const sentClass = sent === 'positive' ? 'positive' : sent === 'negative' ? 'negative' : 'neutral';
-                                    const timeAgo = formatTimeAgo(a.published_utc || a.publishedUtc);
-                                    return `<div class="news-item"><span class="news-time">${timeAgo}</span><span class="news-title">${title}</span><span class="news-sentiment ${sentClass}">${sent}</span></div>`;
-                                }).join('') + '</div>';
-                            })()}
-                        </div>
-                    `;
+                    holdingDataArray.push({
+                        symbol, shares, stockPrice, currentValue, changeClass, avgPurchasePrice,
+                        earliestDate, conviction, daysHeld, gainLoss, gainLossPercent, gainLossClass,
+                        positionSizePercent, isPastTimeframe, stockName, stockSector, entryMomentum,
+                        entryRS, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
+                        _struct, _profitSignals, _lossSignals, insertionOrder: insertionOrder++
+                    });
                 }
-                holdingsList.innerHTML = compactHtml;
-                if (holdingsDetailGrid) holdingsDetailGrid.innerHTML = detailHtml;
+
+                // Cache for sort-only re-renders
+                lastHoldingDataArray = holdingDataArray;
+
+                sortAndRenderHoldings(holdingDataArray);
             }
 
             // Update chart
@@ -11533,9 +11701,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             try {
                 // Get portfolio context
-                const { total: totalValue } = await calculatePortfolioValue();
+                const { total: totalValue, priceData } = await calculatePortfolioValue();
                 const recentTransactions = portfolio.transactions.slice(-5);
-                
+
                 // Call Claude API via Cloudflare Worker proxy
                 const data = await fetchAnthropicStreaming({
                         model: 'claude-sonnet-4-6',
@@ -11555,7 +11723,10 @@ Current Portfolio:
         let totalCost = 0, totalShares = 0;
         buys.forEach(t => { totalShares += t.shares; totalCost += t.price * t.shares; });
         const avgCost = totalShares > 0 ? totalCost / totalShares : 0;
-        summary[sym] = { shares, avgCost: '$' + avgCost.toFixed(2) };
+        const pd = priceData[sym];
+        const curPrice = pd ? pd.price : null;
+        const dayChg = pd ? pd.changePercent : null;
+        summary[sym] = { shares, avgCost: '$' + avgCost.toFixed(2), currentPrice: curPrice ? '$' + curPrice.toFixed(2) : 'unknown', dayChange: dayChg != null ? dayChg.toFixed(2) + '%' : 'unknown' };
     });
     return JSON.stringify(summary);
 })()}

@@ -243,7 +243,7 @@
             <!-- Charts -->
             <div class="charts-grid">
                 <div class="chart-card card">
-                    <h2 class="chart-title">Portfolio Performance</h2>
+                    <h2 class="chart-title">Portfolio Returns</h2>
                     <canvas id="performanceChart"></canvas>
                 </div>
                 <div class="chart-card card">
@@ -269,6 +269,15 @@
             <div class="card collapsible-section" id="holdingsDetailSection">
                 <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="holdingsDetailBody" onclick="toggleSection('holdingsDetail')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('holdingsDetail')}">
                     <h2 class="chart-title">Current Holdings</h2>
+                    <div class="holdings-sort-controls" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
+                        <label for="holdingsSortSelect" class="holdings-sort-label">Sort:</label>
+                        <select id="holdingsSortSelect" class="holdings-sort-select" onchange="applyHoldingsSort(this.value)">
+                            <option value="dateAdded">Date Added</option>
+                            <option value="totalPL">Total P&amp;L %</option>
+                            <option value="dailyChange">Daily Change %</option>
+                            <option value="positionSize">Position Size</option>
+                        </select>
+                    </div>
                     <span class="toggle-icon" id="holdingsDetailToggle">&#9662;</span>
                 </div>
                 <div class="section-body" id="holdingsDetailBody">
