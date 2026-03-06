@@ -5378,7 +5378,7 @@
         }
 
         // Volume divergence — price rising with declining volume signals weakness
-        function detectVolumeDivergence(bars, lookback = 10) {
+        function detectVolumeDivergence(bars, lookback = 15) {
             if (!bars || bars.length < lookback + 1) return { divergence: false };
             const recent = bars.slice(-lookback);
             let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
@@ -5394,8 +5394,8 @@
             const avgVol = recent.reduce((s, b) => s + b.v, 0) / n;
             const priceTrendPct = avgPrice > 0 ? (priceSlope / avgPrice) * 100 : 0;
             const volTrendPct = avgVol > 0 ? (volSlope / avgVol) * 100 : 0;
-            const bearishDiv = priceTrendPct > 0.1 && volTrendPct < -0.5;
-            const bullishDiv = priceTrendPct < -0.1 && volTrendPct > 0.5;
+            const bearishDiv = priceTrendPct > 0.5 && volTrendPct < -2;
+            const bullishDiv = priceTrendPct < -0.5 && volTrendPct > 2;
             return {
                 divergence: bearishDiv || bullishDiv,
                 direction: bearishDiv ? 'bearish' : bullishDiv ? 'bullish' : 'none',

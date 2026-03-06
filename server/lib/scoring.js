@@ -496,7 +496,7 @@ function calculateATR(bars, period = 14) {
 
 // Volume divergence — detects price rising with declining volume.
 // Returns { divergence: bool, direction, priceTrend, volumeTrend, days }
-function detectVolumeDivergence(bars, lookback = 10) {
+function detectVolumeDivergence(bars, lookback = 15) {
     if (!bars || bars.length < lookback + 1) return { divergence: false };
     const recent = bars.slice(-lookback);
 
@@ -526,9 +526,9 @@ function detectVolumeDivergence(bars, lookback = 10) {
     const volTrendPct = avgVol > 0 ? (volSlope / avgVol) * 100 : 0;
 
     // Bearish divergence: price trending up, volume trending down
-    const bearishDiv = priceTrendPct > 0.1 && volTrendPct < -0.5;
+    const bearishDiv = priceTrendPct > 0.5 && volTrendPct < -2;
     // Bullish divergence: price trending down, volume trending up
-    const bullishDiv = priceTrendPct < -0.1 && volTrendPct > 0.5;
+    const bullishDiv = priceTrendPct < -0.5 && volTrendPct > 2;
 
     return {
         divergence: bearishDiv || bullishDiv,
