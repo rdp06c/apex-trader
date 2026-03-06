@@ -602,39 +602,52 @@
             letter-spacing: 0.3px;
         }
 
-        /* ── Catalyst Popover ─────────────────────────────── */
-        .catalyst-popover {
-            display: none;
-            position: fixed;
-            z-index: 200;
-            width: min(520px, calc(100vw - 32px));
-            max-height: 350px;
-            overflow-y: auto;
-            background: var(--bg-surface);
-            border: 1px solid var(--border-medium);
-            border-radius: var(--radius-md);
-            box-shadow: var(--shadow-lg);
-            padding: 18px;
-            animation: popoverIn 0.15s ease-out;
+        /* ── Holding Card Action Banner ──────────────────── */
+        .holding-card-action {
+            margin: 8px 0 4px;
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        .holding-card-action.action-profit {
+            background: var(--green-dim);
+            color: var(--green);
+            border-left: 3px solid var(--green);
+        }
+        .holding-card-action.action-warning {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--yellow);
+            border-left: 3px solid var(--yellow);
+        }
+        .holding-card-action.action-sell {
+            background: var(--red-dim);
+            color: var(--red);
+            border-left: 3px solid var(--red);
         }
 
-        .catalyst-popover.open {
-            display: block;
-        }
-
-        .catalyst-popover-title {
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--accent-light);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 10px;
-        }
-
-        .catalyst-popover-text {
-            font-size: 13px;
+        /* ── Holding Card Indicators Line ───────────────── */
+        .holding-card-indicators {
+            margin: 6px 0;
+            padding: 6px 10px;
+            background: var(--bg-inset);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
             color: var(--text-secondary);
-            line-height: 1.7;
+            line-height: 1.6;
+        }
+
+        /* ── Holding Card Levels Row ────────────────────── */
+        .holding-card-levels {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+            padding: 4px 0 2px;
+        }
+        .level-item {
+            white-space: nowrap;
         }
 
         .holding-card-timeframe {
@@ -677,13 +690,7 @@
             margin-top: 0;
         }
 
-        .holding-card-signals {
-            font-size: 11px;
-            color: var(--text-muted);
-            padding: 6px 0 2px;
-            border-top: 1px solid var(--border-subtle);
-            line-height: 1.6;
-        }
+
 
         .position-warning {
             color: var(--yellow);
