@@ -4116,48 +4116,38 @@
         async function updatePerformanceChart() {
             if (!performanceChart || portfolio.performanceHistory.length === 0) return;
 
-            // Aggregate performanceHistory to daily: last value per day, sum deposits
+            // Aggregate performanceHistory to daily: last entry per day (with totalReturnPct)
             const dailyMap = {};
             for (const entry of portfolio.performanceHistory) {
                 const date = new Date(entry.timestamp).toISOString().split('T')[0];
-                if (!dailyMap[date]) dailyMap[date] = { value: entry.value, deposits: 0 };
-                if (entry.value != null) dailyMap[date].value = entry.value;
-                if (entry.deposit) dailyMap[date].deposits += entry.deposit;
+                // Keep the last entry per day; prefer entries with totalReturnPct
+                if (!dailyMap[date] || entry.totalReturnPct != null) {
+                    dailyMap[date] = {
+                        value: entry.value,
+                        totalReturnPct: entry.totalReturnPct ?? null
+                    };
+                }
             }
 
-            const dates = Object.keys(dailyMap).sort();
+            // Only include days that have stored totalReturnPct (reliable data)
+            const allDates = Object.keys(dailyMap).sort();
+            const dates = allDates.filter(d => dailyMap[d].totalReturnPct != null);
             if (dates.length < 1) return;
 
-            // Compute daily returns and cumulative returns (deposit-adjusted)
+            // Build daily and cumulative return arrays from stored data
             const dailyReturns = [];
             const cumulativeReturns = [];
-            let runningDeposits = 0;
 
             for (let i = 0; i < dates.length; i++) {
                 const day = dailyMap[dates[i]];
-                runningDeposits += day.deposits;
+                cumulativeReturns.push(day.totalReturnPct);
 
                 if (i === 0) {
-                    // First day: value IS the initial deposit if no explicit deposit marker
-                    if (runningDeposits === 0) runningDeposits = day.value;
                     dailyReturns.push(0);
-                    cumulativeReturns.push(0);
-                    continue;
+                } else {
+                    const prevReturn = dailyMap[dates[i - 1]].totalReturnPct;
+                    dailyReturns.push(Math.round((day.totalReturnPct - prevReturn) * 100) / 100);
                 }
-
-                const prevDay = dailyMap[dates[i - 1]];
-
-                // Daily return: (value - prev_value - new_deposits) / prev_value
-                const dailyReturn = prevDay.value > 0
-                    ? ((day.value - prevDay.value - day.deposits) / prevDay.value) * 100
-                    : 0;
-                dailyReturns.push(Math.round(dailyReturn * 100) / 100);
-
-                // Cumulative return: (current_value - total_deposits) / total_deposits
-                const cumReturn = runningDeposits > 0
-                    ? ((day.value - runningDeposits) / runningDeposits) * 100
-                    : 0;
-                cumulativeReturns.push(Math.round(cumReturn * 100) / 100);
             }
 
             // Fetch SPY data for comparison
@@ -4165,13 +4155,11 @@
             try {
                 const spyBars = await fetchSPYForChart(dates[0]);
                 if (spyBars && spyBars.length > 0) {
-                    // Build date -> close price map
                     const spyByDate = {};
                     for (const bar of spyBars) {
                         const d = new Date(bar.t).toISOString().split('T')[0];
                         spyByDate[d] = bar.c;
                     }
-                    // Find baseline: SPY close on or before the first portfolio date
                     let baselinePrice = null;
                     for (const bar of spyBars) {
                         const d = new Date(bar.t).toISOString().split('T')[0];
@@ -4180,7 +4168,6 @@
                     }
                     if (!baselinePrice) baselinePrice = spyBars[0].c;
 
-                    // For each portfolio date, find closest SPY price on or before that date
                     let lastSPYPrice = baselinePrice;
                     for (let i = 0; i < dates.length; i++) {
                         if (spyByDate[dates[i]]) lastSPYPrice = spyByDate[dates[i]];
@@ -4205,17 +4192,13 @@
             // Update chart data
             performanceChart.data.labels = labels;
 
-            // Daily return bars with green/red per value
             performanceChart.data.datasets[0].data = dailyReturns;
             performanceChart.data.datasets[0].backgroundColor = dailyReturns.map(v =>
                 v >= 0 ? 'rgba(52, 211, 153, 0.7)' : 'rgba(248, 113, 113, 0.7)');
             performanceChart.data.datasets[0].borderColor = dailyReturns.map(v =>
                 v >= 0 ? 'rgba(52, 211, 153, 0.9)' : 'rgba(248, 113, 113, 0.9)');
 
-            // Cumulative total return line
             performanceChart.data.datasets[1].data = cumulativeReturns;
-
-            // SPY cumulative return line
             performanceChart.data.datasets[2].data = spyReturns;
 
             performanceChart.update();
@@ -11791,15 +11774,32 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const now = new Date();
             const lastEntry = portfolio.performanceHistory[portfolio.performanceHistory.length - 1];
             const timeSinceLast = lastEntry ? (now - new Date(lastEntry.timestamp)) : Infinity;
+            // Compute total return % using same formula as header (realized + unrealized / cost basis)
+            const _closedPL = (portfolio.closedTrades || []).reduce((sum, t) => sum + (t.profitLoss || 0), 0);
+            let _costBasis = 0;
+            for (const [_sym, _sh] of Object.entries(portfolio.holdings)) {
+                const _buys = getCurrentPositionBuys(_sym);
+                if (_buys.length > 0) {
+                    const _tc = _buys.reduce((s, t) => s + (t.price * t.shares), 0);
+                    const _ts = _buys.reduce((s, t) => s + t.shares, 0);
+                    _costBasis += _ts > 0 ? (_tc / _ts) * _sh : 0;
+                }
+            }
+            const _unrealizedPL = totalValue - _costBasis;
+            const _totalReturnPct = _costBasis > 0
+                ? ((_closedPL + _unrealizedPL) / _costBasis) * 100
+                : 0;
+
             if (timeSinceLast >= 15 * 60 * 1000 || !lastEntry) {
                 portfolio.performanceHistory.push({
                     timestamp: now.toISOString(),
-                    value: totalValue
+                    value: totalValue,
+                    totalReturnPct: Math.round(_totalReturnPct * 100) / 100
                 });
             } else {
-                // Update the most recent entry's value instead of adding a new one
                 lastEntry.value = totalValue;
                 lastEntry.timestamp = now.toISOString();
+                lastEntry.totalReturnPct = Math.round(_totalReturnPct * 100) / 100;
             }
 
             // Hard cap: keep at most 3000 entries
