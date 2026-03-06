@@ -646,6 +646,58 @@ function detectMarketRegime(vix, sectorAnalysis, mktData, multiDayCache) {
     return { regime, score, signals };
 }
 
+const ENTRY_SIGNAL_PATTERNS = [
+    {
+        id: 'reversal',
+        label: 'Reversal Entry',
+        criteria: [
+            { id: 'macd', label: 'MACD Bull', test: c => c.macdCrossover === 'bullish' },
+            { id: 'rsi', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
+            { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 },
+            { id: 'pullback', label: 'Pullback', test: c => c.return5d != null && c.return5d >= -8 && c.return5d <= -2 }
+        ],
+        minMatch: 2,
+        requireAny: ['macd', 'structure']
+    }
+];
+
+function evaluateEntrySignals(candidate) {
+    const results = [];
+    let bestMatch = null;
+    let bestMatchCount = 0;
+
+    for (const pattern of ENTRY_SIGNAL_PATTERNS) {
+        const criteriaResults = {};
+        let matchCount = 0;
+        for (const crit of pattern.criteria) {
+            const passed = crit.test(candidate);
+            criteriaResults[crit.id] = passed;
+            if (passed) matchCount++;
+        }
+
+        const total = pattern.criteria.length;
+        let match = null;
+        if (matchCount === total) {
+            match = 'full';
+        } else if (matchCount >= total - 1) {
+            match = 'strong';
+        } else if (matchCount >= pattern.minMatch) {
+            const hasRequired = pattern.requireAny.some(id => criteriaResults[id]);
+            if (hasRequired) match = 'partial';
+        }
+
+        const result = { id: pattern.id, label: pattern.label, match, matchCount, totalCriteria: total, criteria: criteriaResults };
+        results.push(result);
+
+        if (matchCount > bestMatchCount) {
+            bestMatchCount = matchCount;
+            bestMatch = match;
+        }
+    }
+
+    return { patterns: results, bestMatch, bestMatchCount };
+}
+
 module.exports = {
     isMarketOpen,
     calculateRSI,
@@ -664,5 +716,6 @@ module.exports = {
     calculateATR,
     detectVolumeDivergence,
     calculateFibTargets,
-    detectMarketRegime
+    detectMarketRegime,
+    evaluateEntrySignals
 };

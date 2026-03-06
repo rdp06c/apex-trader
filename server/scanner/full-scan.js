@@ -8,7 +8,7 @@ const {
     calculateRSI, calculateSMA, calculateMACD, calculateSMACrossover,
     detectStructure, calculate5DayMomentum, calculateVolumeRatio,
     calculateRelativeStrength, detectSectorRotation, calculateCompositeScore,
-    getActiveWeights, isMarketOpen, detectMarketRegime
+    getActiveWeights, isMarketOpen, detectMarketRegime, evaluateEntrySignals
 } = require('../lib/scoring');
 const {
     fetchBulkSnapshot, fetchGroupedDailyBars, fetchServerIndicators,
@@ -223,7 +223,8 @@ async function runFullScan({ force = false } = {}) {
                 scoreBreakdown: score.breakdown,
                 serverRsi: si.serverRsi ?? null,
                 serverMacd: si.serverMacd ?? null,
-                serverSma50: si.serverSma50 ?? null
+                serverSma50: si.serverSma50 ?? null,
+                entrySignal: evaluateEntrySignals({ macdCrossover: macd?.crossover || 'none', rsi, structure: structure.structure, structureScore: structure.structureScore, return5d: momentum.totalReturn5d ?? null })
             });
             scored++;
         }

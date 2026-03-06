@@ -2470,6 +2470,60 @@
             };
         }
 
+        // Entry signal pattern definitions — data-driven for extensibility.
+        // Phase 5 will add backtesting-discovered patterns to this array.
+        const ENTRY_SIGNAL_PATTERNS = [
+            {
+                id: 'reversal',
+                label: 'Reversal Entry',
+                criteria: [
+                    { id: 'macd', label: 'MACD Bull', test: c => c.macdCrossover === 'bullish' },
+                    { id: 'rsi', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
+                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 },
+                    { id: 'pullback', label: 'Pullback', test: c => c.return5d != null && c.return5d >= -8 && c.return5d <= -2 }
+                ],
+                minMatch: 2,
+                requireAny: ['macd', 'structure']
+            }
+        ];
+
+        function evaluateEntrySignals(candidate) {
+            const results = [];
+            let bestMatch = null;
+            let bestMatchCount = 0;
+
+            for (const pattern of ENTRY_SIGNAL_PATTERNS) {
+                const criteriaResults = {};
+                let matchCount = 0;
+                for (const crit of pattern.criteria) {
+                    const passed = crit.test(candidate);
+                    criteriaResults[crit.id] = passed;
+                    if (passed) matchCount++;
+                }
+
+                const total = pattern.criteria.length;
+                let match = null;
+                if (matchCount === total) {
+                    match = 'full';
+                } else if (matchCount >= total - 1) {
+                    match = 'strong';
+                } else if (matchCount >= pattern.minMatch) {
+                    const hasRequired = pattern.requireAny.some(id => criteriaResults[id]);
+                    if (hasRequired) match = 'partial';
+                }
+
+                const result = { id: pattern.id, label: pattern.label, match, matchCount, totalCriteria: total, criteria: criteriaResults };
+                results.push(result);
+
+                if (matchCount > bestMatchCount) {
+                    bestMatchCount = matchCount;
+                    bestMatch = match;
+                }
+            }
+
+            return { patterns: results, bestMatch, bestMatchCount };
+        }
+
         // BULK SNAPSHOT: Fetch all tickers in ONE call instead of 300 individual calls
         let bulkSnapshotCache = {};
         let bulkSnapshotTimestamp = 0;
@@ -8336,6 +8390,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 case 'positionSize':
                     sorted.sort((a, b) => b.currentValue - a.currentValue);
                     break;
+                case 'health':
+                    sorted.sort((a, b) => (b._lossSignals?.length || 0) - (a._lossSignals?.length || 0));
+                    break;
                 case 'dateAdded':
                 default:
                     sorted.sort((a, b) => a.insertionOrder - b.insertionOrder);
@@ -8390,10 +8447,31 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             <strong>${h.daysHeld === 0 ? 'Bought today' : `Held ${h.daysHeld}d`}</strong>
                             ${h.isPastTimeframe ? '<span class="holding-card-timeframe-warning">OVERDUE</span>' : ''}
                             <span class="text-muted">·</span>
-                            Mtm: <strong>${h.entryMomentum != null ? h.entryMomentum.toFixed(1) : '--'}</strong>
-                            · RS: <strong>${h.entryRS != null ? h.entryRS.toFixed(0) : '--'}</strong>
+                            Mtm: ${(() => {
+                                const entry = h.entryMomentum;
+                                const now = h._candidateNow?.momentum;
+                                if (entry == null) return '<strong>--</strong>';
+                                if (now != null) {
+                                    const delta = now - entry;
+                                    const cls = delta <= -3 ? 'negative' : delta >= 3 ? 'positive' : '';
+                                    return '<strong>' + entry.toFixed(1) + '</strong><span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span>';
+                                }
+                                return '<strong>' + entry.toFixed(1) + '</strong>';
+                            })()}
+                            · RS: ${(() => {
+                                const entry = h.entryRS;
+                                const now = h._candidateNow?.rs;
+                                if (entry == null) return '<strong>--</strong>';
+                                if (now != null) {
+                                    const delta = now - entry;
+                                    const cls = delta <= -15 ? 'negative' : delta >= 15 ? 'positive' : '';
+                                    return '<strong>' + Math.round(entry) + '</strong><span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span>';
+                                }
+                                return '<strong>' + Math.round(entry) + '</strong>';
+                            })()}
                             ${h._rsiVal != null ? '· RSI: <strong class="' + (h._rsiVal < 30 ? 'rsi-oversold' : h._rsiVal > 70 ? 'rsi-overbought' : '') + '">' + Math.round(h._rsiVal) + '</strong>' : ''}
                             ${h._macdResult ? '· MACD: <strong class="' + (h._macdResult.crossover === 'bullish' ? 'macd-bullish' : h._macdResult.crossover === 'bearish' ? 'macd-bearish' : h._macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish') + '">' + (h._macdResult.crossover === 'bullish' ? '▲ Cross' : h._macdResult.crossover === 'bearish' ? '▼ Cross' : h._macdResult.histogram >= 0 ? '▲' : '▼') + '</strong>' : ''}
+                            ${h._struct ? '· Struct: <strong class="' + (h._struct.structure === 'bullish' || h._struct.structure === 'bullish_continuation' ? 'sig-green' : h._struct.structure === 'bearish' || h._struct.structure === 'bearish_continuation' ? 'sig-red' : '') + '">' + (h._struct.structure || 'unknown').replace(/_/g, ' ') + '</strong>' : ''}
                             ${h._dtcVal && h._dtcVal > 0 ? '· DTC: <strong class="' + (h._dtcVal > 5 ? 'dtc-squeeze' : h._dtcVal > 3 ? 'dtc-elevated' : '') + '">' + h._dtcVal.toFixed(1) + '</strong>' : ''}
                             ${h._struct?.choch ? '· CHoCH: <strong class="' + (h._struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._struct.chochType === 'bullish' ? '▲' : '▼') + '</strong>' : ''}
                             ${h._volDiv?.divergence ? '· <span class="' + (h._volDiv.direction === 'bearish' ? 'negative' : 'positive') + '" style="font-weight:600">Vol ' + h._volDiv.direction + '</span>' : ''}
@@ -8404,8 +8482,24 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             <div><span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString() + ' ' + h.earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span></div>
                         </div>
                         <div class="holding-card-levels">
-                            <div>${h._atrStop ? '<span class="holding-card-footer-label">ATR Stop:</span> <span class="holding-card-footer-value ' + (h.stockPrice.price <= h._atrStop ? 'negative' : '') + '">$' + h._atrStop.toFixed(2) + '</span>' : ''}</div>
-                            <div>${h._fib?.type === 'bullish' ? '<span class="holding-card-footer-label">Fib Target:</span> <span class="holding-card-footer-value ' + (h.stockPrice.price >= h._fib.fib1272 ? 'positive' : '') + '">$' + h._fib.fib1272.toFixed(2) + '</span> · <span class="holding-card-footer-value ' + (h.stockPrice.price >= h._fib.fib1618 ? 'positive' : '') + '">$' + h._fib.fib1618.toFixed(2) + '</span>' : ''}</div>
+                            <div>${(() => {
+                                const thesisStop = h._thesis?.stopPrice;
+                                const atr = h._atrStop;
+                                const stop = thesisStop || atr;
+                                const label = thesisStop ? 'Stop' : 'ATR Stop';
+                                return stop ? '<span class="holding-card-footer-label">' + label + ':</span> <span class="holding-card-footer-value ' + (h.stockPrice.price <= stop ? 'negative' : '') + '">$' + stop.toFixed(2) + '</span>' : '';
+                            })()}</div>
+                            <div>${(() => {
+                                const thesisTarget = h._thesis?.targetPrice;
+                                const fib = h._fib?.type === 'bullish' ? h._fib : null;
+                                if (thesisTarget) {
+                                    return '<span class="holding-card-footer-label">Target:</span> <span class="holding-card-footer-value ' + (h.stockPrice.price >= thesisTarget ? 'positive' : '') + '">$' + thesisTarget.toFixed(2) + '</span>';
+                                }
+                                if (fib) {
+                                    return '<span class="holding-card-footer-label">Fib Target:</span> <span class="holding-card-footer-value ' + (h.stockPrice.price >= fib.fib1272 ? 'positive' : '') + '">$' + fib.fib1272.toFixed(2) + '</span> · <span class="holding-card-footer-value ' + (h.stockPrice.price >= fib.fib1618 ? 'positive' : '') + '">$' + fib.fib1618.toFixed(2) + '</span>';
+                                }
+                                return '';
+                            })()}</div>
                             <div></div>
                         </div>
                         ${(() => {
@@ -8615,12 +8709,27 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (_struct?.structure === 'bearish') _lossSignals.push('Bearish structure');
                     if (gainLossPercent <= -10) _lossSignals.push('Down 10%+');
 
+                    // Thesis-based sell/profit signals (Phase 2)
+                    const _thesis = (portfolio.holdingTheses || {})[symbol];
+                    const _candidateNow = (portfolio.lastCandidateScores?.candidates || []).find(c => c.symbol === symbol);
+
+                    if (_thesis?.stopPrice && stockPrice.price <= _thesis.stopPrice) _lossSignals.push('Stop breached');
+                    if (_thesis?.entryRS != null && _candidateNow?.rs != null && (_candidateNow.rs - _thesis.entryRS) <= -30)
+                        _lossSignals.push(`RS ${Math.round(_thesis.entryRS)}\u2192${Math.round(_candidateNow.rs)}`);
+                    if (_thesis?.entryMomentum >= 7 && _candidateNow?.momentum != null && _candidateNow.momentum < 3)
+                        _lossSignals.push(`Mom ${_thesis.entryMomentum.toFixed(1)}\u2192${_candidateNow.momentum.toFixed(1)}`);
+                    if (_thesis?.entryStructure === 'bullish' && _struct?.structure === 'bearish')
+                        _lossSignals.push('Structure flipped');
+
+                    if (_thesis?.targetPrice && stockPrice.price >= _thesis.targetPrice) _profitSignals.push('Target reached');
+
                     holdingDataArray.push({
                         symbol, shares, stockPrice, currentValue, changeClass, avgPurchasePrice,
                         earliestDate, conviction, daysHeld, gainLoss, gainLossPercent, gainLossClass,
                         positionSizePercent, isPastTimeframe, stockName, stockSector, entryMomentum,
                         entryRS, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
-                        _struct, _profitSignals, _lossSignals, insertionOrder: insertionOrder++
+                        _struct, _profitSignals, _lossSignals, _thesis, _candidateNow,
+                        insertionOrder: insertionOrder++
                     });
                 }
 
@@ -11872,7 +11981,7 @@ Current Portfolio:
         }
 
         // Module 2: Candidate Scorecard (paginated, full universe)
-        const scorecardState = { page: 1, filterSector: '', filterHeld: false, sortField: 'score', sortDir: 'desc' };
+        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: false, sortField: 'score', sortDir: 'desc' };
         const SCORECARD_PAGE_SIZE = 40;
 
         function scorecardSetSector(val) {
@@ -11883,6 +11992,12 @@ Current Portfolio:
 
         function scorecardToggleHeld() {
             scorecardState.filterHeld = !scorecardState.filterHeld;
+            scorecardState.page = 1;
+            updateCandidateScorecard();
+        }
+
+        function scorecardToggleSignal() {
+            scorecardState.filterSignal = !scorecardState.filterSignal;
             scorecardState.page = 1;
             updateCandidateScorecard();
         }
@@ -11949,8 +12064,15 @@ Current Portfolio:
             const sectorCounts = {};
             candidates.forEach(c => { sectorCounts[c.sector] = (sectorCounts[c.sector] || 0) + 1; });
 
+            // Compute entry signals for all candidates
+            candidates.forEach(c => { c._entrySignal = evaluateEntrySignals(c); });
+
             if (scorecardState.filterHeld) {
                 candidates = candidates.filter(c => holdingSymbols.has(c.symbol));
+            }
+
+            if (scorecardState.filterSignal) {
+                candidates = candidates.filter(c => (c._entrySignal?.bestMatchCount ?? 0) >= 3);
             }
 
             if (scorecardState.filterSector) {
@@ -11977,6 +12099,7 @@ Current Portfolio:
                 },
                 dtc: c => c.daysToCover || 0,
                 mcap: c => c.marketCap || 0,
+                sig: c => c._entrySignal?.bestMatchCount ?? 0,
             };
             const accessor = sortAccessors[scorecardState.sortField] || sortAccessors.score;
             const dir = scorecardState.sortDir === 'asc' ? 1 : -1;
@@ -11994,6 +12117,7 @@ Current Portfolio:
             // Controls: holdings filter + sector filter + pagination
             let html = '<div class="scorecard-controls">';
             html += `<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8rem;color:#888;cursor:pointer;margin-right:12px;"><input type="checkbox" onchange="scorecardToggleHeld()"${scorecardState.filterHeld ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> Holdings only</label>`;
+            html += `<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8rem;color:#888;cursor:pointer;margin-right:12px;"><input type="checkbox" onchange="scorecardToggleSignal()"${scorecardState.filterSignal ? ' checked' : ''} style="accent-color:#2ecc40;cursor:pointer;"> Entry signals</label>`;
             html += `<select onchange="scorecardSetSector(this.value)" class="scorecard-sector-filter">`;
             html += `<option value="">All Sectors (${totalCount})</option>`;
             sectors.forEach(s => {
@@ -12021,6 +12145,7 @@ Current Portfolio:
 
             html += '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
                 '<th>#</th><th>Symbol</th>' +
+                sh('sig', "Entry signal match. Evaluates reversal criteria: MACD Bull + RSI<40 + Bull Structure + 5D Pullback. ENTRY=4/4, 3/4=strong, 2/4=partial.", 'Sig') +
                 sh('score', "Composite score from ~15 weighted signals. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
@@ -12108,11 +12233,36 @@ Current Portfolio:
                 const structClass = (c.structure === 'bullish' || c.structure === 'bullish_continuation') ? 'sig-green'
                     : (c.structure === 'bearish' || c.structure === 'bearish_continuation') ? 'sig-red' : '';
 
+                // Entry signal badge
+                const sig = c._entrySignal;
+                let sigBadge = '';
+                if (sig?.bestMatch) {
+                    const pat = sig.patterns[0]; // first pattern (reversal)
+                    const critParts = pat ? ENTRY_SIGNAL_PATTERNS[0].criteria.map(cr => {
+                        const hit = pat.criteria[cr.id];
+                        return hit ? cr.label : `~${cr.label}~`;
+                    }).join(', ') : '';
+                    const tipText = pat ? `${pat.label}: ${critParts}` : '';
+                    if (sig.bestMatch === 'full') sigBadge = `<span class="entry-badge full" title="${tipText}">ENTRY</span>`;
+                    else if (sig.bestMatch === 'strong') sigBadge = `<span class="entry-badge strong" title="${tipText}">${sig.bestMatchCount}/${pat.totalCriteria}</span>`;
+                    else if (sig.bestMatch === 'partial') sigBadge = `<span class="entry-badge partial" title="${tipText}">${sig.bestMatchCount}/${pat.totalCriteria}</span>`;
+                }
+
+                // Score driver indicator (Phase 4)
+                let driverBadge = '';
+                if (bd && score > 0) {
+                    const momRsContrib = (bd.momentumContrib || 0) + (bd.rsContrib || 0);
+                    driverBadge = momRsContrib > score * 0.5
+                        ? '<span class="score-driver mom" title="Score driven by momentum/RS">M</span>'
+                        : '<span class="score-driver sig" title="Score driven by reversal signals">S</span>';
+                }
+
                 const globalRank = start + i + 1;
                 html += `<tr>
                     <td class="scorecard-rank">${globalRank}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
-                    <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span></div></td>
+                    <td>${sigBadge}</td>
+                    <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span>${driverBadge}</div></td>
                     <td style="font-size:11px">${priceStr}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td class="${ret5dClass}" style="font-size:11px">${ret5d != null ? (ret5d >= 0 ? '+' : '') + ret5d.toFixed(2) + '%' : '--'}</td>
@@ -12130,7 +12280,7 @@ Current Portfolio:
 
             html += '</tbody></table></div>';
             html += `<div style="font-size:10px;color:var(--text-faint);margin-top:8px">Last scored: ${new Date(data.timestamp).toLocaleString()} — ${totalCount} stocks scored</div>`;
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent)">Ideal entry: <strong style="color:var(--green)">Bullish MACD Cross</strong> + <strong style="color:var(--green)">RSI &lt; 40</strong> + <strong style="color:var(--green)">Bullish Structure</strong> + <strong style="color:var(--green)">5D return -2% to -8%</strong> &mdash; triggers pullback bonus (+5) and 1.3x score multiplier</div>`;
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent)">Sig column: <strong style="color:var(--green)">ENTRY</strong> = all 4 criteria met, <strong style="color:var(--yellow)">3/4</strong> = strong match, <span style="color:var(--text-muted)">2/4</span> = partial. Score badge: <span class="score-driver sig" style="display:inline">S</span> = signal-driven, <span class="score-driver mom" style="display:inline">M</span> = momentum-driven.</div>`;
             container.innerHTML = html;
         }
 

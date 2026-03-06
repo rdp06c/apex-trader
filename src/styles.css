@@ -2411,6 +2411,35 @@
             letter-spacing: 0.5px;
         }
 
+        .entry-badge {
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-size: 0.7em;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .entry-badge.full { background: var(--green); color: #000; }
+        .entry-badge.strong { background: var(--yellow); color: #000; }
+        .entry-badge.partial { background: rgba(255,255,255,0.1); color: var(--text-muted); }
+
+        .score-driver {
+            font-size: 9px;
+            font-weight: 700;
+            padding: 0 3px;
+            border-radius: 3px;
+            margin-left: 3px;
+        }
+        .score-driver.sig { background: rgba(46,204,64,0.2); color: var(--green); }
+        .score-driver.mom { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+
+        .health-arrow {
+            font-size: 0.85em;
+            margin-left: 1px;
+            color: var(--text-muted);
+        }
+        .health-arrow.negative { color: var(--red, #ff4757); font-weight: 600; }
+        .health-arrow.positive { color: var(--green); font-weight: 600; }
+
         .scorecard-score-cell {
             display: flex;
             align-items: center;
