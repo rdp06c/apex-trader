@@ -105,11 +105,13 @@ ${status.fullScan?.topScorers?.length > 0 ? `
         : Object.entries(status.readings).map(([sym, r]) => `
             <div class="reading">
                 <span class="sym">${sym}</span>
+                ${r.price ? `<span style="font-size:0.8rem; color:#aaa;">$${r.price.toFixed(2)}</span>` : ''}
                 <span class="struct ${r.structure}">${r.structure}</span>
-                <span style="font-size:0.8rem; color:#888;">Score: ${r.structureScore}</span>
-                <span style="font-size:0.8rem; color:#888;">RSI: ${r.rsi || '—'}</span>
-                <span style="font-size:0.8rem; color:#888;">${r.choch ? '⚠ CHoCH ' + r.chochType : ''}</span>
-                <span style="font-size:0.8rem; color:#666;">${r.timestamp ? timeAgo(r.timestamp) : ''}</span>
+                <span style="font-size:0.8rem; color:#888;">RSI: ${r.rsi != null ? Math.round(r.rsi) : '—'}</span>
+                <span style="font-size:0.8rem; color:#888;">MACD: ${r.macdCrossover === 'bullish' ? '<span style="color:#2ecc40">▲</span>' : r.macdCrossover === 'bearish' ? '<span style="color:#ff4757">▼</span>' : '—'}</span>
+                ${r.choch ? `<span style="font-size:0.8rem; color:#ff4757;">⚠ CHoCH ${r.chochType}</span>` : ''}
+                ${r.lossSignals && r.lossSignals.length > 0 ? `<span style="font-size:0.75rem; background:#ff4757; color:#fff; padding:1px 6px; border-radius:8px; font-weight:600;" title="${r.lossSignals.join(', ')}">${r.lossSignals.length} warning${r.lossSignals.length > 1 ? 's' : ''}</span>` : ''}
+                <span style="font-size:0.75rem; color:#666;">${r.timestamp ? timeAgo(r.timestamp) : ''}</span>
             </div>
         `).join('')
     }

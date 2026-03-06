@@ -110,6 +110,21 @@ async function runStructureCheck({ force = false } = {}) {
             const entryPrice = thesis?.entryPrice || price;
             const atrStop = atr && entryPrice ? Math.round((entryPrice - 2 * atr) * 100) / 100 : null;
 
+            // Compute loss signals for health summary
+            const lossSignals = [];
+            const candidateNow = (portfolio.lastCandidateScores?.candidates || []).find(c => c.symbol === symbol);
+            if (atrStop && price && price <= atrStop) lossSignals.push('ATR stop');
+            if (current.choch && current.chochType === 'bearish') lossSignals.push('Bearish CHoCH');
+            if (current.structure === 'bearish') lossSignals.push('Bearish structure');
+            if (thesis?.stopPrice && price && price <= thesis.stopPrice) lossSignals.push('Stop breached');
+            if (thesis?.entryRS != null && candidateNow?.rs != null && (candidateNow.rs - thesis.entryRS) <= -30)
+                lossSignals.push('RS collapse');
+            if (thesis?.entryMomentum >= 7 && candidateNow?.momentum != null && candidateNow.momentum < 3)
+                lossSignals.push('Mom collapse');
+            if (thesis?.entryStructure === 'bullish' && current.structure === 'bearish')
+                lossSignals.push('Structure flipped');
+            if (volDiv.divergence && volDiv.direction === 'bearish') lossSignals.push('Vol divergence');
+
             // Store current readings in state
             if (!state.readings) state.readings = {};
             state.readings[symbol] = {
@@ -125,6 +140,7 @@ async function runStructureCheck({ force = false } = {}) {
                 volumeDivergence: volDiv,
                 fibTargets,
                 price,
+                lossSignals,
                 timestamp: new Date().toISOString()
             };
 
