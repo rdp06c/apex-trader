@@ -210,7 +210,16 @@ function start() {
         });
     }, { timezone: 'America/New_York' });
 
-    console.log('Scanner: scheduled (structure check every 15 min, full scan 9:35 AM + 12:30 PM ET)');
+    // End-of-day scan at 4:05 PM ET — captures final daily bar values
+    // for after-hours review and manual trade signal enrichment
+    cron.schedule('5 16 * * 1-5', () => {
+        console.log('Full scan: triggered (4:05 PM ET schedule)');
+        runFullScan({ force: true }).catch(err => {
+            console.error('Full scan: unhandled error:', err.message);
+        });
+    }, { timezone: 'America/New_York' });
+
+    console.log('Scanner: scheduled (structure check every 15 min, full scan 9:35 AM + 12:30 PM + 4:05 PM ET)');
 
     // Run structure check on startup if market is open
     if (isMarketOpen()) {
