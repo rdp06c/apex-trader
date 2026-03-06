@@ -14325,6 +14325,63 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 html += `</tbody></table></div></div>`;
             }
 
+            // ── Section E: Signal Combinations (from calibration backtesting) ──
+            const comboData = portfolio.calibratedWeights?.signalCombos;
+            if (comboData?.baseline) {
+                const showAll = document.getElementById('comboShowAll')?.checked || false;
+                const hotThreshold = showAll ? 0.2 : 0.5;
+                const coldThreshold = showAll ? -0.2 : -0.5;
+                const minN = showAll ? 30 : 50;
+
+                // Reclassify from raw combo data based on current threshold
+                const allCombos = Object.values(comboData.combos);
+                const sufficient = allCombos.filter(c => !c.insufficient && c.n >= minN);
+                const insufficientCombos = allCombos.filter(c => c.insufficient || c.n < minN);
+                const hotCombos = sufficient.filter(c => c.vsBaselineReturn > hotThreshold).sort((a, b) => b.vsBaselineReturn - a.vsBaselineReturn);
+                const coldCombos = sufficient.filter(c => c.vsBaselineReturn < coldThreshold).sort((a, b) => a.vsBaselineReturn - b.vsBaselineReturn);
+                const neutralCombos = sufficient.filter(c => c.vsBaselineReturn >= coldThreshold && c.vsBaselineReturn <= hotThreshold);
+
+                html += `<div class="analytics-panel">
+                    <div class="analytics-panel-title">Signal Combinations <span style="font-size:0.7em;font-weight:400;color:var(--text-muted)">(${comboData.baseline.totalObs.toLocaleString()} backtested observations · baseline: ${comboData.baseline.avgReturn10d >= 0 ? '+' : ''}${comboData.baseline.avgReturn10d.toFixed(2)}% avg 10D return, ${comboData.baseline.winRate10d.toFixed(0)}% WR)</span></div>
+                    <div class="insight-panel-body">`;
+
+                html += `<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8rem;color:#888;cursor:pointer;margin-bottom:8px;"><input type="checkbox" id="comboShowAll" onchange="updateLearningInsightsDisplay()"${showAll ? ' checked' : ''} style="accent-color:#2ecc40;cursor:pointer;"> Show all combos (lower thresholds)</label>`;
+
+                const renderComboTable = (combos, title, colorVal) => {
+                    if (combos.length === 0) return;
+                    html += `<div style="margin-top:8px;margin-bottom:4px;font-weight:600;font-size:0.85rem;color:${colorVal}">${title}</div>`;
+                    html += `<table class="signal-accuracy-table"><thead><tr>
+                        <th>Combination</th><th>Tier</th><th>Avg 10D</th><th>Win Rate</th><th>vs Baseline</th><th>Obs</th>
+                    </tr></thead><tbody>`;
+                    for (const c of combos) {
+                        const retColor = c.avgReturn10d >= 0 ? 'var(--green)' : 'var(--red)';
+                        const wrColor = c.winRate10d >= 55 ? 'var(--green)' : c.winRate10d >= 45 ? 'var(--yellow)' : 'var(--red)';
+                        const vsColor = c.vsBaselineReturn > 0 ? 'var(--green)' : 'var(--red)';
+                        html += `<tr>
+                            <td>${c.label}</td>
+                            <td style="color:var(--text-muted)">${c.tier === 1 ? 'Pair' : c.tier === 2 ? 'Triple' : 'Anti'}</td>
+                            <td style="color:${retColor};font-weight:600">${c.avgReturn10d >= 0 ? '+' : ''}${c.avgReturn10d.toFixed(2)}%</td>
+                            <td style="color:${wrColor};font-weight:600">${c.winRate10d.toFixed(0)}%</td>
+                            <td style="color:${vsColor}">${c.vsBaselineReturn >= 0 ? '+' : ''}${c.vsBaselineReturn.toFixed(2)}%</td>
+                            <td style="color:var(--text-muted)">${c.n.toLocaleString()}</td>
+                        </tr>`;
+                    }
+                    html += `</tbody></table>`;
+                };
+
+                renderComboTable(hotCombos, 'Hot Signals (beat baseline)', 'var(--green)');
+                renderComboTable(coldCombos, 'Cold Signals (underperform baseline)', 'var(--red, #ff4757)');
+                if (showAll && neutralCombos.length > 0) {
+                    renderComboTable(neutralCombos, 'Neutral', 'var(--text-muted)');
+                }
+
+                if (insufficientCombos.length > 0) {
+                    html += `<div style="margin-top:8px;font-size:0.75rem;color:var(--text-muted)">Insufficient data (< ${minN} obs): ${insufficientCombos.map(c => c.label + ' (' + c.n + ')').join(', ')}</div>`;
+                }
+
+                html += `</div></div>`;
+            }
+
             container.innerHTML = html;
         }
 
@@ -14417,6 +14474,85 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const sumY2 = ys.reduce((a, y) => a + y * y, 0);
             const denom = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
             return denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
+        }
+
+        // Signal combo analysis — tests curated signal combinations against forward returns
+        function analyzeSignalCombos(observations, showAll = false) {
+            const MIN_N = showAll ? 30 : 50;
+            const HOT_THRESHOLD = showAll ? 0.2 : 0.5;
+            const COLD_THRESHOLD = showAll ? -0.2 : -0.5;
+
+            const sectorFlowInflow = f => f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow';
+
+            const comboDefs = [
+                // Tier 1: Core Pairs
+                { id: 'rsi_low_macd_bull', label: 'RSI<40 + Bullish MACD', tier: 1, filter: s => s.rsi != null && s.rsi < 40 && s.macdCrossover === 'bullish' },
+                { id: 'rsi_low_structure_bull', label: 'RSI<40 + Bull Structure', tier: 1, filter: s => s.rsi != null && s.rsi < 40 && (s.structureScore ?? 0) >= 2 },
+                { id: 'pullback_structure_bull', label: 'Pullback + Bull Structure', tier: 1, filter: s => s.totalReturn5d >= -8 && s.totalReturn5d <= -2 && (s.structureScore ?? 0) >= 2 },
+                { id: 'pullback_macd_bull', label: 'Pullback + Bullish MACD', tier: 1, filter: s => s.totalReturn5d >= -8 && s.totalReturn5d <= -2 && s.macdCrossover === 'bullish' },
+                { id: 'macd_bull_structure_bull', label: 'Bullish MACD + Bull Structure', tier: 1, filter: s => s.macdCrossover === 'bullish' && (s.structureScore ?? 0) >= 2 },
+                { id: 'momentum_high_vol', label: 'High Mom + Volume Confirming', tier: 1, filter: s => (s.momentumScore ?? 0) >= 7 && (s.volumeTrend ?? 1) > 1.2 },
+                { id: 'rsi_high_extension', label: 'RSI>70 + Extended Mom', tier: 1, filter: s => s.rsi != null && s.rsi > 70 && (s.momentumScore ?? 0) >= 8 },
+                { id: 'sector_inflow_structure', label: 'Sector Inflow + Bull Structure', tier: 1, filter: s => sectorFlowInflow(s.sectorFlow) && (s.structureScore ?? 0) >= 2 },
+                { id: 'sma_near_macd_bull', label: 'Near SMA20 + Bullish MACD', tier: 1, filter: s => s.sma20 > 0 && s.currentPrice > 0 && Math.abs((s.currentPrice - s.sma20) / s.sma20 * 100) <= 3 && s.macdCrossover === 'bullish' },
+                { id: 'rsi_low_sector_inflow', label: 'RSI<40 + Sector Inflow', tier: 1, filter: s => s.rsi != null && s.rsi < 40 && sectorFlowInflow(s.sectorFlow) },
+                // Tier 2: Key Triples
+                { id: 'ideal_entry', label: 'RSI<40 + MACD + Structure + Pullback', tier: 2, filter: s => s.rsi != null && s.rsi < 40 && s.macdCrossover === 'bullish' && (s.structureScore ?? 0) >= 2 && s.totalReturn5d >= -8 && s.totalReturn5d <= -2 },
+                { id: 'triple_pullback', label: 'Pullback + Structure + MACD', tier: 2, filter: s => s.totalReturn5d >= -8 && s.totalReturn5d <= -2 && (s.structureScore ?? 0) >= 2 && s.macdCrossover === 'bullish' },
+                { id: 'triple_oversold', label: 'RSI<30 + Structure + Sector Inflow', tier: 2, filter: s => s.rsi != null && s.rsi < 30 && (s.structureScore ?? 0) >= 2 && sectorFlowInflow(s.sectorFlow) },
+                { id: 'momentum_vol_structure', label: 'High Mom + Volume + Structure', tier: 2, filter: s => (s.momentumScore ?? 0) >= 7 && (s.volumeTrend ?? 1) > 1.2 && (s.structureScore ?? 0) >= 2 },
+                { id: 'rsi_macd_structure', label: 'RSI<40 + MACD + Structure', tier: 2, filter: s => s.rsi != null && s.rsi < 40 && s.macdCrossover === 'bullish' && (s.structureScore ?? 0) >= 2 },
+                // Tier 3: Anti-Patterns
+                { id: 'runner_overbought', label: 'RSI>70 + Runner (5%+)', tier: 3, filter: s => s.rsi != null && s.rsi > 70 && (s.todayChange ?? 0) >= 5 },
+                { id: 'bearish_outflow', label: 'Bearish Structure + Sector Outflow', tier: 3, filter: s => (s.structureScore ?? 0) <= -2 && (s.sectorFlow === 'outflow' || s.sectorFlow === 'avoid' || s.sectorFlow === 'caution') },
+                { id: 'extended_no_vol', label: 'High Mom + Declining Volume', tier: 3, filter: s => (s.momentumScore ?? 0) >= 7 && (s.volumeTrend ?? 1) < 0.8 },
+            ];
+
+            // Baseline stats
+            const baseAvg = observations.reduce((s, o) => s + o.return10d, 0) / observations.length;
+            const baseWR = (observations.filter(o => o.return10d > 0).length / observations.length) * 100;
+
+            const results = {};
+            for (const combo of comboDefs) {
+                const matching = observations.filter(o => combo.filter(o.scoreInputs));
+                if (matching.length < MIN_N) {
+                    results[combo.id] = { id: combo.id, label: combo.label, tier: combo.tier, n: matching.length, insufficient: true };
+                    continue;
+                }
+
+                const avgReturn5d = matching.reduce((s, o) => s + (o.return5d ?? 0), 0) / matching.length;
+                const avgReturn10d = matching.reduce((s, o) => s + o.return10d, 0) / matching.length;
+                const winRate10d = (matching.filter(o => o.return10d > 0).length / matching.length) * 100;
+
+                // Median
+                const sorted10d = matching.map(o => o.return10d).sort((a, b) => a - b);
+                const mid = Math.floor(sorted10d.length / 2);
+                const medianReturn10d = sorted10d.length % 2 !== 0 ? sorted10d[mid] : (sorted10d[mid - 1] + sorted10d[mid]) / 2;
+
+                results[combo.id] = {
+                    id: combo.id, label: combo.label, tier: combo.tier,
+                    n: matching.length,
+                    avgReturn5d: parseFloat(avgReturn5d.toFixed(3)),
+                    avgReturn10d: parseFloat(avgReturn10d.toFixed(3)),
+                    medianReturn10d: parseFloat(medianReturn10d.toFixed(3)),
+                    winRate10d: parseFloat(winRate10d.toFixed(1)),
+                    vsBaselineReturn: parseFloat((avgReturn10d - baseAvg).toFixed(3)),
+                    vsBaselineWR: parseFloat((winRate10d - baseWR).toFixed(1))
+                };
+            }
+
+            // Classify hot/cold
+            const combos = Object.values(results).filter(c => !c.insufficient);
+            const hot = combos.filter(c => c.vsBaselineReturn > HOT_THRESHOLD).sort((a, b) => b.vsBaselineReturn - a.vsBaselineReturn);
+            const cold = combos.filter(c => c.vsBaselineReturn < COLD_THRESHOLD).sort((a, b) => a.vsBaselineReturn - b.vsBaselineReturn);
+            const neutral = combos.filter(c => c.vsBaselineReturn >= COLD_THRESHOLD && c.vsBaselineReturn <= HOT_THRESHOLD);
+
+            return {
+                combos: results,
+                baseline: { avgReturn10d: parseFloat(baseAvg.toFixed(3)), winRate10d: parseFloat(baseWR.toFixed(1)), totalObs: observations.length },
+                hot, cold, neutral,
+                insufficient: Object.values(results).filter(c => c.insufficient)
+            };
         }
 
         // Helper: generate weekdays between two dates
@@ -14898,6 +15034,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
             }
 
+            // Signal combo analysis
+            report('🔄 Analyzing signal combinations...');
+            const comboAnalysis = analyzeSignalCombos(allObservations);
+            report(`📊 Signal combos: ${comboAnalysis.hot.length} hot, ${comboAnalysis.cold.length} cold, ${comboAnalysis.insufficient.length} insufficient data`);
+
             // Save to portfolio
             portfolio.calibratedWeights = {
                 timestamp: new Date().toISOString(),
@@ -14907,6 +15048,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 weights: finalWeights,
                 regimeWeights: Object.keys(finalRegimeWeights).length > 0 ? finalRegimeWeights : null,
                 componentCorrelations: componentCorrelations,
+                signalCombos: comboAnalysis,
                 validation: {
                     calibratedAvg10d: parseFloat(calibratedAvg10d.toFixed(2)),
                     defaultAvg10d: parseFloat(defaultAvg10d.toFixed(2)),
@@ -14933,6 +15075,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     highVix: highVixObs.length,
                     hasLowVix: !!finalRegimeWeights.lowVix,
                     hasHighVix: !!finalRegimeWeights.highVix
+                },
+                signalCombos: {
+                    tested: Object.values(comboAnalysis.combos).filter(c => !c.insufficient).length,
+                    hot: comboAnalysis.hot.length,
+                    cold: comboAnalysis.cold.length,
+                    bestCombo: comboAnalysis.hot[0] ? { label: comboAnalysis.hot[0].label, avgReturn10d: comboAnalysis.hot[0].avgReturn10d, winRate10d: comboAnalysis.hot[0].winRate10d, n: comboAnalysis.hot[0].n } : null,
+                    worstCombo: comboAnalysis.cold[0] ? { label: comboAnalysis.cold[0].label, avgReturn10d: comboAnalysis.cold[0].avgReturn10d, winRate10d: comboAnalysis.cold[0].winRate10d, n: comboAnalysis.cold[0].n } : null
                 }
             };
         }
@@ -15123,7 +15272,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         });
                     }
                     if (result.regimeSplit.hasLowVix || result.regimeSplit.hasHighVix) {
-                        response += `\nRegime split: Low-VIX ${result.regimeSplit.lowVix} obs | High-VIX ${result.regimeSplit.highVix} obs`;
+                        response += `\nRegime split: Low-VIX ${result.regimeSplit.lowVix} obs | High-VIX ${result.regimeSplit.highVix} obs\n`;
+                    }
+                    if (result.signalCombos) {
+                        response += `\n**Signal Combinations** (${result.signalCombos.tested} tested):\n`;
+                        if (result.signalCombos.bestCombo) {
+                            response += `  Best: ${result.signalCombos.bestCombo.label} → ${result.signalCombos.bestCombo.avgReturn10d >= 0 ? '+' : ''}${result.signalCombos.bestCombo.avgReturn10d.toFixed(2)}% avg 10D, ${result.signalCombos.bestCombo.winRate10d.toFixed(0)}% WR (${result.signalCombos.bestCombo.n} obs)\n`;
+                        }
+                        if (result.signalCombos.worstCombo) {
+                            response += `  Worst: ${result.signalCombos.worstCombo.label} → ${result.signalCombos.worstCombo.avgReturn10d >= 0 ? '+' : ''}${result.signalCombos.worstCombo.avgReturn10d.toFixed(2)}% avg 10D, ${result.signalCombos.worstCombo.winRate10d.toFixed(0)}% WR (${result.signalCombos.worstCombo.n} obs)\n`;
+                        }
+                        response += `  ${result.signalCombos.hot} hot, ${result.signalCombos.cold} cold — see Trade Insights for full table`;
                     }
                     addChatMessage(response, 'agent');
                 } catch (e) {
