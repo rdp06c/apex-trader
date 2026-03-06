@@ -62,6 +62,11 @@ app.post('/api/scanner/fullscan', (req, res) => {
 // Admin panel
 app.use('/admin', adminRoutes);
 
+// Analytics dashboard
+app.get('/analytics', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'analytics.html'));
+});
+
 app.use(express.static(path.join(__dirname, '..')));
 
 app.listen(PORT, () => {

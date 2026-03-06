@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APEX Analytics Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  /* ── Design Tokens (matched to APEX) ──────────────────── */
+  :root {
+    --bg-base: #121215;
+    --bg-surface: #1a1a22;
+    --bg-raised: #22222b;
+    --bg-inset: #161619;
+    --bg-hover: rgba(255, 200, 100, 0.04);
+
+    --border-subtle: rgba(255, 200, 100, 0.06);
+    --border-medium: rgba(255, 200, 100, 0.12);
+    --border-strong: rgba(255, 200, 100, 0.20);
+
+    --accent: #f59e0b;
+    --accent-light: #fbbf24;
+    --accent-dim: rgba(245, 158, 11, 0.12);
+    --accent-gradient: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    --accent-subtle: rgba(245, 158, 11, 0.08);
+    --accent-glow: rgba(245, 158, 11, 0.30);
+
+    --green: #34d399;
+    --green-dim: rgba(52, 211, 153, 0.10);
+    --green-border: rgba(52, 211, 153, 0.25);
+    --red: #f87171;
+    --red-dim: rgba(248, 113, 113, 0.10);
+    --red-border: rgba(248, 113, 113, 0.30);
+    --yellow: #fbbf24;
+    --blue: #60a5fa;
+
+    --text-primary: #f5f5f0;
+    --text-secondary: #a8a8a0;
+    --text-muted: #78786e;
+    --text-faint: #7a7a72;
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+    --transition-fast: 0.15s ease;
+  }
+
+  /* ── Reset ─────────────────────────────────────────────── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-base);
+    background-image: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(245,158,11,0.04) 0%, transparent 70%);
+    min-height: 100vh;
+    color: var(--text-secondary);
+    -webkit-font-smoothing: antialiased;
+    padding: 28px 32px;
+    line-height: 1.5;
+  }
+
+  /* ── Header ────────────────────────────────────────────── */
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 28px;
+    padding-bottom: 20px; border-bottom: 1px solid var(--border-subtle);
+  }
+  .header-branding { display: flex; flex-direction: column; }
+  .header-subtitle {
+    font-size: 10px; color: var(--text-faint);
+    text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 4px;
+  }
+  h1 {
+    font-size: 28px; font-weight: 800;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; letter-spacing: -0.5px;
+  }
+  .header-tagline { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+
+  /* ── Section Titles (chart-title pattern) ───────────────── */
+  .chart-title {
+    font-size: 16px; font-weight: 600; color: var(--text-primary);
+    margin-bottom: 16px; display: flex; align-items: center;
+    gap: 10px; letter-spacing: 0.2px;
+  }
+  .chart-title::before {
+    content: ''; width: 3px; height: 14px;
+    background: var(--accent-gradient); border-radius: 2px;
+    flex-shrink: 0; box-shadow: 0 0 6px var(--accent-glow);
+  }
+  .section-sub {
+    font-size: 12px; color: var(--text-muted); font-weight: 400;
+    margin-top: -10px; margin-bottom: 14px; padding-left: 13px;
+  }
+
+  /* ── Buttons ───────────────────────────────────────────── */
+  #loadBtn {
+    background: var(--accent); color: #000; border: none;
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition-fast);
+  }
+  #loadBtn:hover {
+    opacity: 0.9; transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--accent-glow);
+  }
+  #loadBtn:active { transform: translateY(0); opacity: 0.8; }
+  #fileInput { display: none; }
+  #loadStatus { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
+
+  /* ── Summary Stats ─────────────────────────────────────── */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--bg-inset); border-radius: var(--radius-sm);
+    padding: 12px 14px; border: 1px solid var(--border-subtle);
+  }
+  .stat-label {
+    font-size: 11px; color: var(--text-muted); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  .stat-value { font-size: 22px; font-weight: 700; margin-top: 2px; color: var(--text-primary); }
+  .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .positive { color: var(--green); }
+  .negative { color: var(--red); }
+
+  /* ── Grid Layout ───────────────────────────────────────── */
+  .grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 20px; margin-bottom: 24px;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .full-width { grid-column: 1 / -1; }
+
+  /* ── Cards ──────────────────────────────────────────────── */
+  .card {
+    background: var(--bg-surface); border-radius: var(--radius-lg);
+    padding: 28px; border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+  }
+  .card:hover { box-shadow: var(--shadow-md); }
+  .card canvas { max-height: 320px; }
+
+  /* ── Tables ─────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; color: var(--text-muted); font-weight: 600;
+    padding: 10px 12px; border-bottom: 1px solid var(--border-medium);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  td {
+    padding: 10px 12px; border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+  }
+  tr:hover td { background: var(--bg-hover); }
+
+  /* ── Rules Cards ────────────────────────────────────────── */
+  .rules-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;
+  }
+  .rule-card {
+    background: var(--bg-inset); border-radius: var(--radius-sm);
+    padding: 14px; border: 1px solid var(--border-subtle);
+    border-left: 3px solid var(--text-muted);
+    transition: border-color var(--transition-fast);
+  }
+  .rule-card:hover { border-color: var(--border-medium); }
+  .rule-card.avoid { border-left-color: var(--red); }
+  .rule-card.prefer { border-left-color: var(--green); }
+  .rule-card.neutral { border-left-color: var(--text-muted); }
+  .rule-label { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--text-primary); }
+  .rule-stat { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+  .rule-stat strong { color: var(--text-primary); }
+
+  /* ── Landing State ──────────────────────────────────────── */
+  #landing {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 50vh; color: var(--text-muted); text-align: center;
+  }
+  #landing .icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.3; }
+  #landing p { font-size: 14px; }
+  #landing strong { color: var(--accent); }
+  #dashboard { display: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-branding">
+    <div class="header-subtitle">Analytics Companion</div>
+    <h1>APEX Analytics</h1>
+    <div class="header-tagline">Trading pattern insights from your portfolio data</div>
+  </div>
+  <div>
+    <button id="reloadBtn" onclick="loadFromAPI()" title="Reload from server">Reload</button>
+    <button id="loadBtn" onclick="document.getElementById('fileInput').click()">Load File</button>
+    <input type="file" id="fileInput" accept=".json" onchange="handleFileLoad(event)">
+    <div id="loadStatus"></div>
+  </div>
+</div>
+
+<div id="landing">
+  <div class="icon">&#x1F4CA;</div>
+  <p>Connecting to server... or load a <strong>portfolio JSON</strong> file manually.</p>
+</div>
+
+<div id="dashboard">
+  <!-- Summary Stats -->
+  <div class="stats-row" id="statsRow"></div>
+
+  <!-- Performance History -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Portfolio Value Over Time</div>
+    <canvas id="perfChart"></canvas>
+  </div>
+
+  <!-- Post-Mortems: 4 bar charts -->
+  <div class="grid">
+    <div class="card">
+      <div class="chart-title">Win Rate by Day of Week</div>
+      <div class="section-sub">Which days produce winners?</div>
+      <canvas id="dayChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Win Rate by Sector</div>
+      <div class="section-sub">Where does the edge come from?</div>
+      <canvas id="sectorChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Win Rate by Hold Duration</div>
+      <div class="section-sub">How long should trades be held?</div>
+      <canvas id="holdChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Win Rate by Entry Conviction</div>
+      <div class="section-sub">Does higher conviction mean better outcomes?</div>
+      <canvas id="convictionBarChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Conviction vs Outcome Scatter -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Conviction vs. Outcome</div>
+    <div class="section-sub">Does higher conviction correlate with better returns? Green = win, Red = loss, Size = position size</div>
+    <canvas id="scatterChart"></canvas>
+  </div>
+
+  <!-- Exit Timing -->
+  <div class="grid" style="grid-template-columns: 1fr 2fr">
+    <div class="card">
+      <div class="chart-title">Exit Timing Summary</div>
+      <div id="exitSummary"></div>
+    </div>
+    <div class="card">
+      <div class="chart-title">Exit Timing by Reason</div>
+      <div class="section-sub">Which exit types are premature vs well-timed?</div>
+      <canvas id="exitReasonChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Post-Exit Tracker — extends the exit timing story -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Did I Sell Too Early?</div>
+    <div class="section-sub">Stock price movement 1 week after selling &mdash; green = stock fell (good exit), red = stock rose (left money on table)</div>
+    <canvas id="postExitChart"></canvas>
+  </div>
+
+  <!-- P&L Analysis -->
+  <div class="grid">
+    <div class="card">
+      <div class="chart-title">P&amp;L by Exit Reason</div>
+      <div class="section-sub">Which exit strategies protect capital best?</div>
+      <canvas id="exitReasonPL"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Entry RSI vs. Outcome</div>
+      <div class="section-sub">Does buying overbought stocks hurt returns?</div>
+      <canvas id="rsiScatter"></canvas>
+    </div>
+  </div>
+
+  <!-- Cumulative Realized P&L -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Cumulative Realized P&amp;L</div>
+    <div class="section-sub">Running total of closed-trade profits &mdash; are things trending better over time?</div>
+    <canvas id="cumulativePL"></canvas>
+  </div>
+
+  <!-- Conviction Delta -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Conviction Delta: Entry vs. Exit</div>
+    <div class="section-sub">How much did APEX's conviction change before selling? Bigger drops = faster thesis breakdown</div>
+    <canvas id="convictionDelta"></canvas>
+  </div>
+
+  <!-- Position Size vs Outcome -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Position Size vs. Outcome</div>
+    <div class="section-sub">Do larger positions perform worse?</div>
+    <canvas id="positionScatter"></canvas>
+  </div>
+
+  <!-- Trading Rules -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Trading Rules</div>
+    <div class="section-sub">ML-derived rules from APEX &mdash; strongest signals highlighted</div>
+    <div id="rulesContainer"></div>
+  </div>
+
+  <!-- Current Holdings -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Current Holdings</div>
+    <div class="section-sub">Open positions with entry details</div>
+    <div style="overflow-x:auto">
+      <table id="holdingsTable">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Shares</th>
+            <th>Entry Price</th>
+            <th>Entry Date</th>
+            <th>Conviction</th>
+            <th>Momentum</th>
+            <th>RS</th>
+            <th>Sector Flow</th>
+            <th>RSI</th>
+            <th>Structure</th>
+          </tr>
+        </thead>
+        <tbody id="holdingsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// Symbol -> sector lookup for early trades missing sector field
+const SECTOR_MAP = {
+  MU: 'Technology', PLTR: 'Technology', ENPH: 'Energy',
+  LRCX: 'Technology', FORM: 'Technology', PSNY: 'Automotive'
+};
+
+// Color palette matched to APEX design tokens
+const COLORS = {
+  win: '#34d399',
+  loss: '#f87171',
+  accent: '#f59e0b',
+  accentLight: '#fbbf24',
+  surface: '#1a1a22',
+  raised: '#22222b',
+  inset: '#161619',
+  gridLine: 'rgba(255, 200, 100, 0.06)',
+  borderMedium: 'rgba(255, 200, 100, 0.12)',
+  text: '#f5f5f0',
+  secondary: '#a8a8a0',
+  muted: '#78786e',
+  blue: '#60a5fa'
+};
+
+// Chart.js global defaults for APEX dark theme
+Chart.defaults.color = COLORS.muted;
+Chart.defaults.borderColor = COLORS.gridLine;
+Chart.defaults.plugins.legend.display = false;
+Chart.defaults.plugins.tooltip.backgroundColor = COLORS.raised + 'ee';
+Chart.defaults.plugins.tooltip.titleColor = COLORS.accent;
+Chart.defaults.plugins.tooltip.bodyColor = COLORS.secondary;
+Chart.defaults.plugins.tooltip.borderColor = 'rgba(245, 158, 11, 0.20)';
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.cornerRadius = 8;
+Chart.defaults.plugins.tooltip.padding = 12;
+Chart.defaults.font.family = "'Inter', sans-serif";
+
+let data = null;
+
+/* ── Reconstruct missing closedTrades from transactions ── */
+function reconstructMissingClosedTrades(d) {
+  if (!d.transactions || !d.transactions.length) return;
+  if (!d.closedTrades) d.closedTrades = [];
+
+  // Index existing closedTrades by symbol+sellDate to avoid duplicates
+  const existing = new Set(d.closedTrades.map(ct => ct.symbol + '|' + ct.sellDate));
+
+  // Group transactions by symbol
+  const bySymbol = {};
+  d.transactions.forEach(t => {
+    if (!bySymbol[t.symbol]) bySymbol[t.symbol] = [];
+    bySymbol[t.symbol].push(t);
+  });
+
+  for (const symbol of Object.keys(bySymbol)) {
+    const txns = bySymbol[symbol];
+    let buyQueue = []; // FIFO queue of {price, shares, timestamp, conviction, entryTechnicals, ...}
+
+    for (const t of txns) {
+      if (t.type === 'BUY') {
+        buyQueue.push(t);
+      } else if (t.type === 'SELL') {
+        if (existing.has(symbol + '|' + t.timestamp)) {
+          // Already have this closedTrade — just drain the buy queue
+          let sharesToDrain = t.shares;
+          while (sharesToDrain > 0 && buyQueue.length > 0) {
+            if (buyQueue[0].shares <= sharesToDrain) {
+              sharesToDrain -= buyQueue[0].shares;
+              buyQueue.shift();
+            } else {
+              buyQueue[0] = { ...buyQueue[0], shares: buyQueue[0].shares - sharesToDrain };
+              sharesToDrain = 0;
+            }
+          }
+          continue;
+        }
+
+        // Reconstruct closedTrade from matched buys
+        let sharesToMatch = t.shares;
+        let totalCost = 0;
+        let totalShares = 0;
+        let firstBuy = buyQueue[0] || null;
+
+        while (sharesToMatch > 0 && buyQueue.length > 0) {
+          const buy = buyQueue[0];
+          const matched = Math.min(buy.shares, sharesToMatch);
+          totalCost += matched * buy.price;
+          totalShares += matched;
+          sharesToMatch -= matched;
+          if (matched >= buy.shares) {
+            buyQueue.shift();
+          } else {
+            buyQueue[0] = { ...buy, shares: buy.shares - matched };
+          }
+        }
+
+        if (totalShares > 0 && firstBuy) {
+          const avgBuyPrice = totalCost / totalShares;
+          const profitLoss = (t.price - avgBuyPrice) * totalShares;
+          const returnPercent = ((t.price - avgBuyPrice) / avgBuyPrice) * 100;
+
+          d.closedTrades.push({
+            symbol,
+            sector: firstBuy.entryTechnicals?.sector || t.sector || null,
+            buyPrice: avgBuyPrice,
+            sellPrice: t.price,
+            shares: totalShares,
+            profitLoss,
+            returnPercent,
+            buyDate: firstBuy.timestamp,
+            sellDate: t.timestamp,
+            holdTime: new Date(t.timestamp).getTime() - new Date(firstBuy.timestamp).getTime(),
+            entryConviction: firstBuy.conviction || null,
+            entryTechnicals: firstBuy.entryTechnicals || {},
+            entryMarketRegime: firstBuy.entryMarketRegime || null,
+            entryHoldingsCount: firstBuy.entryHoldingsCount || null,
+            exitReason: t.reasoning ? classifyExitReason(t.reasoning, returnPercent) : (returnPercent >= 2 ? 'profit_target' : returnPercent <= -8 ? 'stop_loss' : 'manual'),
+            exitReasoning: t.reasoning || 'Manual sell',
+            positionSizePercent: firstBuy.positionSizePercent || null,
+            tracking: { priceAfter1Week: null, priceAfter1Month: null, tracked: false },
+            reconstructed: true
+          });
+        }
+      }
+    }
+  }
+
+  // Sort closedTrades by sell date
+  d.closedTrades.sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+}
+
+function classifyExitReason(reasoning, returnPercent) {
+  if (!reasoning) return 'manual';
+  const rl = reasoning.toLowerCase();
+  if (rl.includes('stop') || rl.includes('loss')) return 'stop_loss';
+  if (rl.includes('catalyst') || rl.includes('thesis') || rl.includes('broke')) return 'catalyst_failure';
+  if (returnPercent >= 2) return 'profit_target';
+  if (returnPercent <= -8) return 'stop_loss';
+  if (returnPercent < 0) return 'catalyst_failure';
+  return 'profit_target';
+}
+
+/* ── Data Loading ────────────────────────────────────── */
+function loadData(d, source) {
+  data = d;
+  reconstructMissingClosedTrades(data);
+  document.getElementById('loadStatus').textContent = 'Loaded: ' + source;
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  renderAll();
+}
+
+async function loadFromAPI() {
+  const statusEl = document.getElementById('loadStatus');
+  try {
+    statusEl.textContent = 'Loading from server...';
+    const res = await fetch('/api/portfolio');
+    if (!res.ok) throw new Error('Server returned ' + res.status);
+    const d = await res.json();
+    loadData(d, 'Server (live)');
+  } catch (err) {
+    statusEl.textContent = 'Server unavailable — load a file instead';
+    console.warn('API load failed:', err.message);
+  }
+}
+
+function handleFileLoad(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      loadData(JSON.parse(e.target.result), file.name);
+    } catch (err) {
+      document.getElementById('loadStatus').textContent = 'Error: Invalid JSON';
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Auto-load from API on page load
+document.addEventListener('DOMContentLoaded', loadFromAPI);
+
+function destroyAllCharts() {
+  document.querySelectorAll('canvas').forEach(c => {
+    const instance = Chart.getChart(c);
+    if (instance) instance.destroy();
+  });
+}
+
+function renderAll() {
+  destroyAllCharts();
+  renderStats();
+  renderPerfChart();
+  renderDayChart();
+  renderSectorChart();
+  renderHoldChart();
+  renderConvictionBarChart();
+  renderScatterChart();
+  renderExitSummary();
+  renderExitReasonChart();
+  renderPositionScatter();
+  renderPostExitChart();
+  renderRSIScatter();
+  renderExitReasonPL();
+  renderCumulativePL();
+  renderConvictionDelta();
+  renderRules();
+  renderHoldings();
+}
+
+/* ── Summary Stats ────────────────────────────────────── */
+function renderStats() {
+  const ct = data.closedTrades;
+  const wins = ct.filter(t => t.profitLoss > 0);
+  const losses = ct.filter(t => t.profitLoss <= 0);
+  const realizedPL = ct.reduce((s, t) => s + t.profitLoss, 0);
+  const winRate = ((wins.length / ct.length) * 100).toFixed(1);
+  const avgWin = wins.length ? (wins.reduce((s, t) => s + t.returnPercent, 0) / wins.length).toFixed(1) : '0';
+  const avgLoss = losses.length ? (losses.reduce((s, t) => s + t.returnPercent, 0) / losses.length).toFixed(1) : '0';
+  const openCount = Object.keys(data.holdings || {}).length;
+  const perf = data.performanceHistory || [];
+  const lastVal = perf.length ? perf[perf.length - 1].value : null;
+
+  const stats = [
+    { label: 'Closed Trades', value: ct.length, cls: '' },
+    { label: 'Win Rate', value: winRate + '%', cls: parseFloat(winRate) >= 50 ? 'positive' : 'negative', sub: `${wins.length}W / ${losses.length}L` },
+    { label: 'Avg Win', value: '+' + avgWin + '%', cls: 'positive' },
+    { label: 'Avg Loss', value: avgLoss + '%', cls: 'negative' },
+    { label: 'Realized P&L', value: '$' + realizedPL.toFixed(2), cls: realizedPL >= 0 ? 'positive' : 'negative', sub: 'Closed trades only' },
+    { label: 'Total Deposits', value: '$' + (data.totalDeposits || 0).toLocaleString(), cls: '' },
+    { label: 'Portfolio Value', value: lastVal ? '$' + lastVal.toFixed(2) : '--', cls: '', sub: lastVal ? ((lastVal / data.totalDeposits - 1) * 100).toFixed(1) + '% vs deposits' : '' },
+    { label: 'Open Positions', value: openCount, cls: '' },
+  ];
+
+  const row = document.getElementById('statsRow');
+  row.innerHTML = stats.map(s => `
+    <div class="stat-card">
+      <div class="stat-label">${s.label}</div>
+      <div class="stat-value ${s.cls}">${s.value}</div>
+      ${s.sub ? `<div class="stat-sub">${s.sub}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+/* ── Performance History ──────────────────────────────── */
+function renderPerfChart() {
+  const perf = data.performanceHistory || [];
+  if (!perf.length) return;
+
+  let cumDeposits = 0;
+  const labels = [];
+  const values = [];
+  const depositAdj = [];
+
+  perf.forEach(p => {
+    if (p.deposit) cumDeposits += p.deposit;
+    labels.push(new Date(p.timestamp));
+    values.push(p.value);
+    depositAdj.push(p.value - cumDeposits);
+  });
+
+  new Chart(document.getElementById('perfChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Portfolio Value',
+          data: values,
+          borderColor: COLORS.accent,
+          backgroundColor: 'rgba(245, 158, 11, 0.08)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 2
+        },
+        {
+          label: 'Value Minus Deposits (Gains Only)',
+          data: depositAdj,
+          borderColor: COLORS.loss,
+          borderDash: [5, 3],
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 1.5,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: ctx => new Date(ctx[0].label).toLocaleDateString(),
+            label: ctx => ctx.dataset.label + ': $' + ctx.parsed.y.toFixed(2)
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'category',
+          ticks: {
+            callback: function(val, i) {
+              const d = labels[i];
+              return (i === 0 || d.getDate() !== labels[Math.max(0, i - 1)].getDate())
+                ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : '';
+            },
+            maxTicksLimit: 15,
+            font: { size: 10 }
+          },
+          grid: { display: false }
+        },
+        y: {
+          ticks: { callback: v => '$' + v },
+          grid: { color: COLORS.gridLine }
+        }
+      }
+    }
+  });
+}
+
+/* ── Win Rate by Day of Week ──────────────────────────── */
+function renderDayChart() {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const buckets = days.map(() => ({ wins: 0, total: 0 }));
+
+  data.closedTrades.forEach(t => {
+    const d = new Date(t.buyDate).getDay();
+    buckets[d].total++;
+    if (t.profitLoss > 0) buckets[d].wins++;
+  });
+
+  const active = days.map((d, i) => ({ day: d, ...buckets[i] })).filter(b => b.total > 0);
+
+  new Chart(document.getElementById('dayChart'), {
+    type: 'bar',
+    data: {
+      labels: active.map(a => a.day),
+      datasets: [{
+        data: active.map(a => (a.wins / a.total * 100)),
+        backgroundColor: active.map(a => (a.wins / a.total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: active.map(a => (a.wins / a.total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        x: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = active[ctx.dataIndex];
+              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
+            }
+          }
+        }
+      }
+    },
+    plugins: [countLabelPlugin]
+  });
+}
+
+// Plugin to show value above bars
+const countLabelPlugin = {
+  id: 'countLabel',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    chart.data.datasets[0].data.forEach((val, i) => {
+      const meta = chart.getDatasetMeta(0).data[i];
+      if (!meta) return;
+      ctx.save();
+      ctx.fillStyle = COLORS.muted;
+      ctx.font = "10px 'Inter', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(val.toFixed(0) + '%', meta.x, meta.y - 6);
+      ctx.restore();
+    });
+  }
+};
+
+/* ── Win Rate by Sector ───────────────────────────────── */
+function renderSectorChart() {
+  const buckets = {};
+  data.closedTrades.forEach(t => {
+    const sector = t.sector || SECTOR_MAP[t.symbol] || 'Unknown';
+    if (!buckets[sector]) buckets[sector] = { wins: 0, total: 0 };
+    buckets[sector].total++;
+    if (t.profitLoss > 0) buckets[sector].wins++;
+  });
+
+  const entries = Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
+
+  new Chart(document.getElementById('sectorChart'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(e => e[0]),
+      datasets: [{
+        data: entries.map(e => (e[1].wins / e[1].total * 100)),
+        backgroundColor: entries.map(e => (e[1].wins / e[1].total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: entries.map(e => (e[1].wins / e[1].total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      scales: {
+        x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        y: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = entries[ctx.dataIndex][1];
+              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.x.toFixed(0)}%) — ${b.total} trades`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── Win Rate by Hold Duration ────────────────────────── */
+function renderHoldChart() {
+  const buckets = [
+    { label: '<1 day', min: 0, max: 86400000, wins: 0, total: 0 },
+    { label: '1-2 days', min: 86400000, max: 172800000, wins: 0, total: 0 },
+    { label: '2-4 days', min: 172800000, max: 345600000, wins: 0, total: 0 },
+    { label: '4+ days', min: 345600000, max: Infinity, wins: 0, total: 0 }
+  ];
+
+  data.closedTrades.forEach(t => {
+    const ht = t.holdTime || (new Date(t.sellDate) - new Date(t.buyDate));
+    const b = buckets.find(b => ht >= b.min && ht < b.max);
+    if (b) {
+      b.total++;
+      if (t.profitLoss > 0) b.wins++;
+    }
+  });
+
+  const active = buckets.filter(b => b.total > 0);
+
+  new Chart(document.getElementById('holdChart'), {
+    type: 'bar',
+    data: {
+      labels: active.map(b => b.label),
+      datasets: [{
+        data: active.map(b => (b.wins / b.total * 100)),
+        backgroundColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        x: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = active[ctx.dataIndex];
+              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
+            }
+          }
+        }
+      }
+    },
+    plugins: [countLabelPlugin]
+  });
+}
+
+/* ── Win Rate by Entry Conviction ─────────────────────── */
+function renderConvictionBarChart() {
+  const buckets = {};
+  data.closedTrades.forEach(t => {
+    const c = t.entryConviction;
+    if (c == null) return;
+    if (!buckets[c]) buckets[c] = { wins: 0, total: 0 };
+    buckets[c].total++;
+    if (t.profitLoss > 0) buckets[c].wins++;
+  });
+
+  const keys = Object.keys(buckets).sort((a, b) => a - b);
+
+  new Chart(document.getElementById('convictionBarChart'), {
+    type: 'bar',
+    data: {
+      labels: keys.map(k => k + '/10'),
+      datasets: [{
+        data: keys.map(k => (buckets[k].wins / buckets[k].total * 100)),
+        backgroundColor: keys.map(k => (buckets[k].wins / buckets[k].total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: keys.map(k => (buckets[k].wins / buckets[k].total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        x: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = buckets[keys[ctx.dataIndex]];
+              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
+            }
+          }
+        }
+      }
+    },
+    plugins: [countLabelPlugin]
+  });
+}
+
+/* ── Conviction vs Outcome Scatter ────────────────────── */
+function renderScatterChart() {
+  const points = data.closedTrades
+    .filter(t => t.entryConviction != null)
+    .map(t => ({
+      x: t.entryConviction + (Math.random() - 0.5) * 0.4,
+      y: t.returnPercent,
+      r: Math.max(4, Math.min(20, (t.positionSizePercent || 10) / 2)),
+      symbol: t.symbol,
+      conviction: t.entryConviction,
+      ret: t.returnPercent,
+      exitReason: t.exitReason,
+      buyDate: t.buyDate,
+      sellDate: t.sellDate,
+      win: t.profitLoss > 0
+    }));
+
+  new Chart(document.getElementById('scatterChart'), {
+    type: 'bubble',
+    data: {
+      datasets: [
+        {
+          label: 'Wins',
+          data: points.filter(p => p.win),
+          backgroundColor: COLORS.win + '88',
+          borderColor: COLORS.win,
+          borderWidth: 1
+        },
+        {
+          label: 'Losses',
+          data: points.filter(p => !p.win),
+          backgroundColor: COLORS.loss + '88',
+          borderColor: COLORS.loss,
+          borderWidth: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          boxPadding: 6,
+          borderColor: ctx => {
+            if (ctx.tooltip.dataPoints && ctx.tooltip.dataPoints.length) {
+              const dp = ctx.tooltip.dataPoints[0];
+              return dp.dataset.label === 'Wins' ? COLORS.win + '55' : COLORS.loss + '55';
+            }
+            return 'rgba(245, 158, 11, 0.20)';
+          },
+          callbacks: {
+            label: ctx => {
+              const p = ctx.raw;
+              return [
+                `${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`,
+                `Conviction: ${p.conviction}/10`,
+                `Exit: ${(p.exitReason || '').replace(/_/g, ' ')}`,
+                `${new Date(p.buyDate).toLocaleDateString()} → ${new Date(p.sellDate).toLocaleDateString()}`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Entry Conviction', color: COLORS.muted },
+          min: 6, max: 11,
+          ticks: { stepSize: 1, callback: v => v <= 10 ? v : '' },
+          grid: { color: COLORS.gridLine }
+        },
+        y: {
+          title: { display: true, text: 'Return %', color: COLORS.muted },
+          grid: { color: COLORS.gridLine },
+          ticks: { callback: v => v + '%' }
+        }
+      }
+    },
+    plugins: [{
+      id: 'zeroLine',
+      beforeDraw(chart) {
+        const yScale = chart.scales.y;
+        const ctx = chart.ctx;
+        const y = yScale.getPixelForValue(0);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(chart.chartArea.left, y);
+        ctx.lineTo(chart.chartArea.right, y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+
+/* ── Exit Timing Summary ──────────────────────────────── */
+function renderExitSummary() {
+  const trades = data.closedTrades.filter(t =>
+    t.tracking && t.tracking.weekReturnVsSell != null
+  );
+
+  const premature = [];
+  const wellTimed = [];
+
+  trades.forEach(t => {
+    const wd = parseFloat(String(t.tracking.weekReturnVsSell));
+    if (isNaN(wd)) return;
+    if (wd > 0) premature.push({ symbol: t.symbol, delta: wd });
+    else wellTimed.push({ symbol: t.symbol, delta: wd });
+  });
+
+  const avgPremature = premature.length ? (premature.reduce((s, p) => s + p.delta, 0) / premature.length).toFixed(1) : 0;
+  const avgWellTimed = wellTimed.length ? (wellTimed.reduce((s, p) => s + Math.abs(p.delta), 0) / wellTimed.length).toFixed(1) : 0;
+
+  const container = document.getElementById('exitSummary');
+  container.innerHTML = `
+    <div style="margin-bottom:20px">
+      <div style="font-size:28px; font-weight:800; color:var(--red)">${premature.length}</div>
+      <div style="color:var(--text-secondary); font-size:13px">trades exited too early</div>
+      <div style="color:var(--red); font-size:13px; font-weight:600">avg +${avgPremature}% left on the table</div>
+      <div style="color:var(--text-muted); font-size:11px; margin-top:4px">${premature.map(p => p.symbol).join(', ')}</div>
+    </div>
+    <div>
+      <div style="font-size:28px; font-weight:800; color:var(--green)">${wellTimed.length}</div>
+      <div style="color:var(--text-secondary); font-size:13px">trades exited well</div>
+      <div style="color:var(--green); font-size:13px; font-weight:600">avoided avg ${avgWellTimed}% further loss</div>
+      <div style="color:var(--text-muted); font-size:11px; margin-top:4px">${wellTimed.map(p => p.symbol).join(', ')}</div>
+    </div>
+  `;
+}
+
+/* ── Exit Timing by Exit Reason ───────────────────────── */
+function renderExitReasonChart() {
+  const trades = data.closedTrades.filter(t =>
+    t.tracking && t.tracking.weekReturnVsSell != null && t.exitReason
+  );
+
+  const buckets = {};
+  trades.forEach(t => {
+    const reason = t.exitReason.replace(/_/g, ' ');
+    if (!buckets[reason]) buckets[reason] = { premature: 0, wellTimed: 0, total: 0, sumDelta: 0 };
+    const wd = parseFloat(String(t.tracking.weekReturnVsSell));
+    if (isNaN(wd)) return;
+    buckets[reason].total++;
+    buckets[reason].sumDelta += wd;
+    if (wd > 0) buckets[reason].premature++;
+    else buckets[reason].wellTimed++;
+  });
+
+  const entries = Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
+
+  new Chart(document.getElementById('exitReasonChart'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(e => e[0]),
+      datasets: [
+        {
+          label: 'Well-timed exits',
+          data: entries.map(e => e[1].wellTimed),
+          backgroundColor: COLORS.win + '99',
+          borderColor: COLORS.win,
+          borderWidth: 1,
+          borderRadius: 3
+        },
+        {
+          label: 'Premature exits',
+          data: entries.map(e => e[1].premature),
+          backgroundColor: COLORS.loss + '99',
+          borderColor: COLORS.loss,
+          borderWidth: 1,
+          borderRadius: 3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            afterBody: ctx => {
+              const b = entries[ctx[0].dataIndex][1];
+              const avg = (b.sumDelta / b.total).toFixed(1);
+              return `Avg post-exit move: ${avg > 0 ? '+' : ''}${avg}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: COLORS.gridLine }, title: { display: true, text: 'Count', color: COLORS.muted } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+/* ── Position Size vs Outcome ─────────────────────────── */
+function renderPositionScatter() {
+  const points = data.closedTrades
+    .filter(t => t.positionSizePercent != null)
+    .map(t => ({
+      x: t.positionSizePercent,
+      y: t.returnPercent,
+      r: 6,
+      symbol: t.symbol,
+      win: t.profitLoss > 0
+    }));
+
+  new Chart(document.getElementById('positionScatter'), {
+    type: 'bubble',
+    data: {
+      datasets: [
+        {
+          label: 'Wins',
+          data: points.filter(p => p.win),
+          backgroundColor: COLORS.win + '88',
+          borderWidth: 0
+        },
+        {
+          label: 'Losses',
+          data: points.filter(p => !p.win),
+          backgroundColor: COLORS.loss + '88',
+          borderWidth: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          boxPadding: 6,
+          borderColor: ctx => {
+            if (ctx.tooltip.dataPoints && ctx.tooltip.dataPoints.length) {
+              const dp = ctx.tooltip.dataPoints[0];
+              return dp.dataset.label === 'Wins' ? COLORS.win + '55' : COLORS.loss + '55';
+            }
+            return 'rgba(245, 158, 11, 0.20)';
+          },
+          callbacks: {
+            label: ctx => {
+              const p = ctx.raw;
+              return [`${p.symbol}: ${p.y > 0 ? '+' : ''}${p.y.toFixed(1)}%`, `Position: ${p.x.toFixed(1)}% of portfolio`];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Position Size (% of portfolio)', color: COLORS.muted },
+          grid: { color: COLORS.gridLine },
+          ticks: { callback: v => v + '%' }
+        },
+        y: {
+          title: { display: true, text: 'Return %', color: COLORS.muted },
+          grid: { color: COLORS.gridLine },
+          ticks: { callback: v => v + '%' }
+        }
+      }
+    },
+    plugins: [{
+      id: 'zeroLine',
+      beforeDraw(chart) {
+        const yScale = chart.scales.y;
+        const ctx = chart.ctx;
+        const y = yScale.getPixelForValue(0);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(chart.chartArea.left, y);
+        ctx.lineTo(chart.chartArea.right, y);
+        ctx.stroke();
+        ctx.restore();
+
+        // 15% vertical threshold line
+        const xScale = chart.scales.x;
+        const x15 = xScale.getPixelForValue(15);
+        ctx.strokeStyle = 'rgba(248, 113, 113, 0.30)';
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x15, chart.chartArea.top);
+        ctx.lineTo(x15, chart.chartArea.bottom);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(248, 113, 113, 0.50)';
+        ctx.font = "10px 'Inter', sans-serif";
+        ctx.fillText('15% threshold', x15 + 4, chart.chartArea.top + 12);
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+/* ── Post-Exit Tracker ───────────────────────────────── */
+function renderPostExitChart() {
+  const trades = data.closedTrades.filter(t =>
+    t.tracking && t.tracking.weekReturnVsSell != null
+  ).sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+
+  if (!trades.length) return;
+
+  const labels = trades.map(t => t.symbol);
+  const deltas = trades.map(t => parseFloat(String(t.tracking.weekReturnVsSell)));
+  // Positive delta = stock rose after sell (bad exit), negative = stock fell (good exit)
+  const barColors = deltas.map(d => d > 0 ? COLORS.loss + 'cc' : COLORS.win + 'cc');
+  const barBorders = deltas.map(d => d > 0 ? COLORS.loss : COLORS.win);
+
+  new Chart(document.getElementById('postExitChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Post-exit 1-week move',
+        data: deltas,
+        backgroundColor: barColors,
+        borderColor: barBorders,
+        borderWidth: 1,
+        borderRadius: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          boxPadding: 6,
+          callbacks: {
+            label: ctx => {
+              const d = deltas[ctx.dataIndex];
+              const t = trades[ctx.dataIndex];
+              const exitReturn = t.returnPercent;
+              const lines = [
+                `Exit return: ${exitReturn > 0 ? '+' : ''}${exitReturn.toFixed(1)}%`,
+                `Post-exit move: ${d > 0 ? '+' : ''}${d.toFixed(1)}%`
+              ];
+              if (d > 0) lines.push(`Left +${d.toFixed(1)}% on the table`);
+              else lines.push(`Avoided ${Math.abs(d).toFixed(1)}% further drop`);
+              return lines;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          grid: { color: COLORS.gridLine },
+          ticks: { callback: v => (v > 0 ? '+' : '') + v + '%' },
+          title: { display: true, text: 'Stock move after selling', color: COLORS.muted }
+        },
+        x: { grid: { display: false } }
+      }
+    },
+    plugins: [{
+      id: 'zeroLine',
+      beforeDraw(chart) {
+        const yScale = chart.scales.y;
+        const ctx = chart.ctx;
+        const y = yScale.getPixelForValue(0);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(chart.chartArea.left, y);
+        ctx.lineTo(chart.chartArea.right, y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+/* ── Entry RSI vs Outcome ────────────────────────────── */
+function renderRSIScatter() {
+  const points = data.closedTrades
+    .filter(t => t.entryTechnicals && t.entryTechnicals.rsi != null)
+    .map(t => ({
+      x: t.entryTechnicals.rsi,
+      y: t.returnPercent,
+      r: 6,
+      symbol: t.symbol,
+      rsi: t.entryTechnicals.rsi,
+      ret: t.returnPercent,
+      win: t.profitLoss > 0
+    }));
+
+  if (!points.length) return;
+
+  new Chart(document.getElementById('rsiScatter'), {
+    type: 'bubble',
+    data: {
+      datasets: [
+        {
+          label: 'Wins',
+          data: points.filter(p => p.win),
+          backgroundColor: COLORS.win + '88',
+          borderWidth: 0
+        },
+        {
+          label: 'Losses',
+          data: points.filter(p => !p.win),
+          backgroundColor: COLORS.loss + '88',
+          borderWidth: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          boxPadding: 6,
+          borderColor: ctx => {
+            if (ctx.tooltip.dataPoints && ctx.tooltip.dataPoints.length) {
+              const dp = ctx.tooltip.dataPoints[0];
+              return dp.dataset.label === 'Wins' ? COLORS.win + '55' : COLORS.loss + '55';
+            }
+            return 'rgba(245, 158, 11, 0.20)';
+          },
+          callbacks: {
+            label: ctx => {
+              const p = ctx.raw;
+              return [
+                `${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`,
+                `Entry RSI: ${p.rsi.toFixed(1)}`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'RSI at Entry', color: COLORS.muted },
+          grid: { color: COLORS.gridLine }
+        },
+        y: {
+          title: { display: true, text: 'Return %', color: COLORS.muted },
+          grid: { color: COLORS.gridLine },
+          ticks: { callback: v => v + '%' }
+        }
+      }
+    },
+    plugins: [{
+      id: 'rsiZones',
+      beforeDraw(chart) {
+        const xScale = chart.scales.x;
+        const yScale = chart.scales.y;
+        const ctx = chart.ctx;
+        const area = chart.chartArea;
+
+        // Zero line horizontal
+        const y0 = yScale.getPixelForValue(0);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(area.left, y0);
+        ctx.lineTo(area.right, y0);
+        ctx.stroke();
+
+        // RSI 70 overbought line
+        const x70 = xScale.getPixelForValue(70);
+        if (x70 >= area.left && x70 <= area.right) {
+          ctx.strokeStyle = 'rgba(248, 113, 113, 0.30)';
+          ctx.beginPath();
+          ctx.moveTo(x70, area.top);
+          ctx.lineTo(x70, area.bottom);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(248, 113, 113, 0.50)';
+          ctx.font = "10px 'Inter', sans-serif";
+          ctx.fillText('Overbought', x70 + 4, area.top + 12);
+        }
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+/* ── Exit Reason P&L Breakdown ───────────────────────── */
+function renderExitReasonPL() {
+  const buckets = {};
+  data.closedTrades.forEach(t => {
+    if (!t.exitReason) return;
+    const reason = t.exitReason.replace(/_/g, ' ');
+    if (!buckets[reason]) buckets[reason] = { wins: 0, total: 0, sumReturn: 0, trades: [] };
+    buckets[reason].total++;
+    buckets[reason].sumReturn += t.returnPercent;
+    if (t.profitLoss > 0) buckets[reason].wins++;
+    buckets[reason].trades.push(t);
+  });
+
+  const entries = Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
+  const labels = entries.map(e => e[0]);
+  const avgReturns = entries.map(e => e[1].sumReturn / e[1].total);
+  const winRates = entries.map(e => (e[1].wins / e[1].total) * 100);
+
+  // Append win rate to labels so it's visible on the y-axis
+  const richLabels = entries.map((e, i) => {
+    const b = e[1];
+    return `${e[0]}  (${b.wins}W/${b.total - b.wins}L)`;
+  });
+
+  new Chart(document.getElementById('exitReasonPL'), {
+    type: 'bar',
+    data: {
+      labels: richLabels,
+      datasets: [{
+        data: avgReturns,
+        backgroundColor: avgReturns.map(v => v >= 0 ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: avgReturns.map(v => v >= 0 ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      layout: { padding: { right: 8 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          boxPadding: 6,
+          callbacks: {
+            title: ctx => entries[ctx[0].dataIndex][0],
+            label: ctx => {
+              const i = ctx.dataIndex;
+              const b = entries[i][1];
+              const avg = avgReturns[i];
+              return [
+                `Avg return: ${avg > 0 ? '+' : ''}${avg.toFixed(1)}%`,
+                `Win rate: ${winRates[i].toFixed(0)}%  (${b.wins}W / ${b.total - b.wins}L)`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: COLORS.gridLine },
+          ticks: { callback: v => (v > 0 ? '+' : '') + v + '%' }
+        },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+/* ── Cumulative Realized P&L ─────────────────────────── */
+function renderCumulativePL() {
+  const sorted = [...data.closedTrades].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+  if (!sorted.length) return;
+
+  let cumPL = 0;
+  const labels = [];
+  const values = [];
+  const symbols = [];
+
+  sorted.forEach(t => {
+    cumPL += t.profitLoss;
+    labels.push(new Date(t.sellDate));
+    values.push(cumPL);
+    symbols.push(t.symbol);
+  });
+
+  const pointColors = sorted.map(t => t.profitLoss > 0 ? COLORS.win : COLORS.loss);
+
+  new Chart(document.getElementById('cumulativePL'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Cumulative P&L',
+        data: values,
+        borderColor: values[values.length - 1] >= 0 ? COLORS.win : COLORS.loss,
+        backgroundColor: values[values.length - 1] >= 0 ? 'rgba(52, 211, 153, 0.08)' : 'rgba(248, 113, 113, 0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointBackgroundColor: pointColors,
+        pointBorderColor: pointColors,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          boxPadding: 6,
+          callbacks: {
+            title: ctx => {
+              const i = ctx[0].dataIndex;
+              return `Trade #${i + 1}: ${symbols[i]}`;
+            },
+            label: ctx => {
+              const i = ctx.dataIndex;
+              const t = sorted[i];
+              const pl = t.profitLoss;
+              return [
+                `This trade: ${pl > 0 ? '+' : ''}$${pl.toFixed(2)} (${t.returnPercent > 0 ? '+' : ''}${t.returnPercent.toFixed(1)}%)`,
+                `Running total: ${values[i] > 0 ? '+' : ''}$${values[i].toFixed(2)}`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'category',
+          ticks: {
+            callback: function(val, i) {
+              return labels[i].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            },
+            maxTicksLimit: 10,
+            font: { size: 10 }
+          },
+          grid: { display: false }
+        },
+        y: {
+          title: { display: true, text: 'Cumulative P&L ($)', color: COLORS.muted },
+          grid: { color: COLORS.gridLine },
+          ticks: { callback: v => '$' + v }
+        }
+      }
+    },
+    plugins: [{
+      id: 'zeroLine',
+      beforeDraw(chart) {
+        const yScale = chart.scales.y;
+        const ctx = chart.ctx;
+        const y = yScale.getPixelForValue(0);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 200, 100, 0.20)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(chart.chartArea.left, y);
+        ctx.lineTo(chart.chartArea.right, y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+/* ── Conviction Delta: Entry vs Exit ─────────────────── */
+function renderConvictionDelta() {
+  const trades = data.closedTrades
+    .filter(t => t.entryConviction != null && t.exitConviction != null)
+    .sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+
+  if (!trades.length) return;
+
+  const labels = trades.map(t => t.symbol);
+  const entryVals = trades.map(t => t.entryConviction);
+  const exitVals = trades.map(t => t.exitConviction);
+  const deltas = trades.map(t => t.exitConviction - t.entryConviction);
+
+  new Chart(document.getElementById('convictionDelta'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Entry Conviction',
+          data: entryVals,
+          backgroundColor: COLORS.accent + '66',
+          borderColor: COLORS.accent,
+          borderWidth: 1,
+          borderRadius: 3
+        },
+        {
+          label: 'Exit Conviction',
+          data: exitVals,
+          backgroundColor: exitVals.map((v, i) => v < entryVals[i] ? COLORS.loss + '66' : COLORS.win + '66'),
+          borderColor: exitVals.map((v, i) => v < entryVals[i] ? COLORS.loss : COLORS.win),
+          borderWidth: 1,
+          borderRadius: 3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          boxPadding: 6,
+          callbacks: {
+            afterBody: ctx => {
+              const i = ctx[0].dataIndex;
+              const d = deltas[i];
+              const t = trades[i];
+              return [
+                `Change: ${d > 0 ? '+' : ''}${d} (${t.entryConviction} → ${t.exitConviction})`,
+                `Return: ${t.returnPercent > 0 ? '+' : ''}${t.returnPercent.toFixed(1)}%`,
+                `Exit: ${(t.exitReason || '').replace(/_/g, ' ')}`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          min: 0, max: 10,
+          ticks: { stepSize: 2, callback: v => v + '/10' },
+          grid: { color: COLORS.gridLine },
+          title: { display: true, text: 'Conviction Score', color: COLORS.muted }
+        },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+/* ── Trading Rules ────────────────────────────────────── */
+function renderRules() {
+  const container = document.getElementById('rulesContainer');
+  const rules = (data.tradingRules && data.tradingRules.rules) || [];
+
+  if (!rules.length) {
+    container.innerHTML = '<p style="color:var(--text-muted)">No trading rules data found.</p>';
+    return;
+  }
+
+  const order = { avoid: 0, prefer: 1, neutral: 2 };
+  const sorted = [...rules].sort((a, b) => (order[a.type] || 2) - (order[b.type] || 2));
+
+  container.innerHTML = '<div class="rules-grid">' + sorted.map(r => {
+    const typeClass = r.type || 'neutral';
+    const icon = r.type === 'avoid' ? '&#9888;' : r.type === 'prefer' ? '&#10003;' : '&#8226;';
+    return `
+      <div class="rule-card ${typeClass}">
+        <div class="rule-label">${icon} ${r.label}</div>
+        <div class="rule-stat">Win rate: <strong>${r.winRate.toFixed(0)}%</strong> (${r.trades} trades)
+          ${r.compareWinRate != null && r.compareTrades > 0
+            ? ` vs <strong>${r.compareWinRate.toFixed(0)}%</strong> (${r.compareTrades})`
+            : ''}
+        </div>
+        <div class="rule-stat">Avg return: <strong>${r.avgReturn > 0 ? '+' : ''}${r.avgReturn.toFixed(1)}%</strong></div>
+        ${r.needsData ? '<div class="rule-stat" style="color:var(--text-muted); font-style:italic">Needs more data</div>' : ''}
+      </div>
+    `;
+  }).join('') + '</div>';
+}
+
+/* ── Current Holdings Table ───────────────────────────── */
+function renderHoldings() {
+  const tbody = document.getElementById('holdingsBody');
+  const theses = data.holdingTheses || {};
+  const holdings = data.holdings || {};
+
+  const rows = Object.entries(holdings).map(([symbol, shares]) => {
+    const t = theses[symbol] || {};
+    return {
+      symbol,
+      shares,
+      price: t.entryPrice,
+      date: t.entryDate,
+      conviction: t.entryConviction,
+      momentum: t.entryMomentum,
+      rs: t.entryRS,
+      sectorFlow: t.entrySectorFlow,
+      rsi: t.entryRSI,
+      structure: t.entryStructure
+    };
+  });
+
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="font-weight:700; color:var(--accent)">${r.symbol}</td>
+      <td>${r.shares}</td>
+      <td>${r.price ? '$' + r.price.toFixed(2) : '--'}</td>
+      <td>${r.date ? new Date(r.date).toLocaleDateString() : '--'}</td>
+      <td>${r.conviction != null ? r.conviction + '/10' : '--'}</td>
+      <td>${r.momentum != null ? r.momentum : '--'}</td>
+      <td>${r.rs != null ? r.rs : '--'}</td>
+      <td>${r.sectorFlow || '--'}</td>
+      <td>${r.rsi != null ? r.rsi : '--'}</td>
+      <td>${r.structure || '--'}</td>
+    </tr>
+  `).join('');
+}
+</script>
+</body>
+</html>
