@@ -690,6 +690,14 @@
             margin-top: 0;
         }
 
+        .holding-card-signals {
+            font-size: 11px;
+            color: var(--text-muted);
+            padding: 6px 0 2px;
+            border-top: 1px solid var(--border-subtle);
+            line-height: 1.6;
+        }
+
         .position-warning {
             color: var(--yellow);
         }
@@ -4995,6 +5003,82 @@
             };
         }
 
+        // ATR (Average True Range) — volatility-aware stop loss calculation
+        function calculateATR(bars, period = 14) {
+            if (!bars || bars.length < period + 1) return null;
+            let trSum = 0;
+            for (let i = 1; i <= period; i++) {
+                const tr = Math.max(
+                    bars[i].h - bars[i].l,
+                    Math.abs(bars[i].h - bars[i - 1].c),
+                    Math.abs(bars[i].l - bars[i - 1].c)
+                );
+                trSum += tr;
+            }
+            let atr = trSum / period;
+            for (let i = period + 1; i < bars.length; i++) {
+                const tr = Math.max(
+                    bars[i].h - bars[i].l,
+                    Math.abs(bars[i].h - bars[i - 1].c),
+                    Math.abs(bars[i].l - bars[i - 1].c)
+                );
+                atr = (atr * (period - 1) + tr) / period;
+            }
+            return Math.round(atr * 100) / 100;
+        }
+
+        // Volume divergence — price rising with declining volume signals weakness
+        function detectVolumeDivergence(bars, lookback = 10) {
+            if (!bars || bars.length < lookback + 1) return { divergence: false };
+            const recent = bars.slice(-lookback);
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+            const n = recent.length;
+            for (let i = 0; i < n; i++) {
+                sumX += i; sumY += recent[i].c; sumXY += i * recent[i].c; sumX2 += i * i;
+            }
+            const priceSlope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            sumY = 0; sumXY = 0;
+            for (let i = 0; i < n; i++) { sumY += recent[i].v; sumXY += i * recent[i].v; }
+            const volSlope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const avgPrice = recent.reduce((s, b) => s + b.c, 0) / n;
+            const avgVol = recent.reduce((s, b) => s + b.v, 0) / n;
+            const priceTrendPct = avgPrice > 0 ? (priceSlope / avgPrice) * 100 : 0;
+            const volTrendPct = avgVol > 0 ? (volSlope / avgVol) * 100 : 0;
+            const bearishDiv = priceTrendPct > 0.1 && volTrendPct < -0.5;
+            const bullishDiv = priceTrendPct < -0.1 && volTrendPct > 0.5;
+            return {
+                divergence: bearishDiv || bullishDiv,
+                direction: bearishDiv ? 'bearish' : bullishDiv ? 'bullish' : 'none',
+                priceTrend: Math.round(priceTrendPct * 100) / 100,
+                volumeTrend: Math.round(volTrendPct * 100) / 100
+            };
+        }
+
+        // Fibonacci extension targets from recent swing structure
+        function calculateFibTargets(bars) {
+            if (!bars || bars.length < 10) return null;
+            const swingHighs = [], swingLows = [];
+            for (let i = 1; i < bars.length - 1; i++) {
+                if (bars[i].h > bars[i - 1].h && bars[i].h > bars[i + 1].h) swingHighs.push({ index: i, price: bars[i].h });
+                if (bars[i].l < bars[i - 1].l && bars[i].l < bars[i + 1].l) swingLows.push({ index: i, price: bars[i].l });
+            }
+            if (swingHighs.length < 1 || swingLows.length < 1) return null;
+            const currentPrice = bars[bars.length - 1].c;
+            const lastSH = swingHighs[swingHighs.length - 1];
+            const lastSL = swingLows[swingLows.length - 1];
+            if (lastSL.index < lastSH.index) {
+                const swingRange = lastSH.price - lastSL.price;
+                const pullback = currentPrice < lastSH.price ? currentPrice : lastSL.price;
+                return { type: 'bullish', swingLow: Math.round(lastSL.price * 100) / 100, swingHigh: Math.round(lastSH.price * 100) / 100, fib1272: Math.round((pullback + swingRange * 1.272) * 100) / 100, fib1618: Math.round((pullback + swingRange * 1.618) * 100) / 100 };
+            }
+            if (lastSH.index < lastSL.index) {
+                const swingRange = lastSH.price - lastSL.price;
+                const bounce = currentPrice > lastSL.price ? currentPrice : lastSH.price;
+                return { type: 'bearish', swingHigh: Math.round(lastSH.price * 100) / 100, swingLow: Math.round(lastSL.price * 100) / 100, fib1272: Math.round((bounce - swingRange * 1.272) * 100) / 100, fib1618: Math.round((bounce - swingRange * 1.618) * 100) / 100 };
+            }
+            return null;
+        }
+
         // Calculate relative strength vs sector using MULTI-DAY data
         function calculateRelativeStrength(stockData, sectorData, symbol) {
             if (!stockData || !sectorData || sectorData.length === 0) return { rsScore: 50, strength: 'neutral' };
@@ -5357,6 +5441,9 @@
         // BULK SNAPSHOT: Fetch all tickers in ONE call instead of 300 individual calls
         let bulkSnapshotCache = {};
         let bulkSnapshotTimestamp = 0;
+
+        // Scanner readings from Pi server (ATR, volume divergence, fib targets)
+        let scannerReadings = {};
         
         async function fetchBulkSnapshot(symbols) {
             const now = Date.now();
@@ -11201,7 +11288,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         async function updateUI() {
             try {
                 const { total: totalValue, priceData } = await calculatePortfolioValue();
-                
+
+                // Fetch scanner readings from Pi for sell signals (ATR, vol divergence, fib)
+                try {
+                    const scanRes = await fetch('/api/scanner/status');
+                    if (scanRes.ok) {
+                        const scanData = await scanRes.json();
+                        scannerReadings = scanData.readings || {};
+                    }
+                } catch (e) { /* server unavailable — browser calculations will be used */ }
+
             // Calculate DAILY PERFORMANCE by summing each holding's intraday change.
             // This uses the same price data (change * shares) displayed on each holding card,
             // so the daily total always matches the sum of individual cards.
@@ -11398,11 +11494,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     </div>
                                 </div>
                             </div>
-                            ${reasoning ? `
-                            <div class="holding-card-catalyst" onclick="event.stopPropagation(); showCatalystPopover(this, '${symbol}');" data-full-catalyst="${escapeHtml(reasoning)}">
-                                <span class="catalyst-label">View Catalyst</span>
-                            </div>
-                            ` : ''}
                             <div class="holding-card-timeframe">
                                 <strong>${daysHeld === 0 ? 'Bought today' : `Held ${daysHeld} day${daysHeld !== 1 ? 's' : ''}`}</strong> | Expected: ${expectedDays.label}
                                 ${isPastTimeframe ?
@@ -11456,6 +11547,49 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     <span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${earliestDate ? earliestDate.toLocaleDateString() + ' ' + earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span>
                                 </div>
                             </div>
+                            ${(() => {
+                                // Sell signals: ATR stop, Fib targets, Volume divergence
+                                // Prefer scanner readings from Pi, fall back to browser calculation
+                                const sr = scannerReadings[symbol];
+                                const bars = multiDayCache[symbol];
+                                const atr = sr?.atr ?? calculateATR(bars);
+                                const atrStop = sr?.atrStop ?? (atr && avgPurchasePrice > 0 ? Math.round((avgPurchasePrice - 2 * atr) * 100) / 100 : null);
+                                const volDiv = sr?.volumeDivergence ?? detectVolumeDivergence(bars);
+                                const fib = sr?.fibTargets ?? calculateFibTargets(bars);
+
+                                let signals = '';
+
+                                // ATR Stop
+                                if (atrStop) {
+                                    const belowStop = stockPrice.price <= atrStop;
+                                    const atrClass = belowStop ? 'negative' : '';
+                                    signals += '<span class="holding-card-footer-label">ATR Stop:</span> <span class="holding-card-footer-value ' + atrClass + '">$' + atrStop.toFixed(2) + '</span>';
+                                    if (atr) signals += ' <span class="text-muted">(ATR $' + atr.toFixed(2) + ')</span>';
+                                    if (belowStop) signals += ' <span class="negative" style="font-weight:600">BREACHED</span>';
+                                }
+
+                                // Fib Targets
+                                if (fib && fib.type === 'bullish') {
+                                    const atFib1 = stockPrice.price >= fib.fib1272;
+                                    const atFib2 = stockPrice.price >= fib.fib1618;
+                                    signals += '<span class="holding-card-footer-label" style="margin-left:12px">Fib:</span>';
+                                    signals += ' <span class="holding-card-footer-value ' + (atFib1 ? 'positive' : '') + '">1.27× $' + fib.fib1272.toFixed(2) + '</span>';
+                                    signals += ' · <span class="holding-card-footer-value ' + (atFib2 ? 'positive' : '') + '">1.62× $' + fib.fib1618.toFixed(2) + '</span>';
+                                    if (atFib2) signals += ' <span class="positive" style="font-weight:600">TARGET HIT</span>';
+                                    else if (atFib1) signals += ' <span class="positive" style="font-weight:600">NEAR TARGET</span>';
+                                }
+
+                                // Volume Divergence
+                                if (volDiv?.divergence) {
+                                    const divClass = volDiv.direction === 'bearish' ? 'negative' : 'positive';
+                                    signals += '<span class="holding-card-footer-label" style="margin-left:12px">Vol Div:</span>';
+                                    signals += ' <span class="' + divClass + '" style="font-weight:600">' + volDiv.direction.toUpperCase() + '</span>';
+                                    signals += ' <span class="text-muted">(price ' + (volDiv.priceTrend > 0 ? '+' : '') + volDiv.priceTrend + '%, vol ' + (volDiv.volumeTrend > 0 ? '+' : '') + volDiv.volumeTrend + '%)</span>';
+                                }
+
+                                if (!signals) return '';
+                                return '<div class="holding-card-signals">' + signals + '</div>';
+                            })()}
                             ${(() => {
                                 const articles = newsCache[symbol];
                                 if (!articles || articles.length === 0) return '';
@@ -12085,8 +12219,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                 // Fetch historical bars and reconstruct signals
                 let signals = null;
+                let entryBars = null;
                 try {
                     const bars = await fetchHistoricalBars(symbol, dateStr);
+                    entryBars = bars;
                     if (bars) {
                         // Temporarily inject into multiDayCache for detectStructure
                         const prevCache = multiDayCache[symbol];
@@ -12197,8 +12333,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         entrySMA20: signals?.sma20 ?? null,
                         peakPrice: price,
                         peakDate: timestamp,
-                        targetPrice: null,
-                        stopPrice: null,
+                        entryATR: entryBars ? calculateATR(entryBars) : null,
+                        targetPrice: (() => {
+                            const fib = entryBars ? calculateFibTargets(entryBars) : null;
+                            return fib?.type === 'bullish' ? fib.fib1272 : null;
+                        })(),
+                        stopPrice: (() => {
+                            const atr = entryBars ? calculateATR(entryBars) : null;
+                            return atr ? Math.round((price - 2 * atr) * 100) / 100 : null;
+                        })(),
                         timeHorizon: null
                     };
                 }

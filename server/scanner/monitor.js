@@ -6,7 +6,7 @@
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
-const { isMarketOpen, detectStructure, calculateRSI, calculateMACD } = require('../lib/scoring');
+const { isMarketOpen, detectStructure, calculateRSI, calculateMACD, calculateATR, detectVolumeDivergence, calculateFibTargets } = require('../lib/scoring');
 const { fetchBulkSnapshot, fetchGroupedDailyBars } = require('../lib/fetchers');
 const { sendAlert } = require('./alerts');
 const { runFullScan, getScanStatus } = require('./full-scan');
@@ -100,8 +100,15 @@ async function runStructureCheck({ force = false } = {}) {
             const current = detectStructure(bars);
             const rsi = calculateRSI(bars);
             const macd = calculateMACD(bars);
+            const atr = calculateATR(bars);
+            const volDiv = detectVolumeDivergence(bars);
+            const fibTargets = calculateFibTargets(bars);
             const price = prices[symbol]?.price;
             const thesis = portfolio.holdingTheses && portfolio.holdingTheses[symbol];
+
+            // ATR-based stop: entry price - 2×ATR (use thesis entry price if available)
+            const entryPrice = thesis?.entryPrice || price;
+            const atrStop = atr && entryPrice ? Math.round((entryPrice - 2 * atr) * 100) / 100 : null;
 
             // Store current readings in state
             if (!state.readings) state.readings = {};
@@ -113,6 +120,10 @@ async function runStructureCheck({ force = false } = {}) {
                 chochType: current.chochType,
                 rsi,
                 macdCrossover: macd?.crossover || 'none',
+                atr,
+                atrStop,
+                volumeDivergence: volDiv,
+                fibTargets,
                 price,
                 timestamp: new Date().toISOString()
             };
@@ -147,18 +158,34 @@ async function runStructureCheck({ force = false } = {}) {
                 }
             }
 
-            // Alert condition 3: Stop loss breached
+            // Alert condition 3: Stop loss breached (manual or ATR-based)
             const stopPrice = thesis?.stopPrice || thesis?.targets?.stop;
-            if (stopPrice && price && price <= stopPrice) {
+            const effectiveStop = stopPrice || atrStop;
+            if (effectiveStop && price && price <= effectiveStop) {
+                const stopType = stopPrice ? 'manual' : 'ATR';
                 if (shouldAlert(state, symbol, 'stop-breached')) {
                     alerts.push({
                         symbol,
                         condition: 'stop-breached',
-                        title: `APEX: ${symbol} Stop Loss Breached`,
-                        body: `${symbol} at $${price} is below stop of $${stopPrice}.`,
+                        title: `APEX: ${symbol} ${stopType} Stop Breached`,
+                        body: `${symbol} at $${price} is below ${stopType} stop of $${effectiveStop}.${atr ? `\nATR: $${atr}` : ''}`,
                         tags: ['octagonal_sign']
                     });
                     recordAlert(state, symbol, 'stop-breached');
+                }
+            }
+
+            // Alert condition 4: Bearish volume divergence
+            if (volDiv.divergence && volDiv.direction === 'bearish') {
+                if (shouldAlert(state, symbol, 'volume-divergence')) {
+                    alerts.push({
+                        symbol,
+                        condition: 'volume-divergence',
+                        title: `APEX: ${symbol} Volume Divergence`,
+                        body: `${symbol} price rising but volume declining over ${volDiv.days} days.\nPrice trend: ${volDiv.priceTrend > 0 ? '+' : ''}${volDiv.priceTrend}%/day\nVolume trend: ${volDiv.volumeTrend}%/day`,
+                        tags: ['chart_with_downwards_trend']
+                    });
+                    recordAlert(state, symbol, 'volume-divergence');
                 }
             }
         }

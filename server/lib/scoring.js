@@ -468,6 +468,135 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
     };
 }
 
+// ATR (Average True Range) — measures typical daily price movement.
+// Used to set volatility-aware stop losses (e.g., entry - 2×ATR).
+function calculateATR(bars, period = 14) {
+    if (!bars || bars.length < period + 1) return null;
+    let trSum = 0;
+    for (let i = 1; i <= period; i++) {
+        const tr = Math.max(
+            bars[i].h - bars[i].l,
+            Math.abs(bars[i].h - bars[i - 1].c),
+            Math.abs(bars[i].l - bars[i - 1].c)
+        );
+        trSum += tr;
+    }
+    let atr = trSum / period;
+    // Smooth remaining bars with Wilder's method
+    for (let i = period + 1; i < bars.length; i++) {
+        const tr = Math.max(
+            bars[i].h - bars[i].l,
+            Math.abs(bars[i].h - bars[i - 1].c),
+            Math.abs(bars[i].l - bars[i - 1].c)
+        );
+        atr = (atr * (period - 1) + tr) / period;
+    }
+    return Math.round(atr * 100) / 100;
+}
+
+// Volume divergence — detects price rising with declining volume.
+// Returns { divergence: bool, direction, priceTrend, volumeTrend, days }
+function detectVolumeDivergence(bars, lookback = 10) {
+    if (!bars || bars.length < lookback + 1) return { divergence: false };
+    const recent = bars.slice(-lookback);
+
+    // Price trend: linear regression slope of closes
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    const n = recent.length;
+    for (let i = 0; i < n; i++) {
+        sumX += i;
+        sumY += recent[i].c;
+        sumXY += i * recent[i].c;
+        sumX2 += i * i;
+    }
+    const priceSlope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+
+    // Volume trend: linear regression slope of volume
+    sumY = 0; sumXY = 0;
+    for (let i = 0; i < n; i++) {
+        sumY += recent[i].v;
+        sumXY += i * recent[i].v;
+    }
+    const volSlope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+
+    // Normalize slopes for comparison
+    const avgPrice = recent.reduce((s, b) => s + b.c, 0) / n;
+    const avgVol = recent.reduce((s, b) => s + b.v, 0) / n;
+    const priceTrendPct = avgPrice > 0 ? (priceSlope / avgPrice) * 100 : 0;
+    const volTrendPct = avgVol > 0 ? (volSlope / avgVol) * 100 : 0;
+
+    // Bearish divergence: price trending up, volume trending down
+    const bearishDiv = priceTrendPct > 0.1 && volTrendPct < -0.5;
+    // Bullish divergence: price trending down, volume trending up
+    const bullishDiv = priceTrendPct < -0.1 && volTrendPct > 0.5;
+
+    return {
+        divergence: bearishDiv || bullishDiv,
+        direction: bearishDiv ? 'bearish' : bullishDiv ? 'bullish' : 'none',
+        priceTrend: Math.round(priceTrendPct * 100) / 100,
+        volumeTrend: Math.round(volTrendPct * 100) / 100,
+        days: lookback
+    };
+}
+
+// Fibonacci extension targets from the most recent swing.
+// Identifies the last completed swing (low→high or high→low→pullback)
+// and projects 1.272 and 1.618 extension levels.
+function calculateFibTargets(bars) {
+    if (!bars || bars.length < 10) return null;
+
+    // Find swing highs and lows (same logic as detectStructure)
+    const swingHighs = [];
+    const swingLows = [];
+    for (let i = 1; i < bars.length - 1; i++) {
+        if (bars[i].h > bars[i - 1].h && bars[i].h > bars[i + 1].h) {
+            swingHighs.push({ index: i, price: bars[i].h });
+        }
+        if (bars[i].l < bars[i - 1].l && bars[i].l < bars[i + 1].l) {
+            swingLows.push({ index: i, price: bars[i].l });
+        }
+    }
+
+    if (swingHighs.length < 1 || swingLows.length < 1) return null;
+
+    const currentPrice = bars[bars.length - 1].c;
+    const lastSH = swingHighs[swingHighs.length - 1];
+    const lastSL = swingLows[swingLows.length - 1];
+
+    // Bullish setup: swing low → swing high → pullback (current price < swing high)
+    // Project upside targets from the pullback
+    if (lastSL.index < lastSH.index) {
+        const swingRange = lastSH.price - lastSL.price;
+        // Use current price as the pullback level (or last swing low if it's after the high)
+        const pullback = currentPrice < lastSH.price ? currentPrice : lastSL.price;
+        return {
+            type: 'bullish',
+            swingLow: Math.round(lastSL.price * 100) / 100,
+            swingHigh: Math.round(lastSH.price * 100) / 100,
+            pullback: Math.round(pullback * 100) / 100,
+            fib1272: Math.round((pullback + swingRange * 1.272) * 100) / 100,
+            fib1618: Math.round((pullback + swingRange * 1.618) * 100) / 100
+        };
+    }
+
+    // Bearish setup: swing high → swing low (downtrend)
+    // Project downside targets
+    if (lastSH.index < lastSL.index) {
+        const swingRange = lastSH.price - lastSL.price;
+        const bounce = currentPrice > lastSL.price ? currentPrice : lastSH.price;
+        return {
+            type: 'bearish',
+            swingHigh: Math.round(lastSH.price * 100) / 100,
+            swingLow: Math.round(lastSL.price * 100) / 100,
+            bounce: Math.round(bounce * 100) / 100,
+            fib1272: Math.round((bounce - swingRange * 1.272) * 100) / 100,
+            fib1618: Math.round((bounce - swingRange * 1.618) * 100) / 100
+        };
+    }
+
+    return null;
+}
+
 module.exports = {
     isMarketOpen,
     calculateRSI,
@@ -482,5 +611,8 @@ module.exports = {
     calculateVolumeRatio,
     calculateRelativeStrength,
     detectSectorRotation,
-    calculateCompositeScore
+    calculateCompositeScore,
+    calculateATR,
+    detectVolumeDivergence,
+    calculateFibTargets
 };

@@ -677,6 +677,14 @@
             margin-top: 0;
         }
 
+        .holding-card-signals {
+            font-size: 11px;
+            color: var(--text-muted);
+            padding: 6px 0 2px;
+            border-top: 1px solid var(--border-subtle);
+            line-height: 1.6;
+        }
+
         .position-warning {
             color: var(--yellow);
         }
