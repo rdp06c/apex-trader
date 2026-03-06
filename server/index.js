@@ -20,7 +20,7 @@ app.listen(PORT, () => {
     console.log(`APEX server running on port ${PORT}`);
 
     // Start background scanner if API key is configured
-    if (process.env.MASSIVE_API_KEY) {
+    if (process.env.MASSIVE_API_KEY && process.env.MASSIVE_API_KEY !== 'your_api_key_here') {
         scanner.start();
     } else {
         console.log('Scanner: MASSIVE_API_KEY not set — scanner disabled');
