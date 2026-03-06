@@ -181,7 +181,7 @@
             'INTU': 'Intuit',
             // Cybersecurity
             'FTNT': 'Fortinet', 'TENB': 'Tenable', 'QLYS': 'Qualys',
-            'RPD': 'Rapid7', 'CYBR': 'CyberArk', 'VRNS': 'Varonis Systems',
+            'RPD': 'Rapid7', 'VRNS': 'Varonis Systems',
 
             // Tech - Hardware/Semiconductors
             'AAPL': 'Apple', 'QCOM': 'Qualcomm', 'INTC': 'Intel', 'MU': 'Micron Technology',
@@ -379,7 +379,7 @@
             'INTU': 'Technology',
             // Cybersecurity
             'FTNT': 'Technology', 'TENB': 'Technology', 'QLYS': 'Technology',
-            'RPD': 'Technology', 'CYBR': 'Technology', 'VRNS': 'Technology',
+            'RPD': 'Technology', 'VRNS': 'Technology',
             
             // Tech - Hardware/Semiconductors
             'AAPL': 'Technology', 'QCOM': 'Technology', 'INTC': 'Technology', 'MU': 'Technology',
@@ -4017,7 +4017,7 @@
                          'PLTR', 'SNOW', 'AI', 'BBAI', 'SOUN', 'PATH', 'S', 'HUBS', 'ZM', 'DOCU',
                          'TEAM', 'WDAY', 'VEEV', 'ESTC', 'DDOG', 'NET', 'MDB', 'CRWD', 'PANW', 'ZS',
                          'OKTA', 'CFLT', 'GTLB', 'FROG', 'BILL', 'DOCN', 'MNDY', 'PCOR', 'APP',
-                         'FTNT', 'TENB', 'QLYS', 'RPD', 'CYBR', 'VRNS',
+                         'FTNT', 'TENB', 'QLYS', 'RPD', 'VRNS',
                          'TOST', 'GLBE', 'CART', 'GRAB', 'IOT', 'BRZE'],
                 
                 techHardware: ['AAPL', 'QCOM', 'INTC', 'MU', 'ARM', 'DELL', 'HPQ', 'AMAT', 'LRCX', 'MRVL',
