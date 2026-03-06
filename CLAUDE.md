@@ -1,6 +1,6 @@
 # APEX – Scorecard-Guided Manual Trading Dashboard
 
-APEX is a single-page trading dashboard that screens ~490 stocks, scores them with a composite scoring engine, and surfaces actionable signals via a candidate scorecard. The user makes all buy/sell decisions manually, guided by the scorecard and trade insights. Uses Massive (formerly Polygon.io) for market data. No framework, no backend beyond a Cloudflare Worker for optional AI chat.
+APEX is a single-page trading dashboard that screens ~537 stocks across 14 sectors, scores them with a composite scoring engine, and surfaces actionable signals via a candidate scorecard. The user makes all buy/sell decisions manually, guided by the scorecard and trade insights. Uses Massive (formerly Polygon.io) for market data. No framework, no backend beyond a Cloudflare Worker for optional AI chat. No cash/budget concept — portfolio return is based on cost basis of invested capital.
 
 ## Project Structure
 
@@ -28,9 +28,9 @@ Browser (index.html)
 
 ## Core Workflow
 
-1. **Scan Market** — fetches prices, ~65-day OHLCV bars, ticker details, short interest, VIX for ~490 stocks across 12 sectors. Populates all caches.
+1. **Scan Market** — fetches prices, ~65-day OHLCV bars, ticker details, short interest, server indicators (RSI, MACD, SMA50), VIX for ~537 stocks across 14 sectors. Populates all caches. Server indicators fetched for ALL stocks (no cap).
 2. **Score** — `calculateCompositeScore` produces weighted sum of ~15 components (momentum, RS, structure, RSI, MACD, pullback, extension, etc.) with entry quality multiplier
-3. **Candidate Scorecard** — top candidates displayed with color-coded columns: Score, Price, Day%, 5D, MOM, VOL, RS, RSI, MACD, Structure, DTC. Tooltips on headers explain each signal.
+3. **Candidate Scorecard** — full universe displayed with sortable, color-coded columns: Score, Price, Day%, 5D, MOM, VOL, RS, RSI, MACD, Structure, DTC, Sector, MCap. Click column headers to sort. Sector filter dropdown. Paginated (40 per page).
 4. **Manual Trade** — user enters buy/sell via modal. Same-day trades auto-capture all live signals from caches (run Scan Market first for richest data).
 5. **Trade Insights** — derived rules, performance summary, signal accuracy table, regime history — all computed from `closedTrades`
 
@@ -88,13 +88,21 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 
 **Bulk Snapshot Cache**: `fetchBulkSnapshot()` uses a 15-second cache. Cache hit requires ALL requested symbols present (`symbols.every`), and new fetches merge via `Object.assign` (not overwrite).
 
+## Portfolio Metrics
+
+**Total Return** = Realized P&L (sum of closedTrades.profitLoss) + Unrealized P&L (current holdings value − cost basis). Percentage based on current cost basis. No cash/budget concept — `portfolio.cash` is legacy.
+
+**Alpha vs SPY** = Total Return % − SPY return % (from `spyBaseline` price). Same realized + unrealized formula.
+
+**Cost Basis**: Computed via `getCurrentPositionBuys()` which tracks buys for the current position (after any full exit/re-entry).
+
 ## Portfolio State
 
-Persisted to `localStorage`, backed up to Google Drive as `Apex_Portfolio.json`. Key fields: `cash`, `holdings`, `transactions`, `closedTrades`, `holdingTheses`, `performanceHistory`, `lastMarketRegime`, `lastCandidateScores`, `lastSectorRotation`, `lastVIX`, `regimeHistory`, `portfolioHealth`. Array caps on save: transactions (500), closedTrades (300), performanceHistory (3000).
+Persisted to `localStorage`, backed up to Google Drive as `Apex_Portfolio.json`. Key fields: `holdings`, `transactions`, `closedTrades`, `holdingTheses`, `performanceHistory`, `lastMarketRegime`, `lastCandidateScores`, `lastSectorRotation`, `lastVIX`, `regimeHistory`, `portfolioHealth`. Array caps on save: transactions (500), closedTrades (300), performanceHistory (3000).
 
 ## Known Issues
 
-- **Technical indicators dual source**: Client-side RSI/MACD are approximations from ~65-day bars. Server values (`serverRsi`, `serverMacd`, `serverSma50`) use full history. Client for scoring, server for display.
+- **Technical indicators dual source**: Client-side RSI/MACD are approximations from ~65-day bars. Server values (`serverRsi`, `serverMacd`, `serverSma50`) use full history and are fetched for all stocks during Scan Market. Client for scoring, server for display.
 - **Keyboard accessibility**: Collapsible sections use `<div onclick>` — should migrate to `<button>` with proper roles
 - **FVG detection partial**: Detected and scored (±0.5) but not used in reversal filtering
 - **RS not reconstructable**: Relative strength requires full market context at time of entry. For historical manual trades, RS is null unless cached from a prior Scan Market.
@@ -102,6 +110,15 @@ Persisted to `localStorage`, backed up to Google Drive as `Apex_Portfolio.json`.
 ## Legacy AI Code
 
 The codebase still contains the two-phase AI analysis system (`runAIAnalysis`, Phase 1/Phase 2 prompts, `executeSingleTrade`, `executeMultipleTrades`, budget/risk controls). This code is not actively used — the "Run AI Analysis" button has been removed. The chat interface still uses the Cloudflare Worker proxy for conversational queries.
+
+## Stock Universe
+
+~537 stocks across 14 sectors: Technology, Automotive, Financial, Healthcare, Consumer, Energy, Industrials, Real Estate, Materials, Defense, Space, Crypto, Index Fund. Three lists must stay in sync when adding/removing stocks:
+1. `stockNames` — display names
+2. `stockSectors` — sector classification (drives heatmap, which is dynamic)
+3. `screenStocks()` — scan list (sector-grouped arrays, deduplicated)
+
+Coverage includes: AI/software, semiconductors, cybersecurity, biotech/genomics, digital health, EV/auto, fintech/payments, crypto-adjacent, space/satellite, drones/eVTOL, infrastructure/data center, materials/mining, defense contractors, REITs, and more.
 
 ## Development Notes
 

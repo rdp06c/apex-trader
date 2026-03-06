@@ -7,5 +7,11 @@ node_modules/
 *.db
 .DS_Store
 
+# Server-side portfolio data (persisted locally, not in repo)
+server/data/portfolio.json
+server/data/*.tmp.json
+server/data/backups/
+server/data/scanner-state.json
+
 # Old generated output name (no longer produced)
 ai_trader.html

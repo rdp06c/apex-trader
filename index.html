@@ -2325,6 +2325,19 @@
             cursor: help;
         }
 
+        .scorecard-table th.sortable-header {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .scorecard-table th.sortable-header:hover {
+            color: var(--accent);
+        }
+
+        .scorecard-table th.sorted {
+            color: var(--accent);
+        }
+
         .scorecard-table td {
             padding: 7px 10px;
             border-bottom: 1px solid var(--border-subtle);
@@ -2414,9 +2427,14 @@
             color: var(--text-primary);
             border: 1px solid var(--border-medium);
             border-radius: var(--radius-sm);
-            padding: 6px 10px;
+            padding: 6px 28px 6px 10px;
             font-size: 12px;
             cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
         }
 
         .scorecard-pagination {
@@ -3101,6 +3119,43 @@
             regimeHistory: []     // Rolling regime transition log
         };
 
+        // Portfolio storage adapter — server-backed with localStorage fallback
+        const portfolioStorage = {
+            _etag: null,
+            _serverAvailable: null, // null = untested, true/false after first probe
+
+            async load() {
+                try {
+                    const res = await fetch('/api/portfolio');
+                    if (res.ok) {
+                        this._etag = res.headers.get('ETag');
+                        this._serverAvailable = true;
+                        return await res.json();
+                    }
+                } catch (e) { /* server unreachable — fall through to localStorage */ }
+                this._serverAvailable = false;
+                const saved = localStorage.getItem('aiTradingPortfolio');
+                return saved ? JSON.parse(saved) : null;
+            },
+
+            async save(data) {
+                // Always save to localStorage as local backup
+                localStorage.setItem('aiTradingPortfolio', JSON.stringify(data));
+                if (this._serverAvailable === false) return;
+                try {
+                    const headers = { 'Content-Type': 'application/json' };
+                    if (this._etag) headers['If-Match'] = this._etag;
+                    const res = await fetch('/api/portfolio', {
+                        method: 'POST', headers, body: JSON.stringify(data)
+                    });
+                    if (res.ok) {
+                        this._etag = res.headers.get('ETag');
+                        this._serverAvailable = true;
+                    }
+                } catch (e) { /* server unreachable — localStorage has the save */ }
+            }
+        };
+
         // Calibration weight system — data-driven scoring via runCalibrationSweep
         const DEFAULT_WEIGHTS = {
             momentumMultiplier: 0.6, rsMultiplier: 0.6, structureMultiplier: 1.25,
@@ -3223,8 +3278,11 @@
             'DDOG': 'Datadog', 'NET': 'Cloudflare', 'MDB': 'MongoDB', 'CRWD': 'CrowdStrike',
             'PANW': 'Palo Alto Networks', 'ZS': 'Zscaler', 'OKTA': 'Okta', 'CFLT': 'Confluent',
             'GTLB': 'GitLab', 'FROG': 'JFrog', 'BILL': 'Bill Holdings', 'DOCN': 'DigitalOcean',
-            'GTM': 'ZoomInfo', 'MNDY': 'monday.com', 'PCOR': 'Procore', 'APP': 'AppLovin',
+            'MNDY': 'monday.com', 'PCOR': 'Procore', 'APP': 'AppLovin',
             'INTU': 'Intuit',
+            // Cybersecurity
+            'FTNT': 'Fortinet', 'TENB': 'Tenable', 'QLYS': 'Qualys',
+            'RPD': 'Rapid7', 'CYBR': 'CyberArk', 'VRNS': 'Varonis Systems',
 
             // Tech - Hardware/Semiconductors
             'AAPL': 'Apple', 'QCOM': 'Qualcomm', 'INTC': 'Intel', 'MU': 'Micron Technology',
@@ -3247,17 +3305,15 @@
             'TSLA': 'Tesla', 'RIVN': 'Rivian', 'LCID': 'Lucid Group', 'NIO': 'NIO Inc.',
             'XPEV': 'XPeng', 'LI': 'Li Auto', 'F': 'Ford', 'GM': 'General Motors',
             'STLA': 'Stellantis', 'TM': 'Toyota', 'HMC': 'Honda', 'RACE': 'Ferrari',
-            'VWAGY': 'Volkswagen', 'PSNY': 'Polestar', 'NSANY': 'Nissan', 'MBGYY': 'Mercedes-Benz',
-            'POAHY': 'Porsche', 'FUJHY': 'Subaru', 'BLNK': 'Blink Charging', 'CHPT': 'ChargePoint',
+            'BLNK': 'Blink Charging', 'CHPT': 'ChargePoint',
             'EVGO': 'EVgo', 'PAG': 'Penske Auto',
-            'QS': 'QuantumScape', 'WKHS': 'Workhorse', 'ALV': 'Autoliv',
-            'HYLN': 'Hyliion', 'JZXN': 'Jiuzi Holdings', 'VRM': 'Vroom',
+            'QS': 'QuantumScape', 'ALV': 'Autoliv',
             'CVNA': 'Carvana', 'KMX': 'CarMax', 'APTV': 'Aptiv',
             'AN': 'AutoNation', 'LAD': 'Lithia Motors',
 
             // Finance
             'JPM': 'JPMorgan Chase', 'BAC': 'Bank of America', 'V': 'Visa', 'MA': 'Mastercard',
-            'COIN': 'Coinbase', 'SOFI': 'SoFi', 'PYPL': 'PayPal', 'XYZ': 'Block',
+            'SOFI': 'SoFi', 'PYPL': 'PayPal', 'XYZ': 'Block',
             'WFC': 'Wells Fargo', 'GS': 'Goldman Sachs', 'MS': 'Morgan Stanley', 'C': 'Citigroup',
             'BLK': 'BlackRock', 'SCHW': 'Charles Schwab', 'AFRM': 'Affirm', 'UPST': 'Upstart',
             'NU': 'Nu Holdings', 'MELI': 'MercadoLibre', 'HOOD': 'Robinhood',
@@ -3270,6 +3326,9 @@
             'WRB': 'Berkley', 'CB': 'Chubb', 'TRV': 'Travelers', 'ALL': 'Allstate',
             'PGR': 'Progressive', 'AIG': 'AIG', 'MET': 'MetLife', 'PRU': 'Prudential',
             'RKT': 'Rocket Companies',
+            // Payments/Fintech
+            'FOUR': 'Shift4 Payments', 'PAYO': 'Payoneer', 'DLO': 'DLocal',
+            'RELY': 'Remitly', 'FLYW': 'Flywire',
 
             // Growth
             'DKNG': 'DraftKings', 'RBLX': 'Roblox', 'U': 'Unity Software', 'PINS': 'Pinterest',
@@ -3277,8 +3336,12 @@
             'LYFT': 'Lyft', 'DASH': 'DoorDash', 'UBER': 'Uber', 'SHOP': 'Shopify',
             'SE': 'Sea Limited', 'BABA': 'Alibaba', 'JD': 'JD.com', 'PDD': 'PDD Holdings',
             'CPNG': 'Coupang', 'BKNG': 'Booking Holdings', 'EXPE': 'Expedia', 'TCOM': 'Trip.com',
-            'TRIP': 'TripAdvisor', 'PTON': 'Peloton', 'OPEN': 'Opendoor', 'COMP': 'Compass International',
+            'TRIP': 'TripAdvisor', 'PTON': 'Peloton', 'OPEN': 'Opendoor', 'COMP': 'Compass Inc.',
             'CWAN': 'Clearwater Analytics', 'DUOL': 'Duolingo', 'BROS': 'Dutch Bros', 'CAVA': 'CAVA Group',
+            // Mid-cap Growth
+            'TOST': 'Toast', 'GLBE': 'Global-e Online', 'CART': 'Instacart (Maplebear)',
+            'GRAB': 'Grab Holdings', 'IOT': 'Samsara', 'BRZE': 'Braze',
+            'ONON': 'On Holding', 'BIRK': 'Birkenstock',
 
             // Healthcare
             'JNJ': 'Johnson & Johnson', 'UNH': 'UnitedHealth', 'LLY': 'Eli Lilly', 'PFE': 'Pfizer',
@@ -3291,6 +3354,14 @@
             'EXAS': 'Exact Sciences', 'ILMN': 'Illumina', 'BIIB': 'Biogen', 'ALNY': 'Alnylam',
             'INCY': 'Incyte', 'NBIX': 'Neurocrine Bio', 'UTHR': 'United Therapeutics', 'JAZZ': 'Jazz Pharma',
             'SRPT': 'Sarepta', 'BMRN': 'BioMarin', 'IONS': 'Ionis Pharma', 'RGEN': 'Repligen',
+            // Biotech/Genomics
+            'CRSP': 'CRISPR Therapeutics', 'NTLA': 'Intellia Therapeutics', 'BEAM': 'Beam Therapeutics',
+            'RXRX': 'Recursion Pharma', 'TWST': 'Twist Bioscience', 'PACB': 'PacBio',
+            'EDIT': 'Editas Medicine', 'IOVA': 'Iovance Biotherapeutics', 'PCVX': 'Vaxcyte',
+            'MDGL': 'Madrigal Pharma', 'TGTX': 'TG Therapeutics', 'LEGN': 'Legend Biotech',
+            'DNA': 'Ginkgo Bioworks', 'FATE': 'Fate Therapeutics',
+            // Digital Health
+            'HIMS': 'Hims & Hers', 'DOCS': 'Doximity', 'OSCR': 'Oscar Health',
 
             // Consumer
             'AMZN': 'Amazon', 'WMT': 'Walmart', 'COST': 'Costco', 'TGT': 'Target',
@@ -3337,6 +3408,12 @@
             'AOS': 'A.O. Smith', 'ROP': 'Roper Technologies', 'CARR': 'Carrier Global', 'VLTO': 'Veralto',
             'ROCK': 'Gibraltar Industries', 'MLI': 'Mueller Industries', 'RUSHA': 'Rush Enterprises',
             'MYRG': 'MYR Group', 'DY': 'Dycom Industries', 'APOG': 'Apogee Enterprises',
+            // Infrastructure/Data Center
+            'VRT': 'Vertiv Holdings', 'EME': 'EMCOR Group', 'APH': 'Amphenol',
+            'HUBB': 'Hubbell', 'WCC': 'WESCO International', 'TT': 'Trane Technologies',
+            'GNRC': 'Generac Holdings',
+            // Policy-Sensitive
+            'GEO': 'GEO Group', 'CXW': 'CoreCivic',
 
             // Real Estate
             'AMT': 'American Tower', 'PLD': 'Prologis', 'EQIX': 'Equinix', 'O': 'Realty Income',
@@ -3353,7 +3430,7 @@
             // Materials
             'NEM': 'Newmont', 'FCX': 'Freeport-McMoRan', 'NUE': 'Nucor', 'DOW': 'Dow Inc.',
             'USAR': 'USA Rare Earth', 'UUUU': 'Energy Fuels', 'NB': 'NioCorp Developments', 'MP': 'MP Materials',
-            'GOLD': 'Gold.com', 'AU': 'AngloGold Ashanti', 'AEM': 'Agnico Eagle', 'WPM': 'Wheaton Precious Metals',
+            'GOLD': 'Barrick Gold', 'AU': 'AngloGold Ashanti', 'AEM': 'Agnico Eagle', 'WPM': 'Wheaton Precious Metals',
             'FNV': 'Franco-Nevada', 'RGLD': 'Royal Gold', 'KGC': 'Kinross Gold', 'HL': 'Hecla Mining',
             'STLD': 'Steel Dynamics', 'RS': 'Reliance Steel', 'CLF': 'Cleveland-Cliffs', 'MT': 'ArcelorMittal',
             'TX': 'Ternium', 'CMC': 'Commercial Metals', 'ATI': 'ATI Inc.',
@@ -3371,6 +3448,18 @@
             'BWXT': 'BWX Technologies', 'WWD': 'Woodward', 'TDG': 'TransDigm', 'HEI': 'HEICO',
             'CW': 'Curtiss-Wright', 'MOG.A': 'Moog', 'AIN': 'Albany International',
             'PSN': 'Parsons Corporation', 'MRCY': 'Mercury Systems', 'DRS': 'Leonardo DRS',
+            // Drones/eVTOL
+            'RCAT': 'Red Cat Holdings', 'JOBY': 'Joby Aviation', 'ACHR': 'Archer Aviation',
+
+            // Space
+            'RKLB': 'Rocket Lab', 'ASTS': 'AST SpaceMobile', 'LUNR': 'Intuitive Machines',
+            'RDW': 'Redwire', 'BKSY': 'BlackSky Technology', 'SPIR': 'Spire Global',
+            'IRDM': 'Iridium Communications', 'GSAT': 'Globalstar',
+
+            // Crypto
+            'COIN': 'Coinbase', 'MSTR': 'Strategy', 'MARA': 'MARA Holdings',
+            'RIOT': 'Riot Platforms', 'CLSK': 'CleanSpark', 'HUT': 'Hut 8',
+            'BTDR': 'Bitdeer Technologies', 'BITF': 'Bitfarms',
 
             // Index Funds
             'SPY': 'S&P 500 ETF', 'QQQ': 'Nasdaq 100 ETF', 'IWM': 'Russell 2000 ETF', 'VOO': 'Vanguard S&P 500'
@@ -3387,8 +3476,11 @@
             'DDOG': 'Technology', 'NET': 'Technology', 'MDB': 'Technology', 'CRWD': 'Technology',
             'PANW': 'Technology', 'ZS': 'Technology', 'OKTA': 'Technology', 'CFLT': 'Technology',
             'GTLB': 'Technology', 'FROG': 'Technology', 'BILL': 'Technology', 'DOCN': 'Technology',
-            'GTM': 'Technology', 'MNDY': 'Technology', 'PCOR': 'Technology', 'APP': 'Technology',
+            'MNDY': 'Technology', 'PCOR': 'Technology', 'APP': 'Technology',
             'INTU': 'Technology',
+            // Cybersecurity
+            'FTNT': 'Technology', 'TENB': 'Technology', 'QLYS': 'Technology',
+            'RPD': 'Technology', 'CYBR': 'Technology', 'VRNS': 'Technology',
             
             // Tech - Hardware/Semiconductors
             'AAPL': 'Technology', 'QCOM': 'Technology', 'INTC': 'Technology', 'MU': 'Technology',
@@ -3409,18 +3501,15 @@
             'TSLA': 'Automotive', 'RIVN': 'Automotive', 'LCID': 'Automotive', 'NIO': 'Automotive',
             'XPEV': 'Automotive', 'LI': 'Automotive', 'F': 'Automotive', 'GM': 'Automotive',
             'STLA': 'Automotive', 'TM': 'Automotive', 'HMC': 'Automotive', 'RACE': 'Automotive',
-            'VWAGY': 'Automotive', 'PSNY': 'Automotive', 'NSANY': 'Automotive',
-            'MBGYY': 'Automotive', 'POAHY': 'Automotive', 'FUJHY': 'Automotive', 
             'BLNK': 'Automotive', 'CHPT': 'Automotive', 'EVGO': 'Automotive',
             'PAG': 'Automotive', 'QS': 'Automotive',
-            'WKHS': 'Automotive', 'ALV': 'Automotive', 'HYLN': 'Automotive',
-            'JZXN': 'Automotive', 'VRM': 'Automotive',
+            'ALV': 'Automotive',
             'CVNA': 'Automotive', 'KMX': 'Automotive', 'APTV': 'Automotive',
             'AN': 'Automotive', 'LAD': 'Automotive',
             
             // Finance
             'JPM': 'Financial', 'BAC': 'Financial', 'V': 'Financial', 'MA': 'Financial',
-            'COIN': 'Financial', 'SOFI': 'Financial', 'PYPL': 'Financial', 'XYZ': 'Financial', 'GPN': 'Financial',
+            'SOFI': 'Financial', 'PYPL': 'Financial', 'XYZ': 'Financial', 'GPN': 'Financial',
             'WFC': 'Financial', 'GS': 'Financial', 'MS': 'Financial', 'C': 'Financial',
             'BLK': 'Financial', 'SCHW': 'Financial', 'AFRM': 'Financial', 'UPST': 'Financial',
             'LC': 'Financial', 'NU': 'Financial', 'MELI': 'Financial', 'HOOD': 'Financial',
@@ -3431,6 +3520,9 @@
             'ZION': 'Financial', 'FHN': 'Financial',
             'WRB': 'Financial', 'CB': 'Financial', 'TRV': 'Financial', 'ALL': 'Financial',
             'PGR': 'Financial', 'AIG': 'Financial', 'MET': 'Financial', 'PRU': 'Financial',
+            // Payments/Fintech
+            'FOUR': 'Financial', 'PAYO': 'Financial', 'DLO': 'Financial',
+            'RELY': 'Financial', 'FLYW': 'Financial',
 
             // Growth Tech/Consumer
             'DKNG': 'Technology', 'RBLX': 'Technology', 'U': 'Technology', 'PINS': 'Technology',
@@ -3440,6 +3532,10 @@
             'PDD': 'Consumer', 'BKNG': 'Consumer', 'EXPE': 'Consumer', 'TCOM': 'Consumer', 'TRIP': 'Consumer',
             'PTON': 'Consumer', 'OPEN': 'Technology', 'COMP': 'Technology', 'RKT': 'Financial',
             'CWAN': 'Technology', 'DUOL': 'Technology', 'BROS': 'Consumer', 'CAVA': 'Consumer',
+            // Mid-cap Growth
+            'TOST': 'Technology', 'GLBE': 'Technology', 'CART': 'Technology',
+            'GRAB': 'Technology', 'IOT': 'Technology', 'BRZE': 'Technology',
+            'ONON': 'Consumer', 'BIRK': 'Consumer',
             
             // Healthcare
             'JNJ': 'Healthcare', 'UNH': 'Healthcare', 'LLY': 'Healthcare', 'PFE': 'Healthcare',
@@ -3452,7 +3548,15 @@
             'EXAS': 'Healthcare', 'ILMN': 'Healthcare', 'BIIB': 'Healthcare', 'ALNY': 'Healthcare',
             'INCY': 'Healthcare', 'NBIX': 'Healthcare', 'UTHR': 'Healthcare', 'JAZZ': 'Healthcare',
             'SRPT': 'Healthcare', 'BMRN': 'Healthcare', 'IONS': 'Healthcare', 'RGEN': 'Healthcare',
-            
+            // Biotech/Genomics
+            'CRSP': 'Healthcare', 'NTLA': 'Healthcare', 'BEAM': 'Healthcare',
+            'RXRX': 'Healthcare', 'TWST': 'Healthcare', 'PACB': 'Healthcare',
+            'EDIT': 'Healthcare', 'IOVA': 'Healthcare', 'PCVX': 'Healthcare',
+            'MDGL': 'Healthcare', 'TGTX': 'Healthcare', 'LEGN': 'Healthcare',
+            'DNA': 'Healthcare', 'FATE': 'Healthcare',
+            // Digital Health
+            'HIMS': 'Healthcare', 'DOCS': 'Healthcare', 'OSCR': 'Healthcare',
+
             // Consumer
             'AMZN': 'Consumer', 'WMT': 'Consumer', 'COST': 'Consumer', 'TGT': 'Consumer',
             'HD': 'Consumer', 'LOW': 'Consumer', 'SBUX': 'Consumer', 'MCD': 'Consumer',
@@ -3495,6 +3599,12 @@
             'IR': 'Industrials', 'WM': 'Industrials', 'RSG': 'Industrials', 
             'PCAR': 'Industrials', 'PWR': 'Industrials', 'JCI': 'Industrials',
             'AOS': 'Industrials', 'ROP': 'Industrials',
+            // Infrastructure/Data Center
+            'VRT': 'Industrials', 'EME': 'Industrials', 'APH': 'Industrials',
+            'HUBB': 'Industrials', 'WCC': 'Industrials', 'TT': 'Industrials',
+            'GNRC': 'Industrials',
+            // Policy-Sensitive
+            'GEO': 'Industrials', 'CXW': 'Industrials',
             
             // Real Estate
             'AMT': 'Real Estate', 'PLD': 'Real Estate', 'CCI': 'Real Estate', 'EQIX': 'Real Estate',
@@ -3519,7 +3629,7 @@
             'SHW': 'Materials', 'PPG': 'Materials', 'RPM': 'Materials', 'AXTA': 'Materials',
             'ALB': 'Materials', 'SQM': 'Materials', 'LAC': 'Materials', 'AA': 'Materials',
             'MP': 'Materials', 'DD': 'Materials', 'USAR': 'Materials',
-            'FUL': 'Materials', 'NEU': 'Materials', 'UUUU': 'Materials',
+            'FUL': 'Materials', 'NEU': 'Materials', 'UUUU': 'Materials', 'B': 'Materials',
             
             // Defense
             'LMT': 'Defense', 'RTX': 'Defense', 'NOC': 'Defense', 'GD': 'Defense',
@@ -3529,14 +3639,23 @@
             'BWXT': 'Defense', 'WWD': 'Defense', 'MOG.A': 'Defense', 'TDG': 'Defense',
             'HEI': 'Defense', 'CW': 'Defense', 'AIN': 'Defense',
             'PSN': 'Defense', 'MRCY': 'Defense', 'DRS': 'Defense',
+            // Drones/eVTOL
+            'RCAT': 'Defense', 'JOBY': 'Defense', 'ACHR': 'Defense',
             'EQT': 'Energy',
             // Reclassified from Defense
-            'B': 'Materials',
             'ROCK': 'Industrials', 'MLI': 'Industrials', 'RUSHA': 'Industrials',
             'MYRG': 'Industrials', 'DY': 'Industrials', 'APOG': 'Industrials',
             'IMOS': 'Technology', 'VECO': 'Technology', 'POWI': 'Technology',
             'PLXS': 'Technology', 'VICR': 'Technology',
-            
+
+            // Space
+            'RKLB': 'Space', 'ASTS': 'Space', 'LUNR': 'Space', 'RDW': 'Space',
+            'BKSY': 'Space', 'SPIR': 'Space', 'IRDM': 'Space', 'GSAT': 'Space',
+
+            // Crypto
+            'COIN': 'Crypto', 'MSTR': 'Crypto', 'MARA': 'Crypto', 'RIOT': 'Crypto',
+            'CLSK': 'Crypto', 'HUT': 'Crypto', 'BTDR': 'Crypto', 'BITF': 'Crypto',
+
             // Index Funds (not tracked in portfolio)
             'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund'
         };
@@ -6998,7 +7117,9 @@
                 techAI: ['NVDA', 'AVGO', 'GOOGL', 'MSFT', 'META', 'ORCL', 'CRM', 'ADBE', 'NOW', 'INTU',
                          'PLTR', 'SNOW', 'AI', 'BBAI', 'SOUN', 'PATH', 'S', 'HUBS', 'ZM', 'DOCU',
                          'TEAM', 'WDAY', 'VEEV', 'ESTC', 'DDOG', 'NET', 'MDB', 'CRWD', 'PANW', 'ZS',
-                         'OKTA', 'CFLT', 'GTLB', 'FROG', 'BILL', 'DOCN', 'GTM', 'MNDY', 'PCOR', 'APP'],
+                         'OKTA', 'CFLT', 'GTLB', 'FROG', 'BILL', 'DOCN', 'MNDY', 'PCOR', 'APP',
+                         'FTNT', 'TENB', 'QLYS', 'RPD', 'CYBR', 'VRNS',
+                         'TOST', 'GLBE', 'CART', 'GRAB', 'IOT', 'BRZE'],
                 
                 techHardware: ['AAPL', 'QCOM', 'INTC', 'MU', 'ARM', 'DELL', 'HPQ', 'AMAT', 'LRCX', 'MRVL',
                                'AMD', 'TXN', 'ADI', 'NXPI', 'KLAC', 'ASML', 'TSM', 'SNPS', 'CDNS', 'ON',
@@ -7009,35 +7130,42 @@
                                'IMOS', 'VECO', 'POWI', 'PLXS', 'VICR'],
 
                 evAuto: ['TSLA', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'F', 'GM', 'STLA', 'TM',
-                         'HMC', 'RACE', 'VWAGY', 'PSNY', 'NSANY', 'APTV', 'MBGYY', 'POAHY', 'FUJHY', 'ALV',
-                         'WKHS', 'BLNK', 'CHPT', 'EVGO', 'PAG', 'QS',
-                         'HYLN', 'JZXN', 'VRM', 'CVNA', 'KMX', 'AN', 'LAD'],
+                         'HMC', 'RACE', 'APTV', 'ALV',
+                         'BLNK', 'CHPT', 'EVGO', 'PAG', 'QS',
+                         'CVNA', 'KMX', 'AN', 'LAD'],
                 
                 finance: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'V', 'MA',
                           'XYZ', 'PYPL', 'GPN', 'AXP', 'FIS', 'COF', 'ALLY', 'USB', 'PNC', 'TFC', 'RF',
                           'KEY', 'FITB', 'MTB', 'CFG', 'HBAN', 'STT', 'BK', 'NTRS',
-                          'ZION', 'FHN', 'WRB', 'CB', 'TRV', 'ALL', 'PGR', 'AIG', 'MET', 'PRU'],
+                          'ZION', 'FHN', 'WRB', 'CB', 'TRV', 'ALL', 'PGR', 'AIG', 'MET', 'PRU',
+                          'FOUR', 'PAYO', 'DLO', 'RELY', 'FLYW'],
                 
                 growth: ['DKNG', 'RBLX', 'U', 'PINS', 'SNAP', 'SPOT', 'ABNB', 'LYFT', 'DASH', 'UBER',
                          'CPNG', 'BKNG', 'EXPE', 'TCOM', 'TRIP', 'PTON', 'LULU', 'ETSY', 'W', 'CHWY',
-                         'COIN', 'OPEN', 'COMP', 'RKT', 'CWAN', 'DUOL', 'BROS', 'CAVA', 'HOOD', 'AFRM',
-                         'UPST', 'LC', 'NU', 'SOFI', 'NFLX', 'ROKU', 'WBD', 'FOXA', 'CMCSA', 'T'],
+                         'OPEN', 'COMP', 'RKT', 'CWAN', 'DUOL', 'BROS', 'CAVA', 'HOOD', 'AFRM',
+                         'UPST', 'LC', 'NU', 'SOFI', 'NFLX', 'ROKU', 'WBD', 'FOXA', 'CMCSA', 'T',
+                         'SHOP', 'SE', 'BABA', 'JD', 'PDD', 'MELI'],
                 
                 healthcare: ['JNJ', 'UNH', 'LLY', 'ABBV', 'PFE', 'MRNA', 'VRTX', 'REGN', 'BMY', 'GILD',
                              'AMGN', 'CVS', 'CI', 'HUM', 'ISRG', 'TMO', 'DHR', 'ABT', 'SYK', 'BSX',
                              'MDT', 'BDX', 'BAX', 'ZBH', 'HCA', 'DVA', 'EXAS', 'ILMN',
-                             'BIIB', 'ALNY', 'INCY', 'NBIX', 'UTHR', 'JAZZ', 'SRPT', 'BMRN', 'IONS', 'RGEN'],
+                             'BIIB', 'ALNY', 'INCY', 'NBIX', 'UTHR', 'JAZZ', 'SRPT', 'BMRN', 'IONS', 'RGEN',
+                             'CRSP', 'NTLA', 'BEAM', 'RXRX', 'TWST', 'PACB', 'EDIT', 'IOVA',
+                             'PCVX', 'MDGL', 'TGTX', 'LEGN', 'DNA', 'FATE',
+                             'HIMS', 'DOCS', 'OSCR'],
                 
                 consumer: ['AMZN', 'WMT', 'COST', 'TGT', 'HD', 'LOW', 'SBUX', 'MCD', 'CMG', 'YUM',
                            'NKE', 'RH', 'DECK', 'CROX', 'ULTA', 'ELF', 'LEVI', 'UAA', 'DIS', 'GOOG',
                            'KO', 'PEP', 'PM', 'MO', 'BUD', 'TAP', 'STZ', 'MNST', 'CELH', 'KDP',
-                           'ORLY', 'AZO', 'AAP', 'GPC', 'TSCO', 'DG', 'DLTR', 'ROST', 'TJX', 'BBY'],
+                           'ORLY', 'AZO', 'AAP', 'GPC', 'TSCO', 'DG', 'DLTR', 'ROST', 'TJX', 'BBY',
+                           'VZ', 'TMUS', 'ONON', 'BIRK'],
                 
                 energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'OXY', 'MPC', 'PSX', 'VLO', 'TRGP',
                          'DVN', 'FANG', 'WMB', 'APA', 'HAL', 'BKR', 'NOV', 'FTI', 'NEE', 'DUK',
                          'SO', 'D', 'AEP', 'EXC', 'ENPH', 'SEDG', 'RUN', 'FSLR', 'PLUG',
                          'PBF', 'DK', 'CTRA', 'OVV', 'PR', 'SM', 'MGY', 'MTDR', 'CHRD', 'OKE',
-                         'SMR', 'VST', 'CEG', 'CCJ', 'LNG', 'AR', 'GEV'],
+                         'SMR', 'VST', 'CEG', 'CCJ', 'LNG', 'AR', 'GEV',
+                         'VNOM', 'EQT'],
                 
                 // NEW SECTORS ADDED:
                 
@@ -7045,7 +7173,9 @@
                               'GE', 'HON', 'MMM', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'BLD', 'BLDR',
                               'UNP', 'NSC', 'CSX', 'UPS', 'FDX', 'CHRW', 'JBHT', 'KNX', 'ODFL', 'XPO',
                               'CARR', 'VLTO', 'IR', 'WM', 'RSG', 'PCAR', 'PWR', 'JCI', 'AOS', 'ROP',
-                              'ROCK', 'MLI', 'RUSHA', 'MYRG', 'DY', 'APOG'],
+                              'ROCK', 'MLI', 'RUSHA', 'MYRG', 'DY', 'APOG',
+                              'VRT', 'EME', 'APH', 'HUBB', 'WCC', 'TT', 'GNRC',
+                              'GEO', 'CXW'],
                 
                 realEstate: ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'WELL', 'O', 'VICI', 'SPG',
                              'AVB', 'EQR', 'MAA', 'UDR', 'CPT', 'ESS', 'ELS', 'SUI', 'NXRT',
@@ -7060,7 +7190,12 @@
 
                 defense: ['LMT', 'RTX', 'NOC', 'GD', 'BA', 'LHX', 'HII', 'TXT', 'HWM', 'AXON',
                           'KTOS', 'AVAV', 'AIR', 'SAIC', 'LDOS', 'CACI', 'BAH', 'BWXT', 'WWD', 'MOG.A',
-                          'TDG', 'HEI', 'CW', 'AIN', 'PSN', 'MRCY', 'DRS']
+                          'TDG', 'HEI', 'CW', 'AIN', 'PSN', 'MRCY', 'DRS',
+                          'RCAT', 'JOBY', 'ACHR'],
+
+                space: ['RKLB', 'ASTS', 'LUNR', 'RDW', 'BKSY', 'SPIR', 'IRDM', 'GSAT'],
+
+                crypto: ['COIN', 'MSTR', 'MARA', 'RIOT', 'CLSK', 'HUT', 'BTDR', 'BITF']
             };
             
             // Use all stocks from every sector for maximum coverage
@@ -7279,11 +7414,8 @@
                 ])];
                 await fetchNewsForStocks(drNewsSymbols);
 
-                // Fetch server-computed indicators for top candidates (RSI, MACD, SMA50 from Massive API)
-                const drServerSymbols = [...new Set([
-                    ...dryRunScored.slice(0, 25).map(s => s.symbol),
-                    ...Object.keys(portfolio.holdings)
-                ])];
+                // Fetch server-computed indicators for ALL scored stocks (RSI, MACD, SMA50 from Massive API)
+                const drServerSymbols = dryRunScored.map(s => s.symbol);
                 thinkingDetail.textContent = `🧪 Fetching server indicators for ${drServerSymbols.length} stocks...`;
                 try {
                     const drServerData = await fetchServerIndicators(drServerSymbols);
@@ -7328,14 +7460,26 @@
                             console.log(`SPY baseline set: $${spyPrice.toFixed(2)}`);
                         }
                         portfolio.spyCurrent = { price: spyPrice, date: new Date().toISOString() };
-                        const currentValue = await calculatePortfolioValue().then(r => r.total);
+                        const holdingsValue = await calculatePortfolioValue().then(r => r.total);
                         const peakValue = portfolio.performanceHistory.length > 0
                             ? Math.max(...portfolio.performanceHistory.filter(e => e.value != null).map(e => e.value))
-                            : currentValue;
-                        const drawdownPct = peakValue > 0 ? ((currentValue - peakValue) / peakValue) * 100 : 0;
+                            : holdingsValue;
+                        const drawdownPct = peakValue > 0 ? ((holdingsValue - peakValue) / peakValue) * 100 : 0;
                         const spyReturn = ((spyPrice - portfolio.spyBaseline.price) / portfolio.spyBaseline.price) * 100;
-                        const portfolioReturn = portfolio.totalDeposits > 0
-                            ? ((currentValue - portfolio.totalDeposits) / portfolio.totalDeposits) * 100 : 0;
+                        // Total return = realized P&L + unrealized P&L, % on current cost basis
+                        const realizedPL = (portfolio.closedTrades || []).reduce((s, t) => s + (t.profitLoss || 0), 0);
+                        let costBasis = 0;
+                        for (const [sym, sh] of Object.entries(portfolio.holdings)) {
+                            const buys = getCurrentPositionBuys(sym);
+                            if (buys.length > 0) {
+                                const totalCost = buys.reduce((s, t) => s + (t.price * t.shares), 0);
+                                const totalShares = buys.reduce((s, t) => s + t.shares, 0);
+                                costBasis += totalShares > 0 ? (totalCost / totalShares) * sh : 0;
+                            }
+                        }
+                        const unrealizedPL = holdingsValue - costBasis;
+                        const portfolioReturn = costBasis > 0
+                            ? ((realizedPL + unrealizedPL) / costBasis) * 100 : 0;
                         portfolio.portfolioHealth = {
                             peakValue, drawdownPct, spyReturn, portfolioReturn,
                             alpha: portfolioReturn - spyReturn, timestamp: new Date().toISOString()
@@ -7846,14 +7990,26 @@
                             console.log(`SPY baseline set: $${spyPrice.toFixed(2)}`);
                         }
                         portfolio.spyCurrent = { price: spyPrice, date: new Date().toISOString() };
-                        const currentValue = await calculatePortfolioValue().then(r => r.total);
+                        const holdingsValue = await calculatePortfolioValue().then(r => r.total);
                         const peakValue = portfolio.performanceHistory.length > 0
                             ? Math.max(...portfolio.performanceHistory.filter(e => e.value != null).map(e => e.value))
-                            : currentValue;
-                        const drawdownPct = peakValue > 0 ? ((currentValue - peakValue) / peakValue) * 100 : 0;
+                            : holdingsValue;
+                        const drawdownPct = peakValue > 0 ? ((holdingsValue - peakValue) / peakValue) * 100 : 0;
                         const spyReturn = ((spyPrice - portfolio.spyBaseline.price) / portfolio.spyBaseline.price) * 100;
-                        const portfolioReturn = portfolio.totalDeposits > 0
-                            ? ((currentValue - portfolio.totalDeposits) / portfolio.totalDeposits) * 100 : 0;
+                        // Total return = realized P&L + unrealized P&L, % on current cost basis
+                        const realizedPL = (portfolio.closedTrades || []).reduce((s, t) => s + (t.profitLoss || 0), 0);
+                        let costBasis = 0;
+                        for (const [sym, sh] of Object.entries(portfolio.holdings)) {
+                            const buys = getCurrentPositionBuys(sym);
+                            if (buys.length > 0) {
+                                const totalCost = buys.reduce((s, t) => s + (t.price * t.shares), 0);
+                                const totalShares = buys.reduce((s, t) => s + t.shares, 0);
+                                costBasis += totalShares > 0 ? (totalCost / totalShares) * sh : 0;
+                            }
+                        }
+                        const unrealizedPL = holdingsValue - costBasis;
+                        const portfolioReturn = costBasis > 0
+                            ? ((realizedPL + unrealizedPL) / costBasis) * 100 : 0;
                         portfolio.portfolioHealth = {
                             peakValue, drawdownPct, spyReturn, portfolioReturn,
                             alpha: portfolioReturn - spyReturn, timestamp: new Date().toISOString()
@@ -11399,9 +11555,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             feed.insertBefore(item, feed.firstChild);
         }
 
-        // Save portfolio to localStorage
-        function savePortfolio(localOnly = false) {
-            // Cap unbounded arrays to prevent localStorage quota exhaustion
+        // Save portfolio to localStorage and server (if available)
+        async function savePortfolio(localOnly = false) {
+            // Cap unbounded arrays to prevent storage bloat
             const TX_CAP = 500;
             if (portfolio.transactions.length > TX_CAP) {
                 portfolio.transactions = portfolio.transactions.slice(-TX_CAP);
@@ -11414,8 +11570,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if ((portfolio.performanceHistory || []).length > PERF_CAP) {
                 portfolio.performanceHistory = portfolio.performanceHistory.slice(-PERF_CAP);
             }
-            localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
-            
+            await portfolioStorage.save(portfolio);
+
             // Also save to Google Drive if authorized (and not in recovery mode or local-only)
             if (gdriveAuthorized && !preventAutoSave && !localOnly) {
                 console.log('Google Drive authorized - saving to cloud...');
@@ -11427,12 +11583,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
         }
 
-        // Load portfolio from localStorage
+        // Load portfolio from server (with localStorage fallback)
         async function loadPortfolio() {
-            const saved = localStorage.getItem('aiTradingPortfolio');
+            const saved = await portfolioStorage.load();
             if (saved) {
                 try {
-                    portfolio = JSON.parse(saved);
+                    portfolio = saved;
                     console.log(`Portfolio loaded: ${Object.keys(portfolio.holdings).length} positions, ${portfolio.transactions.length} transactions`);
                     
                     // MIGRATION: Ensure new analytics fields exist
@@ -12990,13 +13146,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         // Calculate and update performance analytics
         function updatePerformanceAnalytics() {
-            // Holdings value from latest performance snapshot (no cash)
+            // Realized P&L from closed trades
+            const closedTrades = portfolio.closedTrades || [];
+            const realizedPL = closedTrades.reduce((sum, t) => sum + (t.profitLoss || 0), 0);
+
+            // Unrealized P&L from current holdings (cost basis vs last snapshot)
             const performanceHistory = portfolio.performanceHistory || [];
             const holdingsValue = performanceHistory.length > 0
                 ? performanceHistory[performanceHistory.length - 1].value
                 : 0;
 
-            // Cost basis of current holdings (avg buy price × current shares)
             let costBasis = 0;
             for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
                 const buys = getCurrentPositionBuys(symbol);
@@ -13006,13 +13165,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     costBasis += totalShares > 0 ? (totalCost / totalShares) * shares : 0;
                 }
             }
+            const unrealizedPL = holdingsValue - costBasis;
 
-            // Total Return = (Holdings Value - Cost Basis) / Cost Basis
-            const actualGains = holdingsValue - costBasis;
+            // Total Return = Realized + Unrealized, % based on current cost basis
+            const returnDollar = realizedPL + unrealizedPL;
             const totalReturn = costBasis > 0
-                ? (actualGains / costBasis) * 100
+                ? (returnDollar / costBasis) * 100
                 : 0;
-            const returnDollar = actualGains;
             
             document.getElementById('totalReturn').textContent = totalReturn.toFixed(2) + '%';
             document.getElementById('totalReturn').className = 'index-price';
@@ -13023,7 +13182,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('totalReturnDollar').className = 'index-change ' + (returnDollar >= 0 ? 'positive' : 'negative');
             
             // Win Rate (based on closed trades)
-            const closedTrades = portfolio.closedTrades || [];
             const wins = closedTrades.filter(t => t.profitLoss > 0).length;
             const losses = closedTrades.filter(t => t.profitLoss < 0).length;
             const totalClosed = wins + losses;
@@ -14461,7 +14619,7 @@ Current Portfolio:
         }
 
         // Module 2: Candidate Scorecard (paginated, full universe)
-        const scorecardState = { page: 1, filterSector: '' };
+        const scorecardState = { page: 1, filterSector: '', sortField: 'score', sortDir: 'desc' };
         const SCORECARD_PAGE_SIZE = 40;
 
         function scorecardSetSector(val) {
@@ -14472,6 +14630,17 @@ Current Portfolio:
 
         function scorecardSetPage(p) {
             scorecardState.page = p;
+            updateCandidateScorecard();
+        }
+
+        function scorecardSetSort(field) {
+            if (scorecardState.sortField === field) {
+                scorecardState.sortDir = scorecardState.sortDir === 'desc' ? 'asc' : 'desc';
+            } else {
+                scorecardState.sortField = field;
+                scorecardState.sortDir = 'desc';
+            }
+            scorecardState.page = 1;
             updateCandidateScorecard();
         }
 
@@ -14513,6 +14682,31 @@ Current Portfolio:
                 candidates = candidates.filter(c => c.sector === scorecardState.filterSector);
             }
 
+            // Sort
+            const sortAccessors = {
+                score: c => c.compositeScore || 0,
+                price: c => c.price || 0,
+                day: c => c.dayChange || 0,
+                '5d': c => c.return5d != null ? c.return5d : -999,
+                mom: c => c.momentum || 0,
+                vol: c => c.volumeRatio != null ? c.volumeRatio : -1,
+                rs: c => c.rs || 0,
+                rsi: c => c.rsi != null ? c.rsi : -1,
+                macd: c => {
+                    const cross = c.macdCrossover || 'none';
+                    if (cross === 'bullish') return 3;
+                    if (cross === 'bearish') return 0;
+                    const h = c.macdHistogram;
+                    if (h == null) return -1;
+                    return h >= 0 ? 2 : 1;
+                },
+                dtc: c => c.daysToCover || 0,
+                mcap: c => c.marketCap || 0,
+            };
+            const accessor = sortAccessors[scorecardState.sortField] || sortAccessors.score;
+            const dir = scorecardState.sortDir === 'asc' ? 1 : -1;
+            candidates = [...candidates].sort((a, b) => (accessor(a) - accessor(b)) * dir);
+
             // Pagination
             const totalPages = Math.ceil(candidates.length / SCORECARD_PAGE_SIZE);
             if (scorecardState.page > totalPages) scorecardState.page = totalPages;
@@ -14540,21 +14734,26 @@ Current Portfolio:
             }
             html += '</div>';
 
+            const sf = scorecardState.sortField;
+            const sd = scorecardState.sortDir;
+            const sortArrow = (field) => sf === field ? (sd === 'desc' ? ' ▼' : ' ▲') : '';
+            const sh = (field, title, label) => `<th title="${title}" class="sortable-header${sf === field ? ' sorted' : ''}" onclick="scorecardSetSort('${field}')">${label}${sortArrow(field)}</th>`;
+
             html += '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
                 '<th>#</th><th>Symbol</th>' +
-                '<th title="Composite score from ~15 weighted signals. Higher is better. Hover over a stock\'s score to see the full breakdown.">Score</th>' +
-                '<th title="Current stock price (last trade or regular session close).">Price</th>' +
-                '<th title="Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.">Day</th>' +
-                '<th title="5-day cumulative return. Sweet spot is -2% to -8% with Bullish structure: triggers pullback bonus (up to +5) and 1.3x entry multiplier on the entire score. The biggest hidden score amplifier.">5D</th>' +
-                '<th title="Momentum (0-10). Sweet spot is 3-7: strong trend without penalties. 9+ triggers extension penalty (-3.5) and reduces entry multiplier to 0.6x.">Mom</th>' +
-                '<th title="Volume ratio vs 20-day avg. Read with Mom: high Mom + low Vol (-2.0 penalty, fake rally). Low Mom + high Vol (+1.5, accumulation). Hard gate: breakouts need ≥1.5x, pullbacks need ≤0.7x or trade is vetoed.">Vol</th>' +
-                '<th title="Relative Strength vs market (0-100). Mid-range is ideal. RS 85+ triggers mean-reversion penalties up to -6.0. When both Mom ≥9 and RS ≥85, extension penalty jumps to -5.0.">RS</th>' +
-                '<th title="RSI oscillator (0-100). Below 40 is a strong buy signal (+1.5 to +2.5). Above 70 is danger (-3.0). Above 80 is severe (-5.0 and entry multiplier drops to 0.3x). Biggest single unconditional bonus in the system.">RSI</th>' +
-                '<th title="MACD crossover state. Bullish ▲ = +2.5, Bearish ▼ Cross = -2.0, Bearish ▼ = -0.5. A 4.5-point swing between bullish and bearish crossover — one of the largest score differentiators.">MACD</th>' +
+                sh('score', "Composite score from ~15 weighted signals. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
+                sh('price', "Current stock price (last trade or regular session close).", 'Price') +
+                sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
+                sh('5d', "5-day cumulative return. Sweet spot is -2% to -8% with Bullish structure: triggers pullback bonus (up to +5) and 1.3x entry multiplier on the entire score. The biggest hidden score amplifier.", '5D') +
+                sh('mom', "Momentum (0-10). Sweet spot is 3-7: strong trend without penalties. 9+ triggers extension penalty (-3.5) and reduces entry multiplier to 0.6x.", 'Mom') +
+                sh('vol', "Volume ratio vs 20-day avg. Read with Mom: high Mom + low Vol (-2.0 penalty, fake rally). Low Mom + high Vol (+1.5, accumulation). Hard gate: breakouts need ≥1.5x, pullbacks need ≤0.7x or trade is vetoed.", 'Vol') +
+                sh('rs', "Relative Strength vs market (0-100). Mid-range is ideal. RS 85+ triggers mean-reversion penalties up to -6.0. When both Mom ≥9 and RS ≥85, extension penalty jumps to -5.0.", 'RS') +
+                sh('rsi', "RSI oscillator (0-100). Below 40 is a strong buy signal (+1.5 to +2.5). Above 70 is danger (-3.0). Above 80 is severe (-5.0 and entry multiplier drops to 0.3x). Biggest single unconditional bonus in the system.", 'RSI') +
+                sh('macd', "MACD crossover state. Bullish ▲ = +2.5, Bearish ▼ Cross = -2.0, Bearish ▼ = -0.5. A 4.5-point swing between bullish and bearish crossover — one of the largest score differentiators.", 'MACD') +
                 '<th title="Market structure (ICT/SMC). Bullish is best: adds +2.5 to +3.75 AND unlocks pullback bonus (up to +5), squeeze bonus, SMA bonus, and 1.3x entry multiplier. Ranging misses most conditional bonuses.">Structure</th>' +
-                '<th title="Days to Cover (short interest). DTC >5 with Bullish structure = +1.5 squeeze bonus. DTC >3 with structure = +0.75. High DTC without Bullish structure gets nothing — structure is the gatekeeper.">DTC</th>' +
+                sh('dtc', "Days to Cover (short interest). DTC >5 with Bullish structure = +1.5 squeeze bonus. DTC >3 with structure = +0.75. High DTC without Bullish structure gets nothing — structure is the gatekeeper.", 'DTC') +
                 '<th title="Sector classification. Sector rotation (inflow/outflow) affects score: inflow +2.0, modest inflow +1.0, outflow -1.0. 35% sector concentration cap enforced.">Sector</th>' +
-                '<th title="Market capitalization.">MCap</th>' +
+                sh('mcap', "Market capitalization.", 'MCap') +
                 '</tr></thead><tbody>';
 
             pageCandidates.forEach((c, i) => {
