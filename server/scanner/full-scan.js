@@ -1,0 +1,302 @@
+// Full market scan orchestrator for server-side execution.
+// Runs the complete scoring pipeline on ~537 stocks and saves results
+// to portfolio.json so the browser picks them up on next load.
+
+const fs = require('fs');
+const path = require('path');
+const {
+    calculateRSI, calculateSMA, calculateMACD, calculateSMACrossover,
+    detectStructure, calculate5DayMomentum, calculateVolumeRatio,
+    calculateRelativeStrength, detectSectorRotation, calculateCompositeScore,
+    getActiveWeights, isMarketOpen
+} = require('../lib/scoring');
+const {
+    fetchBulkSnapshot, fetchGroupedDailyBars, fetchServerIndicators,
+    fetchTickerDetails, fetchShortInterest, fetchVIX
+} = require('../lib/fetchers');
+const { stockSectors, getAllSymbols } = require('../lib/stocks');
+const { sendAlert } = require('./alerts');
+
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const PORTFOLIO_PATH = path.join(DATA_DIR, 'portfolio.json');
+const SCAN_STATE_PATH = path.join(DATA_DIR, 'scan-state.json');
+
+function loadPortfolio() {
+    try {
+        if (!fs.existsSync(PORTFOLIO_PATH)) return null;
+        return JSON.parse(fs.readFileSync(PORTFOLIO_PATH, 'utf8'));
+    } catch (err) {
+        console.error('Full scan: failed to read portfolio:', err.message);
+        return null;
+    }
+}
+
+function savePortfolio(portfolio) {
+    const tmpPath = PORTFOLIO_PATH + '.tmp';
+    fs.writeFileSync(tmpPath, JSON.stringify(portfolio), 'utf8');
+    fs.renameSync(tmpPath, PORTFOLIO_PATH);
+}
+
+function loadScanState() {
+    try {
+        if (!fs.existsSync(SCAN_STATE_PATH)) return {};
+        return JSON.parse(fs.readFileSync(SCAN_STATE_PATH, 'utf8'));
+    } catch { return {}; }
+}
+
+function saveScanState(state) {
+    try {
+        fs.writeFileSync(SCAN_STATE_PATH, JSON.stringify(state, null, 2), 'utf8');
+    } catch (err) {
+        console.error('Full scan: failed to save state:', err.message);
+    }
+}
+
+/**
+ * Run a full market scan — fetches data and scores all ~537 stocks.
+ * Results are saved to portfolio.json fields that the browser reads:
+ *   lastCandidateScores, lastSectorRotation, lastVIX, lastFullScan
+ */
+async function runFullScan({ force = false } = {}) {
+    if (!force && !isMarketOpen()) {
+        console.log('Full scan: market closed, skipping');
+        return null;
+    }
+
+    const apiKey = process.env.MASSIVE_API_KEY;
+    const anthropicApiUrl = process.env.ANTHROPIC_API_URL;
+    const ntfyTopic = process.env.NTFY_TOPIC;
+
+    if (!apiKey || apiKey === 'your_api_key_here') {
+        console.warn('Full scan: MASSIVE_API_KEY not set — skipping');
+        return null;
+    }
+
+    const startTime = Date.now();
+    const allSymbols = getAllSymbols();
+    console.log(`Full scan: starting for ${allSymbols.length} stocks...`);
+
+    try {
+        // Phase 1: Fetch all market data in parallel where possible
+        console.log('Full scan: Phase 1 — fetching market data...');
+
+        // Bulk snapshot in batches (API has ~250 ticker limit per call)
+        const snapshotBatches = [];
+        for (let i = 0; i < allSymbols.length; i += 250) {
+            snapshotBatches.push(allSymbols.slice(i, i + 250));
+        }
+        let marketData = {};
+        for (const batch of snapshotBatches) {
+            const batchResult = await fetchBulkSnapshot(batch, apiKey);
+            Object.assign(marketData, batchResult);
+        }
+        console.log(`Full scan: snapshot prices for ${Object.keys(marketData).length} stocks`);
+
+        // Grouped daily bars (the heavy lift — 80 API calls)
+        const symbolSet = new Set(allSymbols);
+        const multiDayCache = await fetchGroupedDailyBars(symbolSet, apiKey);
+        console.log(`Full scan: bars for ${Object.keys(multiDayCache).length} stocks`);
+
+        // Server indicators, ticker details, short interest, VIX — run in parallel
+        const [serverIndicators, tickerDetails, shortInterest, vixData] = await Promise.all([
+            fetchServerIndicators(allSymbols, apiKey),
+            fetchTickerDetails(allSymbols, apiKey),
+            fetchShortInterest(allSymbols, apiKey),
+            fetchVIX(apiKey, anthropicApiUrl)
+        ]);
+
+        // Phase 2: Compute scores
+        console.log('Full scan: Phase 2 — computing scores...');
+
+        // Sector rotation analysis
+        const sectorRotation = detectSectorRotation(marketData, stockSectors, multiDayCache);
+
+        // Build sector groups for RS calculation
+        const sectorGroups = {};
+        for (const [symbol, data] of Object.entries(marketData)) {
+            const sector = stockSectors[symbol] || 'Unknown';
+            if (!sectorGroups[sector]) sectorGroups[sector] = [];
+            sectorGroups[sector].push({ symbol, ...data });
+        }
+
+        // Load portfolio for calibrated weights
+        const portfolio = loadPortfolio();
+        const calibratedWeights = portfolio?.calibratedWeights;
+        const vixLevel = vixData?.level;
+        const weights = getActiveWeights(calibratedWeights, vixLevel);
+
+        // Score every stock
+        const candidateScores = [];
+        let scored = 0;
+
+        for (const symbol of allSymbols) {
+            const priceData = marketData[symbol];
+            if (!priceData) continue;
+
+            const bars = multiDayCache[symbol];
+            const sector = stockSectors[symbol] || 'Unknown';
+
+            // Momentum
+            const momentum = calculate5DayMomentum(priceData, bars);
+
+            // Relative strength
+            const sectorStocks = sectorGroups[sector] || [];
+            const rs = calculateRelativeStrength(priceData, sectorStocks, bars, multiDayCache);
+            const rsNormalized = rs.rsScore / 10;
+
+            // Structure
+            const structure = bars ? detectStructure(bars) : { structureScore: 0, fvg: 'none' };
+
+            // Technical indicators (prefer server values, fall back to client calculation)
+            const si = serverIndicators[symbol] || {};
+            const rsi = si.serverRsi ?? calculateRSI(bars);
+            const macd = si.serverMacd
+                ? { crossover: si.serverMacd.histogram > 0 ? 'bullish' : 'bearish', histogram: si.serverMacd.histogram }
+                : calculateMACD(bars);
+            const sma20 = calculateSMA(bars, 20);
+            const smaCrossover = calculateSMACrossover(bars);
+
+            // Volume and short interest
+            const volRatio = calculateVolumeRatio(bars);
+            const si_data = shortInterest[symbol];
+            const daysToCover = si_data?.daysToCover || 0;
+
+            // Sector flow
+            const sectorInfo = sectorRotation[sector];
+            const sectorFlow = sectorInfo?.moneyFlow || 'neutral';
+
+            // Composite score
+            const score = calculateCompositeScore({
+                momentumScore: momentum.score,
+                rsNormalized,
+                sectorFlow,
+                structureScore: structure.structureScore,
+                isAccelerating: momentum.isAccelerating,
+                upDays: momentum.upDays,
+                totalDays: momentum.totalDays,
+                todayChange: priceData.changePercent,
+                totalReturn5d: momentum.totalReturn5d,
+                rsi,
+                macdCrossover: macd?.crossover || 'none',
+                daysToCover,
+                volumeTrend: momentum.volumeTrend,
+                fvg: structure.fvg,
+                sma20,
+                currentPrice: priceData.price,
+                smaCrossover
+            }, weights);
+
+            // Market cap formatting
+            const td = tickerDetails[symbol];
+            let marketCapFormatted = null;
+            if (td?.marketCap) {
+                const mc = td.marketCap;
+                if (mc >= 1e12) marketCapFormatted = (mc / 1e12).toFixed(1) + 'T';
+                else if (mc >= 1e9) marketCapFormatted = (mc / 1e9).toFixed(1) + 'B';
+                else if (mc >= 1e6) marketCapFormatted = (mc / 1e6).toFixed(0) + 'M';
+                else marketCapFormatted = mc.toString();
+            }
+
+            // Match browser's lastCandidateScores.candidates format exactly
+            candidateScores.push({
+                symbol,
+                compositeScore: Math.round(score.total * 10) / 10,
+                price: priceData.price,
+                dayChange: Math.round(priceData.changePercent * 100) / 100,
+                return5d: momentum.totalReturn5d ?? null,
+                momentum: momentum.score,
+                rs: rs.rsScore,
+                sector,
+                sectorBonus: sectorFlow === 'inflow' ? 2 : sectorFlow === 'modest-inflow' ? 1 : sectorFlow === 'outflow' ? -1 : 0,
+                structureScore: structure.structureScore,
+                structure: structure.structure,
+                rsi,
+                macdCrossover: macd?.crossover || 'none',
+                macdHistogram: macd?.histogram ?? null,
+                marketCap: td?.marketCap || null,
+                marketCapFormatted,
+                daysToCover,
+                name: td?.name || null,
+                sma50: smaCrossover?.sma50 ?? si.serverSma50 ?? null,
+                smaCrossover: smaCrossover?.crossover || 'none',
+                volumeRatio: volRatio?.ratio ?? null,
+                scoreBreakdown: score.breakdown
+            });
+            scored++;
+        }
+
+        console.log(`Full scan: scored ${scored} stocks`);
+
+        // Sort by composite score descending (matches browser behavior)
+        candidateScores.sort((a, b) => b.compositeScore - a.compositeScore);
+
+        // Phase 3: Save results to portfolio (format matches browser's lastCandidateScores)
+        const updatedPortfolio = portfolio || {};
+        updatedPortfolio.lastCandidateScores = {
+            timestamp: new Date().toISOString(),
+            candidates: candidateScores,
+            source: 'server'
+        };
+        updatedPortfolio.lastSectorRotation = sectorRotation;
+        if (vixData) {
+            updatedPortfolio.lastVIX = vixData;
+        }
+        updatedPortfolio.lastFullScan = {
+            timestamp: new Date().toISOString(),
+            stocksScanned: scored,
+            duration: Math.round((Date.now() - startTime) / 1000)
+        };
+
+        savePortfolio(updatedPortfolio);
+
+        // Save scan state
+        const scanState = loadScanState();
+        scanState.lastRun = new Date().toISOString();
+        scanState.stocksScanned = scored;
+        scanState.duration = Math.round((Date.now() - startTime) / 1000);
+        scanState.topScorers = candidateScores
+            .slice(0, 10)
+            .map(c => ({ symbol: c.symbol, score: c.compositeScore, price: c.price }));
+        saveScanState(scanState);
+
+        const duration = Math.round((Date.now() - startTime) / 1000);
+        console.log(`Full scan: complete in ${duration}s — ${scored} stocks scored`);
+
+        // Notify via ntfy
+        if (ntfyTopic) {
+            const top5 = scanState.topScorers.slice(0, 5)
+                .map(s => `${s.symbol}: ${s.score}`)
+                .join(', ');
+            await sendAlert({
+                title: 'APEX Full Scan Complete',
+                body: `${scored} stocks scored in ${duration}s\nTop: ${top5}`,
+                topic: ntfyTopic,
+                priority: 'low',
+                tags: ['mag']
+            }).catch(() => {});
+        }
+
+        return { scored, duration, topScorers: scanState.topScorers };
+    } catch (err) {
+        console.error('Full scan: error:', err.message);
+        console.error(err.stack);
+
+        if (ntfyTopic) {
+            await sendAlert({
+                title: 'APEX Full Scan Failed',
+                body: err.message,
+                topic: ntfyTopic,
+                priority: 'high',
+                tags: ['x']
+            }).catch(() => {});
+        }
+
+        return null;
+    }
+}
+
+function getScanStatus() {
+    return loadScanState();
+}
+
+module.exports = { runFullScan, getScanStatus };

@@ -14643,11 +14643,17 @@ Current Portfolio:
         }
 
         // Module 2: Candidate Scorecard (paginated, full universe)
-        const scorecardState = { page: 1, filterSector: '', sortField: 'score', sortDir: 'desc' };
+        const scorecardState = { page: 1, filterSector: '', filterHeld: false, sortField: 'score', sortDir: 'desc' };
         const SCORECARD_PAGE_SIZE = 40;
 
         function scorecardSetSector(val) {
             scorecardState.filterSector = val;
+            scorecardState.page = 1;
+            updateCandidateScorecard();
+        }
+
+        function scorecardToggleHeld() {
+            scorecardState.filterHeld = !scorecardState.filterHeld;
             scorecardState.page = 1;
             updateCandidateScorecard();
         }
@@ -14687,6 +14693,17 @@ Current Portfolio:
                     tag.style.cssText = 'font-size:0.65em;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);padding:2px 7px;border-radius:8px;margin-left:8px;vertical-align:middle;font-weight:500;letter-spacing:0.5px;';
                 }
                 scorecardTitle.appendChild(tag);
+
+                // Show source tag (server vs browser scan)
+                const existingSourceTag = scorecardTitle.querySelector('.source-tag');
+                if (existingSourceTag) existingSourceTag.remove();
+                if (portfolio.lastCandidateScores?.source === 'server') {
+                    const srcTag = document.createElement('span');
+                    srcTag.className = 'source-tag';
+                    srcTag.textContent = 'server scan';
+                    srcTag.style.cssText = 'font-size:0.65em;background:#1a5276;color:#5dade2;padding:2px 7px;border-radius:8px;margin-left:6px;vertical-align:middle;font-weight:500;letter-spacing:0.5px;';
+                    scorecardTitle.appendChild(srcTag);
+                }
             }
 
             const data = portfolio.lastCandidateScores;
@@ -14695,12 +14712,17 @@ Current Portfolio:
                 return;
             }
 
-            // Already sorted by score desc from scan — apply sector filter
+            // Already sorted by score desc from scan — apply filters
             let candidates = data.candidates;
             const totalCount = candidates.length;
+            const holdingSymbols = new Set(Object.keys(portfolio.holdings));
             const sectors = [...new Set(candidates.map(c => c.sector))].sort();
             const sectorCounts = {};
             candidates.forEach(c => { sectorCounts[c.sector] = (sectorCounts[c.sector] || 0) + 1; });
+
+            if (scorecardState.filterHeld) {
+                candidates = candidates.filter(c => holdingSymbols.has(c.symbol));
+            }
 
             if (scorecardState.filterSector) {
                 candidates = candidates.filter(c => c.sector === scorecardState.filterSector);
@@ -14739,16 +14761,21 @@ Current Portfolio:
             const pageCandidates = candidates.slice(start, start + SCORECARD_PAGE_SIZE);
 
             const maxScore = Math.max(...data.candidates.map(c => c.compositeScore), 1);
-            const holdingSymbols = new Set(Object.keys(portfolio.holdings));
 
-            // Controls: sector filter + pagination
+            // Controls: holdings filter + sector filter + pagination
             let html = '<div class="scorecard-controls">';
+            html += `<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8rem;color:#888;cursor:pointer;margin-right:12px;"><input type="checkbox" onchange="scorecardToggleHeld()"${scorecardState.filterHeld ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> Holdings only</label>`;
             html += `<select onchange="scorecardSetSector(this.value)" class="scorecard-sector-filter">`;
             html += `<option value="">All Sectors (${totalCount})</option>`;
             sectors.forEach(s => {
                 html += `<option value="${s}"${scorecardState.filterSector === s ? ' selected' : ''}>${s} (${sectorCounts[s] || 0})</option>`;
             });
             html += '</select>';
+            if (data.timestamp) {
+                const scanAge = Math.floor((Date.now() - new Date(data.timestamp).getTime()) / 1000);
+                const ageStr = scanAge < 60 ? 'just now' : scanAge < 3600 ? `${Math.floor(scanAge / 60)}m ago` : scanAge < 86400 ? `${Math.floor(scanAge / 3600)}h ago` : `${Math.floor(scanAge / 86400)}d ago`;
+                html += `<span style="font-size:0.75rem;color:#666;margin-left:8px;" title="${new Date(data.timestamp).toLocaleString()}">Scanned ${ageStr}</span>`;
+            }
             if (totalPages > 1) {
                 html += `<div class="scorecard-pagination">`;
                 html += `<button onclick="scorecardSetPage(${scorecardState.page - 1})"${scorecardState.page <= 1 ? ' disabled' : ''}>&laquo; Prev</button>`;

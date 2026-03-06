@@ -1,6 +1,7 @@
 // Background structure monitor for APEX holdings.
 // Runs on a cron schedule during market hours, detects structure
 // breakdowns on held positions, and sends ntfy.sh alerts.
+// Also schedules full market scans at key times.
 
 const cron = require('node-cron');
 const fs = require('fs');
@@ -8,6 +9,7 @@ const path = require('path');
 const { isMarketOpen, detectStructure, calculateRSI, calculateMACD } = require('../lib/scoring');
 const { fetchBulkSnapshot, fetchGroupedDailyBars } = require('../lib/fetchers');
 const { sendAlert } = require('./alerts');
+const { runFullScan, getScanStatus } = require('./full-scan');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const PORTFOLIO_PATH = path.join(DATA_DIR, 'portfolio.json');
@@ -184,16 +186,33 @@ async function runStructureCheck({ force = false } = {}) {
 }
 
 function start() {
-    // Run every 15 minutes
+    // Structure check every 15 minutes
     cron.schedule('0,15,30,45 * * * *', () => {
         runStructureCheck().catch(err => {
             console.error('Scanner: unhandled error:', err.message);
         });
     });
 
-    console.log('Scanner: scheduled (every 15 min during market hours)');
+    // Full market scan at 9:35 AM ET and 12:30 PM ET (weekdays)
+    // 9:35 gives 5 min after open for prices to settle
+    // 12:30 gives a midday update
+    cron.schedule('35 9 * * 1-5', () => {
+        console.log('Full scan: triggered (9:35 AM ET schedule)');
+        runFullScan().catch(err => {
+            console.error('Full scan: unhandled error:', err.message);
+        });
+    }, { timezone: 'America/New_York' });
 
-    // Run once on startup if market is open
+    cron.schedule('30 12 * * 1-5', () => {
+        console.log('Full scan: triggered (12:30 PM ET schedule)');
+        runFullScan().catch(err => {
+            console.error('Full scan: unhandled error:', err.message);
+        });
+    }, { timezone: 'America/New_York' });
+
+    console.log('Scanner: scheduled (structure check every 15 min, full scan 9:35 AM + 12:30 PM ET)');
+
+    // Run structure check on startup if market is open
     if (isMarketOpen()) {
         console.log('Scanner: market is open, running initial check...');
         runStructureCheck().catch(err => {
@@ -205,13 +224,20 @@ function start() {
 // GET /api/scanner/status handler
 function getStatus() {
     const state = loadState();
+    const scanState = getScanStatus();
     return {
         lastRun: state.lastRun || null,
         lastHoldings: state.lastHoldings || [],
         alertsSent: state.alertsSent || 0,
         readings: state.readings || {},
-        marketOpen: isMarketOpen()
+        marketOpen: isMarketOpen(),
+        fullScan: {
+            lastRun: scanState.lastRun || null,
+            stocksScanned: scanState.stocksScanned || 0,
+            duration: scanState.duration || 0,
+            topScorers: scanState.topScorers || []
+        }
     };
 }
 
-module.exports = { start, getStatus, runStructureCheck };
+module.exports = { start, getStatus, runStructureCheck, runFullScan };

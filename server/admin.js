@@ -74,7 +74,29 @@ router.get('/', (req, res) => {
         <div class="value">${status.alertsSent}</div>
         <div class="label">Alerts Sent</div>
     </div>
+    <div class="stat">
+        <div class="value">${status.fullScan?.lastRun ? timeAgo(status.fullScan.lastRun) : 'Never'}</div>
+        <div class="label">Last Full Scan</div>
+    </div>
+    <div class="stat">
+        <div class="value">${status.fullScan?.stocksScanned || 0}</div>
+        <div class="label">Stocks Scored</div>
+    </div>
 </div>
+
+${status.fullScan?.topScorers?.length > 0 ? `
+<h2>Top Scorers (Last Full Scan)</h2>
+<div class="card">
+    ${status.fullScan.topScorers.map((s, i) => `
+        <div class="reading">
+            <span style="color:#666; width:20px;">${i + 1}.</span>
+            <span class="sym">${s.symbol}</span>
+            <span style="font-size:0.9rem; color:#00d4aa; font-weight:600;">${s.score}</span>
+            <span style="font-size:0.8rem; color:#888;">$${s.price?.toFixed(2) || '?'}</span>
+        </div>
+    `).join('')}
+</div>
+` : ''}
 
 <h2>Scanner Readings</h2>
 <div class="card">
@@ -97,6 +119,7 @@ router.get('/', (req, res) => {
 <div class="card">
     <button class="btn" onclick="doAction('pull')">Pull & Restart</button>
     <button class="btn" onclick="doAction('scan')">Run Scanner Now</button>
+    <button class="btn" onclick="doAction('fullscan')" id="fullscanBtn">Run Full Scan</button>
     <button class="btn" onclick="loadLogs('server')">Server Logs</button>
     <button class="btn" onclick="loadLogs('pull')">Pull Logs</button>
     <div id="result"></div>
@@ -157,6 +180,14 @@ router.post('/action/scan', (req, res) => {
         .catch(err => {
             res.status(500).json({ error: 'Scan failed: ' + err.message });
         });
+});
+
+// POST /admin/action/fullscan — trigger full market scan
+router.post('/action/fullscan', (req, res) => {
+    res.json({ message: 'Full scan started — this takes 2-5 minutes. Check back for results.' });
+    scanner.runFullScan({ force: true }).catch(err => {
+        console.error('Admin full scan error:', err.message);
+    });
 });
 
 // GET /admin/logs/server — last 50 lines of service logs

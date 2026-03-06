@@ -19,13 +19,16 @@ server/
   lib/
     scoring.js      ← Extracted pure scoring functions for server-side use
     fetchers.js     ← Massive API wrappers for Node.js
+    stocks.js       ← Shared stock universe (stockNames, stockSectors, getAllSymbols)
   scanner/
-    monitor.js      ← Background structure monitor (cron, every 15 min)
+    monitor.js      ← Background scanner + full scan scheduler
+    full-scan.js    ← Full market scan orchestrator (~540 stocks)
     alerts.js       ← ntfy.sh alert integration
   data/
     portfolio.json  ← Server-side portfolio storage (gitignored)
     backups/        ← Last 5 portfolio saves (gitignored)
     scanner-state.json ← Scanner readings and alert history (gitignored)
+    scan-state.json ← Full scan results and top scorers (gitignored)
 build.cmd / build.sh  ← Build scripts
 index.html            ← Generated output (DO NOT EDIT DIRECTLY)
 package.json          ← Express, node-cron dependencies
@@ -43,7 +46,8 @@ Raspberry Pi (Express server, port 4000)
 ├── GET /admin                  ← Admin panel (status, logs, actions)
 ├── Static files (index.html)   ← Built dashboard
 ├── Background scanner (cron)   ← Structure monitoring every 15 min
-│   └── ntfy.sh alerts          ← Push notifications on breakdown
+│   ├── ntfy.sh alerts          ← Push notifications on breakdown
+│   └── Full market scan        ← Scores ~540 stocks at 9:35 AM + 12:30 PM ET
 ├── Cloudflare Tunnel           ← Remote access (trycloudflare.com URL)
 ├── Auto-pull (cron)            ← Pulls from GitHub main every 5 min
 └── Basic auth                  ← Password protection via .env
@@ -67,7 +71,7 @@ Browser (index.html)
 4. Systemd services: `apex.service` (server), `apex-tunnel.service` (Cloudflare tunnel)
 5. Cron: `auto-pull.sh` runs every 5 min, pulls from `main`, rebuilds and restarts if source files changed
 
-**Remote access**: Cloudflare quick tunnel provides a `*.trycloudflare.com` URL. URL is sent via ntfy on tunnel start. Basic auth protects all routes.
+**Remote access**: Cloudflare named tunnel at `https://dash.arc-apex.com`. Configured via `~/.cloudflared/config.yml` on Pi. Basic auth protects all routes.
 
 **Update workflow**: Push to `main` on GitHub → Pi auto-pulls within 5 min → rebuilds → restarts → ntfy notification confirms. Or use "Pull & Restart" button on admin panel for immediate update.
 
@@ -123,7 +127,10 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 
 ## Background Scanner
 
-Runs on the Pi via `server/scanner/monitor.js`. Checks structure on all held positions every 15 minutes during market hours. Can also be triggered manually from the admin panel (bypasses market hours check).
+Runs on the Pi via `server/scanner/monitor.js`. Two modes:
+
+### Structure Monitor
+Checks structure on all held positions every 15 minutes during market hours. Can also be triggered manually from the admin panel (bypasses market hours check).
 
 **Alert conditions:**
 - Entry structure was bullish, current is bearish → "Structure Breakdown"
@@ -132,16 +139,29 @@ Runs on the Pi via `server/scanner/monitor.js`. Checks structure on all held pos
 
 **Deduplication:** Same condition for same symbol won't re-alert within 4 hours.
 
+### Full Market Scan
+Runs the complete scoring pipeline on all ~540 stocks server-side. Scheduled at **9:35 AM ET** (5 min after open) and **12:30 PM ET** (midday update). Can also be triggered from the admin panel via "Run Full Scan" button.
+
+**Pipeline:** Fetches bulk snapshots, ~65-day grouped daily bars (80 API calls), server indicators (RSI/MACD/SMA50), ticker details, short interest, VIX → computes momentum, RS, structure, sector rotation, composite score for every stock → saves results to `portfolio.json` as `lastCandidateScores`.
+
+**Browser integration:** The browser's Candidate Scorecard automatically picks up server scan results on next portfolio load. A "server scan" tag appears in the scorecard header when displaying server-generated data. Manual browser scans still work independently and override the server data.
+
+**Resource impact:** ~80 grouped daily API calls + ~540×3 indicator calls + ~540 ticker detail calls. Takes 2-5 minutes on the Pi. Sends ntfy notification with top 5 scorers on completion.
+
 **Alert delivery:** POST to ntfy.sh topic (configured via `NTFY_TOPIC` in `.env`).
 
-**Extracted functions** (`server/lib/scoring.js`): `detectStructure`, `calculateRSI`, `calculateMACD`, `calculateSMA`, `calculateSMACrossover`, `isMarketOpen`. These are copies of the client-side functions adapted to accept data as parameters instead of reading globals. Duplication accepted because client runs in a `<script>` tag and cannot import Node modules.
+### Extracted Server Functions
+Stock universe in `server/lib/stocks.js` (stockNames, stockSectors, getAllSymbols). When adding/removing stocks, update BOTH `server/lib/stocks.js` and `src/trader.js`.
+
+Scoring in `server/lib/scoring.js`: all pure scoring functions adapted to accept data as params. Fetching in `server/lib/fetchers.js`: all Massive API wrappers for Node.js. Duplication with client accepted because client runs in a `<script>` tag and cannot import Node modules.
 
 ## Admin Panel
 
 Available at `/admin`. Shows:
-- Server uptime, market status, last scanner run, total alerts sent
+- Server uptime, market status, last scanner run, last full scan, total alerts sent, stocks scored
+- Top scorers from last full scan (symbol, score, price)
 - Scanner readings for each holding (structure, score, RSI, CHoCH status)
-- Action buttons: "Pull & Restart" (triggers auto-pull.sh), "Run Scanner Now" (triggers structure check)
+- Action buttons: "Pull & Restart" (triggers auto-pull.sh), "Run Scanner Now" (structure check), "Run Full Scan" (~540 stock scan)
 - Log viewers: server logs (journalctl), auto-pull logs
 
 ## Portfolio Storage
@@ -186,7 +206,7 @@ Persisted to Pi server (with localStorage fallback). Key fields: `holdings`, `tr
 - **Keyboard accessibility**: Collapsible sections use `<div onclick>` — should migrate to `<button>` with proper roles
 - **FVG detection partial**: Detected and scored (±0.5) but not used in reversal filtering
 - **RS not reconstructable**: Relative strength requires full market context at time of entry. For historical manual trades, RS is null unless cached from a prior Scan Market.
-- **Tunnel URL changes on reboot**: Cloudflare quick tunnel gets a new random URL on Pi restart. ntfy notification sent with new URL automatically.
+- **Tunnel**: Permanent domain `dash.arc-apex.com` via Cloudflare named tunnel. No URL changes on reboot.
 
 ## Legacy AI Code
 
@@ -194,10 +214,11 @@ The codebase still contains the two-phase AI analysis system (`runAIAnalysis`, P
 
 ## Stock Universe
 
-~540 stocks across 14 sectors: Technology, Automotive, Financial, Healthcare, Consumer, Energy, Industrials, Real Estate, Materials, Defense, Space, Crypto, Index Fund. Three lists must stay in sync when adding/removing stocks:
-1. `stockNames` — display names
-2. `stockSectors` — sector classification (drives heatmap, which is dynamic)
-3. `screenStocks()` — scan list (sector-grouped arrays, deduplicated)
+~540 stocks across 14 sectors: Technology, Automotive, Financial, Healthcare, Consumer, Energy, Industrials, Real Estate, Materials, Defense, Space, Crypto, Index Fund. **Four** lists must stay in sync when adding/removing stocks:
+1. `stockNames` in `src/trader.js` — display names
+2. `stockSectors` in `src/trader.js` — sector classification
+3. `screenStocks()` in `src/trader.js` — scan list (sector-grouped arrays, deduplicated)
+4. `server/lib/stocks.js` — server-side mirror (stockNames, stockSectors, getAllSymbols)
 
 Coverage includes: AI/software, semiconductors, cybersecurity, biotech/genomics, digital health, EV/auto, fintech/payments, crypto-adjacent, space/satellite, drones/eVTOL, infrastructure/data center, materials/mining, defense contractors, REITs, and more.
 
@@ -209,4 +230,5 @@ Coverage includes: AI/software, semiconductors, cybersecurity, biotech/genomics,
 - Extensive console logging
 - Push to `main` → Pi auto-pulls within 5 min, or use admin panel "Pull & Restart"
 - Server files in `server/` — these run on the Pi only, not in the browser
-- Scoring functions are duplicated between `src/trader.js` (browser) and `server/lib/scoring.js` (Node.js) — keep them in sync when modifying scoring logic
+- Scoring functions duplicated between `src/trader.js` (browser) and `server/lib/scoring.js` (Node.js) — keep in sync
+- Stock lists duplicated between `src/trader.js` and `server/lib/stocks.js` — keep in sync

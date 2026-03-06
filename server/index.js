@@ -46,9 +46,17 @@ app.get('/api/config', (req, res) => {
     res.json(config);
 });
 
-// Scanner status endpoint
+// Scanner status endpoint (includes full scan status)
 app.get('/api/scanner/status', (req, res) => {
     res.json(scanner.getStatus());
+});
+
+// Full scan trigger via API (for browser "Run Server Scan" button)
+app.post('/api/scanner/fullscan', (req, res) => {
+    res.json({ message: 'Full scan started' });
+    scanner.runFullScan({ force: true }).catch(err => {
+        console.error('API full scan error:', err.message);
+    });
 });
 
 // Admin panel

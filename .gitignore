@@ -12,6 +12,9 @@ server/data/portfolio.json
 server/data/*.tmp.json
 server/data/backups/
 server/data/scanner-state.json
+server/data/scan-state.json
+server/data/ticker-details-cache.json
+server/data/short-interest-cache.json
 
 # Old generated output name (no longer produced)
 ai_trader.html

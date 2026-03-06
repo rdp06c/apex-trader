@@ -221,6 +221,253 @@ function detectStructure(bars) {
     };
 }
 
+// === FULL SCAN SCORING FUNCTIONS ===
+
+const DEFAULT_WEIGHTS = {
+    momentumMultiplier: 0.6, rsMultiplier: 0.6, structureMultiplier: 1.25,
+    accelBonus: 1.5, consistencyBonus: 1.0,
+    sectorInflow: 2.0, sectorModestInflow: 1.0, sectorOutflow: -1.0,
+    rsiOversold30: 2.5, rsiOversold40: 1.5, rsiOversold50: 0.5,
+    rsiOverbought70: -3.0, rsiOverbought80: -5.0,
+    macdBullish: 2.5, macdBearish: -2.0, macdNone: -0.5,
+    rsMeanRev95: -6.0, rsMeanRev90: -4.0, rsMeanRev85: -2.0,
+    squeezeBonusHigh: 1.5, squeezeBonusMod: 0.75,
+    smaProxNear: 2.0, smaProxBelow: 1.0, smaProxFar15: -1.5, smaProxFar10: -0.5,
+    smaCrossoverBullish: 2.0, smaCrossoverBearish: -2.0,
+    fvgBullish: 0.5, fvgBearish: -0.5,
+    entryMultExtreme: 0.3, entryMultExtended: 0.6, entryMultPullback: 1.3
+};
+
+function getActiveWeights(calibratedWeights, vixLevel) {
+    if (!calibratedWeights) return DEFAULT_WEIGHTS;
+    if (vixLevel != null && calibratedWeights.regimeWeights) {
+        return vixLevel < 20
+            ? calibratedWeights.regimeWeights.lowVix || calibratedWeights.weights || DEFAULT_WEIGHTS
+            : calibratedWeights.regimeWeights.highVix || calibratedWeights.weights || DEFAULT_WEIGHTS;
+    }
+    return calibratedWeights.weights || DEFAULT_WEIGHTS;
+}
+
+// Adapted: accepts bars directly instead of reading multiDayCache[symbol]
+function calculate5DayMomentum(priceData, bars) {
+    if (!bars || bars.length < 2) {
+        if (!priceData || !priceData.price) return { score: 0, trend: 'unknown', basis: 'no-data' };
+        const cp = priceData.changePercent || 0;
+        let score = 5;
+        if (cp > 5) score = 7; else if (cp > 2) score = 6.5; else if (cp > 0) score = 6;
+        else if (cp > -2) score = 4; else if (cp > -5) score = 2; else score = 0;
+        return { score, trend: score >= 6 ? 'building' : score <= 4 ? 'fading' : 'neutral', changePercent: cp, basis: '1-day-fallback' };
+    }
+    const recentBars = bars.slice(-5);
+    const latest = recentBars[recentBars.length - 1], oldest = recentBars[0], mid = recentBars[Math.floor(recentBars.length / 2)];
+    const totalReturn = ((latest.c - oldest.c) / oldest.c) * 100;
+    const firstHalfReturn = ((mid.c - oldest.c) / oldest.c) * 100;
+    const secondHalfReturn = ((latest.c - mid.c) / mid.c) * 100;
+    const isAccelerating = secondHalfReturn > firstHalfReturn;
+    let upDays = 0;
+    for (let i = 1; i < recentBars.length; i++) { if (recentBars[i].c > recentBars[i-1].c) upDays++; }
+    const upDayRatio = upDays / (recentBars.length - 1);
+    const recentVol = recentBars.slice(-2).reduce((s, b) => s + b.v, 0) / 2;
+    const earlyVol = recentBars.slice(0, 2).reduce((s, b) => s + b.v, 0) / 2;
+    const volumeTrend = earlyVol > 0 ? recentVol / earlyVol : 1;
+    let score = 5;
+    if (totalReturn > 8) score += 3; else if (totalReturn > 4) score += 2; else if (totalReturn > 1) score += 1;
+    else if (totalReturn < -8) score -= 3; else if (totalReturn < -4) score -= 2; else if (totalReturn < -1) score -= 1;
+    if (upDayRatio >= 0.8) score += 1.5; else if (upDayRatio >= 0.6) score += 0.5;
+    else if (upDayRatio <= 0.2) score -= 1.5; else if (upDayRatio <= 0.4) score -= 0.5;
+    if (isAccelerating && totalReturn > 0) score += 0.5;
+    else if (!isAccelerating && totalReturn < 0) score -= 0.5;
+    score = Math.max(0, Math.min(10, Math.round(score * 10) / 10));
+    let trend = 'neutral';
+    if (score >= 7 && isAccelerating) trend = 'building';
+    else if (score >= 6) trend = 'steady-up';
+    else if (score <= 3 && !isAccelerating) trend = 'fading';
+    else if (score <= 4) trend = 'steady-down';
+    return { score: Math.round(score * 10) / 10, trend, totalReturn5d: Math.round(totalReturn * 100) / 100, todayChange: priceData?.changePercent || 0, upDays, totalDays: recentBars.length - 1, isAccelerating, volumeTrend: Math.round(volumeTrend * 100) / 100, basis: '5-day-real' };
+}
+
+// Adapted: accepts bars directly via multiDayCache param
+function calculateVolumeRatio(bars) {
+    if (!bars || bars.length < 6) return null;
+    const todayBar = bars[bars.length - 1];
+    const todayVol = todayBar.v;
+    if (!todayVol || todayVol <= 0) return null;
+    const histBars = bars.slice(-21, -1);
+    if (histBars.length < 5) return null;
+    const validBars = histBars.filter(b => b.v > 0);
+    if (validBars.length < 5) return null;
+    const avgVol = validBars.reduce((s, b) => s + b.v, 0) / validBars.length;
+    return {
+        ratio: Math.round((todayVol / avgVol) * 100) / 100,
+        todayVolume: todayVol,
+        avgVolume: Math.round(avgVol)
+    };
+}
+
+// Adapted: accepts bars directly via multiDayCache param
+function calculateRelativeStrength(stockData, sectorStocks, stockBars, multiDayCache) {
+    if (!stockData || !sectorStocks || sectorStocks.length === 0) return { rsScore: 50, strength: 'neutral' };
+    let stockReturn = stockData.changePercent || 0, usedMultiDay = false;
+    if (stockBars && stockBars.length >= 2) {
+        const recent5 = stockBars.slice(-5);
+        stockReturn = ((recent5[recent5.length - 1].c - recent5[0].c) / recent5[0].c) * 100;
+        usedMultiDay = true;
+    }
+    let sectorTotal = 0, sectorCount = 0;
+    sectorStocks.forEach(stock => {
+        const sBars = multiDayCache[stock.symbol];
+        if (sBars && sBars.length >= 2) {
+            const sRecent5 = sBars.slice(-5);
+            sectorTotal += ((sRecent5[sRecent5.length - 1].c - sRecent5[0].c) / sRecent5[0].c) * 100;
+        } else {
+            sectorTotal += (stock.changePercent || 0);
+        }
+        sectorCount++;
+    });
+    const sectorAvg = sectorCount > 0 ? sectorTotal / sectorCount : 0;
+    const relativePerformance = stockReturn - sectorAvg;
+    const multiplier = usedMultiDay ? 5 : 10;
+    let rsScore = 50 + (relativePerformance * multiplier);
+    rsScore = Math.max(0, Math.min(100, rsScore));
+    const strength = rsScore >= 70 ? 'outperforming' : rsScore >= 55 ? 'above-average' : rsScore >= 45 ? 'neutral' : rsScore >= 30 ? 'below-average' : 'underperforming';
+    return { rsScore: Math.round(rsScore), strength, stockReturn5d: Math.round(stockReturn * 100) / 100, sectorAvg5d: Math.round(sectorAvg * 100) / 100, relativePerformance: Math.round(relativePerformance * 100) / 100, basis: usedMultiDay ? '5-day' : '1-day-fallback' };
+}
+
+// Adapted: accepts stockSectors and multiDayCache as params
+function detectSectorRotation(marketData, stockSectors, multiDayCache) {
+    const sectors = {};
+    Object.entries(marketData).forEach(([symbol, data]) => {
+        const sector = stockSectors[symbol] || 'Unknown';
+        if (!sectors[sector]) sectors[sector] = { stocks: [], totalReturn5d: 0, totalChangeToday: 0, leaders5d: 0, laggards5d: 0, leadersToday: 0, laggardsToday: 0 };
+        const bars = multiDayCache[symbol];
+        let return5d = data.changePercent || 0;
+        if (bars && bars.length >= 2) {
+            const recent5 = bars.slice(-5);
+            return5d = ((recent5[recent5.length - 1].c - recent5[0].c) / recent5[0].c) * 100;
+        }
+        sectors[sector].stocks.push({ symbol, ...data, return5d });
+        sectors[sector].totalReturn5d += return5d;
+        sectors[sector].totalChangeToday += (data.changePercent || 0);
+        if (return5d > 2) sectors[sector].leaders5d++;
+        if (return5d < -2) sectors[sector].laggards5d++;
+        if ((data.changePercent || 0) > 1) sectors[sector].leadersToday++;
+        if ((data.changePercent || 0) < -1) sectors[sector].laggardsToday++;
+    });
+    const sectorAnalysis = {};
+    Object.entries(sectors).forEach(([sector, data]) => {
+        const count = data.stocks.length;
+        const avgReturn5d = data.totalReturn5d / count;
+        const avgChange = data.totalChangeToday / count;
+        const leaderRatio5d = data.leaders5d / count;
+        const laggardRatio5d = data.laggards5d / count;
+        let flow = 'neutral', rotationSignal = 'hold';
+        if (avgReturn5d > 2 && leaderRatio5d > 0.5) { flow = 'inflow'; rotationSignal = 'accumulate'; }
+        else if (avgReturn5d > 1 && leaderRatio5d > 0.35) { flow = 'modest-inflow'; rotationSignal = 'favorable'; }
+        else if (avgReturn5d < -2 && laggardRatio5d > 0.5) { flow = 'outflow'; rotationSignal = 'avoid'; }
+        else if (avgReturn5d < -1 && laggardRatio5d > 0.35) { flow = 'modest-outflow'; rotationSignal = 'caution'; }
+        sectorAnalysis[sector] = { avgChange: avgChange.toFixed(2), avgReturn5d: avgReturn5d.toFixed(2), leaders5d: data.leaders5d, laggards5d: data.laggards5d, leadersToday: data.leadersToday, laggardsToday: data.laggardsToday, total: count, leaderRatio5d: (leaderRatio5d * 100).toFixed(0) + '%', moneyFlow: flow, rotationSignal };
+    });
+    return sectorAnalysis;
+}
+
+function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, sma20, currentPrice, smaCrossover }, weights) {
+    const w = weights || DEFAULT_WEIGHTS;
+
+    const momentumContrib = momentumScore * w.momentumMultiplier;
+    const rsContrib = rsNormalized * w.rsMultiplier;
+
+    let sectorBonus = 0;
+    if (sectorFlow === 'inflow') sectorBonus = w.sectorInflow;
+    else if (sectorFlow === 'modest-inflow') sectorBonus = w.sectorModestInflow;
+    else if (sectorFlow === 'outflow') sectorBonus = w.sectorOutflow;
+
+    const accelBonus = isAccelerating && momentumScore >= 6 ? w.accelBonus : 0;
+    const consistencyBonus = (upDays >= 3 && totalDays >= 4) ? w.consistencyBonus : 0;
+    const structureBonus = (structureScore || 0) * w.structureMultiplier;
+
+    const chg = todayChange || 0;
+    const runnerPenalty = chg >= 15 ? -3 : chg >= 10 ? -2 : chg >= 7 ? -1 : chg >= 5 ? -0.5 : 0;
+    const declinePenalty = 0;
+
+    const extensionPenalty = (momentumScore >= 9 && rsNormalized >= 8.5) ? -5
+        : (momentumScore >= 9 || rsNormalized >= 8.5) ? -3.5
+        : (momentumScore >= 8 || rsNormalized >= 8) ? -2
+        : (momentumScore >= 7.5 || rsNormalized >= 7.5) ? -1
+        : 0;
+
+    const ret5d = totalReturn5d ?? 0;
+    const pullbackBonus =
+        (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 2 && sectorFlow !== 'outflow') ? 5
+        : (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow' && sectorFlow !== 'modest-outflow') ? 4
+        : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? 3
+        : (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 0) ? 2
+        : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 0 && sectorFlow !== 'outflow') ? 1
+        : 0;
+
+    const rsiBonusPenalty = rsi != null
+        ? (rsi < 30 ? w.rsiOversold30 : rsi < 40 ? w.rsiOversold40 : rsi < 50 ? w.rsiOversold50
+            : rsi > 80 ? w.rsiOverbought80 : rsi > 70 ? w.rsiOverbought70 : 0)
+        : 0;
+    const macdBonus = macdCrossover === 'bullish' ? w.macdBullish : macdCrossover === 'bearish' ? w.macdBearish : w.macdNone;
+
+    const rsMeanRevPenalty = rsNormalized >= 9.5 ? w.rsMeanRev95 : rsNormalized >= 9 ? w.rsMeanRev90 : rsNormalized >= 8.5 ? w.rsMeanRev85 : 0;
+
+    const dtc = daysToCover || 0;
+    const squeezeBonus = (dtc > 5 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? w.squeezeBonusHigh
+        : (dtc > 3 && (structureScore ?? 0) >= 1) ? w.squeezeBonusMod
+        : 0;
+
+    const vt = volumeTrend ?? 1;
+    const volumeBonus = (momentumScore >= 7 && vt < 0.7) ? -2.0
+        : (momentumScore >= 7 && vt > 1.3) ? 1.0
+        : (momentumScore < 5 && vt > 1.5 && (structureScore ?? 0) >= 0) ? 1.5
+        : (vt > 1.2 ? 0.5 : vt < 0.8 ? -0.5 : 0);
+
+    const fvgBonus = (fvg === 'bullish' && ret5d < 0 && (structureScore ?? 0) >= 0) ? w.fvgBullish
+        : (fvg === 'bearish' && (structureScore ?? 0) < 0) ? w.fvgBearish
+        : 0;
+
+    let smaProximityBonus = 0;
+    if (sma20 != null && currentPrice != null && sma20 > 0) {
+        const pctFromSMA20 = ((currentPrice - sma20) / sma20) * 100;
+        if (pctFromSMA20 >= 0 && pctFromSMA20 <= 3 && (structureScore ?? 0) >= 1) smaProximityBonus = w.smaProxNear;
+        else if (pctFromSMA20 < 0 && pctFromSMA20 >= -3 && (structureScore ?? 0) >= 1) smaProximityBonus = w.smaProxBelow;
+        else if (pctFromSMA20 > 15) smaProximityBonus = w.smaProxFar15;
+        else if (pctFromSMA20 > 10) smaProximityBonus = w.smaProxFar10;
+    }
+
+    const smaCrossoverBonus = smaCrossover?.crossover === 'bullish' ? w.smaCrossoverBullish
+        : smaCrossover?.crossover === 'bearish' ? w.smaCrossoverBearish
+        : 0;
+
+    // No learned adjustments on server (requires portfolio.closedTrades analysis)
+    const learnedAdj = 0;
+
+    const additiveScore = momentumContrib + rsContrib + sectorBonus + accelBonus + consistencyBonus
+        + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + declinePenalty
+        + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus
+        + smaProximityBonus + smaCrossoverBonus + learnedAdj;
+
+    let entryMultiplier = 1.0;
+    if (additiveScore > 0) {
+        if (rsi != null && rsi > 80 && momentumScore >= 9) entryMultiplier = w.entryMultExtreme;
+        else if ((rsi != null && rsi > 70) || momentumScore >= 9 || rsNormalized >= 9) entryMultiplier = w.entryMultExtended;
+        else if (ret5d >= -8 && ret5d <= -1 && (structureScore ?? 0) >= 1) entryMultiplier = w.entryMultPullback;
+    }
+
+    const compositeScore = additiveScore * entryMultiplier;
+
+    return {
+        total: compositeScore,
+        breakdown: {
+            momentumContrib, rsContrib, sectorBonus, accelBonus, consistencyBonus,
+            structureBonus, extensionPenalty, pullbackBonus, runnerPenalty, declinePenalty,
+            rsiBonusPenalty, macdBonus, rsMeanRevPenalty, squeezeBonus, volumeBonus, fvgBonus,
+            smaProximityBonus, smaCrossoverBonus, learnedAdj, entryMultiplier
+        }
+    };
+}
+
 module.exports = {
     isMarketOpen,
     calculateRSI,
@@ -228,5 +475,12 @@ module.exports = {
     calculateEMAArray,
     calculateMACD,
     calculateSMACrossover,
-    detectStructure
+    detectStructure,
+    DEFAULT_WEIGHTS,
+    getActiveWeights,
+    calculate5DayMomentum,
+    calculateVolumeRatio,
+    calculateRelativeStrength,
+    detectSectorRotation,
+    calculateCompositeScore
 };
