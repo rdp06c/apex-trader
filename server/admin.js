@@ -148,7 +148,7 @@ router.post('/action/pull', (req, res) => {
 
 // POST /admin/action/scan — trigger scanner immediately
 router.post('/action/scan', (req, res) => {
-    scanner.runStructureCheck()
+    scanner.runStructureCheck({ force: true })
         .then(() => {
             const status = scanner.getStatus();
             const count = Object.keys(status.readings).length;

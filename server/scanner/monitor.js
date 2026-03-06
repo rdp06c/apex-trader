@@ -53,8 +53,8 @@ function recordAlert(state, symbol, condition) {
     state.alerts[`${symbol}:${condition}`] = Date.now();
 }
 
-async function runStructureCheck() {
-    if (!isMarketOpen()) {
+async function runStructureCheck({ force = false } = {}) {
+    if (!force && !isMarketOpen()) {
         return;
     }
 
