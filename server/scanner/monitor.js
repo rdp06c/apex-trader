@@ -174,6 +174,16 @@ async function runStructureCheck({ force = false } = {}) {
             });
         }
 
+        // Clean up readings for symbols no longer held
+        if (state.readings) {
+            const heldSet = new Set(heldSymbols);
+            for (const sym of Object.keys(state.readings)) {
+                if (!heldSet.has(sym)) {
+                    delete state.readings[sym];
+                }
+            }
+        }
+
         state.lastRun = new Date().toISOString();
         state.lastHoldings = heldSymbols;
         state.alertsSent = (state.alertsSent || 0) + alerts.length;
