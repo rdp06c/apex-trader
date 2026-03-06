@@ -8694,7 +8694,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const _rsiVal = _bars && _bars.length >= 14 ? calculateRSI(_bars) : null;
                     const _macdResult = _bars && _bars.length >= 14 ? calculateMACD(_bars) : null;
                     const _dtcVal = shortInterestCache[symbol]?.daysToCover;
-                    const _struct = _bars && _bars.length >= 5 ? detectStructure(_bars) : null;
+                    const _struct = _bars && _bars.length >= 5 ? detectStructure(symbol) : null;
 
                     const _profitSignals = [];
                     if (_fib?.type === 'bullish' && stockPrice.price >= _fib.fib1272) _profitSignals.push('Fib target');
