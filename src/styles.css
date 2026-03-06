@@ -2433,12 +2433,13 @@
         .score-driver.mom { background: rgba(255,255,255,0.08); color: var(--text-muted); }
 
         .health-arrow {
-            font-size: 0.85em;
-            margin-left: 1px;
+            font-size: 1em;
+            font-weight: 600;
+            margin-left: 2px;
             color: var(--text-muted);
         }
-        .health-arrow.negative { color: var(--red, #ff4757); font-weight: 600; }
-        .health-arrow.positive { color: var(--green); font-weight: 600; }
+        .health-arrow.negative { color: var(--red, #ff4757); }
+        .health-arrow.positive { color: var(--green); }
 
         .scorecard-score-cell {
             display: flex;
