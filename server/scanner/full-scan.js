@@ -231,23 +231,25 @@ async function runFullScan({ force = false } = {}) {
         candidateScores.sort((a, b) => b.compositeScore - a.compositeScore);
 
         // Phase 3: Save results to portfolio (format matches browser's lastCandidateScores)
-        const updatedPortfolio = portfolio || {};
-        updatedPortfolio.lastCandidateScores = {
+        // Re-read portfolio right before writing to avoid overwriting browser changes
+        // (the scan takes minutes; the browser may have saved trades in the meantime)
+        const freshPortfolio = loadPortfolio() || {};
+        freshPortfolio.lastCandidateScores = {
             timestamp: new Date().toISOString(),
             candidates: candidateScores,
             source: 'server'
         };
-        updatedPortfolio.lastSectorRotation = sectorRotation;
+        freshPortfolio.lastSectorRotation = sectorRotation;
         if (vixData) {
-            updatedPortfolio.lastVIX = vixData;
+            freshPortfolio.lastVIX = vixData;
         }
-        updatedPortfolio.lastFullScan = {
+        freshPortfolio.lastFullScan = {
             timestamp: new Date().toISOString(),
             stocksScanned: scored,
             duration: Math.round((Date.now() - startTime) / 1000)
         };
 
-        savePortfolio(updatedPortfolio);
+        savePortfolio(freshPortfolio);
 
         // Save scan state
         const scanState = loadScanState();
