@@ -1,6 +1,6 @@
 # APEX – Scorecard-Guided Manual Trading Dashboard
 
-APEX is a single-page trading dashboard that screens ~537 stocks across 14 sectors, scores them with a composite scoring engine, and surfaces actionable signals via a candidate scorecard. The user makes all buy/sell decisions manually, guided by the scorecard and trade insights. Uses Massive (formerly Polygon.io) for market data. No framework, no backend beyond a Cloudflare Worker for optional AI chat. No cash/budget concept — portfolio return is based on cost basis of invested capital.
+APEX is a single-page trading dashboard that screens ~540 stocks across 14 sectors, scores them with a composite scoring engine, and surfaces actionable signals via a candidate scorecard. The user makes all buy/sell decisions manually, guided by the scorecard and trade insights. Uses Massive (formerly Polygon.io) for market data. No framework. No cash/budget concept — portfolio return is based on cost basis of invested capital.
 
 ## Project Structure
 
@@ -10,25 +10,70 @@ src/
   body.html         ← HTML body content
   trader.js         ← All JavaScript
   template.html     ← Skeleton HTML with placeholders
+server/
+  index.js          ← Express server entry point (port 4000)
+  admin.js          ← Admin panel (status, logs, actions)
+  auto-pull.sh      ← Auto-pull from GitHub main every 5 min (cron)
+  api/
+    portfolio.js    ← GET/POST /api/portfolio with atomic file writes
+  lib/
+    scoring.js      ← Extracted pure scoring functions for server-side use
+    fetchers.js     ← Massive API wrappers for Node.js
+  scanner/
+    monitor.js      ← Background structure monitor (cron, every 15 min)
+    alerts.js       ← ntfy.sh alert integration
+  data/
+    portfolio.json  ← Server-side portfolio storage (gitignored)
+    backups/        ← Last 5 portfolio saves (gitignored)
+    scanner-state.json ← Scanner readings and alert history (gitignored)
 build.cmd / build.sh  ← Build scripts
 index.html            ← Generated output (DO NOT EDIT DIRECTLY)
+package.json          ← Express, node-cron dependencies
+.env.example          ← Template for server config
 ```
 
-**Build:** Edit `src/` files, then run `bash build.sh`. Assembles template + CSS + HTML + JS → `index.html`. Output is committed for GitHub Pages.
+**Build:** Edit `src/` files, then run `bash build.sh`. Assembles template + CSS + HTML + JS → `index.html`. Output is committed.
 
 ## Architecture
 
 ```
+Raspberry Pi (Express server, port 4000)
+├── GET/POST /api/portfolio     ← Server-side portfolio storage (JSON file)
+├── GET /api/scanner/status     ← Scanner health check
+├── GET /admin                  ← Admin panel (status, logs, actions)
+├── Static files (index.html)   ← Built dashboard
+├── Background scanner (cron)   ← Structure monitoring every 15 min
+│   └── ntfy.sh alerts          ← Push notifications on breakdown
+├── Cloudflare Tunnel           ← Remote access (trycloudflare.com URL)
+├── Auto-pull (cron)            ← Pulls from GitHub main every 5 min
+└── Basic auth                  ← Password protection via .env
+
 Browser (index.html)
-  ├── Massive API → Market data (snapshots, bars, ticker details, short interest, news, VIX)
-  ├── Cloudflare Worker proxy → Anthropic API (chat only, not trading decisions)
-  ├── Google Drive API → Portfolio backup/restore, encrypted API key sync
-  └── localStorage → Portfolio state, price cache, API keys
+├── portfolioStorage adapter    ← Server-first with localStorage fallback
+├── Massive API                 ← Market data (snapshots, bars, details, etc.)
+├── Cloudflare Worker proxy     ← Anthropic API (chat only)
+├── Google Drive API            ← Optional backup/restore
+└── localStorage                ← Market data caches, API keys
 ```
+
+**Key design**: The `portfolioStorage` adapter auto-detects whether a server is available. If no server (e.g., opened as a local file), it falls back to localStorage. Dashboard works in both modes with zero config.
+
+## Deployment
+
+**Pi deployment** (primary):
+1. Clone repo, `npm install`
+2. Copy `.env.example` to `.env`, fill in `MASSIVE_API_KEY`, `NTFY_TOPIC`, `AUTH_USER`, `AUTH_PASS`
+3. `npm start` — serves on port 4000
+4. Systemd services: `apex.service` (server), `apex-tunnel.service` (Cloudflare tunnel)
+5. Cron: `auto-pull.sh` runs every 5 min, pulls from `main`, rebuilds and restarts if source files changed
+
+**Remote access**: Cloudflare quick tunnel provides a `*.trycloudflare.com` URL. URL is sent via ntfy on tunnel start. Basic auth protects all routes.
+
+**Update workflow**: Push to `main` on GitHub → Pi auto-pulls within 5 min → rebuilds → restarts → ntfy notification confirms. Or use "Pull & Restart" button on admin panel for immediate update.
 
 ## Core Workflow
 
-1. **Scan Market** — fetches prices, ~65-day OHLCV bars, ticker details, short interest, server indicators (RSI, MACD, SMA50), VIX for ~537 stocks across 14 sectors. Populates all caches. Server indicators fetched for ALL stocks (no cap).
+1. **Scan Market** — fetches prices, ~65-day OHLCV bars, ticker details, short interest, server indicators (RSI, MACD, SMA50), VIX for ~540 stocks across 14 sectors. Populates all caches. Server indicators fetched for ALL stocks (no cap).
 2. **Score** — `calculateCompositeScore` produces weighted sum of ~15 components (momentum, RS, structure, RSI, MACD, pullback, extension, etc.) with entry quality multiplier
 3. **Candidate Scorecard** — full universe displayed with sortable, color-coded columns: Score, Price, Day%, 5D, MOM, VOL, RS, RSI, MACD, Structure, DTC, Sector, MCap. Click column headers to sort. Sector filter dropdown. Paginated (40 per page).
 4. **Manual Trade** — user enters buy/sell via modal. Same-day trades auto-capture all live signals from caches (run Scan Market first for richest data).
@@ -74,7 +119,40 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 
 **Chat Interface** (`sendMessage`): Conversational with portfolio context. Gated behind activation button. Special commands: `calibrate`, `backtest YYYY-MM-DD`. Uses Cloudflare Worker proxy to Claude API.
 
-**Google Drive**: OAuth 2.0 backup/restore, encrypted API key sync.
+**Google Drive**: OAuth 2.0 backup/restore. Optional — Pi server is the primary storage now.
+
+## Background Scanner
+
+Runs on the Pi via `server/scanner/monitor.js`. Checks structure on all held positions every 15 minutes during market hours. Can also be triggered manually from the admin panel (bypasses market hours check).
+
+**Alert conditions:**
+- Entry structure was bullish, current is bearish → "Structure Breakdown"
+- Bearish CHoCH detected → "Bearish CHoCH"
+- Price below stop price (if set in holding thesis) → "Stop Loss Breached"
+
+**Deduplication:** Same condition for same symbol won't re-alert within 4 hours.
+
+**Alert delivery:** POST to ntfy.sh topic (configured via `NTFY_TOPIC` in `.env`).
+
+**Extracted functions** (`server/lib/scoring.js`): `detectStructure`, `calculateRSI`, `calculateMACD`, `calculateSMA`, `calculateSMACrossover`, `isMarketOpen`. These are copies of the client-side functions adapted to accept data as parameters instead of reading globals. Duplication accepted because client runs in a `<script>` tag and cannot import Node modules.
+
+## Admin Panel
+
+Available at `/admin`. Shows:
+- Server uptime, market status, last scanner run, total alerts sent
+- Scanner readings for each holding (structure, score, RSI, CHoCH status)
+- Action buttons: "Pull & Restart" (triggers auto-pull.sh), "Run Scanner Now" (triggers structure check)
+- Log viewers: server logs (journalctl), auto-pull logs
+
+## Portfolio Storage
+
+**Primary:** `server/data/portfolio.json` on Pi. Read/written via `/api/portfolio` endpoints. Atomic writes (tmp file + rename). Last 5 saves kept as timestamped backups in `server/data/backups/`.
+
+**Fallback:** localStorage in browser (`aiTradingPortfolio` key). Always written as backup alongside server saves.
+
+**Restore:** `POST /api/portfolio/restore/:filename` restores from a backup. Google Drive restore still works from the browser.
+
+**`portfolioStorage` adapter** (in `src/trader.js`): Probes `/api/portfolio` on first load. If server responds, uses server for all reads/writes. If not (e.g., opened as local file), falls back to localStorage. Browser always saves to both.
 
 ## Design Constraints
 
@@ -88,6 +166,8 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 
 **Bulk Snapshot Cache**: `fetchBulkSnapshot()` uses a 15-second cache. Cache hit requires ALL requested symbols present (`symbols.every`), and new fetches merge via `Object.assign` (not overwrite).
 
+**Basic Auth**: Configured via `AUTH_USER` and `AUTH_PASS` in `.env`. Protects all routes (dashboard, API, admin). Disabled if not set.
+
 ## Portfolio Metrics
 
 **Total Return** = Realized P&L (sum of closedTrades.profitLoss) + Unrealized P&L (current holdings value − cost basis). Percentage based on current cost basis. No cash/budget concept — `portfolio.cash` is legacy.
@@ -98,7 +178,7 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 
 ## Portfolio State
 
-Persisted to `localStorage`, backed up to Google Drive as `Apex_Portfolio.json`. Key fields: `holdings`, `transactions`, `closedTrades`, `holdingTheses`, `performanceHistory`, `lastMarketRegime`, `lastCandidateScores`, `lastSectorRotation`, `lastVIX`, `regimeHistory`, `portfolioHealth`. Array caps on save: transactions (500), closedTrades (300), performanceHistory (3000).
+Persisted to Pi server (with localStorage fallback). Key fields: `holdings`, `transactions`, `closedTrades`, `holdingTheses`, `performanceHistory`, `lastMarketRegime`, `lastCandidateScores`, `lastSectorRotation`, `lastVIX`, `regimeHistory`, `portfolioHealth`. Array caps on save: transactions (500), closedTrades (300), performanceHistory (3000).
 
 ## Known Issues
 
@@ -106,6 +186,7 @@ Persisted to `localStorage`, backed up to Google Drive as `Apex_Portfolio.json`.
 - **Keyboard accessibility**: Collapsible sections use `<div onclick>` — should migrate to `<button>` with proper roles
 - **FVG detection partial**: Detected and scored (±0.5) but not used in reversal filtering
 - **RS not reconstructable**: Relative strength requires full market context at time of entry. For historical manual trades, RS is null unless cached from a prior Scan Market.
+- **Tunnel URL changes on reboot**: Cloudflare quick tunnel gets a new random URL on Pi restart. ntfy notification sent with new URL automatically.
 
 ## Legacy AI Code
 
@@ -113,7 +194,7 @@ The codebase still contains the two-phase AI analysis system (`runAIAnalysis`, P
 
 ## Stock Universe
 
-~537 stocks across 14 sectors: Technology, Automotive, Financial, Healthcare, Consumer, Energy, Industrials, Real Estate, Materials, Defense, Space, Crypto, Index Fund. Three lists must stay in sync when adding/removing stocks:
+~540 stocks across 14 sectors: Technology, Automotive, Financial, Healthcare, Consumer, Energy, Industrials, Real Estate, Materials, Defense, Space, Crypto, Index Fund. Three lists must stay in sync when adding/removing stocks:
 1. `stockNames` — display names
 2. `stockSectors` — sector classification (drives heatmap, which is dynamic)
 3. `screenStocks()` — scan list (sector-grouped arrays, deduplicated)
@@ -126,3 +207,6 @@ Coverage includes: AI/software, semiconductors, cybersecurity, biotech/genomics,
 - Test with "Scan Market" button (fetches market data and updates scorecard without AI)
 - `let`/`const` throughout, `async/await` throughout
 - Extensive console logging
+- Push to `main` → Pi auto-pulls within 5 min, or use admin panel "Pull & Restart"
+- Server files in `server/` — these run on the Pi only, not in the browser
+- Scoring functions are duplicated between `src/trader.js` (browser) and `server/lib/scoring.js` (Node.js) — keep them in sync when modifying scoring logic
