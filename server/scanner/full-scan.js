@@ -8,7 +8,7 @@ const {
     calculateRSI, calculateSMA, calculateMACD, calculateSMACrossover,
     detectStructure, calculate5DayMomentum, calculateVolumeRatio,
     calculateRelativeStrength, detectSectorRotation, calculateCompositeScore,
-    getActiveWeights, isMarketOpen
+    getActiveWeights, isMarketOpen, detectMarketRegime
 } = require('../lib/scoring');
 const {
     fetchBulkSnapshot, fetchGroupedDailyBars, fetchServerIndicators,
@@ -246,6 +246,9 @@ async function runFullScan({ force = false } = {}) {
         if (vixData) {
             freshPortfolio.lastVIX = vixData;
         }
+        const regimeResult = detectMarketRegime(vixData?.level, sectorRotation, marketData, multiDayCache);
+        freshPortfolio.lastMarketRegime = { regime: regimeResult.regime, score: regimeResult.score, signals: regimeResult.signals, timestamp: new Date().toISOString() };
+        console.log(`Full scan: regime ${regimeResult.regime.toUpperCase()} (score ${regimeResult.score})`, regimeResult.signals);
         freshPortfolio.lastFullScan = {
             timestamp: new Date().toISOString(),
             stocksScanned: scored,

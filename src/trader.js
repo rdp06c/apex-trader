@@ -1916,47 +1916,8 @@
                 }
             }
 
-            // --- Fallback: Polygon indices snapshot (may be stale EOD data) ---
-            try {
-                console.log('📊 Fetching VIX via Polygon (fallback)...');
-                let data = null;
-                const endpoints = [
-                    { url: `https://api.polygon.io/v3/snapshot/indices?ticker.any_of=I:VIX&apiKey=${POLYGON_API_KEY}`, label: 'polygon' },
-                    { url: `https://api.massive.com/v3/snapshot/indices?ticker.any_of=I:VIX`, label: 'massive', headers: { 'Authorization': `Bearer ${POLYGON_API_KEY}` } }
-                ];
-
-                for (const ep of endpoints) {
-                    try {
-                        const response = await fetch(ep.url, ep.headers ? { headers: ep.headers } : undefined);
-                        if (!response.ok) {
-                            console.warn(`VIX fetch (${ep.label}): HTTP ${response.status}`);
-                            continue;
-                        }
-                        data = await response.json();
-                        if (data.results && data.results.length > 0) {
-                            console.log(`⚠️ VIX fetched via ${ep.label} (fallback — may be stale)`);
-                            break;
-                        }
-                        data = null;
-                    } catch (e) {
-                        console.warn(`VIX fetch (${ep.label}) error:`, e.message);
-                    }
-                }
-
-                if (!data || !data.results || data.results.length === 0) {
-                    console.warn('VIX fetch: no results from any endpoint');
-                    return null;
-                }
-
-                const snap = data.results[0];
-                const level = snap.value;
-                const session = snap.session || {};
-                const prevClose = session.previous_close || level;
-                return buildVixResult(level, prevClose);
-            } catch (err) {
-                console.warn('VIX fetch error:', err.message);
-                return null;
-            }
+            console.warn('VIX: Yahoo proxy unavailable, no data');
+            return null;
         }
 
         // Calculate REAL 5-day momentum score (uses last 5 bars from 20-day cache)
@@ -2126,6 +2087,59 @@
             return { rsScore: Math.round(rsScore), strength, stockReturn5d: Math.round(stockReturn * 100) / 100, sectorAvg5d: Math.round(sectorAvg * 100) / 100, relativePerformance: Math.round(relativePerformance * 100) / 100, basis: usedMultiDay ? '5-day' : '1-day-fallback' };
         }
         
+        // Composite market regime detection using multiple signals
+        // Returns { regime: 'bull'|'bear'|'choppy', score, signals }
+        function detectMarketRegime(vix, sectorAnalysis, mktData) {
+            const signals = {};
+            let score = 0;
+
+            // 1. VIX level
+            if (vix != null) {
+                if (vix <= 20) { score += 1; signals.vix = 'bull'; }
+                else if (vix > 30) { score -= 1; signals.vix = 'bear'; }
+                else { signals.vix = 'neutral'; }
+            }
+
+            // 2. Sector breadth — how many sectors show inflow vs outflow
+            if (sectorAnalysis && typeof sectorAnalysis === 'object') {
+                const sectors = Object.values(sectorAnalysis);
+                const inflowCount = sectors.filter(s => s.moneyFlow === 'inflow' || s.moneyFlow === 'modest-inflow').length;
+                const outflowCount = sectors.filter(s => s.moneyFlow === 'outflow' || s.moneyFlow === 'modest-outflow').length;
+                if (inflowCount >= 8) { score += 1; signals.sectorBreadth = 'bull'; }
+                else if (inflowCount < 4 && outflowCount >= 6) { score -= 1; signals.sectorBreadth = 'bear'; }
+                else { signals.sectorBreadth = 'neutral'; }
+                signals.sectorDetail = `${inflowCount} inflow, ${outflowCount} outflow`;
+            }
+
+            // 3. Market breadth — advancers vs decliners across all scanned stocks
+            if (mktData && typeof mktData === 'object') {
+                const stocks = Object.values(mktData);
+                const total = stocks.length;
+                if (total > 0) {
+                    const advancers = stocks.filter(s => (s.changePercent || 0) > 0).length;
+                    const pct = advancers / total;
+                    if (pct >= 0.6) { score += 1; signals.breadth = 'bull'; }
+                    else if (pct < 0.4) { score -= 1; signals.breadth = 'bear'; }
+                    else { signals.breadth = 'neutral'; }
+                    signals.breadthDetail = `${advancers}/${total} advancing (${(pct * 100).toFixed(0)}%)`;
+                }
+            }
+
+            // 4. SPY 5-day trend
+            const spyBars = multiDayCache['SPY'];
+            if (spyBars && spyBars.length >= 5) {
+                const recent5 = spyBars.slice(-5);
+                const spy5dReturn = ((recent5[recent5.length - 1].c - recent5[0].c) / recent5[0].c) * 100;
+                if (spy5dReturn > 1) { score += 1; signals.spy5d = 'bull'; }
+                else if (spy5dReturn < -1) { score -= 1; signals.spy5d = 'bear'; }
+                else { signals.spy5d = 'neutral'; }
+                signals.spy5dDetail = `${spy5dReturn >= 0 ? '+' : ''}${spy5dReturn.toFixed(2)}%`;
+            }
+
+            const regime = score >= 2 ? 'bull' : score <= -2 ? 'bear' : 'choppy';
+            return { regime, score, signals };
+        }
+
         // Detect sector rotation using MULTI-DAY data
         function detectSectorRotation(marketData) {
             const sectors = {};
@@ -4581,15 +4595,13 @@
                     candidates: dryRunScored
                 };
 
-                // Persist VIX from scan + infer market regime if not yet set
+                // Persist VIX + detect composite market regime
                 if (vixCache) {
                     portfolio.lastVIX = { ...vixCache, fetchedAt: new Date().toISOString() };
-                    if (!portfolio.lastMarketRegime) {
-                        const vixRegime = vixCache.level > 30 ? 'bear' : vixCache.level > 25 ? 'choppy' : 'bull';
-                        portfolio.lastMarketRegime = { regime: vixRegime, timestamp: new Date().toISOString() };
-                        console.log(`📊 Scan inferred market regime from VIX ${vixCache.level.toFixed(1)}: ${vixRegime}`);
-                    }
                 }
+                const regimeResult = detectMarketRegime(vixCache?.level, sectorRotation, marketData);
+                portfolio.lastMarketRegime = { regime: regimeResult.regime, score: regimeResult.score, signals: regimeResult.signals, timestamp: new Date().toISOString() };
+                console.log(`📊 Market regime: ${regimeResult.regime.toUpperCase()} (score ${regimeResult.score})`, regimeResult.signals);
 
                 // Benchmark: fetch SPY price and compute portfolio health
                 try {
@@ -5118,8 +5130,13 @@
                 // Persist sector rotation for dashboard display
                 portfolio.lastSectorRotation = { timestamp: new Date().toISOString(), sectors: sectorRotation };
 
-                // Persist VIX for dashboard display
-                if (vixCache) portfolio.lastVIX = { ...vixCache, fetchedAt: new Date().toISOString() };
+                // Persist VIX + detect composite market regime
+                if (vixCache) {
+                    portfolio.lastVIX = { ...vixCache, fetchedAt: new Date().toISOString() };
+                }
+                const regimeResult = detectMarketRegime(vixCache?.level, sectorRotation, marketData);
+                portfolio.lastMarketRegime = { regime: regimeResult.regime, score: regimeResult.score, signals: regimeResult.signals, timestamp: new Date().toISOString() };
+                console.log(`📊 Market regime: ${regimeResult.regime.toUpperCase()} (score ${regimeResult.score})`, regimeResult.signals);
 
                 // Benchmark: fetch SPY price and compute portfolio health
                 try {
@@ -11803,6 +11820,11 @@ Current Portfolio:
                 desc = 'Selective entries only — smaller positions';
             }
 
+            // Show composite score breakdown
+            if (data.score != null) {
+                desc += ` (score: ${data.score})`;
+            }
+
             // Append recent transition info if available
             const history = portfolio.regimeHistory || [];
             if (history.length >= 2) {
@@ -11815,7 +11837,18 @@ Current Portfolio:
             descEl.textContent = desc;
 
             if (data.timestamp) {
-                timeEl.textContent = 'Last detected: ' + new Date(data.timestamp).toLocaleString();
+                timeEl.textContent = 'Last checked: ' + new Date(data.timestamp).toLocaleString();
+            }
+
+            // Signal breakdown tooltip
+            if (data.signals) {
+                const s = data.signals;
+                const parts = [];
+                if (s.vix) parts.push(`VIX: ${s.vix}`);
+                if (s.sectorBreadth) parts.push(`Sectors: ${s.sectorDetail || s.sectorBreadth}`);
+                if (s.breadth) parts.push(`Breadth: ${s.breadthDetail || s.breadth}`);
+                if (s.spy5d) parts.push(`SPY 5D: ${s.spy5dDetail || s.spy5d}`);
+                banner.title = parts.join(' | ');
             }
 
             // VIX display

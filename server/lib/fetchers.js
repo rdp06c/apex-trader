@@ -394,29 +394,7 @@ async function fetchVIX(apiKey, anthropicApiUrl) {
         }
     }
 
-    // Fallback: Polygon indices
-    if (apiKey) {
-        try {
-            const response = await fetch(
-                `https://api.polygon.io/v3/snapshot/indices?ticker.any_of=I:VIX&apiKey=${apiKey}`
-            );
-            if (response.ok) {
-                const data = await response.json();
-                if (data.results && data.results.length > 0) {
-                    const snap = data.results[0];
-                    const level = snap.value;
-                    const session = snap.session || {};
-                    const prevClose = session.previous_close || level;
-                    console.log(`VIX: ${level.toFixed(1)} via polygon`);
-                    return buildVixResult(level, prevClose);
-                }
-            }
-        } catch (err) {
-            console.warn('VIX fetch error:', err.message);
-        }
-    }
-
-    console.warn('VIX: no data from any source');
+    console.warn('VIX: Yahoo proxy unavailable, no data');
     return null;
 }
 

@@ -597,6 +597,55 @@ function calculateFibTargets(bars) {
     return null;
 }
 
+function detectMarketRegime(vix, sectorAnalysis, mktData, multiDayCache) {
+    const signals = {};
+    let score = 0;
+
+    if (vix != null) {
+        if (vix <= 20) { score += 1; signals.vix = 'bull'; }
+        else if (vix > 30) { score -= 1; signals.vix = 'bear'; }
+        else { signals.vix = 'neutral'; }
+    }
+
+    if (sectorAnalysis && typeof sectorAnalysis === 'object') {
+        const sectors = Object.values(sectorAnalysis);
+        const inflowCount = sectors.filter(s => s.moneyFlow === 'inflow' || s.moneyFlow === 'modest-inflow').length;
+        const outflowCount = sectors.filter(s => s.moneyFlow === 'outflow' || s.moneyFlow === 'modest-outflow').length;
+        if (inflowCount >= 8) { score += 1; signals.sectorBreadth = 'bull'; }
+        else if (inflowCount < 4 && outflowCount >= 6) { score -= 1; signals.sectorBreadth = 'bear'; }
+        else { signals.sectorBreadth = 'neutral'; }
+        signals.sectorDetail = `${inflowCount} inflow, ${outflowCount} outflow`;
+    }
+
+    if (mktData && typeof mktData === 'object') {
+        const stocks = Object.values(mktData);
+        const total = stocks.length;
+        if (total > 0) {
+            const advancers = stocks.filter(s => (s.changePercent || 0) > 0).length;
+            const pct = advancers / total;
+            if (pct >= 0.6) { score += 1; signals.breadth = 'bull'; }
+            else if (pct < 0.4) { score -= 1; signals.breadth = 'bear'; }
+            else { signals.breadth = 'neutral'; }
+            signals.breadthDetail = `${advancers}/${total} advancing (${(pct * 100).toFixed(0)}%)`;
+        }
+    }
+
+    if (multiDayCache) {
+        const spyBars = multiDayCache['SPY'];
+        if (spyBars && spyBars.length >= 5) {
+            const recent5 = spyBars.slice(-5);
+            const spy5dReturn = ((recent5[recent5.length - 1].c - recent5[0].c) / recent5[0].c) * 100;
+            if (spy5dReturn > 1) { score += 1; signals.spy5d = 'bull'; }
+            else if (spy5dReturn < -1) { score -= 1; signals.spy5d = 'bear'; }
+            else { signals.spy5d = 'neutral'; }
+            signals.spy5dDetail = `${spy5dReturn >= 0 ? '+' : ''}${spy5dReturn.toFixed(2)}%`;
+        }
+    }
+
+    const regime = score >= 2 ? 'bull' : score <= -2 ? 'bear' : 'choppy';
+    return { regime, score, signals };
+}
+
 module.exports = {
     isMarketOpen,
     calculateRSI,
@@ -614,5 +663,6 @@ module.exports = {
     calculateCompositeScore,
     calculateATR,
     detectVolumeDivergence,
-    calculateFibTargets
+    calculateFibTargets,
+    detectMarketRegime
 };
