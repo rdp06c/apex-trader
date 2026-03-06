@@ -4313,8 +4313,12 @@
                 ])];
                 await fetchNewsForStocks(drNewsSymbols);
 
-                // Fetch server-computed indicators for ALL scored stocks (RSI, MACD, SMA50 from Massive API)
-                const drServerSymbols = dryRunScored.map(s => s.symbol);
+                // Fetch server-computed indicators for top candidates + holdings only
+                // (540 × 3 calls = 1,620 API requests takes 7+ min due to browser's 6-connection limit)
+                const drServerSymbols = [...new Set([
+                    ...dryRunScored.slice(0, 50).map(s => s.symbol),
+                    ...Object.keys(portfolio.holdings)
+                ])];
                 thinkingDetail.textContent = `🧪 Fetching server indicators for ${drServerSymbols.length} stocks...`;
                 try {
                     const drServerData = await fetchServerIndicators(drServerSymbols);
