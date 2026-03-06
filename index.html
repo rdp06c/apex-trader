@@ -2692,6 +2692,182 @@
             }
         }
 
+        /* ── Phone (≤ 480px) ─────────────────────────────── */
+        @media (max-width: 480px) {
+            .main-content {
+                padding: 12px 8px;
+                gap: 12px;
+            }
+
+            .sidebar {
+                padding: 12px;
+            }
+
+            .sidebar-header {
+                gap: 8px;
+            }
+
+            h1 { font-size: 22px; }
+            .hero-value { font-size: 24px; }
+
+            .header-actions {
+                width: 100%;
+            }
+
+            .header-actions button,
+            .header-actions select {
+                flex: 1;
+            }
+
+            /* Sidebar action buttons: 2-column grid for bigger touch targets */
+            .sidebar-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .sidebar-actions button {
+                padding: 12px 8px;
+                font-size: 12px;
+                min-height: 44px;
+            }
+
+            /* Cards: tighter padding */
+            .card {
+                padding: 14px;
+                border-radius: var(--radius-md);
+            }
+
+            /* Performance Analytics: stack to 1 column */
+            .indices-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .index-card {
+                padding: 12px;
+            }
+
+            .index-price {
+                font-size: 18px;
+            }
+
+            /* Sub-stats: 1 column */
+            .sub-stats-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            /* Holdings sort: wrap below title */
+            .section-header {
+                flex-wrap: wrap;
+            }
+
+            .holdings-sort-controls {
+                order: 3;
+                margin-left: 0;
+                margin-right: auto;
+                margin-top: 4px;
+                flex-basis: 100%;
+            }
+
+            /* Holding card header: stack symbol/value vertically */
+            .holding-card-header {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .holding-card-value,
+            .holding-card-gainloss,
+            .holding-card-daily {
+                text-align: left;
+            }
+
+            .holding-card-symbol { font-size: 15px; }
+            .holding-card-value { font-size: 15px; }
+
+            /* Holding card footer + levels: stack to 1 column */
+            .holding-card-footer {
+                grid-template-columns: 1fr;
+                gap: 4px;
+            }
+
+            .holding-card-levels {
+                grid-template-columns: 1fr;
+                gap: 4px;
+            }
+
+            .holding-card-indicators {
+                font-size: 10px;
+                line-height: 1.8;
+            }
+
+            /* Sector rotation: 1 column */
+            .rotation-grid {
+                grid-template-columns: 1fr;
+            }
+
+            /* Chart: shorter to save vertical space */
+            .chart-card canvas#performanceChart {
+                max-height: 220px;
+            }
+
+            /* Modal: full-width, less padding */
+            .modal-content {
+                width: 96%;
+                padding: 18px;
+                max-height: 90vh;
+            }
+
+            /* Chat input: stack send button below */
+            .chat-input-container {
+                flex-direction: column;
+            }
+
+            /* Scorecard table: smaller font */
+            .scorecard-table {
+                font-size: 11px;
+            }
+
+            .scorecard-table th {
+                padding: 6px 6px;
+                font-size: 9px;
+            }
+
+            .scorecard-table td {
+                padding: 6px 6px;
+            }
+
+            /* Analytics popover: full width */
+            .analytics-popover {
+                width: calc(100vw - 24px);
+                max-width: none;
+            }
+
+            /* Regime banner: tighter */
+            .regime-banner-inner {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+
+            /* Touch-friendly targets for primary interactive elements */
+            .sidebar-actions button,
+            .header-actions button,
+            .header-actions select,
+            .modal-content button,
+            .modal-content select,
+            .modal-content input,
+            .chat-input-container button,
+            .scorecard-pagination button {
+                min-height: 44px;
+            }
+
+            .manual-trade-tab {
+                padding: 10px 12px;
+                min-height: 40px;
+            }
+        }
+
         /* ── Focus Visible ────────────────────────────────── */
         /* WCAG 2.4.7: keyboard users need visible focus indicators */
         button:focus-visible,
