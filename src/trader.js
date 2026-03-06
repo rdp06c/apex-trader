@@ -9010,10 +9010,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                 // Execute the buy
                 try {
-                portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
 
                 // Enrich with live cache data when available (same-day trades)
-                const liveData = marketData[symbol];
+                const liveData = priceCache[symbol] || bulkSnapshotCache[symbol];
                 const cachedScores = portfolio.lastCandidateScores?.candidates?.find(c => c.symbol === symbol);
                 const shortInt = shortInterestCache[symbol];
                 const details = tickerDetailsCache[symbol];
@@ -9055,6 +9054,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     smaCrossover: signals.smaCrossover?.crossover || null
                 } : {};
 
+                // Update holdings and push transaction together so they stay in sync
+                // (if enrichment above throws, neither gets saved)
+                portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
                 portfolio.transactions.push({
                     type: 'BUY',
                     symbol,
