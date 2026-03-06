@@ -9364,7 +9364,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (!GDRIVE_CONFIG.CLIENT_ID || !GDRIVE_CONFIG.API_KEY ||
                 GDRIVE_CONFIG.CLIENT_ID === '' || GDRIVE_CONFIG.API_KEY === '') {
                 console.log('Google Drive credentials not configured yet');
-                updateCloudSyncStatus('⚙️ Setup needed', 'Configure in settings');
+                const msg = portfolioStorage._serverAvailable
+                    ? '☁️ Server sync active'
+                    : '⚙️ Setup needed';
+                const sub = portfolioStorage._serverAvailable
+                    ? 'Drive backup optional'
+                    : 'Configure in settings';
+                updateCloudSyncStatus(msg, sub);
                 return;
             }
 
