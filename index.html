@@ -5975,9 +5975,9 @@
                 if (!result || result.insufficient) continue;
 
                 if (result.vsBaselineReturn > 0.5) {
-                    hotCombos.push({ label: result.label, avgReturn10d: result.avgReturn10d, winRate10d: result.winRate10d, n: result.n });
+                    hotCombos.push({ label: result.label, avgReturn10d: result.avgReturn10d, winRate10d: result.winRate10d, vsBaseline: result.vsBaselineReturn, n: result.n });
                 } else if (result.vsBaselineReturn < -0.5) {
-                    coldCombos.push({ label: result.label, avgReturn10d: result.avgReturn10d, winRate10d: result.winRate10d, n: result.n });
+                    coldCombos.push({ label: result.label, avgReturn10d: result.avgReturn10d, winRate10d: result.winRate10d, vsBaseline: result.vsBaselineReturn, n: result.n });
                 }
             }
 
@@ -14439,22 +14439,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         const sc = (portfolio.calibratedWeights?.sectorCombos || {})[sel.value];
                         if (!sc) { detail.innerHTML = ''; return; }
                         let h = '<div style=\\'margin-top:6px;\\'>';
-                        const renderRows = (combos, color) => {
+                        const renderRows = (combos) => {
                             let t = '';
                             for (const c of combos) {
-                                const rc = c.avgReturn10d >= 0 ? 'var(--green)' : 'var(--red)';
+                                const vc = c.vsBaselineReturn > 0 ? 'var(--green)' : 'var(--red)';
                                 const wc = c.winRate10d >= 55 ? 'var(--green)' : c.winRate10d >= 45 ? 'var(--yellow)' : 'var(--red)';
-                                t += '<tr><td>' + c.label + '</td><td style=\\'color:' + rc + ';font-weight:600\\'>' + (c.avgReturn10d >= 0 ? '+' : '') + c.avgReturn10d.toFixed(2) + '%</td><td style=\\'color:' + wc + ';font-weight:600\\'>' + c.winRate10d.toFixed(0) + '%</td><td style=\\'color:var(--text-muted)\\'>' + c.n.toLocaleString() + '</td></tr>';
+                                t += '<tr><td>' + c.label + '</td><td style=\\'color:' + vc + ';font-weight:600\\'>' + (c.vsBaselineReturn >= 0 ? '+' : '') + c.vsBaselineReturn.toFixed(2) + '%</td><td style=\\'color:' + wc + ';font-weight:600\\'>' + c.winRate10d.toFixed(0) + '%</td><td style=\\'color:var(--text-muted)\\'>' + c.n.toLocaleString() + '</td></tr>';
                             }
                             return t;
                         };
+                        h += '<div style=\\'font-size:0.75rem;color:var(--text-muted);margin-bottom:4px\\'>Sector baseline: ' + (sc.baseline.avgReturn10d >= 0 ? '+' : '') + sc.baseline.avgReturn10d.toFixed(2) + '% avg 10D, ' + sc.baseline.winRate10d.toFixed(0) + '% WR (' + sc.baseline.totalObs.toLocaleString() + ' obs)</div>';
                         if (sc.hot.length > 0) {
                             h += '<div style=\\'color:var(--green);font-weight:600;font-size:0.8rem;margin-bottom:2px\\'>Hot</div>';
-                            h += '<table class=\\'signal-accuracy-table\\'><thead><tr><th>Combo</th><th>Avg 10D</th><th>WR</th><th>Obs</th></tr></thead><tbody>' + renderRows(sc.hot) + '</tbody></table>';
+                            h += '<table class=\\'signal-accuracy-table\\'><thead><tr><th>Combo</th><th>vs Baseline</th><th>WR</th><th>Obs</th></tr></thead><tbody>' + renderRows(sc.hot) + '</tbody></table>';
                         }
                         if (sc.cold.length > 0) {
                             h += '<div style=\\'color:var(--red);font-weight:600;font-size:0.8rem;margin-top:6px;margin-bottom:2px\\'>Cold</div>';
-                            h += '<table class=\\'signal-accuracy-table\\'><thead><tr><th>Combo</th><th>Avg 10D</th><th>WR</th><th>Obs</th></tr></thead><tbody>' + renderRows(sc.cold) + '</tbody></table>';
+                            h += '<table class=\\'signal-accuracy-table\\'><thead><tr><th>Combo</th><th>vs Baseline</th><th>WR</th><th>Obs</th></tr></thead><tbody>' + renderRows(sc.cold) + '</tbody></table>';
                         }
                         h += '</div>';
                         detail.innerHTML = h;
@@ -16003,8 +16004,8 @@ Current Portfolio:
                     for (let h = 0; h < heat.hotCount; h++) dots.push('<span class="heat-dot hot"></span>');
                     for (let h = 0; h < heat.coldCount; h++) dots.push('<span class="heat-dot cold"></span>');
                     const tipParts = [];
-                    heat.hotCombos.forEach(h => tipParts.push(`🟢 ${h.label}: +${h.avgReturn10d.toFixed(1)}% avg, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
-                    heat.coldCombos.forEach(h => tipParts.push(`🔴 ${h.label}: ${h.avgReturn10d.toFixed(1)}% avg, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
+                    heat.hotCombos.forEach(h => tipParts.push(`🟢 ${h.label}: ${h.vsBaseline != null ? (h.vsBaseline >= 0 ? '+' : '') + h.vsBaseline.toFixed(1) + '% vs baseline' : '+' + h.avgReturn10d.toFixed(1) + '% avg'}, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
+                    heat.coldCombos.forEach(h => tipParts.push(`🔴 ${h.label}: ${h.vsBaseline != null ? (h.vsBaseline >= 0 ? '+' : '') + h.vsBaseline.toFixed(1) + '% vs baseline' : h.avgReturn10d.toFixed(1) + '% avg'}, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
                     heatCell = `<span class="heat-dots" title="${tipParts.join('\n')}">${dots.join('')}</span>`;
                 }
 
