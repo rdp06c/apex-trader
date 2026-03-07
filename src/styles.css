@@ -2422,6 +2422,11 @@
         .entry-badge.strong { background: var(--yellow); color: #000; }
         .entry-badge.partial { background: rgba(255,255,255,0.1); color: var(--text-muted); }
 
+        .heat-dots { display: inline-flex; gap: 3px; align-items: center; cursor: help; }
+        .heat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+        .heat-dot.hot { background: var(--green); box-shadow: 0 0 4px rgba(46, 204, 64, 0.4); }
+        .heat-dot.cold { background: var(--red); box-shadow: 0 0 4px rgba(255, 71, 87, 0.4); }
+
         .score-driver {
             font-size: 9px;
             font-weight: 700;

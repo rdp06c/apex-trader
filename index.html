@@ -2435,6 +2435,11 @@
         .entry-badge.strong { background: var(--yellow); color: #000; }
         .entry-badge.partial { background: rgba(255,255,255,0.1); color: var(--text-muted); }
 
+        .heat-dots { display: inline-flex; gap: 3px; align-items: center; cursor: help; }
+        .heat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+        .heat-dot.hot { background: var(--green); box-shadow: 0 0 4px rgba(46, 204, 64, 0.4); }
+        .heat-dot.cold { background: var(--red); box-shadow: 0 0 4px rgba(255, 71, 87, 0.4); }
+
         .score-driver {
             font-size: 9px;
             font-weight: 700;
@@ -5887,6 +5892,74 @@
             return { patterns: results, bestMatch, bestMatchCount };
         }
 
+        // Signal combo definitions — shared between calibration analysis and live heat evaluation.
+        // Uses scoreInputs field names (same shape as calibration observations).
+        const sectorFlowIsInflow = f => f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow';
+        const SIGNAL_COMBO_DEFS = [
+            // Tier 1: Core Pairs
+            { id: 'rsi_low_macd_bull', label: 'RSI<40 + Bullish MACD', tier: 1, filter: s => s.rsi != null && s.rsi < 40 && s.macdCrossover === 'bullish' },
+            { id: 'rsi_low_structure_bull', label: 'RSI<40 + Bull Structure', tier: 1, filter: s => s.rsi != null && s.rsi < 40 && (s.structureScore ?? 0) >= 2 },
+            { id: 'pullback_structure_bull', label: 'Pullback + Bull Structure', tier: 1, filter: s => s.totalReturn5d >= -8 && s.totalReturn5d <= -2 && (s.structureScore ?? 0) >= 2 },
+            { id: 'pullback_macd_bull', label: 'Pullback + Bullish MACD', tier: 1, filter: s => s.totalReturn5d >= -8 && s.totalReturn5d <= -2 && s.macdCrossover === 'bullish' },
+            { id: 'macd_bull_structure_bull', label: 'Bullish MACD + Bull Structure', tier: 1, filter: s => s.macdCrossover === 'bullish' && (s.structureScore ?? 0) >= 2 },
+            { id: 'momentum_high_vol', label: 'High Mom + Volume Confirming', tier: 1, filter: s => (s.momentumScore ?? 0) >= 7 && (s.volumeTrend ?? 1) > 1.2 },
+            { id: 'rsi_high_extension', label: 'RSI>70 + Extended Mom', tier: 1, filter: s => s.rsi != null && s.rsi > 70 && (s.momentumScore ?? 0) >= 8 },
+            { id: 'sector_inflow_structure', label: 'Sector Inflow + Bull Structure', tier: 1, filter: s => sectorFlowIsInflow(s.sectorFlow) && (s.structureScore ?? 0) >= 2 },
+            { id: 'sma_near_macd_bull', label: 'Near SMA20 + Bullish MACD', tier: 1, filter: s => s.sma20 > 0 && s.currentPrice > 0 && Math.abs((s.currentPrice - s.sma20) / s.sma20 * 100) <= 3 && s.macdCrossover === 'bullish' },
+            { id: 'rsi_low_sector_inflow', label: 'RSI<40 + Sector Inflow', tier: 1, filter: s => s.rsi != null && s.rsi < 40 && sectorFlowIsInflow(s.sectorFlow) },
+            // Tier 2: Key Triples
+            { id: 'ideal_entry', label: 'RSI<40 + MACD + Structure + Pullback', tier: 2, filter: s => s.rsi != null && s.rsi < 40 && s.macdCrossover === 'bullish' && (s.structureScore ?? 0) >= 2 && s.totalReturn5d >= -8 && s.totalReturn5d <= -2 },
+            { id: 'triple_pullback', label: 'Pullback + Structure + MACD', tier: 2, filter: s => s.totalReturn5d >= -8 && s.totalReturn5d <= -2 && (s.structureScore ?? 0) >= 2 && s.macdCrossover === 'bullish' },
+            { id: 'triple_oversold', label: 'RSI<30 + Structure + Sector Inflow', tier: 2, filter: s => s.rsi != null && s.rsi < 30 && (s.structureScore ?? 0) >= 2 && sectorFlowIsInflow(s.sectorFlow) },
+            { id: 'momentum_vol_structure', label: 'High Mom + Volume + Structure', tier: 2, filter: s => (s.momentumScore ?? 0) >= 7 && (s.volumeTrend ?? 1) > 1.2 && (s.structureScore ?? 0) >= 2 },
+            { id: 'rsi_macd_structure', label: 'RSI<40 + MACD + Structure', tier: 2, filter: s => s.rsi != null && s.rsi < 40 && s.macdCrossover === 'bullish' && (s.structureScore ?? 0) >= 2 },
+            // Tier 3: Anti-Patterns
+            { id: 'runner_overbought', label: 'RSI>70 + Runner (5%+)', tier: 3, filter: s => s.rsi != null && s.rsi > 70 && (s.todayChange ?? 0) >= 5 },
+            { id: 'bearish_outflow', label: 'Bearish Structure + Sector Outflow', tier: 3, filter: s => (s.structureScore ?? 0) <= -2 && (s.sectorFlow === 'outflow' || s.sectorFlow === 'avoid' || s.sectorFlow === 'caution') },
+            { id: 'extended_no_vol', label: 'High Mom + Declining Volume', tier: 3, filter: s => (s.momentumScore ?? 0) >= 7 && (s.volumeTrend ?? 1) < 0.8 },
+        ];
+
+        // Evaluate which signal combos a candidate currently matches,
+        // cross-referenced with calibration results to classify as hot/cold.
+        function evaluateComboHeat(candidate) {
+            const comboResults = portfolio.calibratedWeights?.signalCombos?.combos;
+            if (!comboResults) return null;
+
+            // Map candidate fields to scoreInputs shape expected by combo filters
+            const inputs = {
+                rsi: candidate.rsi,
+                macdCrossover: candidate.macdCrossover,
+                structureScore: candidate.structureScore ?? 0,
+                totalReturn5d: candidate.return5d ?? 0,
+                momentumScore: candidate.momentum ?? 0,
+                volumeTrend: candidate.volumeTrend ?? candidate.volumeRatio ?? 1,
+                todayChange: candidate.dayChange ?? 0,
+                sectorFlow: candidate.sectorFlow || 'neutral',
+                sma20: candidate.sma20 ?? 0,
+                currentPrice: candidate.price ?? 0,
+            };
+
+            const hotCombos = [];
+            const coldCombos = [];
+
+            for (const def of SIGNAL_COMBO_DEFS) {
+                try {
+                    if (!def.filter(inputs)) continue;
+                } catch { continue; }
+
+                const result = comboResults[def.id];
+                if (!result || result.insufficient) continue;
+
+                if (result.vsBaselineReturn > 0.5) {
+                    hotCombos.push({ label: result.label, avgReturn10d: result.avgReturn10d, winRate10d: result.winRate10d, n: result.n });
+                } else if (result.vsBaselineReturn < -0.5) {
+                    coldCombos.push({ label: result.label, avgReturn10d: result.avgReturn10d, winRate10d: result.winRate10d, n: result.n });
+                }
+            }
+
+            return { hotCount: hotCombos.length, coldCount: coldCombos.length, hotCombos, coldCombos };
+        }
+
         // BULK SNAPSHOT: Fetch all tickers in ONE call instead of 300 individual calls
         let bulkSnapshotCache = {};
         let bulkSnapshotTimestamp = 0;
@@ -8732,6 +8805,7 @@
                             momentum: s.data.momentum?.score || 0,
                             rs: s.data.relativeStrength?.rsScore || 0,
                             sector: s.data.sector || 'Unknown',
+                            sectorFlow: s.data.sectorRotation?.moneyFlow || 'neutral',
                             sectorBonus: s.data.sectorRotation?.moneyFlow === 'inflow' ? 2 : s.data.sectorRotation?.moneyFlow === 'modest-inflow' ? 1 : s.data.sectorRotation?.moneyFlow === 'outflow' ? -1 : 0,
                             structureScore: s.data.marketStructure?.structureScore || 0,
                             structure: s.data.marketStructure?.structure || 'unknown',
@@ -8745,6 +8819,7 @@
                             sma50: s.data.smaCrossover?.sma50 ?? null,
                             smaCrossover: s.data.smaCrossover?.crossover || 'none',
                             volumeRatio: calculateVolumeRatio(s.symbol)?.ratio ?? null,
+                            volumeTrend: s.data.momentum?.volumeTrend ?? null,
                             scoreBreakdown: s.scoreBreakdown || null
                         };
                     })
@@ -14482,31 +14557,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const HOT_THRESHOLD = showAll ? 0.2 : 0.5;
             const COLD_THRESHOLD = showAll ? -0.2 : -0.5;
 
-            const sectorFlowInflow = f => f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow';
-
-            const comboDefs = [
-                // Tier 1: Core Pairs
-                { id: 'rsi_low_macd_bull', label: 'RSI<40 + Bullish MACD', tier: 1, filter: s => s.rsi != null && s.rsi < 40 && s.macdCrossover === 'bullish' },
-                { id: 'rsi_low_structure_bull', label: 'RSI<40 + Bull Structure', tier: 1, filter: s => s.rsi != null && s.rsi < 40 && (s.structureScore ?? 0) >= 2 },
-                { id: 'pullback_structure_bull', label: 'Pullback + Bull Structure', tier: 1, filter: s => s.totalReturn5d >= -8 && s.totalReturn5d <= -2 && (s.structureScore ?? 0) >= 2 },
-                { id: 'pullback_macd_bull', label: 'Pullback + Bullish MACD', tier: 1, filter: s => s.totalReturn5d >= -8 && s.totalReturn5d <= -2 && s.macdCrossover === 'bullish' },
-                { id: 'macd_bull_structure_bull', label: 'Bullish MACD + Bull Structure', tier: 1, filter: s => s.macdCrossover === 'bullish' && (s.structureScore ?? 0) >= 2 },
-                { id: 'momentum_high_vol', label: 'High Mom + Volume Confirming', tier: 1, filter: s => (s.momentumScore ?? 0) >= 7 && (s.volumeTrend ?? 1) > 1.2 },
-                { id: 'rsi_high_extension', label: 'RSI>70 + Extended Mom', tier: 1, filter: s => s.rsi != null && s.rsi > 70 && (s.momentumScore ?? 0) >= 8 },
-                { id: 'sector_inflow_structure', label: 'Sector Inflow + Bull Structure', tier: 1, filter: s => sectorFlowInflow(s.sectorFlow) && (s.structureScore ?? 0) >= 2 },
-                { id: 'sma_near_macd_bull', label: 'Near SMA20 + Bullish MACD', tier: 1, filter: s => s.sma20 > 0 && s.currentPrice > 0 && Math.abs((s.currentPrice - s.sma20) / s.sma20 * 100) <= 3 && s.macdCrossover === 'bullish' },
-                { id: 'rsi_low_sector_inflow', label: 'RSI<40 + Sector Inflow', tier: 1, filter: s => s.rsi != null && s.rsi < 40 && sectorFlowInflow(s.sectorFlow) },
-                // Tier 2: Key Triples
-                { id: 'ideal_entry', label: 'RSI<40 + MACD + Structure + Pullback', tier: 2, filter: s => s.rsi != null && s.rsi < 40 && s.macdCrossover === 'bullish' && (s.structureScore ?? 0) >= 2 && s.totalReturn5d >= -8 && s.totalReturn5d <= -2 },
-                { id: 'triple_pullback', label: 'Pullback + Structure + MACD', tier: 2, filter: s => s.totalReturn5d >= -8 && s.totalReturn5d <= -2 && (s.structureScore ?? 0) >= 2 && s.macdCrossover === 'bullish' },
-                { id: 'triple_oversold', label: 'RSI<30 + Structure + Sector Inflow', tier: 2, filter: s => s.rsi != null && s.rsi < 30 && (s.structureScore ?? 0) >= 2 && sectorFlowInflow(s.sectorFlow) },
-                { id: 'momentum_vol_structure', label: 'High Mom + Volume + Structure', tier: 2, filter: s => (s.momentumScore ?? 0) >= 7 && (s.volumeTrend ?? 1) > 1.2 && (s.structureScore ?? 0) >= 2 },
-                { id: 'rsi_macd_structure', label: 'RSI<40 + MACD + Structure', tier: 2, filter: s => s.rsi != null && s.rsi < 40 && s.macdCrossover === 'bullish' && (s.structureScore ?? 0) >= 2 },
-                // Tier 3: Anti-Patterns
-                { id: 'runner_overbought', label: 'RSI>70 + Runner (5%+)', tier: 3, filter: s => s.rsi != null && s.rsi > 70 && (s.todayChange ?? 0) >= 5 },
-                { id: 'bearish_outflow', label: 'Bearish Structure + Sector Outflow', tier: 3, filter: s => (s.structureScore ?? 0) <= -2 && (s.sectorFlow === 'outflow' || s.sectorFlow === 'avoid' || s.sectorFlow === 'caution') },
-                { id: 'extended_no_vol', label: 'High Mom + Declining Volume', tier: 3, filter: s => (s.momentumScore ?? 0) >= 7 && (s.volumeTrend ?? 1) < 0.8 },
-            ];
+            const comboDefs = SIGNAL_COMBO_DEFS;
 
             // Baseline stats
             const baseAvg = observations.reduce((s, o) => s + o.return10d, 0) / observations.length;
@@ -15285,6 +15336,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         response += `  ${result.signalCombos.hot} hot, ${result.signalCombos.cold} cold — see Trade Insights for full table`;
                     }
                     addChatMessage(response, 'agent');
+                    // Re-render Trade Insights so Signal Combinations section appears without refresh
+                    updateLearningInsightsDisplay();
                 } catch (e) {
                     removeTypingIndicator();
                     addChatMessage(`Calibration failed: ${e.message}`, 'agent');
@@ -15586,8 +15639,11 @@ Current Portfolio:
             const sectorCounts = {};
             candidates.forEach(c => { sectorCounts[c.sector] = (sectorCounts[c.sector] || 0) + 1; });
 
-            // Compute entry signals for all candidates
-            candidates.forEach(c => { c._entrySignal = evaluateEntrySignals(c); });
+            // Compute entry signals and combo heat for all candidates
+            candidates.forEach(c => {
+                c._entrySignal = evaluateEntrySignals(c);
+                c._comboHeat = evaluateComboHeat(c);
+            });
 
             if (scorecardState.filterHeld) {
                 candidates = candidates.filter(c => holdingSymbols.has(c.symbol));
@@ -15622,6 +15678,7 @@ Current Portfolio:
                 dtc: c => c.daysToCover || 0,
                 mcap: c => c.marketCap || 0,
                 sig: c => c._entrySignal?.bestMatchCount ?? 0,
+                heat: c => (c._comboHeat?.hotCount ?? 0) - (c._comboHeat?.coldCount ?? 0),
             };
             const accessor = sortAccessors[scorecardState.sortField] || sortAccessors.score;
             const dir = scorecardState.sortDir === 'asc' ? 1 : -1;
@@ -15668,6 +15725,7 @@ Current Portfolio:
             html += '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
                 '<th>#</th><th>Symbol</th>' +
                 sh('sig', "Entry signal match. Evaluates reversal criteria: MACD Bull + RSI<40 + Bull Structure + 5D Pullback. ENTRY=4/4, 3/4=strong, 2/4=partial.", 'Sig') +
+                sh('heat', "Combo heat from calibration backtesting. Green dots = matches historically hot signal combos. Red dots = matches cold combos. Based on 10-day forward returns vs baseline.", 'Heat') +
                 sh('score', "Composite score from ~15 weighted signals. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
@@ -15770,6 +15828,19 @@ Current Portfolio:
                     else if (sig.bestMatch === 'partial') sigBadge = `<span class="entry-badge partial" title="${tipText}">${sig.bestMatchCount}/${pat.totalCriteria}</span>`;
                 }
 
+                // Combo heat indicator
+                const heat = c._comboHeat;
+                let heatCell = '';
+                if (heat && (heat.hotCount > 0 || heat.coldCount > 0)) {
+                    const dots = [];
+                    for (let h = 0; h < heat.hotCount; h++) dots.push('<span class="heat-dot hot"></span>');
+                    for (let h = 0; h < heat.coldCount; h++) dots.push('<span class="heat-dot cold"></span>');
+                    const tipParts = [];
+                    heat.hotCombos.forEach(h => tipParts.push(`🟢 ${h.label}: +${h.avgReturn10d.toFixed(1)}% avg, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
+                    heat.coldCombos.forEach(h => tipParts.push(`🔴 ${h.label}: ${h.avgReturn10d.toFixed(1)}% avg, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
+                    heatCell = `<span class="heat-dots" title="${tipParts.join('\n')}">${dots.join('')}</span>`;
+                }
+
                 // Score driver indicator (Phase 4)
                 let driverBadge = '';
                 if (bd && score > 0) {
@@ -15784,6 +15855,7 @@ Current Portfolio:
                     <td class="scorecard-rank">${globalRank}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
                     <td>${sigBadge}</td>
+                    <td>${heatCell}</td>
                     <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span>${driverBadge}</div></td>
                     <td style="font-size:11px">${priceStr}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
@@ -15802,7 +15874,7 @@ Current Portfolio:
 
             html += '</tbody></table></div>';
             html += `<div style="font-size:10px;color:var(--text-faint);margin-top:8px">Last scored: ${new Date(data.timestamp).toLocaleString()} — ${totalCount} stocks scored</div>`;
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent)">Sig column: <strong style="color:var(--green)">ENTRY</strong> = all 4 criteria met, <strong style="color:var(--yellow)">3/4</strong> = strong match, <span style="color:var(--text-muted)">2/4</span> = partial. Score badge: <span class="score-driver sig" style="display:inline">S</span> = signal-driven, <span class="score-driver mom" style="display:inline">M</span> = momentum-driven.</div>`;
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent)">Sig column: <strong style="color:var(--green)">ENTRY</strong> = all 4 criteria met, <strong style="color:var(--yellow)">3/4</strong> = strong match, <span style="color:var(--text-muted)">2/4</span> = partial. Heat: <span class="heat-dot hot" style="display:inline-block"></span> = hot combo match, <span class="heat-dot cold" style="display:inline-block"></span> = cold combo. Score: <span class="score-driver sig" style="display:inline">S</span> = signal-driven, <span class="score-driver mom" style="display:inline">M</span> = momentum-driven.</div>`;
             container.innerHTML = html;
         }
 
