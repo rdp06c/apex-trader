@@ -2426,6 +2426,13 @@
         .heat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
         .heat-dot.hot { background: var(--green); box-shadow: 0 0 4px rgba(46, 204, 64, 0.4); }
         .heat-dot.cold { background: var(--red); box-shadow: 0 0 4px rgba(255, 71, 87, 0.4); }
+        .heat-net { font-size: 0.75em; font-weight: 600; margin-left: 3px; }
+        .accel-badge { font-size: 0.75em; }
+        .vol-rising { color: var(--green); }
+        .vol-falling { color: var(--red); }
+        .fvg-badge { font-size: 0.65em; font-weight: 600; padding: 1px 3px; border-radius: 3px; vertical-align: middle; }
+        .fvg-bull { background: rgba(46, 204, 64, 0.15); color: var(--green); }
+        .fvg-bear { background: rgba(255, 107, 107, 0.15); color: var(--red); }
 
         .score-driver {
             font-size: 9px;

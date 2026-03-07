@@ -252,6 +252,18 @@ async function runFullScan({ force = false } = {}) {
         const regimeResult = detectMarketRegime(vixData?.level, sectorRotation, marketData, multiDayCache);
         freshPortfolio.lastMarketRegime = { regime: regimeResult.regime, score: regimeResult.score, signals: regimeResult.signals, timestamp: new Date().toISOString() };
         console.log(`Full scan: regime ${regimeResult.regime.toUpperCase()} (score ${regimeResult.score})`, regimeResult.signals);
+
+        // Record regime transition in history
+        const normalized = regimeResult.regime.toLowerCase().includes('bull') ? 'bull' : regimeResult.regime.toLowerCase().includes('bear') ? 'bear' : 'choppy';
+        if (!freshPortfolio.regimeHistory) freshPortfolio.regimeHistory = [];
+        const lastRegime = freshPortfolio.regimeHistory.length > 0 ? freshPortfolio.regimeHistory[freshPortfolio.regimeHistory.length - 1] : null;
+        if (lastRegime && lastRegime.regime === normalized) {
+            lastRegime.lastSeen = new Date().toISOString();
+        } else {
+            freshPortfolio.regimeHistory.push({ regime: normalized, timestamp: new Date().toISOString(), lastSeen: new Date().toISOString(), from: lastRegime ? lastRegime.regime : null });
+            if (freshPortfolio.regimeHistory.length > 200) freshPortfolio.regimeHistory = freshPortfolio.regimeHistory.slice(-200);
+            console.log(`Regime transition: ${lastRegime ? lastRegime.regime : 'none'} → ${normalized}`);
+        }
         freshPortfolio.lastFullScan = {
             timestamp: new Date().toISOString(),
             stocksScanned: scored,

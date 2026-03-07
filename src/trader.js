@@ -2562,7 +2562,17 @@
                 }
             }
 
-            return { hotCount: hotCombos.length, coldCount: coldCombos.length, hotCombos, coldCombos };
+            // Weighted net heat: each combo's vsBaseline weighted by observation count
+            const allMatched = [...hotCombos, ...coldCombos];
+            let weightedSum = 0, totalWeight = 0;
+            for (const combo of allMatched) {
+                const w = combo.n || 1;
+                weightedSum += combo.vsBaseline * w;
+                totalWeight += w;
+            }
+            const netHeat = totalWeight > 0 ? parseFloat((weightedSum / totalWeight).toFixed(2)) : 0;
+
+            return { hotCount: hotCombos.length, coldCount: coldCombos.length, hotCombos, coldCombos, netHeat };
         }
 
         // BULK SNAPSHOT: Fetch all tickers in ONE call instead of 300 individual calls
@@ -12427,7 +12437,7 @@ Current Portfolio:
                 dtc: c => c.daysToCover || 0,
                 mcap: c => c.marketCap || 0,
                 sig: c => c._entrySignal?.bestMatchCount ?? 0,
-                heat: c => (c._comboHeat?.hotCount ?? 0) - (c._comboHeat?.coldCount ?? 0),
+                heat: c => c._comboHeat?.netHeat ?? 0,
             };
             const accessor = sortAccessors[scorecardState.sortField] || sortAccessors.score;
             const dir = scorecardState.sortDir === 'asc' ? 1 : -1;
@@ -12474,7 +12484,7 @@ Current Portfolio:
             html += '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
                 '<th>#</th><th>Symbol</th>' +
                 sh('sig', "Entry signal match. Evaluates reversal criteria: MACD Bull + RSI<40 + Bull Structure + 5D Pullback. ENTRY=4/4, 3/4=strong, 2/4=partial.", 'Sig') +
-                sh('heat', "Combo heat from calibration backtesting. Green dots = matches historically hot signal combos. Red dots = matches cold combos. Based on 10-day forward returns vs baseline.", 'Heat') +
+                sh('heat', "Combo heat from calibration backtesting. Green dots = hot combos, red dots = cold combos. Number = weighted net edge vs baseline. Positive = historically outperforms, negative = underperforms.", 'Heat') +
                 sh('score', "Composite score from ~15 weighted signals. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
@@ -12599,9 +12609,12 @@ Current Portfolio:
                     for (let h = 0; h < heat.hotCount; h++) dots.push('<span class="heat-dot hot"></span>');
                     for (let h = 0; h < heat.coldCount; h++) dots.push('<span class="heat-dot cold"></span>');
                     const tipParts = [];
+                    tipParts.push(`Net: ${heat.netHeat >= 0 ? '+' : ''}${heat.netHeat.toFixed(2)}% vs baseline (weighted by sample size)`);
                     heat.hotCombos.forEach(h => tipParts.push(`🟢 ${h.label}: ${h.vsBaseline != null ? (h.vsBaseline >= 0 ? '+' : '') + h.vsBaseline.toFixed(1) + '% vs baseline' : '+' + h.avgReturn10d.toFixed(1) + '% avg'}, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
                     heat.coldCombos.forEach(h => tipParts.push(`🔴 ${h.label}: ${h.vsBaseline != null ? (h.vsBaseline >= 0 ? '+' : '') + h.vsBaseline.toFixed(1) + '% vs baseline' : h.avgReturn10d.toFixed(1) + '% avg'}, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
-                    heatCell = `<span class="heat-dots" title="${tipParts.join('\n')}">${dots.join('')}</span>`;
+                    const netColor = heat.netHeat > 0 ? 'var(--green)' : heat.netHeat < 0 ? 'var(--red)' : 'var(--text-muted)';
+                    const netLabel = (heat.netHeat >= 0 ? '+' : '') + heat.netHeat.toFixed(1);
+                    heatCell = `<span class="heat-dots" title="${tipParts.join('\n')}">${dots.join('')}<span class="heat-net" style="color:${netColor}">${netLabel}</span></span>`;
                 }
 
                 // Score driver indicator (Phase 4)
@@ -12623,12 +12636,12 @@ Current Portfolio:
                     <td style="font-size:11px">${priceStr}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td class="${ret5dClass}" style="font-size:11px">${ret5d != null ? (ret5d >= 0 ? '+' : '') + ret5d.toFixed(2) + '%' : '--'}</td>
-                    <td class="${momClass}">${mom.toFixed(1)}</td>
-                    <td class="${volClass}">${vr != null ? vr.toFixed(1) + 'x' : '--'}</td>
+                    <td class="${momClass}">${mom.toFixed(1)}${c.isAccelerating ? ' <span class="accel-badge" title="Momentum accelerating">⚡</span>' : ''}</td>
+                    <td class="${volClass}">${vr != null ? vr.toFixed(1) + 'x' + (c.volumeTrend > 1.2 ? ' <span class="vol-rising">▲</span>' : c.volumeTrend < 0.8 ? ' <span class="vol-falling">▼</span>' : '') : '--'}</td>
                     <td class="${rsClass}">${rsVal.toFixed(0)}</td>
                     <td class="${rsiClass}">${rsiVal != null ? Math.round(rsiVal) : '--'}</td>
                     <td class="${macdClass}">${macdArrow}</td>
-                    <td class="${structClass}" style="font-size:10px;text-transform:capitalize">${structLabel}</td>
+                    <td class="${structClass}" style="font-size:10px;text-transform:capitalize">${structLabel}${c.fvg === 'bullish' ? ' <span class="fvg-badge fvg-bull" title="Bullish Fair Value Gap detected">FVG</span>' : c.fvg === 'bearish' ? ' <span class="fvg-badge fvg-bear" title="Bearish Fair Value Gap detected">FVG</span>' : ''}</td>
                     <td class="${dtcClass}">${dtcVal > 0 ? dtcVal.toFixed(1) : '--'}</td>
                     <td>${c.sector || '--'}</td>
                     <td class="mcap-cell">${formatMarketCap(c.marketCap)}</td>
@@ -12637,7 +12650,7 @@ Current Portfolio:
 
             html += '</tbody></table></div>';
             html += `<div style="font-size:10px;color:var(--text-faint);margin-top:8px">Last scored: ${new Date(data.timestamp).toLocaleString()} — ${totalCount} stocks scored</div>`;
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent)">Sig column: <strong style="color:var(--green)">ENTRY</strong> = all 4 criteria met, <strong style="color:var(--yellow)">3/4</strong> = strong match, <span style="color:var(--text-muted)">2/4</span> = partial. Heat: <span class="heat-dot hot" style="display:inline-block"></span> = hot combo match, <span class="heat-dot cold" style="display:inline-block"></span> = cold combo. Score: <span class="score-driver sig" style="display:inline">S</span> = signal-driven, <span class="score-driver mom" style="display:inline">M</span> = momentum-driven.</div>`;
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent)">Sig column: <strong style="color:var(--green)">ENTRY</strong> = all 4 criteria met, <strong style="color:var(--yellow)">3/4</strong> = strong match, <span style="color:var(--text-muted)">2/4</span> = partial. Heat: <span class="heat-dot hot" style="display:inline-block"></span> = hot combo, <span class="heat-dot cold" style="display:inline-block"></span> = cold combo, <span style="color:var(--green)">+1.2</span> = weighted net edge. Mom: ⚡ = accelerating. Vol: <span class="vol-rising">▲</span>/<span class="vol-falling">▼</span> = trend. Struct: <span class="fvg-badge fvg-bull" style="display:inline">FVG</span> = fair value gap. Score: <span class="score-driver sig" style="display:inline">S</span> = signal-driven, <span class="score-driver mom" style="display:inline">M</span> = momentum-driven.</div>`;
             container.innerHTML = html;
         }
 
