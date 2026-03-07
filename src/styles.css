@@ -2510,6 +2510,11 @@
             background-position: right 8px center;
         }
 
+        .scorecard-sector-filter option {
+            background: var(--bg-inset);
+            color: var(--text-primary);
+        }
+
         .scorecard-pagination {
             display: flex;
             align-items: center;

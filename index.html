@@ -2523,6 +2523,11 @@
             background-position: right 8px center;
         }
 
+        .scorecard-sector-filter option {
+            background: var(--bg-inset);
+            color: var(--text-primary);
+        }
+
         .scorecard-pagination {
             display: flex;
             align-items: center;
@@ -14352,9 +14357,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const minN = showAll ? 30 : 50;
 
                 // Reclassify from raw combo data based on current threshold
+                // Note: ignore the baked-in `insufficient` flag — re-evaluate using current minN
                 const allCombos = Object.values(comboData.combos);
-                const sufficient = allCombos.filter(c => !c.insufficient && c.n >= minN);
-                const insufficientCombos = allCombos.filter(c => c.insufficient || c.n < minN);
+                const sufficient = allCombos.filter(c => c.n >= minN && c.vsBaselineReturn != null);
+                const insufficientCombos = allCombos.filter(c => c.n < minN || c.vsBaselineReturn == null);
                 const hotCombos = sufficient.filter(c => c.vsBaselineReturn > hotThreshold).sort((a, b) => b.vsBaselineReturn - a.vsBaselineReturn);
                 const coldCombos = sufficient.filter(c => c.vsBaselineReturn < coldThreshold).sort((a, b) => a.vsBaselineReturn - b.vsBaselineReturn);
                 const neutralCombos = sufficient.filter(c => c.vsBaselineReturn >= coldThreshold && c.vsBaselineReturn <= hotThreshold);
@@ -14452,7 +14458,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         }
                         h += '</div>';
                         detail.innerHTML = h;
-                    })(this)" style="background:rgba(255,255,255,0.08);color:var(--text-primary);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:4px 8px;font-size:0.8rem;cursor:pointer;">
+                    })(this)" class="scorecard-sector-filter">
                         <option value="">View sector details...</option>
                         ${sectors.map(s => '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>').join('')}
                     </select></div>
