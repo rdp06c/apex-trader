@@ -15940,11 +15940,24 @@ Current Portfolio:
                 let sigBadge = '';
                 if (sig?.bestMatch) {
                     const pat = sig.patterns[0]; // first pattern (reversal)
-                    const critParts = pat ? ENTRY_SIGNAL_PATTERNS[0].criteria.map(cr => {
-                        const hit = pat.criteria[cr.id];
-                        return hit ? cr.label : `~${cr.label}~`;
-                    }).join(', ') : '';
-                    const tipText = pat ? `${pat.label}: ${critParts}` : '';
+                    const tipLines = [];
+                    if (pat) {
+                        const rsiVal = c.rsi != null ? c.rsi.toFixed(0) : 'N/A';
+                        const ret5dVal = c.return5d != null ? (c.return5d >= 0 ? '+' : '') + c.return5d.toFixed(1) + '%' : 'N/A';
+                        const critDetails = {
+                            macd: { val: c.macdCrossover || 'none', target: 'bullish' },
+                            rsi: { val: rsiVal, target: '<40' },
+                            structure: { val: c.structure || 'unknown', target: 'bullish' },
+                            pullback: { val: ret5dVal, target: '-2% to -8%' }
+                        };
+                        for (const cr of ENTRY_SIGNAL_PATTERNS[0].criteria) {
+                            const hit = pat.criteria[cr.id];
+                            const d = critDetails[cr.id];
+                            const icon = hit ? '✓' : '✗';
+                            tipLines.push(`${icon} ${cr.label}: ${d.val} (need ${d.target})`);
+                        }
+                    }
+                    const tipText = tipLines.join('&#10;');
                     if (sig.bestMatch === 'full') sigBadge = `<span class="entry-badge full" title="${tipText}">ENTRY</span>`;
                     else if (sig.bestMatch === 'strong') sigBadge = `<span class="entry-badge strong" title="${tipText}">${sig.bestMatchCount}/${pat.totalCriteria}</span>`;
                     else if (sig.bestMatch === 'partial') sigBadge = `<span class="entry-badge partial" title="${tipText}">${sig.bestMatchCount}/${pat.totalCriteria}</span>`;
