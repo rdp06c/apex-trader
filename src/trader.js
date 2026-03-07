@@ -11211,11 +11211,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const results = {};
             for (const combo of comboDefs) {
                 const matching = observations.filter(o => combo.filter(o.scoreInputs));
-                if (matching.length < MIN_N) {
+                if (matching.length < 10) {
                     results[combo.id] = { id: combo.id, label: combo.label, tier: combo.tier, n: matching.length, insufficient: true };
                     continue;
                 }
 
+                // Always compute stats — display-time filtering decides what's "sufficient"
                 const avgReturn5d = matching.reduce((s, o) => s + (o.return5d ?? 0), 0) / matching.length;
                 const avgReturn10d = matching.reduce((s, o) => s + o.return10d, 0) / matching.length;
                 const m15d = matching.filter(o => o.return15d != null);
