@@ -85,7 +85,7 @@
   }
   .header-tagline { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
 
-  /* ── Section Titles (chart-title pattern) ───────────────── */
+  /* ── Section Titles ───────────────────────────────────── */
   .chart-title {
     font-size: 16px; font-weight: 600; color: var(--text-primary);
     margin-bottom: 16px; display: flex; align-items: center;
@@ -102,24 +102,29 @@
   }
 
   /* ── Buttons ───────────────────────────────────────────── */
-  #loadBtn {
+  .header-btn {
     background: var(--accent); color: #000; border: none;
     padding: 8px 18px; border-radius: var(--radius-sm);
     font-size: 13px; font-weight: 600; cursor: pointer;
     font-family: inherit;
     transition: all var(--transition-fast);
   }
-  #loadBtn:hover {
+  .header-btn:hover {
     opacity: 0.9; transform: translateY(-1px);
     box-shadow: 0 4px 12px var(--accent-glow);
   }
-  #loadBtn:active { transform: translateY(0); opacity: 0.8; }
+  .header-btn:active { transform: translateY(0); opacity: 0.8; }
+  .header-btn.secondary {
+    background: var(--bg-raised); color: var(--text-secondary);
+    border: 1px solid var(--border-medium);
+  }
+  .header-btn.secondary:hover { border-color: var(--accent); color: var(--accent); }
   #fileInput { display: none; }
   #loadStatus { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
 
   /* ── Summary Stats ─────────────────────────────────────── */
   .stats-row {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 10px; margin-bottom: 24px;
   }
   .stat-card {
@@ -153,7 +158,7 @@
   .card:hover { box-shadow: var(--shadow-md); }
   .card canvas { max-height: 320px; }
 
-  /* ── Tables ─────────────────────────────────────────────── */
+  /* ── Tables ──────────────────────────────────────────────── */
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th {
     text-align: left; color: var(--text-muted); font-weight: 600;
@@ -166,23 +171,38 @@
   }
   tr:hover td { background: var(--bg-hover); }
 
-  /* ── Rules Cards ────────────────────────────────────────── */
-  .rules-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;
+  /* ── Signal Match Cards ───────────────────────────────── */
+  .signal-match-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 10px; margin-bottom: 16px;
   }
-  .rule-card {
+  @media (max-width: 700px) { .signal-match-grid { grid-template-columns: repeat(3, 1fr); } }
+  .signal-match-card {
     background: var(--bg-inset); border-radius: var(--radius-sm);
-    padding: 14px; border: 1px solid var(--border-subtle);
-    border-left: 3px solid var(--text-muted);
+    padding: 14px; text-align: center; border: 1px solid var(--border-subtle);
     transition: border-color var(--transition-fast);
   }
-  .rule-card:hover { border-color: var(--border-medium); }
-  .rule-card.avoid { border-left-color: var(--red); }
-  .rule-card.prefer { border-left-color: var(--green); }
-  .rule-card.neutral { border-left-color: var(--text-muted); }
-  .rule-label { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--text-primary); }
-  .rule-stat { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
-  .rule-stat strong { color: var(--text-primary); }
+  .signal-match-card:hover { border-color: var(--border-medium); }
+  .signal-match-label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .signal-match-value { font-size: 28px; font-weight: 800; margin: 4px 0; }
+  .signal-match-sub { font-size: 11px; color: var(--text-muted); }
+
+  /* ── Regime Cards ─────────────────────────────────────── */
+  .regime-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .regime-card {
+    background: var(--bg-inset); border-radius: var(--radius-sm);
+    padding: 16px; border: 1px solid var(--border-subtle);
+    border-top: 3px solid var(--text-muted);
+  }
+  .regime-card.bull { border-top-color: var(--green); }
+  .regime-card.bear { border-top-color: var(--red); }
+  .regime-card.choppy { border-top-color: var(--yellow); }
+  .regime-card-label { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .regime-card-stat { font-size: 12px; color: var(--text-secondary); line-height: 1.7; }
+  .regime-card-stat strong { color: var(--text-primary); }
 
   /* ── Landing State ──────────────────────────────────────── */
   #landing {
@@ -193,19 +213,26 @@
   #landing p { font-size: 14px; }
   #landing strong { color: var(--accent); }
   #dashboard { display: none; }
+
+  /* ── Empty state ────────────────────────────────────────── */
+  .empty-chart {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 120px; color: var(--text-muted); font-size: 13px;
+    font-style: italic;
+  }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div class="header-branding">
-    <div class="header-subtitle">Analytics Companion</div>
+    <div class="header-subtitle">Phase 2 Analytics</div>
     <h1>APEX Analytics</h1>
-    <div class="header-tagline">Trading pattern insights from your portfolio data</div>
+    <div class="header-tagline">Scoring engine validation &amp; trade pattern insights</div>
   </div>
   <div>
-    <button id="reloadBtn" onclick="loadFromAPI()" title="Reload from server">Reload</button>
-    <button id="loadBtn" onclick="document.getElementById('fileInput').click()">Load File</button>
+    <button class="header-btn secondary" onclick="loadFromAPI()" title="Reload from server">Reload</button>
+    <button class="header-btn" onclick="document.getElementById('fileInput').click()">Load File</button>
     <input type="file" id="fileInput" accept=".json" onchange="handleFileLoad(event)">
     <div id="loadStatus"></div>
   </div>
@@ -217,120 +244,104 @@
 </div>
 
 <div id="dashboard">
-  <!-- Summary Stats -->
+
+  <!-- ═══ OVERVIEW ═══ -->
   <div class="stats-row" id="statsRow"></div>
 
-  <!-- Performance History -->
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Portfolio Value Over Time</div>
     <canvas id="perfChart"></canvas>
   </div>
 
-  <!-- Post-Mortems: 3 bar charts -->
+  <!-- ═══ P&L DEEP DIVE ═══ -->
   <div class="grid">
     <div class="card">
-      <div class="chart-title">Win Rate by Day of Week</div>
-      <div class="section-sub">Which days produce winners?</div>
-      <canvas id="dayChart"></canvas>
+      <div class="chart-title">Cumulative Realized P&amp;L</div>
+      <div class="section-sub">Running total of closed-trade profits</div>
+      <canvas id="cumulativePL"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Rolling Win Rate</div>
+      <div class="section-sub">Win rate over the last 10 trades &mdash; are you improving?</div>
+      <canvas id="rollingWinRate"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══ ENTRY QUALITY ═══ -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Entry Signal Match vs Outcome</div>
+    <div class="section-sub">Win rate by how many reversal criteria were met at entry: MACD Bull + RSI&lt;40 + Bull Structure + 5D Pullback</div>
+    <div id="entrySignalContent"></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="chart-title">Composite Score vs. Outcome</div>
+      <div class="section-sub">Do higher-scored trades perform better?</div>
+      <canvas id="compositeScatter"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Entry RSI vs. Outcome</div>
+      <div class="section-sub">Does buying oversold stocks improve returns?</div>
+      <canvas id="rsiScatter"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══ MARKET CONTEXT ═══ -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Performance by Market Regime</div>
+    <div class="section-sub">Win rate, avg return, and trade count by bull / bear / choppy regime at entry</div>
+    <div id="regimeContent"></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="chart-title">Win Rate by Sector Flow</div>
+      <div class="section-sub">Did buying into inflow sectors outperform outflow?</div>
+      <canvas id="sectorFlowChart"></canvas>
     </div>
     <div class="card">
       <div class="chart-title">Win Rate by Sector</div>
       <div class="section-sub">Where does the edge come from?</div>
       <canvas id="sectorChart"></canvas>
     </div>
+  </div>
+
+  <!-- ═══ SIGNAL VALIDATION ═══ -->
+  <div class="grid">
+    <div class="card">
+      <div class="chart-title">Win Rate by Momentum Range</div>
+      <div class="section-sub">What momentum at entry produces winners?</div>
+      <canvas id="momentumChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Win Rate by Structure</div>
+      <div class="section-sub">Does bullish structure at entry actually help?</div>
+      <canvas id="structureChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══ TRADE MECHANICS ═══ -->
+  <div class="grid">
     <div class="card">
       <div class="chart-title">Win Rate by Hold Duration</div>
       <div class="section-sub">How long should trades be held?</div>
       <canvas id="holdChart"></canvas>
     </div>
-  </div>
-
-  <!-- Exit Timing -->
-  <div class="grid" style="grid-template-columns: 1fr 2fr">
     <div class="card">
-      <div class="chart-title">Exit Timing Summary</div>
-      <div id="exitSummary"></div>
-    </div>
-    <div class="card">
-      <div class="chart-title">Exit Timing by Reason</div>
-      <div class="section-sub">Which exit types are premature vs well-timed?</div>
-      <canvas id="exitReasonChart"></canvas>
+      <div class="chart-title">P&amp;L by Exit Reason</div>
+      <div class="section-sub">Which exit strategies protect capital best?</div>
+      <canvas id="exitReasonPL"></canvas>
     </div>
   </div>
 
-  <!-- Post-Exit Tracker — extends the exit timing story -->
+  <!-- ═══ EXIT QUALITY ═══ -->
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Did I Sell Too Early?</div>
     <div class="section-sub">Stock price movement 1 week after selling &mdash; green = stock fell (good exit), red = stock rose (left money on table)</div>
     <canvas id="postExitChart"></canvas>
   </div>
 
-  <!-- P&L Analysis -->
-  <div class="grid">
-    <div class="card">
-      <div class="chart-title">P&amp;L by Exit Reason</div>
-      <div class="section-sub">Which exit strategies protect capital best?</div>
-      <canvas id="exitReasonPL"></canvas>
-    </div>
-    <div class="card">
-      <div class="chart-title">Entry RSI vs. Outcome</div>
-      <div class="section-sub">Does buying overbought stocks hurt returns?</div>
-      <canvas id="rsiScatter"></canvas>
-    </div>
-  </div>
-
-  <!-- Cumulative Realized P&L -->
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Cumulative Realized P&amp;L</div>
-    <div class="section-sub">Running total of closed-trade profits &mdash; are things trending better over time?</div>
-    <canvas id="cumulativePL"></canvas>
-  </div>
-
-  <!-- Composite Score vs Outcome -->
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Composite Score vs. Outcome</div>
-    <div class="section-sub">Do higher-scored trades perform better? Run Scan Market before entering trades for data.</div>
-    <canvas id="compositeScatter"></canvas>
-  </div>
-
-  <!-- Rolling Win Rate -->
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Rolling Win Rate</div>
-    <div class="section-sub">Win rate over the last 10 trades — are you improving?</div>
-    <canvas id="rollingWinRate"></canvas>
-  </div>
-
-  <!-- Trading Rules -->
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Trading Rules</div>
-    <div class="section-sub">ML-derived rules from APEX &mdash; strongest signals highlighted</div>
-    <div id="rulesContainer"></div>
-  </div>
-
-  <!-- Current Holdings -->
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Current Holdings</div>
-    <div class="section-sub">Open positions with entry details</div>
-    <div style="overflow-x:auto">
-      <table id="holdingsTable">
-        <thead>
-          <tr>
-            <th>Symbol</th>
-            <th>Shares</th>
-            <th>Entry Price</th>
-            <th>Entry Date</th>
-            <th>Conviction</th>
-            <th>Momentum</th>
-            <th>RS</th>
-            <th>Sector Flow</th>
-            <th>RSI</th>
-            <th>Structure</th>
-          </tr>
-        </thead>
-        <tbody id="holdingsBody"></tbody>
-      </table>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -354,7 +365,8 @@ const COLORS = {
   text: '#f5f5f0',
   secondary: '#a8a8a0',
   muted: '#78786e',
-  blue: '#60a5fa'
+  blue: '#60a5fa',
+  yellow: '#fbbf24'
 };
 
 // Chart.js global defaults for APEX dark theme
@@ -377,10 +389,8 @@ function reconstructMissingClosedTrades(d) {
   if (!d.transactions || !d.transactions.length) return;
   if (!d.closedTrades) d.closedTrades = [];
 
-  // Index existing closedTrades by symbol+sellDate to avoid duplicates
   const existing = new Set(d.closedTrades.map(ct => ct.symbol + '|' + ct.sellDate));
 
-  // Group transactions by symbol
   const bySymbol = {};
   d.transactions.forEach(t => {
     if (!bySymbol[t.symbol]) bySymbol[t.symbol] = [];
@@ -389,14 +399,13 @@ function reconstructMissingClosedTrades(d) {
 
   for (const symbol of Object.keys(bySymbol)) {
     const txns = bySymbol[symbol];
-    let buyQueue = []; // FIFO queue of {price, shares, timestamp, conviction, entryTechnicals, ...}
+    let buyQueue = [];
 
     for (const t of txns) {
       if (t.type === 'BUY') {
         buyQueue.push(t);
       } else if (t.type === 'SELL') {
         if (existing.has(symbol + '|' + t.timestamp)) {
-          // Already have this closedTrade — just drain the buy queue
           let sharesToDrain = t.shares;
           while (sharesToDrain > 0 && buyQueue.length > 0) {
             if (buyQueue[0].shares <= sharesToDrain) {
@@ -410,7 +419,6 @@ function reconstructMissingClosedTrades(d) {
           continue;
         }
 
-        // Reconstruct closedTrade from matched buys
         let sharesToMatch = t.shares;
         let totalCost = 0;
         let totalShares = 0;
@@ -460,7 +468,6 @@ function reconstructMissingClosedTrades(d) {
     }
   }
 
-  // Sort closedTrades by sell date
   d.closedTrades.sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
 }
 
@@ -513,7 +520,6 @@ function handleFileLoad(event) {
   reader.readAsText(file);
 }
 
-// Auto-load from API on page load
 document.addEventListener('DOMContentLoaded', loadFromAPI);
 
 function destroyAllCharts() {
@@ -523,28 +529,95 @@ function destroyAllCharts() {
   });
 }
 
+// Plugin to show value above bars
+const countLabelPlugin = {
+  id: 'countLabel',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    chart.data.datasets[0].data.forEach((val, i) => {
+      const meta = chart.getDatasetMeta(0).data[i];
+      if (!meta) return;
+      ctx.save();
+      ctx.fillStyle = COLORS.muted;
+      ctx.font = "10px 'Inter', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(val.toFixed(0) + '%', meta.x, meta.y - 6);
+      ctx.restore();
+    });
+  }
+};
+
+// Reusable zero-line plugin
+const zeroLinePlugin = {
+  id: 'zeroLine',
+  beforeDraw(chart) {
+    const yScale = chart.scales.y;
+    const ctx = chart.ctx;
+    const y = yScale.getPixelForValue(0);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(chart.chartArea.left, y);
+    ctx.lineTo(chart.chartArea.right, y);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+// Reusable 50% line plugin
+const fiftyLinePlugin = {
+  id: 'fiftyLine',
+  beforeDraw(chart) {
+    const yScale = chart.scales.y;
+    const ctx = chart.ctx;
+    const y = yScale.getPixelForValue(50);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 200, 100, 0.20)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(chart.chartArea.left, y);
+    ctx.lineTo(chart.chartArea.right, y);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 200, 100, 0.40)';
+    ctx.font = "10px 'Inter', sans-serif";
+    ctx.fillText('50%', chart.chartArea.left + 4, y - 6);
+    ctx.restore();
+  }
+};
+
+/* ══════════════════════════════════════════════════════════
+   RENDER FUNCTIONS
+   ══════════════════════════════════════════════════════════ */
+
 function renderAll() {
   destroyAllCharts();
   renderStats();
   renderPerfChart();
-  renderDayChart();
-  renderSectorChart();
-  renderHoldChart();
-  renderExitSummary();
-  renderExitReasonChart();
-  renderCompositeScatter();
-  renderRollingWinRate();
-  renderPostExitChart();
-  renderRSIScatter();
-  renderExitReasonPL();
   renderCumulativePL();
-  renderRules();
-  renderHoldings();
+  renderRollingWinRate();
+  renderEntrySignalOutcome();
+  renderCompositeScatter();
+  renderRSIScatter();
+  renderRegimePerformance();
+  renderSectorFlowChart();
+  renderSectorChart();
+  renderMomentumChart();
+  renderStructureChart();
+  renderHoldChart();
+  renderExitReasonPL();
+  renderPostExitChart();
 }
 
 /* ── Summary Stats ────────────────────────────────────── */
 function renderStats() {
-  const ct = data.closedTrades;
+  const ct = data.closedTrades || [];
+  if (!ct.length) {
+    document.getElementById('statsRow').innerHTML = '<div class="stat-card"><div class="stat-label">No Data</div><div class="stat-value">--</div><div class="stat-sub">No closed trades found</div></div>';
+    return;
+  }
   const wins = ct.filter(t => t.profitLoss > 0);
   const losses = ct.filter(t => t.profitLoss <= 0);
   const realizedPL = ct.reduce((s, t) => s + t.profitLoss, 0);
@@ -552,22 +625,28 @@ function renderStats() {
   const avgWin = wins.length ? (wins.reduce((s, t) => s + t.returnPercent, 0) / wins.length).toFixed(1) : '0';
   const avgLoss = losses.length ? (losses.reduce((s, t) => s + t.returnPercent, 0) / losses.length).toFixed(1) : '0';
   const openCount = Object.keys(data.holdings || {}).length;
-  const perf = data.performanceHistory || [];
-  const lastVal = perf.length ? perf[perf.length - 1].value : null;
+
+  const totalGains = wins.reduce((s, t) => s + t.profitLoss, 0);
+  const totalLosses = Math.abs(losses.reduce((s, t) => s + t.profitLoss, 0));
+  const profitFactor = totalLosses > 0 ? (totalGains / totalLosses) : (totalGains > 0 ? Infinity : 0);
+  const pfDisplay = profitFactor === Infinity ? '∞' : profitFactor.toFixed(2);
+  const pfClass = profitFactor >= 2 ? 'positive' : profitFactor >= 1 ? '' : 'negative';
+
+  const health = data.portfolioHealth;
+  const alphaVal = health?.alpha;
 
   const stats = [
     { label: 'Closed Trades', value: ct.length, cls: '' },
     { label: 'Win Rate', value: winRate + '%', cls: parseFloat(winRate) >= 50 ? 'positive' : 'negative', sub: `${wins.length}W / ${losses.length}L` },
     { label: 'Avg Win', value: '+' + avgWin + '%', cls: 'positive' },
     { label: 'Avg Loss', value: avgLoss + '%', cls: 'negative' },
-    { label: 'Realized P&L', value: '$' + realizedPL.toFixed(2), cls: realizedPL >= 0 ? 'positive' : 'negative', sub: 'Closed trades only' },
-    { label: 'Total Deposits', value: '$' + (data.totalDeposits || 0).toLocaleString(), cls: '' },
-    { label: 'Portfolio Value', value: lastVal ? '$' + lastVal.toFixed(2) : '--', cls: '', sub: lastVal ? ((lastVal / data.totalDeposits - 1) * 100).toFixed(1) + '% vs deposits' : '' },
+    { label: 'Profit Factor', value: pfDisplay, cls: pfClass, sub: 'Gains / Losses' },
+    { label: 'Realized P&L', value: '$' + realizedPL.toFixed(2), cls: realizedPL >= 0 ? 'positive' : 'negative' },
+    { label: 'Alpha vs SPY', value: alphaVal != null ? (alphaVal >= 0 ? '+' : '') + alphaVal.toFixed(2) + '%' : '--', cls: alphaVal != null ? (alphaVal >= 0 ? 'positive' : 'negative') : '', sub: health?.spyReturn != null ? 'SPY: ' + (health.spyReturn >= 0 ? '+' : '') + health.spyReturn.toFixed(2) + '%' : '' },
     { label: 'Open Positions', value: openCount, cls: '' },
   ];
 
-  const row = document.getElementById('statsRow');
-  row.innerHTML = stats.map(s => `
+  document.getElementById('statsRow').innerHTML = stats.map(s => `
     <div class="stat-card">
       <div class="stat-label">${s.label}</div>
       <div class="stat-value ${s.cls}">${s.value}</div>
@@ -576,7 +655,7 @@ function renderStats() {
   `).join('');
 }
 
-/* ── Performance History ──────────────────────────────── */
+/* ── Portfolio Value Over Time ──────────────────────────── */
 function renderPerfChart() {
   const perf = data.performanceHistory || [];
   if (!perf.length) return;
@@ -655,244 +734,223 @@ function renderPerfChart() {
   });
 }
 
-/* ── Win Rate by Day of Week ──────────────────────────── */
-function renderDayChart() {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const buckets = days.map(() => ({ wins: 0, total: 0 }));
+/* ── Cumulative Realized P&L ─────────────────────────── */
+function renderCumulativePL() {
+  const sorted = [...(data.closedTrades || [])].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+  if (!sorted.length) return;
 
-  data.closedTrades.forEach(t => {
-    const d = new Date(t.buyDate).getDay();
-    buckets[d].total++;
-    if (t.profitLoss > 0) buckets[d].wins++;
+  let cumPL = 0;
+  const labels = [];
+  const values = [];
+  const symbols = [];
+
+  sorted.forEach(t => {
+    cumPL += t.profitLoss;
+    labels.push(new Date(t.sellDate));
+    values.push(cumPL);
+    symbols.push(t.symbol);
   });
 
-  const active = days.map((d, i) => ({ day: d, ...buckets[i] })).filter(b => b.total > 0);
+  const pointColors = sorted.map(t => t.profitLoss > 0 ? COLORS.win : COLORS.loss);
 
-  new Chart(document.getElementById('dayChart'), {
-    type: 'bar',
+  new Chart(document.getElementById('cumulativePL'), {
+    type: 'line',
     data: {
-      labels: active.map(a => a.day),
+      labels,
       datasets: [{
-        data: active.map(a => (a.wins / a.total * 100)),
-        backgroundColor: active.map(a => (a.wins / a.total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
-        borderColor: active.map(a => (a.wins / a.total >= 0.5) ? COLORS.win : COLORS.loss),
-        borderWidth: 1,
-        borderRadius: 4
+        label: 'Cumulative P&L',
+        data: values,
+        borderColor: values[values.length - 1] >= 0 ? COLORS.win : COLORS.loss,
+        backgroundColor: values[values.length - 1] >= 0 ? 'rgba(52, 211, 153, 0.08)' : 'rgba(248, 113, 113, 0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointBackgroundColor: pointColors,
+        pointBorderColor: pointColors,
+        borderWidth: 2
       }]
     },
     options: {
       responsive: true,
-      scales: {
-        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
-        x: { grid: { display: false } }
-      },
       plugins: {
         tooltip: {
+          boxPadding: 6,
           callbacks: {
+            title: ctx => `Trade #${ctx[0].dataIndex + 1}: ${symbols[ctx[0].dataIndex]}`,
             label: ctx => {
-              const b = active[ctx.dataIndex];
-              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
+              const i = ctx.dataIndex;
+              const t = sorted[i];
+              return [
+                `This trade: ${t.profitLoss > 0 ? '+' : ''}$${t.profitLoss.toFixed(2)} (${t.returnPercent > 0 ? '+' : ''}${t.returnPercent.toFixed(1)}%)`,
+                `Running total: ${values[i] > 0 ? '+' : ''}$${values[i].toFixed(2)}`
+              ];
             }
           }
         }
+      },
+      scales: {
+        x: {
+          type: 'category',
+          ticks: {
+            callback: (val, i) => labels[i].toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            maxTicksLimit: 10,
+            font: { size: 10 }
+          },
+          grid: { display: false }
+        },
+        y: {
+          title: { display: true, text: 'Cumulative P&L ($)', color: COLORS.muted },
+          grid: { color: COLORS.gridLine },
+          ticks: { callback: v => '$' + v }
+        }
       }
     },
-    plugins: [countLabelPlugin]
+    plugins: [zeroLinePlugin]
   });
 }
 
-// Plugin to show value above bars
-const countLabelPlugin = {
-  id: 'countLabel',
-  afterDatasetsDraw(chart) {
-    const { ctx } = chart;
-    chart.data.datasets[0].data.forEach((val, i) => {
-      const meta = chart.getDatasetMeta(0).data[i];
-      if (!meta) return;
-      ctx.save();
-      ctx.fillStyle = COLORS.muted;
-      ctx.font = "10px 'Inter', sans-serif";
-      ctx.textAlign = 'center';
-      ctx.fillText(val.toFixed(0) + '%', meta.x, meta.y - 6);
-      ctx.restore();
-    });
+/* ── Rolling Win Rate ────────────────────────────────── */
+function renderRollingWinRate() {
+  const WINDOW = 10;
+  const sorted = [...(data.closedTrades || [])].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+  const canvas = document.getElementById('rollingWinRate');
+
+  if (sorted.length < WINDOW) {
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "13px 'Inter', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(`Need ${WINDOW} closed trades for rolling window (have ${sorted.length}).`, canvas.width / 2, 80);
+    return;
   }
-};
 
-/* ── Win Rate by Sector ───────────────────────────────── */
-function renderSectorChart() {
-  const buckets = {};
-  data.closedTrades.forEach(t => {
-    const sector = t.sector || SECTOR_MAP[t.symbol] || 'Unknown';
-    if (!buckets[sector]) buckets[sector] = { wins: 0, total: 0 };
-    buckets[sector].total++;
-    if (t.profitLoss > 0) buckets[sector].wins++;
-  });
+  const labels = [];
+  const rates = [];
 
-  const entries = Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
+  for (let i = WINDOW - 1; i < sorted.length; i++) {
+    const window = sorted.slice(i - WINDOW + 1, i + 1);
+    const wins = window.filter(t => t.profitLoss > 0).length;
+    labels.push(sorted[i].symbol + ' (#' + (i + 1) + ')');
+    rates.push((wins / WINDOW) * 100);
+  }
 
-  new Chart(document.getElementById('sectorChart'), {
-    type: 'bar',
+  new Chart(canvas, {
+    type: 'line',
     data: {
-      labels: entries.map(e => e[0]),
+      labels,
       datasets: [{
-        data: entries.map(e => (e[1].wins / e[1].total * 100)),
-        backgroundColor: entries.map(e => (e[1].wins / e[1].total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
-        borderColor: entries.map(e => (e[1].wins / e[1].total >= 0.5) ? COLORS.win : COLORS.loss),
-        borderWidth: 1,
-        borderRadius: 4
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      scales: {
-        x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
-        y: { grid: { display: false } }
-      },
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const b = entries[ctx.dataIndex][1];
-              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.x.toFixed(0)}%) — ${b.total} trades`;
-            }
-          }
-        }
-      }
-    }
-  });
-}
-
-/* ── Win Rate by Hold Duration ────────────────────────── */
-function renderHoldChart() {
-  const buckets = [
-    { label: '<1 day', min: 0, max: 86400000, wins: 0, total: 0 },
-    { label: '1-2 days', min: 86400000, max: 172800000, wins: 0, total: 0 },
-    { label: '2-4 days', min: 172800000, max: 345600000, wins: 0, total: 0 },
-    { label: '4+ days', min: 345600000, max: Infinity, wins: 0, total: 0 }
-  ];
-
-  data.closedTrades.forEach(t => {
-    const ht = t.holdTime || (new Date(t.sellDate) - new Date(t.buyDate));
-    const b = buckets.find(b => ht >= b.min && ht < b.max);
-    if (b) {
-      b.total++;
-      if (t.profitLoss > 0) b.wins++;
-    }
-  });
-
-  const active = buckets.filter(b => b.total > 0);
-
-  new Chart(document.getElementById('holdChart'), {
-    type: 'bar',
-    data: {
-      labels: active.map(b => b.label),
-      datasets: [{
-        data: active.map(b => (b.wins / b.total * 100)),
-        backgroundColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
-        borderColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win : COLORS.loss),
-        borderWidth: 1,
-        borderRadius: 4
+        label: 'Win Rate (last 10)',
+        data: rates,
+        borderColor: COLORS.accent,
+        backgroundColor: COLORS.accent + '18',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointBackgroundColor: rates.map(r => r >= 50 ? COLORS.win : COLORS.loss),
+        pointBorderWidth: 0
       }]
     },
     options: {
       responsive: true,
-      scales: {
-        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
-        x: { grid: { display: false } }
-      },
       plugins: {
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const b = active[ctx.dataIndex];
-              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
-            }
-          }
+        tooltip: { callbacks: { label: ctx => `${ctx.parsed.y.toFixed(0)}% win rate (last ${WINDOW} trades)` } }
+      },
+      scales: {
+        y: {
+          min: 0, max: 100,
+          ticks: { callback: v => v + '%', stepSize: 20 },
+          grid: { color: COLORS.gridLine },
+          title: { display: true, text: 'Win Rate %', color: COLORS.muted }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { maxRotation: 45, font: { size: 10 } }
         }
       }
     },
-    plugins: [countLabelPlugin]
+    plugins: [fiftyLinePlugin]
   });
 }
 
-/* ── Exit Timing Summary ──────────────────────────────── */
-function renderExitSummary() {
-  const trades = data.closedTrades.filter(t =>
-    t.tracking && t.tracking.weekReturnVsSell != null
-  );
+/* ── NEW: Entry Signal Match vs Outcome ────────────────── */
+function renderEntrySignalOutcome() {
+  const container = document.getElementById('entrySignalContent');
+  const ct = (data.closedTrades || []).filter(t => t.entryTechnicals);
 
-  const premature = [];
-  const wellTimed = [];
+  if (ct.length < 3) {
+    container.innerHTML = '<div class="empty-chart">Need at least 3 trades with entry technical data</div>';
+    return;
+  }
 
-  trades.forEach(t => {
-    const wd = parseFloat(String(t.tracking.weekReturnVsSell));
-    if (isNaN(wd)) return;
-    if (wd > 0) premature.push({ symbol: t.symbol, delta: wd });
-    else wellTimed.push({ symbol: t.symbol, delta: wd });
+  // Count how many of 4 reversal criteria each trade met
+  const buckets = [0, 1, 2, 3, 4].map(n => ({ count: n, wins: 0, losses: 0, totalReturn: 0 }));
+
+  ct.forEach(t => {
+    const et = t.entryTechnicals;
+    let criteria = 0;
+    if (et.macdCrossover === 'bullish') criteria++;
+    if (et.rsi != null && et.rsi < 40) criteria++;
+    if (et.structure === 'bullish' || et.structure === 'bullish_continuation') criteria++;
+    if (et.totalReturn5d != null && et.totalReturn5d >= -8 && et.totalReturn5d <= -2) criteria++;
+
+    const b = buckets[criteria];
+    if (t.profitLoss > 0) b.wins++;
+    else b.losses++;
+    b.totalReturn += t.returnPercent;
   });
 
-  const avgPremature = premature.length ? (premature.reduce((s, p) => s + p.delta, 0) / premature.length).toFixed(1) : 0;
-  const avgWellTimed = wellTimed.length ? (wellTimed.reduce((s, p) => s + Math.abs(p.delta), 0) / wellTimed.length).toFixed(1) : 0;
+  const active = buckets.filter(b => (b.wins + b.losses) > 0);
 
-  const container = document.getElementById('exitSummary');
-  container.innerHTML = `
-    <div style="margin-bottom:20px">
-      <div style="font-size:28px; font-weight:800; color:var(--red)">${premature.length}</div>
-      <div style="color:var(--text-secondary); font-size:13px">trades exited too early</div>
-      <div style="color:var(--red); font-size:13px; font-weight:600">avg +${avgPremature}% left on the table</div>
-      <div style="color:var(--text-muted); font-size:11px; margin-top:4px">${premature.map(p => p.symbol).join(', ')}</div>
-    </div>
-    <div>
-      <div style="font-size:28px; font-weight:800; color:var(--green)">${wellTimed.length}</div>
-      <div style="color:var(--text-secondary); font-size:13px">trades exited well</div>
-      <div style="color:var(--green); font-size:13px; font-weight:600">avoided avg ${avgWellTimed}% further loss</div>
-      <div style="color:var(--text-muted); font-size:11px; margin-top:4px">${wellTimed.map(p => p.symbol).join(', ')}</div>
-    </div>
-  `;
-}
+  // Render as cards + bar chart
+  let html = '<div class="signal-match-grid">';
+  for (const b of active) {
+    const total = b.wins + b.losses;
+    const wr = (b.wins / total * 100);
+    const avgRet = b.totalReturn / total;
+    const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
+    const label = b.count === 4 ? 'ENTRY (4/4)' : b.count === 0 ? 'None (0/4)' : `${b.count}/4 Match`;
+    html += `<div class="signal-match-card">
+      <div class="signal-match-label">${label}</div>
+      <div class="signal-match-value" style="color:${wrColor}">${wr.toFixed(0)}%</div>
+      <div class="signal-match-sub">${b.wins}W/${b.losses}L &middot; avg ${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>
+    </div>`;
+  }
+  html += '</div>';
 
-/* ── Exit Timing by Exit Reason ───────────────────────── */
-function renderExitReasonChart() {
-  const trades = data.closedTrades.filter(t =>
-    t.tracking && t.tracking.weekReturnVsSell != null && t.exitReason
-  );
+  // Bar chart below
+  html += '<canvas id="entrySignalChart" style="max-height:220px"></canvas>';
+  container.innerHTML = html;
 
-  const buckets = {};
-  trades.forEach(t => {
-    const reason = t.exitReason.replace(/_/g, ' ');
-    if (!buckets[reason]) buckets[reason] = { premature: 0, wellTimed: 0, total: 0, sumDelta: 0 };
-    const wd = parseFloat(String(t.tracking.weekReturnVsSell));
-    if (isNaN(wd)) return;
-    buckets[reason].total++;
-    buckets[reason].sumDelta += wd;
-    if (wd > 0) buckets[reason].premature++;
-    else buckets[reason].wellTimed++;
-  });
+  const labels = active.map(b => b.count === 4 ? '4/4 (ENTRY)' : b.count + '/4');
+  const wrData = active.map(b => b.wins / (b.wins + b.losses) * 100);
+  const retData = active.map(b => b.totalReturn / (b.wins + b.losses));
 
-  const entries = Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
-
-  new Chart(document.getElementById('exitReasonChart'), {
+  new Chart(document.getElementById('entrySignalChart'), {
     type: 'bar',
     data: {
-      labels: entries.map(e => e[0]),
+      labels,
       datasets: [
         {
-          label: 'Well-timed exits',
-          data: entries.map(e => e[1].wellTimed),
-          backgroundColor: COLORS.win + '99',
-          borderColor: COLORS.win,
+          label: 'Win Rate %',
+          data: wrData,
+          backgroundColor: wrData.map(v => v >= 50 ? COLORS.win + '99' : COLORS.loss + '99'),
+          borderColor: wrData.map(v => v >= 50 ? COLORS.win : COLORS.loss),
           borderWidth: 1,
-          borderRadius: 3
+          borderRadius: 4,
+          yAxisID: 'y'
         },
         {
-          label: 'Premature exits',
-          data: entries.map(e => e[1].premature),
-          backgroundColor: COLORS.loss + '99',
-          borderColor: COLORS.loss,
-          borderWidth: 1,
-          borderRadius: 3
+          label: 'Avg Return %',
+          data: retData,
+          type: 'line',
+          borderColor: COLORS.accent,
+          backgroundColor: COLORS.accent + '44',
+          pointBackgroundColor: COLORS.accent,
+          pointRadius: 5,
+          borderWidth: 2,
+          tension: 0.3,
+          yAxisID: 'y1'
         }
       ]
     },
@@ -902,25 +960,38 @@ function renderExitReasonChart() {
         legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
         tooltip: {
           callbacks: {
-            afterBody: ctx => {
-              const b = entries[ctx[0].dataIndex][1];
-              const avg = (b.sumDelta / b.total).toFixed(1);
-              return `Avg post-exit move: ${avg > 0 ? '+' : ''}${avg}%`;
+            label: ctx => {
+              const b = active[ctx.dataIndex];
+              const total = b.wins + b.losses;
+              if (ctx.datasetIndex === 0) return `Win rate: ${ctx.parsed.y.toFixed(0)}% (${total} trades)`;
+              return `Avg return: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(1)}%`;
             }
           }
         }
       },
       scales: {
-        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: COLORS.gridLine }, title: { display: true, text: 'Count', color: COLORS.muted } },
+        y: {
+          beginAtZero: true, max: 100,
+          ticks: { callback: v => v + '%' },
+          grid: { color: COLORS.gridLine },
+          title: { display: true, text: 'Win Rate %', color: COLORS.muted }
+        },
+        y1: {
+          position: 'right',
+          ticks: { callback: v => (v >= 0 ? '+' : '') + v + '%' },
+          grid: { display: false },
+          title: { display: true, text: 'Avg Return %', color: COLORS.muted }
+        },
         x: { grid: { display: false } }
       }
-    }
+    },
+    plugins: [fiftyLinePlugin]
   });
 }
 
 /* ── Composite Score vs Outcome ───────────────────────── */
 function renderCompositeScatter() {
-  const points = data.closedTrades
+  const points = (data.closedTrades || [])
     .filter(t => t.entryTechnicals?.compositeScore != null)
     .map(t => ({
       x: t.entryTechnicals.compositeScore,
@@ -968,13 +1039,6 @@ function renderCompositeScatter() {
         legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
         tooltip: {
           boxPadding: 6,
-          borderColor: ctx => {
-            if (ctx.tooltip.dataPoints && ctx.tooltip.dataPoints.length) {
-              const dp = ctx.tooltip.dataPoints[0];
-              return dp.dataset.label === 'Wins' ? COLORS.win + '55' : COLORS.loss + '55';
-            }
-            return 'rgba(245, 158, 11, 0.20)';
-          },
           callbacks: {
             label: ctx => {
               const p = ctx.raw;
@@ -1000,194 +1064,13 @@ function renderCompositeScatter() {
         }
       }
     },
-    plugins: [{
-      id: 'zeroLine',
-      beforeDraw(chart) {
-        const yScale = chart.scales.y;
-        const ctx = chart.ctx;
-        const y = yScale.getPixelForValue(0);
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(chart.chartArea.left, y);
-        ctx.lineTo(chart.chartArea.right, y);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }]
-  });
-}
-
-/* ── Rolling Win Rate ────────────────────────────────── */
-function renderRollingWinRate() {
-  const WINDOW = 10;
-  const sorted = [...data.closedTrades].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
-
-  if (sorted.length < WINDOW) {
-    const ctx = document.getElementById('rollingWinRate').getContext('2d');
-    ctx.fillStyle = COLORS.muted;
-    ctx.font = "13px 'Inter', sans-serif";
-    ctx.textAlign = 'center';
-    ctx.fillText(`Need ${WINDOW} closed trades for rolling window (have ${sorted.length}).`, ctx.canvas.width / 2, 80);
-    return;
-  }
-
-  const labels = [];
-  const rates = [];
-
-  for (let i = WINDOW - 1; i < sorted.length; i++) {
-    const window = sorted.slice(i - WINDOW + 1, i + 1);
-    const wins = window.filter(t => t.profitLoss > 0).length;
-    const rate = (wins / WINDOW) * 100;
-    labels.push(sorted[i].symbol + ' (#' + (i + 1) + ')');
-    rates.push(rate);
-  }
-
-  new Chart(document.getElementById('rollingWinRate'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Win Rate (last 10)',
-        data: rates,
-        borderColor: COLORS.accent,
-        backgroundColor: COLORS.accent + '18',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 3,
-        pointBackgroundColor: rates.map(r => r >= 50 ? COLORS.win : COLORS.loss),
-        pointBorderWidth: 0
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => `${ctx.parsed.y.toFixed(0)}% win rate (last ${WINDOW} trades)`
-          }
-        }
-      },
-      scales: {
-        y: {
-          min: 0, max: 100,
-          ticks: { callback: v => v + '%', stepSize: 20 },
-          grid: { color: COLORS.gridLine },
-          title: { display: true, text: 'Win Rate %', color: COLORS.muted }
-        },
-        x: {
-          grid: { display: false },
-          ticks: { maxRotation: 45, font: { size: 10 } }
-        }
-      }
-    },
-    plugins: [{
-      id: 'fiftyLine',
-      beforeDraw(chart) {
-        const yScale = chart.scales.y;
-        const ctx = chart.ctx;
-        const y = yScale.getPixelForValue(50);
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 200, 100, 0.20)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(chart.chartArea.left, y);
-        ctx.lineTo(chart.chartArea.right, y);
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(255, 200, 100, 0.40)';
-        ctx.font = "10px 'Inter', sans-serif";
-        ctx.fillText('50%', chart.chartArea.left + 4, y - 6);
-        ctx.restore();
-      }
-    }]
-  });
-}
-
-/* ── Post-Exit Tracker ───────────────────────────────── */
-function renderPostExitChart() {
-  const trades = data.closedTrades.filter(t =>
-    t.tracking && t.tracking.weekReturnVsSell != null
-  ).sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
-
-  if (!trades.length) return;
-
-  const labels = trades.map(t => t.symbol);
-  const deltas = trades.map(t => parseFloat(String(t.tracking.weekReturnVsSell)));
-  // Positive delta = stock rose after sell (bad exit), negative = stock fell (good exit)
-  const barColors = deltas.map(d => d > 0 ? COLORS.loss + 'cc' : COLORS.win + 'cc');
-  const barBorders = deltas.map(d => d > 0 ? COLORS.loss : COLORS.win);
-
-  new Chart(document.getElementById('postExitChart'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Post-exit 1-week move',
-        data: deltas,
-        backgroundColor: barColors,
-        borderColor: barBorders,
-        borderWidth: 1,
-        borderRadius: 3
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          boxPadding: 6,
-          callbacks: {
-            label: ctx => {
-              const d = deltas[ctx.dataIndex];
-              const t = trades[ctx.dataIndex];
-              const exitReturn = t.returnPercent;
-              const lines = [
-                `Exit return: ${exitReturn > 0 ? '+' : ''}${exitReturn.toFixed(1)}%`,
-                `Post-exit move: ${d > 0 ? '+' : ''}${d.toFixed(1)}%`
-              ];
-              if (d > 0) lines.push(`Left +${d.toFixed(1)}% on the table`);
-              else lines.push(`Avoided ${Math.abs(d).toFixed(1)}% further drop`);
-              return lines;
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          grid: { color: COLORS.gridLine },
-          ticks: { callback: v => (v > 0 ? '+' : '') + v + '%' },
-          title: { display: true, text: 'Stock move after selling', color: COLORS.muted }
-        },
-        x: { grid: { display: false } }
-      }
-    },
-    plugins: [{
-      id: 'zeroLine',
-      beforeDraw(chart) {
-        const yScale = chart.scales.y;
-        const ctx = chart.ctx;
-        const y = yScale.getPixelForValue(0);
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(chart.chartArea.left, y);
-        ctx.lineTo(chart.chartArea.right, y);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }]
+    plugins: [zeroLinePlugin]
   });
 }
 
 /* ── Entry RSI vs Outcome ────────────────────────────── */
 function renderRSIScatter() {
-  const points = data.closedTrades
+  const points = (data.closedTrades || [])
     .filter(t => t.entryTechnicals && t.entryTechnicals.rsi != null)
     .map(t => ({
       x: t.entryTechnicals.rsi,
@@ -1205,18 +1088,8 @@ function renderRSIScatter() {
     type: 'bubble',
     data: {
       datasets: [
-        {
-          label: 'Wins',
-          data: points.filter(p => p.win),
-          backgroundColor: COLORS.win + '88',
-          borderWidth: 0
-        },
-        {
-          label: 'Losses',
-          data: points.filter(p => !p.win),
-          backgroundColor: COLORS.loss + '88',
-          borderWidth: 0
-        }
+        { label: 'Wins', data: points.filter(p => p.win), backgroundColor: COLORS.win + '88', borderWidth: 0 },
+        { label: 'Losses', data: points.filter(p => !p.win), backgroundColor: COLORS.loss + '88', borderWidth: 0 }
       ]
     },
     options: {
@@ -1225,34 +1098,17 @@ function renderRSIScatter() {
         legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
         tooltip: {
           boxPadding: 6,
-          borderColor: ctx => {
-            if (ctx.tooltip.dataPoints && ctx.tooltip.dataPoints.length) {
-              const dp = ctx.tooltip.dataPoints[0];
-              return dp.dataset.label === 'Wins' ? COLORS.win + '55' : COLORS.loss + '55';
-            }
-            return 'rgba(245, 158, 11, 0.20)';
-          },
           callbacks: {
             label: ctx => {
               const p = ctx.raw;
-              return [
-                `${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`,
-                `Entry RSI: ${p.rsi.toFixed(1)}`
-              ];
+              return [`${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`, `Entry RSI: ${p.rsi.toFixed(1)}`];
             }
           }
         }
       },
       scales: {
-        x: {
-          title: { display: true, text: 'RSI at Entry', color: COLORS.muted },
-          grid: { color: COLORS.gridLine }
-        },
-        y: {
-          title: { display: true, text: 'Return %', color: COLORS.muted },
-          grid: { color: COLORS.gridLine },
-          ticks: { callback: v => v + '%' }
-        }
+        x: { title: { display: true, text: 'RSI at Entry', color: COLORS.muted }, grid: { color: COLORS.gridLine } },
+        y: { title: { display: true, text: 'Return %', color: COLORS.muted }, grid: { color: COLORS.gridLine }, ticks: { callback: v => v + '%' } }
       }
     },
     plugins: [{
@@ -1263,7 +1119,6 @@ function renderRSIScatter() {
         const ctx = chart.ctx;
         const area = chart.chartArea;
 
-        // Zero line horizontal
         const y0 = yScale.getPixelForValue(0);
         ctx.save();
         ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
@@ -1274,7 +1129,6 @@ function renderRSIScatter() {
         ctx.lineTo(area.right, y0);
         ctx.stroke();
 
-        // RSI 70 overbought line
         const x70 = xScale.getPixelForValue(70);
         if (x70 >= area.left && x70 <= area.right) {
           ctx.strokeStyle = 'rgba(248, 113, 113, 0.30)';
@@ -1286,32 +1140,362 @@ function renderRSIScatter() {
           ctx.font = "10px 'Inter', sans-serif";
           ctx.fillText('Overbought', x70 + 4, area.top + 12);
         }
+
+        const x40 = xScale.getPixelForValue(40);
+        if (x40 >= area.left && x40 <= area.right) {
+          ctx.strokeStyle = 'rgba(52, 211, 153, 0.30)';
+          ctx.beginPath();
+          ctx.moveTo(x40, area.top);
+          ctx.lineTo(x40, area.bottom);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(52, 211, 153, 0.50)';
+          ctx.font = "10px 'Inter', sans-serif";
+          ctx.fillText('Entry zone', x40 - 55, area.top + 12);
+        }
         ctx.restore();
       }
     }]
   });
 }
 
-/* ── Exit Reason P&L Breakdown ───────────────────────── */
-function renderExitReasonPL() {
+/* ── NEW: Performance by Market Regime ───────────────── */
+function renderRegimePerformance() {
+  const container = document.getElementById('regimeContent');
+  const ct = (data.closedTrades || []).filter(t => t.entryMarketRegime);
+
+  if (ct.length < 3) {
+    container.innerHTML = '<div class="empty-chart">Need trades with regime data (run Scan Market before entering trades)</div>';
+    return;
+  }
+
   const buckets = {};
-  data.closedTrades.forEach(t => {
-    if (!t.exitReason) return;
-    const reason = t.exitReason.replace(/_/g, ' ');
-    if (!buckets[reason]) buckets[reason] = { wins: 0, total: 0, sumReturn: 0, trades: [] };
-    buckets[reason].total++;
-    buckets[reason].sumReturn += t.returnPercent;
-    if (t.profitLoss > 0) buckets[reason].wins++;
-    buckets[reason].trades.push(t);
+  ct.forEach(t => {
+    const r = t.entryMarketRegime.toLowerCase();
+    const regime = r.includes('bull') ? 'bull' : r.includes('bear') ? 'bear' : 'choppy';
+    if (!buckets[regime]) buckets[regime] = { wins: 0, losses: 0, totalReturn: 0 };
+    if (t.profitLoss > 0) buckets[regime].wins++;
+    else buckets[regime].losses++;
+    buckets[regime].totalReturn += t.returnPercent;
+  });
+
+  const order = ['bull', 'bear', 'choppy'];
+  const labels = { bull: 'BULL', bear: 'BEAR', choppy: 'CHOPPY' };
+  const colors = { bull: COLORS.win, bear: COLORS.loss, choppy: COLORS.yellow };
+
+  let html = '<div class="regime-grid">';
+  for (const regime of order) {
+    const b = buckets[regime];
+    if (!b) continue;
+    const total = b.wins + b.losses;
+    const wr = (b.wins / total * 100);
+    const avgRet = b.totalReturn / total;
+    html += `<div class="regime-card ${regime}">
+      <div class="regime-card-label" style="color:${colors[regime]}">${labels[regime]}</div>
+      <div class="regime-card-stat">Win rate: <strong style="color:${wr >= 50 ? COLORS.win : COLORS.loss}">${wr.toFixed(0)}%</strong> (${b.wins}W/${b.losses}L)</div>
+      <div class="regime-card-stat">Avg return: <strong style="color:${avgRet >= 0 ? COLORS.win : COLORS.loss}">${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</strong></div>
+      <div class="regime-card-stat">${total} trade${total !== 1 ? 's' : ''}</div>
+    </div>`;
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+/* ── NEW: Win Rate by Sector Flow ────────────────────── */
+function renderSectorFlowChart() {
+  const ct = (data.closedTrades || []).filter(t => t.entryTechnicals?.sectorRotation);
+
+  if (ct.length < 3) {
+    const ctx = document.getElementById('sectorFlowChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "13px 'Inter', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('Need trades with sector flow data', ctx.canvas.width / 2, 80);
+    return;
+  }
+
+  const buckets = {};
+  ct.forEach(t => {
+    const flow = t.entryTechnicals.sectorRotation || 'unknown';
+    if (!buckets[flow]) buckets[flow] = { wins: 0, total: 0 };
+    buckets[flow].total++;
+    if (t.profitLoss > 0) buckets[flow].wins++;
   });
 
   const entries = Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
-  const labels = entries.map(e => e[0]);
-  const avgReturns = entries.map(e => e[1].sumReturn / e[1].total);
-  const winRates = entries.map(e => (e[1].wins / e[1].total) * 100);
 
-  // Append win rate to labels so it's visible on the y-axis
-  const richLabels = entries.map((e, i) => {
+  new Chart(document.getElementById('sectorFlowChart'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(e => e[0]),
+      datasets: [{
+        data: entries.map(e => (e[1].wins / e[1].total * 100)),
+        backgroundColor: entries.map(e => (e[1].wins / e[1].total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: entries.map(e => (e[1].wins / e[1].total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        x: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = entries[ctx.dataIndex][1];
+              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
+            }
+          }
+        }
+      }
+    },
+    plugins: [countLabelPlugin, fiftyLinePlugin]
+  });
+}
+
+/* ── Win Rate by Sector ───────────────────────────────── */
+function renderSectorChart() {
+  const buckets = {};
+  (data.closedTrades || []).forEach(t => {
+    const sector = t.sector || SECTOR_MAP[t.symbol] || 'Unknown';
+    if (!buckets[sector]) buckets[sector] = { wins: 0, total: 0 };
+    buckets[sector].total++;
+    if (t.profitLoss > 0) buckets[sector].wins++;
+  });
+
+  const entries = Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
+
+  new Chart(document.getElementById('sectorChart'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(e => e[0]),
+      datasets: [{
+        data: entries.map(e => (e[1].wins / e[1].total * 100)),
+        backgroundColor: entries.map(e => (e[1].wins / e[1].total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: entries.map(e => (e[1].wins / e[1].total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      scales: {
+        x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        y: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = entries[ctx.dataIndex][1];
+              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.x.toFixed(0)}%) — ${b.total} trades`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── NEW: Win Rate by Momentum Range ─────────────────── */
+function renderMomentumChart() {
+  const ct = (data.closedTrades || []).filter(t => t.entryTechnicals?.momentumScore != null);
+
+  if (ct.length < 3) {
+    const ctx = document.getElementById('momentumChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "13px 'Inter', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('Need trades with momentum data', ctx.canvas.width / 2, 80);
+    return;
+  }
+
+  const buckets = [
+    { label: '0-3 (Low)', min: 0, max: 3, wins: 0, total: 0 },
+    { label: '3-5 (Building)', min: 3, max: 5, wins: 0, total: 0 },
+    { label: '5-7 (Sweet Spot)', min: 5, max: 7, wins: 0, total: 0 },
+    { label: '7-9 (High)', min: 7, max: 9, wins: 0, total: 0 },
+    { label: '9+ (Extended)', min: 9, max: 11, wins: 0, total: 0 }
+  ];
+
+  ct.forEach(t => {
+    const m = t.entryTechnicals.momentumScore;
+    const b = buckets.find(b => m >= b.min && m < b.max) || buckets[buckets.length - 1];
+    b.total++;
+    if (t.profitLoss > 0) b.wins++;
+  });
+
+  const active = buckets.filter(b => b.total > 0);
+
+  new Chart(document.getElementById('momentumChart'), {
+    type: 'bar',
+    data: {
+      labels: active.map(b => b.label),
+      datasets: [{
+        data: active.map(b => (b.wins / b.total * 100)),
+        backgroundColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        x: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = active[ctx.dataIndex];
+              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
+            }
+          }
+        }
+      }
+    },
+    plugins: [countLabelPlugin, fiftyLinePlugin]
+  });
+}
+
+/* ── NEW: Win Rate by Structure ──────────────────────── */
+function renderStructureChart() {
+  const ct = (data.closedTrades || []).filter(t => t.entryTechnicals?.structure);
+
+  if (ct.length < 3) {
+    const ctx = document.getElementById('structureChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "13px 'Inter', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('Need trades with structure data', ctx.canvas.width / 2, 80);
+    return;
+  }
+
+  const buckets = {};
+  ct.forEach(t => {
+    const s = t.entryTechnicals.structure || 'unknown';
+    const label = s.replace(/_/g, ' ');
+    if (!buckets[label]) buckets[label] = { wins: 0, total: 0, sumReturn: 0 };
+    buckets[label].total++;
+    buckets[label].sumReturn += t.returnPercent;
+    if (t.profitLoss > 0) buckets[label].wins++;
+  });
+
+  const entries = Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
+
+  new Chart(document.getElementById('structureChart'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(e => e[0]),
+      datasets: [{
+        data: entries.map(e => (e[1].wins / e[1].total * 100)),
+        backgroundColor: entries.map(e => (e[1].wins / e[1].total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: entries.map(e => (e[1].wins / e[1].total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      scales: {
+        x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        y: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = entries[ctx.dataIndex][1];
+              const avgRet = b.sumReturn / b.total;
+              return [
+                `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.x.toFixed(0)}%)`,
+                `Avg return: ${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%`
+              ];
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── Win Rate by Hold Duration ────────────────────────── */
+function renderHoldChart() {
+  const buckets = [
+    { label: '<1 day', min: 0, max: 86400000, wins: 0, total: 0 },
+    { label: '1-2 days', min: 86400000, max: 172800000, wins: 0, total: 0 },
+    { label: '2-4 days', min: 172800000, max: 345600000, wins: 0, total: 0 },
+    { label: '4-7 days', min: 345600000, max: 604800000, wins: 0, total: 0 },
+    { label: '7+ days', min: 604800000, max: Infinity, wins: 0, total: 0 }
+  ];
+
+  (data.closedTrades || []).forEach(t => {
+    const ht = t.holdTime || (new Date(t.sellDate) - new Date(t.buyDate));
+    const b = buckets.find(b => ht >= b.min && ht < b.max);
+    if (b) {
+      b.total++;
+      if (t.profitLoss > 0) b.wins++;
+    }
+  });
+
+  const active = buckets.filter(b => b.total > 0);
+
+  new Chart(document.getElementById('holdChart'), {
+    type: 'bar',
+    data: {
+      labels: active.map(b => b.label),
+      datasets: [{
+        data: active.map(b => (b.wins / b.total * 100)),
+        backgroundColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        x: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = active[ctx.dataIndex];
+              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
+            }
+          }
+        }
+      }
+    },
+    plugins: [countLabelPlugin, fiftyLinePlugin]
+  });
+}
+
+/* ── P&L by Exit Reason ──────────────────────────────── */
+function renderExitReasonPL() {
+  const buckets = {};
+  (data.closedTrades || []).forEach(t => {
+    if (!t.exitReason) return;
+    const reason = t.exitReason.replace(/_/g, ' ');
+    if (!buckets[reason]) buckets[reason] = { wins: 0, total: 0, sumReturn: 0 };
+    buckets[reason].total++;
+    buckets[reason].sumReturn += t.returnPercent;
+    if (t.profitLoss > 0) buckets[reason].wins++;
+  });
+
+  const entries = Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
+  const avgReturns = entries.map(e => e[1].sumReturn / e[1].total);
+
+  const richLabels = entries.map(e => {
     const b = e[1];
     return `${e[0]}  (${b.wins}W/${b.total - b.wins}L)`;
   });
@@ -1333,7 +1517,6 @@ function renderExitReasonPL() {
       responsive: true,
       layout: { padding: { right: 8 } },
       plugins: {
-        legend: { display: false },
         tooltip: {
           boxPadding: 6,
           callbacks: {
@@ -1344,189 +1527,84 @@ function renderExitReasonPL() {
               const avg = avgReturns[i];
               return [
                 `Avg return: ${avg > 0 ? '+' : ''}${avg.toFixed(1)}%`,
-                `Win rate: ${winRates[i].toFixed(0)}%  (${b.wins}W / ${b.total - b.wins}L)`
+                `Win rate: ${(b.wins / b.total * 100).toFixed(0)}%  (${b.wins}W / ${b.total - b.wins}L)`
               ];
             }
           }
         }
       },
       scales: {
-        x: {
-          grid: { color: COLORS.gridLine },
-          ticks: { callback: v => (v > 0 ? '+' : '') + v + '%' }
-        },
+        x: { grid: { color: COLORS.gridLine }, ticks: { callback: v => (v > 0 ? '+' : '') + v + '%' } },
         y: { grid: { display: false } }
       }
     }
   });
 }
 
-/* ── Cumulative Realized P&L ─────────────────────────── */
-function renderCumulativePL() {
-  const sorted = [...data.closedTrades].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
-  if (!sorted.length) return;
+/* ── Post-Exit Tracker ───────────────────────────────── */
+function renderPostExitChart() {
+  const trades = (data.closedTrades || []).filter(t =>
+    t.tracking && t.tracking.weekReturnVsSell != null
+  ).sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
 
-  let cumPL = 0;
-  const labels = [];
-  const values = [];
-  const symbols = [];
+  if (!trades.length) {
+    const ctx = document.getElementById('postExitChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "13px 'Inter', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('No post-exit tracking data yet.', ctx.canvas.width / 2, 80);
+    return;
+  }
 
-  sorted.forEach(t => {
-    cumPL += t.profitLoss;
-    labels.push(new Date(t.sellDate));
-    values.push(cumPL);
-    symbols.push(t.symbol);
-  });
+  const labels = trades.map(t => t.symbol);
+  const deltas = trades.map(t => parseFloat(String(t.tracking.weekReturnVsSell)));
+  const barColors = deltas.map(d => d > 0 ? COLORS.loss + 'cc' : COLORS.win + 'cc');
+  const barBorders = deltas.map(d => d > 0 ? COLORS.loss : COLORS.win);
 
-  const pointColors = sorted.map(t => t.profitLoss > 0 ? COLORS.win : COLORS.loss);
-
-  new Chart(document.getElementById('cumulativePL'), {
-    type: 'line',
+  new Chart(document.getElementById('postExitChart'), {
+    type: 'bar',
     data: {
       labels,
       datasets: [{
-        label: 'Cumulative P&L',
-        data: values,
-        borderColor: values[values.length - 1] >= 0 ? COLORS.win : COLORS.loss,
-        backgroundColor: values[values.length - 1] >= 0 ? 'rgba(52, 211, 153, 0.08)' : 'rgba(248, 113, 113, 0.08)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 5,
-        pointHoverRadius: 7,
-        pointBackgroundColor: pointColors,
-        pointBorderColor: pointColors,
-        borderWidth: 2
+        label: 'Post-exit 1-week move',
+        data: deltas,
+        backgroundColor: barColors,
+        borderColor: barBorders,
+        borderWidth: 1,
+        borderRadius: 3
       }]
     },
     options: {
       responsive: true,
       plugins: {
-        legend: { display: false },
         tooltip: {
           boxPadding: 6,
           callbacks: {
-            title: ctx => {
-              const i = ctx[0].dataIndex;
-              return `Trade #${i + 1}: ${symbols[i]}`;
-            },
             label: ctx => {
-              const i = ctx.dataIndex;
-              const t = sorted[i];
-              const pl = t.profitLoss;
-              return [
-                `This trade: ${pl > 0 ? '+' : ''}$${pl.toFixed(2)} (${t.returnPercent > 0 ? '+' : ''}${t.returnPercent.toFixed(1)}%)`,
-                `Running total: ${values[i] > 0 ? '+' : ''}$${values[i].toFixed(2)}`
+              const d = deltas[ctx.dataIndex];
+              const t = trades[ctx.dataIndex];
+              const lines = [
+                `Exit return: ${t.returnPercent > 0 ? '+' : ''}${t.returnPercent.toFixed(1)}%`,
+                `Post-exit move: ${d > 0 ? '+' : ''}${d.toFixed(1)}%`
               ];
+              if (d > 0) lines.push(`Left +${d.toFixed(1)}% on the table`);
+              else lines.push(`Avoided ${Math.abs(d).toFixed(1)}% further drop`);
+              return lines;
             }
           }
         }
       },
       scales: {
-        x: {
-          type: 'category',
-          ticks: {
-            callback: function(val, i) {
-              return labels[i].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            },
-            maxTicksLimit: 10,
-            font: { size: 10 }
-          },
-          grid: { display: false }
-        },
         y: {
-          title: { display: true, text: 'Cumulative P&L ($)', color: COLORS.muted },
           grid: { color: COLORS.gridLine },
-          ticks: { callback: v => '$' + v }
-        }
+          ticks: { callback: v => (v > 0 ? '+' : '') + v + '%' },
+          title: { display: true, text: 'Stock move after selling', color: COLORS.muted }
+        },
+        x: { grid: { display: false } }
       }
     },
-    plugins: [{
-      id: 'zeroLine',
-      beforeDraw(chart) {
-        const yScale = chart.scales.y;
-        const ctx = chart.ctx;
-        const y = yScale.getPixelForValue(0);
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 200, 100, 0.20)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(chart.chartArea.left, y);
-        ctx.lineTo(chart.chartArea.right, y);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }]
+    plugins: [zeroLinePlugin]
   });
-}
-
-/* ── Trading Rules ────────────────────────────────────── */
-function renderRules() {
-  const container = document.getElementById('rulesContainer');
-  const rules = (data.tradingRules && data.tradingRules.rules) || [];
-
-  if (!rules.length) {
-    container.innerHTML = '<p style="color:var(--text-muted)">No trading rules data found.</p>';
-    return;
-  }
-
-  const order = { avoid: 0, prefer: 1, neutral: 2 };
-  const sorted = [...rules].sort((a, b) => (order[a.type] || 2) - (order[b.type] || 2));
-
-  container.innerHTML = '<div class="rules-grid">' + sorted.map(r => {
-    const typeClass = r.type || 'neutral';
-    const icon = r.type === 'avoid' ? '&#9888;' : r.type === 'prefer' ? '&#10003;' : '&#8226;';
-    return `
-      <div class="rule-card ${typeClass}">
-        <div class="rule-label">${icon} ${r.label}</div>
-        <div class="rule-stat">Win rate: <strong>${r.winRate.toFixed(0)}%</strong> (${r.trades} trades)
-          ${r.compareWinRate != null && r.compareTrades > 0
-            ? ` vs <strong>${r.compareWinRate.toFixed(0)}%</strong> (${r.compareTrades})`
-            : ''}
-        </div>
-        <div class="rule-stat">Avg return: <strong>${r.avgReturn > 0 ? '+' : ''}${r.avgReturn.toFixed(1)}%</strong></div>
-        ${r.needsData ? '<div class="rule-stat" style="color:var(--text-muted); font-style:italic">Needs more data</div>' : ''}
-      </div>
-    `;
-  }).join('') + '</div>';
-}
-
-/* ── Current Holdings Table ───────────────────────────── */
-function renderHoldings() {
-  const tbody = document.getElementById('holdingsBody');
-  const theses = data.holdingTheses || {};
-  const holdings = data.holdings || {};
-
-  const rows = Object.entries(holdings).map(([symbol, shares]) => {
-    const t = theses[symbol] || {};
-    return {
-      symbol,
-      shares,
-      price: t.entryPrice,
-      date: t.entryDate,
-      conviction: t.entryConviction,
-      momentum: t.entryMomentum,
-      rs: t.entryRS,
-      sectorFlow: t.entrySectorFlow,
-      rsi: t.entryRSI,
-      structure: t.entryStructure
-    };
-  });
-
-  tbody.innerHTML = rows.map(r => `
-    <tr>
-      <td style="font-weight:700; color:var(--accent)">${r.symbol}</td>
-      <td>${r.shares}</td>
-      <td>${r.price ? '$' + r.price.toFixed(2) : '--'}</td>
-      <td>${r.date ? new Date(r.date).toLocaleDateString() : '--'}</td>
-      <td>${r.conviction != null ? r.conviction + '/10' : '--'}</td>
-      <td>${r.momentum != null ? r.momentum : '--'}</td>
-      <td>${r.rs != null ? r.rs : '--'}</td>
-      <td>${r.sectorFlow || '--'}</td>
-      <td>${r.rsi != null ? r.rsi : '--'}</td>
-      <td>${r.structure || '--'}</td>
-    </tr>
-  `).join('');
 }
 </script>
 </body>
