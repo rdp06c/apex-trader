@@ -2549,6 +2549,18 @@
             { id: 'runner_overbought', label: 'RSI>70 + Runner (5%+)', tier: 3, filter: s => s.rsi != null && s.rsi > 70 && (s.todayChange ?? 0) >= 5 },
             { id: 'bearish_outflow', label: 'Bearish Structure + Sector Outflow', tier: 3, filter: s => (s.structureScore ?? 0) <= -2 && (s.sectorFlow === 'outflow' || s.sectorFlow === 'avoid' || s.sectorFlow === 'caution') },
             { id: 'extended_no_vol', label: 'High Mom + Declining Volume', tier: 3, filter: s => (s.momentumScore ?? 0) >= 7 && (s.volumeTrend ?? 1) < 0.8 },
+            // New combos testing previously-untested fields
+            { id: 'rs_high_structure', label: 'RS>70 + Bull Structure', tier: 1, filter: s => (s.rsNormalized ?? 0) > 7 && (s.structureScore ?? 0) >= 2 },
+            { id: 'rs_low_pullback', label: 'RS<30 + Pullback', tier: 1, filter: s => (s.rsNormalized ?? 0) < 3 && (s.totalReturn5d ?? 0) >= -8 && (s.totalReturn5d ?? 0) <= -2 },
+            { id: 'accel_macd_bull', label: 'Accelerating + Bullish MACD', tier: 1, filter: s => s.isAccelerating && s.macdCrossover === 'bullish' },
+            { id: 'accel_structure_rsi', label: 'Accel + Structure + RSI<50', tier: 2, filter: s => s.isAccelerating && (s.structureScore ?? 0) >= 2 && s.rsi != null && s.rsi < 50 },
+            { id: 'consistent_up_structure', label: '3+ Up Days + Bull Structure', tier: 1, filter: s => (s.upDays ?? 0) >= 3 && (s.totalDays ?? 0) >= 4 && (s.structureScore ?? 0) >= 2 },
+            { id: 'fvg_bull_pullback', label: 'Bullish FVG + Pullback', tier: 1, filter: s => s.fvg === 'bullish' && (s.totalReturn5d ?? 0) >= -8 && (s.totalReturn5d ?? 0) < 0 },
+            { id: 'fvg_bear_outflow', label: 'Bearish FVG + Sector Outflow', tier: 3, filter: s => s.fvg === 'bearish' && (s.sectorFlow === 'outflow' || s.sectorFlow === 'avoid' || s.sectorFlow === 'caution') },
+            { id: 'sma_cross_bull_rsi', label: 'SMA Bull Cross + RSI<40', tier: 1, filter: s => s.smaCrossover?.crossover === 'bullish' && s.rsi != null && s.rsi < 40 },
+            { id: 'sma_cross_bear_struct', label: 'SMA Bear Cross + Bear Structure', tier: 3, filter: s => s.smaCrossover?.crossover === 'bearish' && (s.structureScore ?? 0) <= -2 },
+            { id: 'vol_ratio_high_struct', label: 'Vol>1.5x + Bull Structure', tier: 1, filter: s => (s.volumeRatio ?? 0) > 1.5 && (s.structureScore ?? 0) >= 2 },
+            { id: 'vol_ratio_low_mom', label: 'Vol<0.5x + High Mom', tier: 3, filter: s => s.volumeRatio != null && s.volumeRatio < 0.5 && (s.momentumScore ?? 0) >= 7 },
         ];
 
         // Evaluate which signal combos a candidate currently matches,
@@ -2569,6 +2581,13 @@
                 sectorFlow: candidate.sectorFlow || 'neutral',
                 sma20: candidate.sma20 ?? 0,
                 currentPrice: candidate.price ?? 0,
+                rsNormalized: ((candidate.rs ?? 50) / 100) * 10,
+                isAccelerating: candidate.isAccelerating ?? false,
+                upDays: candidate.upDays ?? 0,
+                totalDays: candidate.totalDays ?? 0,
+                fvg: candidate.fvg || 'none',
+                smaCrossover: candidate.smaCrossover ? { crossover: candidate.smaCrossover } : null,
+                volumeRatio: candidate.volumeRatio ?? null,
             };
 
             const hotCombos = [];
@@ -4647,7 +4666,7 @@
                     });
                     const compositeScore = scoreResult.total;
                     const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
-                    dryRunScored.push({ symbol, compositeScore, price: data.price || null, return5d: momentum?.totalReturn5d ?? null, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', volumeRatio: calculateVolumeRatio(symbol)?.ratio ?? null, scoreBreakdown: scoreResult.breakdown });
+                    dryRunScored.push({ symbol, compositeScore, price: data.price || null, return5d: momentum?.totalReturn5d ?? null, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', volumeRatio: calculateVolumeRatio(symbol)?.ratio ?? null, scoreBreakdown: scoreResult.breakdown, isAccelerating: momentum?.isAccelerating ?? false, upDays: momentum?.upDays ?? 0, totalDays: momentum?.totalDays ?? 0, fvg: struct?.fvg || 'none', volumeTrend: momentum?.volumeTrend ?? 1, sectorFlow: flow });
                 });
 
                 // Fetch news for top candidates + holdings
@@ -4723,6 +4742,7 @@
                 }
                 const regimeResult = detectMarketRegime(vixCache?.level, sectorRotation, marketData);
                 portfolio.lastMarketRegime = { regime: regimeResult.regime, score: regimeResult.score, signals: regimeResult.signals, timestamp: new Date().toISOString() };
+                recordRegimeTransition(regimeResult.regime);
                 console.log(`📊 Market regime: ${regimeResult.regime.toUpperCase()} (score ${regimeResult.score})`, regimeResult.signals);
 
                 // Benchmark: fetch SPY price and compute portfolio health
@@ -5258,6 +5278,7 @@
                 }
                 const regimeResult = detectMarketRegime(vixCache?.level, sectorRotation, marketData);
                 portfolio.lastMarketRegime = { regime: regimeResult.regime, score: regimeResult.score, signals: regimeResult.signals, timestamp: new Date().toISOString() };
+                recordRegimeTransition(regimeResult.regime);
                 console.log(`📊 Market regime: ${regimeResult.regime.toUpperCase()} (score ${regimeResult.score})`, regimeResult.signals);
 
                 // Benchmark: fetch SPY price and compute portfolio health
@@ -5452,7 +5473,11 @@
                             smaCrossover: s.data.smaCrossover?.crossover || 'none',
                             volumeRatio: calculateVolumeRatio(s.symbol)?.ratio ?? null,
                             volumeTrend: s.data.momentum?.volumeTrend ?? null,
-                            scoreBreakdown: s.scoreBreakdown || null
+                            scoreBreakdown: s.scoreBreakdown || null,
+                            isAccelerating: s.data.momentum?.isAccelerating ?? false,
+                            upDays: s.data.momentum?.upDays ?? 0,
+                            totalDays: s.data.momentum?.totalDays ?? 0,
+                            fvg: s.data.marketStructure?.fvg || 'none'
                         };
                     })
                 };
@@ -10736,12 +10761,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         // Update Trade Insights Display
         function updateLearningInsightsDisplay() {
             const container = document.getElementById('learningInsights');
-            const rulesData = deriveTradingRules();
+            const closedTradesAll = portfolio.closedTrades || [];
 
-            if (rulesData.rules.length === 0 && (rulesData.summary.insufficientData || rulesData.summary.totalTrades < 3)) {
-                container.innerHTML = `<div class="empty-state">Need more trade history to derive rules (${rulesData.summary.totalTrades || 0} trades so far)</div>`;
+            if (closedTradesAll.length < 3) {
+                container.innerHTML = `<div class="empty-state">Need more trade history for insights (${closedTradesAll.length} trades so far)</div>`;
                 return;
             }
+
+            const rulesData = deriveTradingRules();
 
             let html = '';
 
@@ -10772,90 +10799,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
 
             const s = rulesData.summary;
-
-            // ── Section A: Trading Rules ──
-            const blockRules = rulesData.rules.filter(r => r.enforcement === 'block');
-            const warnRules = rulesData.rules.filter(r => r.enforcement === 'warn' && r.type === 'avoid');
-            const preferRules = rulesData.rules.filter(r => r.type === 'prefer');
-            const observeRules = rulesData.rules.filter(r => r.enforcement === 'observe' && r.type !== 'prefer');
-
-            if (rulesData.rules.length > 0) {
-                html += `<div class="rules-section">
-                    <div class="rules-section-title">What APEX Has Learned</div>
-                    <div class="rules-grid">`;
-
-                for (const r of blockRules) {
-                    html += `<div class="rule-card rule-block">
-                        <div class="rule-card-header">
-                            <span class="rule-card-label">${escapeHtml(r.label)}</span>
-                            <span class="rule-enforcement-badge rule-badge-block">BLOCKED</span>
-                        </div>
-                        <div class="rule-card-stats">
-                            <span class="rule-stat negative">${r.winRate.toFixed(0)}% win rate</span>
-                            <span class="rule-stat">${r.trades} trades</span>
-                            <span class="rule-stat">${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg</span>
-                        </div>
-                        <div class="rule-card-compare">vs ${r.compareWinRate.toFixed(0)}% win rate for opposite (${r.compareTrades} trades)</div>
-                    </div>`;
-                }
-
-                for (const r of warnRules) {
-                    html += `<div class="rule-card rule-warn">
-                        <div class="rule-card-header">
-                            <span class="rule-card-label">${escapeHtml(r.label)}</span>
-                            <span class="rule-enforcement-badge rule-badge-warn">AVOID</span>
-                        </div>
-                        <div class="rule-card-stats">
-                            <span class="rule-stat negative">${r.winRate.toFixed(0)}% win rate</span>
-                            <span class="rule-stat">${r.trades} trades</span>
-                            <span class="rule-stat">${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg</span>
-                        </div>
-                        <div class="rule-card-compare">vs ${r.compareWinRate.toFixed(0)}% win rate for opposite (${r.compareTrades} trades)</div>
-                    </div>`;
-                }
-
-                for (const r of preferRules) {
-                    html += `<div class="rule-card rule-prefer">
-                        <div class="rule-card-header">
-                            <span class="rule-card-label">${escapeHtml(r.label)}</span>
-                            <span class="rule-enforcement-badge rule-badge-prefer">WORKING</span>
-                        </div>
-                        <div class="rule-card-stats">
-                            <span class="rule-stat positive">${r.winRate.toFixed(0)}% win rate</span>
-                            <span class="rule-stat">${r.trades} trades</span>
-                            <span class="rule-stat">${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg</span>
-                        </div>
-                        <div class="rule-card-compare">vs ${r.compareWinRate.toFixed(0)}% overall (${r.compareTrades} trades)</div>
-                    </div>`;
-                }
-
-                for (const r of observeRules) {
-                    if (r.needsData) {
-                        html += `<div class="rule-card rule-observe">
-                            <div class="rule-card-header">
-                                <span class="rule-card-label">${escapeHtml(r.label)}</span>
-                                <span class="rule-enforcement-badge rule-badge-observe">NEED DATA</span>
-                            </div>
-                            <div class="rule-card-compare">${escapeHtml(r.description)}</div>
-                        </div>`;
-                    } else {
-                        html += `<div class="rule-card rule-observe">
-                            <div class="rule-card-header">
-                                <span class="rule-card-label">${escapeHtml(r.label)}</span>
-                                <span class="rule-enforcement-badge rule-badge-observe">WATCHING</span>
-                            </div>
-                            <div class="rule-card-stats">
-                                <span class="rule-stat">${r.winRate.toFixed(0)}% win rate</span>
-                                <span class="rule-stat">${r.trades} trades</span>
-                                <span class="rule-stat">${r.avgReturn >= 0 ? '+' : ''}${r.avgReturn.toFixed(1)}% avg</span>
-                            </div>
-                            <div class="rule-card-compare">vs ${r.compareWinRate.toFixed(0)}% for opposite (${r.compareTrades} trades)</div>
-                        </div>`;
-                    }
-                }
-
-                html += `</div></div>`;
-            }
 
             // ── Section B: Performance Summary ──
             if (s.totalTrades >= 3) {
@@ -11058,18 +11001,21 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (combos.length === 0) return;
                     html += `<div style="margin-top:8px;margin-bottom:4px;font-weight:600;font-size:0.85rem;color:${colorVal}">${title}</div>`;
                     html += `<table class="signal-accuracy-table"><thead><tr>
-                        <th>Combination</th><th>Tier</th><th>Avg 10D</th><th>Win Rate</th><th>vs Baseline</th><th>Obs</th>
+                        <th>Combination</th><th>Tier</th><th>Avg 10D</th><th>Avg 20D</th><th>Win Rate</th><th>vs Baseline</th><th>Obs</th>
                     </tr></thead><tbody>`;
                     for (const c of combos) {
                         const retColor = c.avgReturn10d >= 0 ? 'var(--green)' : 'var(--red)';
+                        const ret20Color = c.avgReturn20d != null ? (c.avgReturn20d >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)';
                         const wrColor = c.winRate10d >= 55 ? 'var(--green)' : c.winRate10d >= 45 ? 'var(--yellow)' : 'var(--red)';
                         const vsColor = c.vsBaselineReturn > 0 ? 'var(--green)' : 'var(--red)';
+                        const horizonBadge = c.bestHorizon && c.bestHorizon !== '10d' ? ` <span style="font-size:0.7em;color:var(--text-muted)">(${c.bestHorizon})</span>` : '';
                         html += `<tr>
                             <td>${c.label}</td>
                             <td style="color:var(--text-muted)">${c.tier === 1 ? 'Pair' : c.tier === 2 ? 'Triple' : 'Anti'}</td>
                             <td style="color:${retColor};font-weight:600">${c.avgReturn10d >= 0 ? '+' : ''}${c.avgReturn10d.toFixed(2)}%</td>
+                            <td style="color:${ret20Color};font-weight:600">${c.avgReturn20d != null ? (c.avgReturn20d >= 0 ? '+' : '') + c.avgReturn20d.toFixed(2) + '%' : '--'}</td>
                             <td style="color:${wrColor};font-weight:600">${c.winRate10d.toFixed(0)}%</td>
-                            <td style="color:${vsColor}">${c.vsBaselineReturn >= 0 ? '+' : ''}${c.vsBaselineReturn.toFixed(2)}%</td>
+                            <td style="color:${vsColor}">${c.vsBaselineReturn >= 0 ? '+' : ''}${c.vsBaselineReturn.toFixed(2)}%${horizonBadge}</td>
                             <td style="color:var(--text-muted)">${c.n.toLocaleString()}</td>
                         </tr>`;
                     }
@@ -11084,6 +11030,67 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                 if (insufficientCombos.length > 0) {
                     html += `<div style="margin-top:8px;font-size:0.75rem;color:var(--text-muted)">Insufficient data (< ${minN} obs): ${insufficientCombos.map(c => c.label + ' (' + c.n + ')').join(', ')}</div>`;
+                }
+
+                // Sector-segmented combos
+                const sectorCombos = portfolio.calibratedWeights?.sectorCombos;
+                if (sectorCombos && Object.keys(sectorCombos).length > 0) {
+                    const sectors = Object.keys(sectorCombos).sort();
+                    html += `<div style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;">
+                        <div style="font-weight:600;font-size:0.85rem;color:var(--text-secondary);margin-bottom:6px;">Sector Signal Combos</div>`;
+
+                    // Summary grid
+                    html += `<table class="signal-accuracy-table"><thead><tr>
+                        <th>Sector</th><th>Top Hot</th><th>Avg Ret</th><th>Top Cold</th><th>Avg Ret</th><th>Obs</th>
+                    </tr></thead><tbody>`;
+                    for (const sector of sectors) {
+                        const sc = sectorCombos[sector];
+                        const topHot = sc.hot[0];
+                        const topCold = sc.cold[0];
+                        html += `<tr style="cursor:pointer" onclick="document.getElementById('sectorComboSelect').value='${escapeHtml(sector)}';document.getElementById('sectorComboSelect').dispatchEvent(new Event('change'))">
+                            <td style="font-weight:600">${escapeHtml(sector)}</td>
+                            <td style="color:var(--green)">${topHot ? topHot.label : '--'}</td>
+                            <td style="color:var(--green)">${topHot ? (topHot.avgReturn10d >= 0 ? '+' : '') + topHot.avgReturn10d.toFixed(2) + '%' : '--'}</td>
+                            <td style="color:var(--red)">${topCold ? topCold.label : '--'}</td>
+                            <td style="color:var(--red)">${topCold ? (topCold.avgReturn10d >= 0 ? '+' : '') + topCold.avgReturn10d.toFixed(2) + '%' : '--'}</td>
+                            <td style="color:var(--text-muted)">${sc.baseline.totalObs.toLocaleString()}</td>
+                        </tr>`;
+                    }
+                    html += `</tbody></table>`;
+
+                    // Expandable detail via dropdown
+                    html += `<div style="margin-top:8px;"><select id="sectorComboSelect" onchange="(function(sel){
+                        const detail = document.getElementById('sectorComboDetail');
+                        if (!sel.value) { detail.innerHTML = ''; return; }
+                        const sc = (portfolio.calibratedWeights?.sectorCombos || {})[sel.value];
+                        if (!sc) { detail.innerHTML = ''; return; }
+                        let h = '<div style=\\'margin-top:6px;\\'>';
+                        const renderRows = (combos, color) => {
+                            let t = '';
+                            for (const c of combos) {
+                                const rc = c.avgReturn10d >= 0 ? 'var(--green)' : 'var(--red)';
+                                const wc = c.winRate10d >= 55 ? 'var(--green)' : c.winRate10d >= 45 ? 'var(--yellow)' : 'var(--red)';
+                                t += '<tr><td>' + c.label + '</td><td style=\\'color:' + rc + ';font-weight:600\\'>' + (c.avgReturn10d >= 0 ? '+' : '') + c.avgReturn10d.toFixed(2) + '%</td><td style=\\'color:' + wc + ';font-weight:600\\'>' + c.winRate10d.toFixed(0) + '%</td><td style=\\'color:var(--text-muted)\\'>' + c.n.toLocaleString() + '</td></tr>';
+                            }
+                            return t;
+                        };
+                        if (sc.hot.length > 0) {
+                            h += '<div style=\\'color:var(--green);font-weight:600;font-size:0.8rem;margin-bottom:2px\\'>Hot</div>';
+                            h += '<table class=\\'signal-accuracy-table\\'><thead><tr><th>Combo</th><th>Avg 10D</th><th>WR</th><th>Obs</th></tr></thead><tbody>' + renderRows(sc.hot) + '</tbody></table>';
+                        }
+                        if (sc.cold.length > 0) {
+                            h += '<div style=\\'color:var(--red);font-weight:600;font-size:0.8rem;margin-top:6px;margin-bottom:2px\\'>Cold</div>';
+                            h += '<table class=\\'signal-accuracy-table\\'><thead><tr><th>Combo</th><th>Avg 10D</th><th>WR</th><th>Obs</th></tr></thead><tbody>' + renderRows(sc.cold) + '</tbody></table>';
+                        }
+                        h += '</div>';
+                        detail.innerHTML = h;
+                    })(this)" style="background:rgba(255,255,255,0.08);color:var(--text-primary);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:4px 8px;font-size:0.8rem;cursor:pointer;">
+                        <option value="">View sector details...</option>
+                        ${sectors.map(s => '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>').join('')}
+                    </select></div>
+                    <div id="sectorComboDetail"></div>`;
+
+                    html += `</div>`;
                 }
 
                 html += `</div></div>`;
@@ -11191,8 +11198,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             const comboDefs = SIGNAL_COMBO_DEFS;
 
-            // Baseline stats
-            const baseAvg = observations.reduce((s, o) => s + o.return10d, 0) / observations.length;
+            // Baseline stats across horizons
+            const baseAvg5d = observations.reduce((s, o) => s + (o.return5d ?? 0), 0) / observations.length;
+            const baseAvg10d = observations.reduce((s, o) => s + o.return10d, 0) / observations.length;
+            const obs15d = observations.filter(o => o.return15d != null);
+            const obs20d = observations.filter(o => o.return20d != null);
+            const baseAvg15d = obs15d.length > 0 ? obs15d.reduce((s, o) => s + o.return15d, 0) / obs15d.length : null;
+            const baseAvg20d = obs20d.length > 0 ? obs20d.reduce((s, o) => s + o.return20d, 0) / obs20d.length : null;
             const baseWR = (observations.filter(o => o.return10d > 0).length / observations.length) * 100;
 
             const results = {};
@@ -11205,26 +11217,64 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                 const avgReturn5d = matching.reduce((s, o) => s + (o.return5d ?? 0), 0) / matching.length;
                 const avgReturn10d = matching.reduce((s, o) => s + o.return10d, 0) / matching.length;
-                const winRate10d = (matching.filter(o => o.return10d > 0).length / matching.length) * 100;
+                const m15d = matching.filter(o => o.return15d != null);
+                const m20d = matching.filter(o => o.return20d != null);
+                const avgReturn15d = m15d.length >= MIN_N ? m15d.reduce((s, o) => s + o.return15d, 0) / m15d.length : null;
+                const avgReturn20d = m20d.length >= MIN_N ? m20d.reduce((s, o) => s + o.return20d, 0) / m20d.length : null;
 
-                // Median
+                const winRate5d = (matching.filter(o => (o.return5d ?? 0) > 0).length / matching.length) * 100;
+                const winRate10d = (matching.filter(o => o.return10d > 0).length / matching.length) * 100;
+                const winRate15d = m15d.length >= MIN_N ? (m15d.filter(o => o.return15d > 0).length / m15d.length) * 100 : null;
+                const winRate20d = m20d.length >= MIN_N ? (m20d.filter(o => o.return20d > 0).length / m20d.length) * 100 : null;
+
+                // Median 10d
                 const sorted10d = matching.map(o => o.return10d).sort((a, b) => a - b);
                 const mid = Math.floor(sorted10d.length / 2);
                 const medianReturn10d = sorted10d.length % 2 !== 0 ? sorted10d[mid] : (sorted10d[mid - 1] + sorted10d[mid]) / 2;
+
+                // Median 20d
+                let medianReturn20d = null;
+                if (m20d.length >= MIN_N) {
+                    const s20 = m20d.map(o => o.return20d).sort((a, b) => a - b);
+                    const m20 = Math.floor(s20.length / 2);
+                    medianReturn20d = s20.length % 2 !== 0 ? s20[m20] : (s20[m20 - 1] + s20[m20]) / 2;
+                }
+
+                // Best-horizon classification: pick horizon with strongest vs-baseline signal
+                const vsBase5d = avgReturn5d - baseAvg5d;
+                const vsBase10d = avgReturn10d - baseAvg10d;
+                const vsBase15d = (avgReturn15d != null && baseAvg15d != null) ? avgReturn15d - baseAvg15d : null;
+                const vsBase20d = (avgReturn20d != null && baseAvg20d != null) ? avgReturn20d - baseAvg20d : null;
+
+                const horizons = [
+                    { h: '5d', vs: vsBase5d },
+                    { h: '10d', vs: vsBase10d },
+                ];
+                if (vsBase15d != null) horizons.push({ h: '15d', vs: vsBase15d });
+                if (vsBase20d != null) horizons.push({ h: '20d', vs: vsBase20d });
+
+                const best = horizons.reduce((a, b) => Math.abs(b.vs) > Math.abs(a.vs) ? b : a);
 
                 results[combo.id] = {
                     id: combo.id, label: combo.label, tier: combo.tier,
                     n: matching.length,
                     avgReturn5d: parseFloat(avgReturn5d.toFixed(3)),
                     avgReturn10d: parseFloat(avgReturn10d.toFixed(3)),
+                    avgReturn15d: avgReturn15d != null ? parseFloat(avgReturn15d.toFixed(3)) : null,
+                    avgReturn20d: avgReturn20d != null ? parseFloat(avgReturn20d.toFixed(3)) : null,
                     medianReturn10d: parseFloat(medianReturn10d.toFixed(3)),
+                    medianReturn20d: medianReturn20d != null ? parseFloat(medianReturn20d.toFixed(3)) : null,
+                    winRate5d: parseFloat(winRate5d.toFixed(1)),
                     winRate10d: parseFloat(winRate10d.toFixed(1)),
-                    vsBaselineReturn: parseFloat((avgReturn10d - baseAvg).toFixed(3)),
+                    winRate15d: winRate15d != null ? parseFloat(winRate15d.toFixed(1)) : null,
+                    winRate20d: winRate20d != null ? parseFloat(winRate20d.toFixed(1)) : null,
+                    vsBaselineReturn: parseFloat(best.vs.toFixed(3)),
+                    bestHorizon: best.h,
                     vsBaselineWR: parseFloat((winRate10d - baseWR).toFixed(1))
                 };
             }
 
-            // Classify hot/cold
+            // Classify hot/cold based on best-horizon vsBaseline
             const combos = Object.values(results).filter(c => !c.insufficient);
             const hot = combos.filter(c => c.vsBaselineReturn > HOT_THRESHOLD).sort((a, b) => b.vsBaselineReturn - a.vsBaselineReturn);
             const cold = combos.filter(c => c.vsBaselineReturn < COLD_THRESHOLD).sort((a, b) => a.vsBaselineReturn - b.vsBaselineReturn);
@@ -11232,7 +11282,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             return {
                 combos: results,
-                baseline: { avgReturn10d: parseFloat(baseAvg.toFixed(3)), winRate10d: parseFloat(baseWR.toFixed(1)), totalObs: observations.length },
+                baseline: { avgReturn10d: parseFloat(baseAvg10d.toFixed(3)), avgReturn20d: baseAvg20d != null ? parseFloat(baseAvg20d.toFixed(3)) : null, winRate10d: parseFloat(baseWR.toFixed(1)), totalObs: observations.length },
                 hot, cold, neutral,
                 insufficient: Object.values(results).filter(c => c.insufficient)
             };
@@ -11289,7 +11339,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const today = new Date();
             const endDefault = new Date(today);
             let forwardBuffer = 0;
-            while (forwardBuffer < 12) { endDefault.setDate(endDefault.getDate() - 1); if (endDefault.getDay() !== 0 && endDefault.getDay() !== 6) forwardBuffer++; }
+            while (forwardBuffer < 22) { endDefault.setDate(endDefault.getDate() - 1); if (endDefault.getDay() !== 0 && endDefault.getDay() !== 6) forwardBuffer++; }
             const startDefault = new Date(endDefault);
             startDefault.setMonth(startDefault.getMonth() - 12);
 
@@ -11313,7 +11363,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Compute full fetch window: earliest - 80 lookback to latest + 10 forward
             const lookbackDates = getWeekdaysBefore(calibrationDates[0], 80);
-            const forwardDates = getWeekdaysAfter(calibrationDates[calibrationDates.length - 1], 10);
+            const forwardDates = getWeekdaysAfter(calibrationDates[calibrationDates.length - 1], 22);
             const allFetchDates = [...new Set([...lookbackDates, ...calibrationDates, ...forwardDates])].sort();
 
             report(`🔄 Calibration: Fetching ${allFetchDates.length} dates of historical data...`);
@@ -11377,15 +11427,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Save original multiDayCache to restore after calibration
             const savedMultiDayCache = multiDayCache;
 
-            // Split dates: 70% training, 30% validation
-            const shuffled = [...calibrationDates];
-            for (let i = shuffled.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-            }
-            const splitIdx = Math.floor(shuffled.length * 0.7);
-            const trainingDates = shuffled.slice(0, splitIdx).sort();
-            const validationDates = shuffled.slice(splitIdx).sort();
+            // Walk-forward validation: chronological split (first 70% train, last 30% validate)
+            const splitIdx = Math.floor(calibrationDates.length * 0.7);
+            const trainingDates = calibrationDates.slice(0, splitIdx);
+            const validationDates = calibrationDates.slice(splitIdx);
 
             // Run full pipeline for each calibration date, collect observations
             const allObservations = [];
@@ -11445,6 +11490,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         const smaCross = calculateSMACrossover(bars);
                         const sectorFlow = calSectorRotation[sector]?.moneyFlow || 'neutral';
 
+                        const volRatio = calculateVolumeRatio(sym);
+
                         const scoreInputs = {
                             momentumScore: momentum?.score || 0,
                             rsNormalized: ((rs?.rsScore || 50) / 100) * 10,
@@ -11463,7 +11510,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             fvg: struct?.fvg || 'none',
                             sma20: sma20,
                             currentPrice: data.price,
-                            smaCrossover: smaCross
+                            smaCrossover: smaCross,
+                            volumeRatio: volRatio?.ratio ?? null
                         };
                         const scoreResult = calculateCompositeScore(scoreInputs);
 
@@ -11472,8 +11520,21 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         futureBars.sort((a, b) => a.t - b.t);
                         const price5d = futureBars.length >= 5 ? futureBars[4].c : null;
                         const price10d = futureBars.length >= 10 ? futureBars[9].c : null;
+                        const price15d = futureBars.length >= 15 ? futureBars[14].c : null;
+                        const price20d = futureBars.length >= 20 ? futureBars[19].c : null;
                         const return5d = price5d ? ((price5d - data.price) / data.price) * 100 : null;
                         const return10d = price10d ? ((price10d - data.price) / data.price) * 100 : null;
+                        const return15d = price15d ? ((price15d - data.price) / data.price) * 100 : null;
+                        const return20d = price20d ? ((price20d - data.price) / data.price) * 100 : null;
+
+                        // MAE/MFE from daily highs and lows
+                        const entryPrice = data.price;
+                        const futureBars10 = futureBars.slice(0, 10);
+                        const futureBars20 = futureBars.slice(0, 20);
+                        const mae10d = futureBars10.length > 0 ? ((Math.min(...futureBars10.map(b => b.l)) - entryPrice) / entryPrice) * 100 : null;
+                        const mfe10d = futureBars10.length > 0 ? ((Math.max(...futureBars10.map(b => b.h)) - entryPrice) / entryPrice) * 100 : null;
+                        const mae20d = futureBars20.length > 0 ? ((Math.min(...futureBars20.map(b => b.l)) - entryPrice) / entryPrice) * 100 : null;
+                        const mfe20d = futureBars20.length > 0 ? ((Math.max(...futureBars20.map(b => b.h)) - entryPrice) / entryPrice) * 100 : null;
 
                         if (return10d != null) {
                             allObservations.push({
@@ -11485,6 +11546,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 breakdown: scoreResult.breakdown,
                                 return5d: return5d,
                                 return10d: return10d,
+                                return15d: return15d,
+                                return20d: return20d,
+                                mae10d: mae10d,
+                                mfe10d: mfe10d,
+                                mae20d: mae20d,
+                                mfe20d: mfe20d,
+                                volumeRatio: volRatio?.ratio ?? null,
                                 vix: vixByDate[calDate] || null
                             });
                         }
@@ -11511,11 +11579,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             ];
 
             const componentCorrelations = {};
+            const returns5d = trainingObs.map(o => o.return5d ?? 0);
             const returns10d = trainingObs.map(o => o.return10d);
+            const returns15d = trainingObs.filter(o => o.return15d != null).length > 50 ? trainingObs.map(o => o.return15d ?? 0) : null;
+            const returns20d = trainingObs.filter(o => o.return20d != null).length > 50 ? trainingObs.map(o => o.return20d ?? 0) : null;
 
             for (const key of componentKeys) {
                 const values = trainingObs.map(o => o.breakdown[key] || 0);
-                const corr = pearsonCorrelation(values, returns10d);
+                const corr5d = pearsonCorrelation(values, returns5d);
+                const corr10d = pearsonCorrelation(values, returns10d);
+                const corr15d = returns15d ? pearsonCorrelation(values, returns15d) : null;
+                const corr20d = returns20d ? pearsonCorrelation(values, returns20d) : null;
 
                 // Quintile analysis
                 const sorted = trainingObs.map((o, i) => ({ val: values[i], ret: o.return10d })).sort((a, b) => a.val - b.val);
@@ -11529,12 +11603,56 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 componentCorrelations[key] = {
-                    corr10d: parseFloat(corr.toFixed(4)),
+                    corr5d: parseFloat(corr5d.toFixed(4)),
+                    corr10d: parseFloat(corr10d.toFixed(4)),
+                    corr15d: corr15d != null ? parseFloat(corr15d.toFixed(4)) : null,
+                    corr20d: corr20d != null ? parseFloat(corr20d.toFixed(4)) : null,
                     topQuintileAvg: parseFloat(quintiles[4].toFixed(2)),
                     bottomQuintileAvg: parseFloat(quintiles[0].toFixed(2)),
                     spread: parseFloat((quintiles[4] - quintiles[0]).toFixed(2))
                 };
             }
+
+            // Excursion analysis: per-component MAE/MFE quintiles
+            const excursionAnalysis = {};
+            const obsWithMAE = trainingObs.filter(o => o.mae10d != null && o.mfe10d != null);
+            if (obsWithMAE.length >= 100) {
+                for (const key of componentKeys) {
+                    const sorted = obsWithMAE.map(o => ({ val: o.breakdown[key] || 0, mae: o.mae10d, mfe: o.mfe10d })).sort((a, b) => a.val - b.val);
+                    const qSize = Math.floor(sorted.length / 5);
+                    const quintileMAE = [], quintileMFE = [];
+                    for (let q = 0; q < 5; q++) {
+                        const start = q * qSize;
+                        const end = q === 4 ? sorted.length : (q + 1) * qSize;
+                        const slice = sorted.slice(start, end);
+                        const maeVals = slice.map(x => x.mae).sort((a, b) => a - b);
+                        const mfeVals = slice.map(x => x.mfe).sort((a, b) => a - b);
+                        quintileMAE.push(parseFloat((maeVals[Math.floor(maeVals.length / 2)] || 0).toFixed(2)));
+                        quintileMFE.push(parseFloat((mfeVals[Math.floor(mfeVals.length / 2)] || 0).toFixed(2)));
+                    }
+                    const maeCorr = pearsonCorrelation(obsWithMAE.map(o => o.breakdown[key] || 0), obsWithMAE.map(o => o.mae10d));
+                    const mfeCorr = pearsonCorrelation(obsWithMAE.map(o => o.breakdown[key] || 0), obsWithMAE.map(o => o.mfe10d));
+                    excursionAnalysis[key] = {
+                        quintileMAE, quintileMFE,
+                        maeCorr: parseFloat(maeCorr.toFixed(4)),
+                        mfeCorr: parseFloat(mfeCorr.toFixed(4))
+                    };
+                }
+            }
+
+            // Global excursion stats
+            const allMAE10d = trainingObs.filter(o => o.mae10d != null).map(o => o.mae10d).sort((a, b) => a - b);
+            const allMFE10d = trainingObs.filter(o => o.mfe10d != null).map(o => o.mfe10d).sort((a, b) => a - b);
+            const allMAE20d = trainingObs.filter(o => o.mae20d != null).map(o => o.mae20d).sort((a, b) => a - b);
+            const allMFE20d = trainingObs.filter(o => o.mfe20d != null).map(o => o.mfe20d).sort((a, b) => a - b);
+            const median = arr => arr.length > 0 ? arr[Math.floor(arr.length / 2)] : null;
+            const excursionStats = {
+                medianMAE10d: median(allMAE10d) != null ? parseFloat(median(allMAE10d).toFixed(2)) : null,
+                medianMFE10d: median(allMFE10d) != null ? parseFloat(median(allMFE10d).toFixed(2)) : null,
+                medianMAE20d: median(allMAE20d) != null ? parseFloat(median(allMAE20d).toFixed(2)) : null,
+                medianMFE20d: median(allMFE20d) != null ? parseFloat(median(allMFE20d).toFixed(2)) : null,
+                rewardRisk10d: (median(allMFE10d) && median(allMAE10d) && median(allMAE10d) !== 0) ? parseFloat((median(allMFE10d) / Math.abs(median(allMAE10d))).toFixed(2)) : null
+            };
 
             // Derive calibrated weights (bounded, with shrinkage)
             const SCALE_FACTOR = 2.0;
@@ -11722,6 +11840,29 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const comboAnalysis = analyzeSignalCombos(allObservations);
             report(`📊 Signal combos: ${comboAnalysis.hot.length} hot, ${comboAnalysis.cold.length} cold, ${comboAnalysis.insufficient.length} insufficient data`);
 
+            // Sector-segmented combo analysis
+            const sectorComboResults = {};
+            const sectorGroups = {};
+            allObservations.forEach(o => {
+                const sector = stockSectors[o.symbol] || 'Unknown';
+                if (!sectorGroups[sector]) sectorGroups[sector] = [];
+                sectorGroups[sector].push(o);
+            });
+            let sectorComboCount = 0;
+            for (const [sector, sectorObs] of Object.entries(sectorGroups)) {
+                if (sectorObs.length < 200) continue;
+                sectorComboResults[sector] = analyzeSignalCombos(sectorObs, true);
+                sectorComboCount++;
+            }
+            if (sectorComboCount > 0) report(`📊 Sector combos: ${sectorComboCount} sectors analyzed`);
+
+            // Determine best correlation horizon
+            const avgCorrs = ['corr5d', 'corr10d', 'corr15d', 'corr20d'].map(h => {
+                const vals = Object.values(componentCorrelations).map(c => c[h]).filter(v => v != null);
+                return { horizon: h.replace('corr', ''), avg: vals.length > 0 ? vals.reduce((s, v) => s + Math.abs(v), 0) / vals.length : 0 };
+            });
+            const bestCorrHorizon = avgCorrs.reduce((a, b) => b.avg > a.avg ? b : a).horizon;
+
             // Save to portfolio
             portfolio.calibratedWeights = {
                 timestamp: new Date().toISOString(),
@@ -11732,6 +11873,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 regimeWeights: Object.keys(finalRegimeWeights).length > 0 ? finalRegimeWeights : null,
                 componentCorrelations: componentCorrelations,
                 signalCombos: comboAnalysis,
+                sectorCombos: sectorComboResults,
+                excursionAnalysis: excursionAnalysis,
+                excursionStats: excursionStats,
+                extendedCorrelations: true,
                 validation: {
                     calibratedAvg10d: parseFloat(calibratedAvg10d.toFixed(2)),
                     defaultAvg10d: parseFloat(defaultAvg10d.toFixed(2)),
@@ -11765,7 +11910,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     cold: comboAnalysis.cold.length,
                     bestCombo: comboAnalysis.hot[0] ? { label: comboAnalysis.hot[0].label, avgReturn10d: comboAnalysis.hot[0].avgReturn10d, winRate10d: comboAnalysis.hot[0].winRate10d, n: comboAnalysis.hot[0].n } : null,
                     worstCombo: comboAnalysis.cold[0] ? { label: comboAnalysis.cold[0].label, avgReturn10d: comboAnalysis.cold[0].avgReturn10d, winRate10d: comboAnalysis.cold[0].winRate10d, n: comboAnalysis.cold[0].n } : null
-                }
+                },
+                excursion: excursionStats,
+                bestHorizon: bestCorrHorizon,
+                sectorInsights: sectorComboCount
             };
         }
 
@@ -11965,7 +12113,19 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         if (result.signalCombos.worstCombo) {
                             response += `  Worst: ${result.signalCombos.worstCombo.label} → ${result.signalCombos.worstCombo.avgReturn10d >= 0 ? '+' : ''}${result.signalCombos.worstCombo.avgReturn10d.toFixed(2)}% avg 10D, ${result.signalCombos.worstCombo.winRate10d.toFixed(0)}% WR (${result.signalCombos.worstCombo.n} obs)\n`;
                         }
-                        response += `  ${result.signalCombos.hot} hot, ${result.signalCombos.cold} cold — see Trade Insights for full table`;
+                        response += `  ${result.signalCombos.hot} hot, ${result.signalCombos.cold} cold — see Trade Insights for full table\n`;
+                    }
+                    if (result.excursion && result.excursion.medianMAE10d != null) {
+                        response += `\n**Excursion Analysis (MAE/MFE)**\n`;
+                        response += `  Median drawdown (10d): ${result.excursion.medianMAE10d}%\n`;
+                        response += `  Median runup (10d): +${result.excursion.medianMFE10d}%\n`;
+                        if (result.excursion.rewardRisk10d != null) response += `  Reward/Risk ratio: ${result.excursion.rewardRisk10d}x\n`;
+                    }
+                    if (result.bestHorizon) {
+                        response += `\nBest correlation horizon: ${result.bestHorizon}\n`;
+                    }
+                    if (result.sectorInsights > 0) {
+                        response += `Sector-level combos: ${result.sectorInsights} sectors analyzed`;
                     }
                     addChatMessage(response, 'agent');
                     // Re-render Trade Insights so Signal Combinations section appears without refresh
