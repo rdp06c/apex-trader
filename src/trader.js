@@ -12511,7 +12511,7 @@ Current Portfolio:
                 let macdArrow, macdClass;
                 if (macdCross === 'bullish') { macdArrow = '▲ Cross'; macdClass = 'macd-bullish'; }
                 else if (macdCross === 'bearish') { macdArrow = '▼ Cross'; macdClass = 'macd-bearish'; }
-                else if (macdHist != null) { macdArrow = macdHist >= 0 ? '▲' : '▼'; macdClass = macdHist >= 0 ? 'macd-bullish' : 'macd-bearish'; }
+                else if (macdHist != null) { macdArrow = macdHist >= 0 ? '▲' : '▼'; macdClass = 'macd-hist-only'; }
                 else { macdArrow = '--'; macdClass = 'macd-neutral'; }
                 const dtcVal = c.daysToCover || 0;
                 const dtcClass = dtcVal > 5 ? 'dtc-squeeze' : dtcVal > 3 ? 'dtc-elevated' : '';
@@ -12571,8 +12571,9 @@ Current Portfolio:
                     if (pat) {
                         const rsiVal = c.rsi != null ? c.rsi.toFixed(0) : 'N/A';
                         const ret5dVal = c.return5d != null ? (c.return5d >= 0 ? '+' : '') + c.return5d.toFixed(1) + '%' : 'N/A';
+                        const macdDesc = c.macdCrossover === 'bullish' ? 'bullish cross' : c.macdCrossover === 'bearish' ? 'bearish cross' : macdHist != null ? (macdHist >= 0 ? 'positive hist (no cross)' : 'negative hist (no cross)') : 'none';
                         const critDetails = {
-                            macd: { val: c.macdCrossover || 'none', target: 'bullish' },
+                            macd: { val: macdDesc, target: 'bullish cross' },
                             rsi: { val: rsiVal, target: '<40' },
                             structure: { val: c.structure || 'unknown', target: 'bullish' },
                             pullback: { val: ret5dVal, target: '-2% to -8%' }

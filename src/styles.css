@@ -2609,9 +2609,11 @@
         .rsi-overbought { color: var(--red); }
         .macd-bullish { color: var(--green); }
         .macd-bearish { color: var(--red); }
+        .macd-hist-only { color: var(--text-muted); }
         .macd-neutral { color: var(--text-faint); }
         .scorecard-table td.macd-bullish { color: var(--green); }
         .scorecard-table td.macd-bearish { color: var(--red); }
+        .scorecard-table td.macd-hist-only { color: var(--text-muted); }
         .scorecard-table td.macd-neutral { color: var(--text-faint); }
         .scorecard-table td.rsi-oversold { color: var(--green); }
         .scorecard-table td.rsi-overbought { color: var(--red); }
