@@ -742,40 +742,26 @@
             const ctx = document.getElementById('performanceChart').getContext('2d');
 
             performanceChart = new Chart(ctx, {
-                type: 'bar',
+                type: 'line',
                 data: {
                     labels: [],
                     datasets: [
                         {
-                            label: 'Daily Return',
-                            data: [],
-                            backgroundColor: [],
-                            borderColor: [],
-                            borderWidth: 1,
-                            borderRadius: 2,
-                            yAxisID: 'y',
-                            order: 2
-                        },
-                        {
                             label: 'Total Return',
-                            type: 'line',
                             data: [],
                             borderColor: '#f59e0b',
-                            backgroundColor: 'transparent',
+                            backgroundColor: 'rgba(245, 158, 11, 0.08)',
                             borderWidth: 2.5,
                             tension: 0.35,
-                            fill: false,
+                            fill: true,
                             pointRadius: 0,
                             pointHoverRadius: 5,
                             pointHoverBackgroundColor: '#f59e0b',
                             pointHoverBorderColor: '#fff',
-                            pointHoverBorderWidth: 2,
-                            yAxisID: 'y1',
-                            order: 1
+                            pointHoverBorderWidth: 2
                         },
                         {
                             label: 'SPY Return',
-                            type: 'line',
                             data: [],
                             borderColor: '#60a5fa',
                             backgroundColor: 'transparent',
@@ -787,9 +773,7 @@
                             pointHoverRadius: 4,
                             pointHoverBackgroundColor: '#60a5fa',
                             pointHoverBorderColor: '#fff',
-                            pointHoverBorderWidth: 2,
-                            yAxisID: 'y1',
-                            order: 0
+                            pointHoverBorderWidth: 2
                         }
                     ]
                 },
@@ -832,6 +816,15 @@
                                     if (val == null) return null;
                                     const sign = val >= 0 ? '+' : '';
                                     return ` ${context.dataset.label}: ${sign}${val.toFixed(2)}%`;
+                                },
+                                afterBody: function(contexts) {
+                                    const totalVal = contexts[0]?.parsed?.y;
+                                    const spyVal = contexts[1]?.parsed?.y;
+                                    if (totalVal != null && spyVal != null) {
+                                        const alpha = totalVal - spyVal;
+                                        return `  Alpha: ${alpha >= 0 ? '+' : ''}${alpha.toFixed(2)}%`;
+                                    }
+                                    return '';
                                 }
                             }
                         }
@@ -839,11 +832,10 @@
                     scales: {
                         y: {
                             position: 'left',
-                            beginAtZero: true,
                             border: { display: false },
                             title: {
                                 display: true,
-                                text: 'Daily %',
+                                text: 'Return %',
                                 color: '#78786e',
                                 font: { family: "'Inter', sans-serif", size: 10 }
                             },
@@ -852,32 +844,15 @@
                                 font: { family: "'Inter', sans-serif", size: 11 },
                                 padding: 8,
                                 callback: function(value) {
-                                    return value.toFixed(1) + '%';
+                                    return (value >= 0 ? '+' : '') + value.toFixed(1) + '%';
                                 }
                             },
                             grid: {
-                                color: 'rgba(255, 200, 100, 0.05)',
+                                color: function(context) {
+                                    return context.tick.value === 0 ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 200, 100, 0.05)';
+                                },
                                 drawTicks: false
                             }
-                        },
-                        y1: {
-                            position: 'right',
-                            border: { display: false },
-                            title: {
-                                display: true,
-                                text: 'Cumulative %',
-                                color: '#78786e',
-                                font: { family: "'Inter', sans-serif", size: 10 }
-                            },
-                            ticks: {
-                                color: '#78786e',
-                                font: { family: "'Inter', sans-serif", size: 11 },
-                                padding: 8,
-                                callback: function(value) {
-                                    return value.toFixed(1) + '%';
-                                }
-                            },
-                            grid: { display: false }
                         },
                         x: {
                             border: { display: false },
@@ -978,21 +953,8 @@
             const dates = allDates.filter(d => dailyMap[d].totalReturnPct != null);
             if (dates.length < 1) return;
 
-            // Build daily and cumulative return arrays from stored data
-            const dailyReturns = [];
-            const cumulativeReturns = [];
-
-            for (let i = 0; i < dates.length; i++) {
-                const day = dailyMap[dates[i]];
-                cumulativeReturns.push(day.totalReturnPct);
-
-                if (i === 0) {
-                    dailyReturns.push(0);
-                } else {
-                    const prevReturn = dailyMap[dates[i - 1]].totalReturnPct;
-                    dailyReturns.push(Math.round((day.totalReturnPct - prevReturn) * 100) / 100);
-                }
-            }
+            // Build cumulative return array from stored data
+            const cumulativeReturns = dates.map(d => dailyMap[d].totalReturnPct);
 
             // Fetch SPY data for comparison
             let spyReturns = new Array(dates.length).fill(null);
@@ -1035,16 +997,8 @@
 
             // Update chart data
             performanceChart.data.labels = labels;
-
-            performanceChart.data.datasets[0].data = dailyReturns;
-            performanceChart.data.datasets[0].backgroundColor = dailyReturns.map(v =>
-                v >= 0 ? 'rgba(52, 211, 153, 0.7)' : 'rgba(248, 113, 113, 0.7)');
-            performanceChart.data.datasets[0].borderColor = dailyReturns.map(v =>
-                v >= 0 ? 'rgba(52, 211, 153, 0.9)' : 'rgba(248, 113, 113, 0.9)');
-
-            performanceChart.data.datasets[1].data = cumulativeReturns;
-            performanceChart.data.datasets[2].data = spyReturns;
-
+            performanceChart.data.datasets[0].data = cumulativeReturns;
+            performanceChart.data.datasets[1].data = spyReturns;
             performanceChart.update();
         }
 
