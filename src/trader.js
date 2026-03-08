@@ -8550,27 +8550,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 }
                                 return '';
                             })()}
+                            ${(() => {
+                                const articles = newsCache[h.symbol];
+                                if (!articles || !articles.length) return '';
+                                const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+                                const recent = articles.filter(a => new Date(a.published_utc || a.publishedUtc).getTime() > sevenDaysAgo);
+                                if (!recent.length) return '';
+                                const pos = recent.filter(a => (a.sentiment || '').toLowerCase() === 'positive').length;
+                                const neg = recent.filter(a => (a.sentiment || '').toLowerCase() === 'negative').length;
+                                const cls = pos > neg ? 'positive' : neg > pos ? 'negative' : '';
+                                return '<span class="hc-stat"><span class="hc-stat-lbl">News</span><span class="hc-stat-val ' + cls + '">' + recent.length + '</span></span>';
+                            })()}
                         </div>
                         <div class="holding-card-footer">
                             <div><span class="holding-card-footer-label">Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
                             <div><span class="holding-card-footer-label">Now:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span></div>
                             <div><span class="holding-card-footer-label">Entry:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'N/A'}</span></div>
                         </div>
-                        ${(() => {
-                            const articles = newsCache[h.symbol];
-                            if (!articles || articles.length === 0) return '';
-                            const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-                            const recent = articles.filter(a => new Date(a.published_utc || a.publishedUtc).getTime() > sevenDaysAgo);
-                            if (recent.length === 0) return '';
-                            const top2 = recent.slice(0, 2);
-                            return '<div class="holding-card-news">' + top2.map(a => {
-                                const title = escapeHtml((a.title || '').length > 70 ? a.title.substring(0, 67) + '...' : a.title || '');
-                                const sent = (a.sentiment || 'neutral').toLowerCase();
-                                const sentClass = sent === 'positive' ? 'positive' : sent === 'negative' ? 'negative' : 'neutral';
-                                const timeAgo = formatTimeAgo(a.published_utc || a.publishedUtc);
-                                return `<div class="news-item"><span class="news-time">${timeAgo}</span><span class="news-title">${title}</span><span class="news-sentiment ${sentClass}">${sent}</span></div>`;
-                            }).join('') + '</div>';
-                        })()}
                     </div>
                 `;
             }
