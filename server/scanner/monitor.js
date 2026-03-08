@@ -9,7 +9,7 @@ const path = require('path');
 const { isMarketOpen, detectStructure, calculateRSI, calculateMACD, calculateATR, detectVolumeDivergence, calculateFibTargets } = require('../lib/scoring');
 const { fetchBulkSnapshot, fetchGroupedDailyBars } = require('../lib/fetchers');
 const { sendAlert } = require('./alerts');
-const { runFullScan, getScanStatus } = require('./full-scan');
+const { runFullScan, getScanStatus, isScanRunning, getScanRunningInfo } = require('./full-scan');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const PORTFOLIO_PATH = path.join(DATA_DIR, 'portfolio.json');
@@ -297,9 +297,11 @@ function getStatus() {
             lastRun: scanState.lastRun || null,
             stocksScanned: scanState.stocksScanned || 0,
             duration: scanState.duration || 0,
-            topScorers: scanState.topScorers || []
+            topScorers: scanState.topScorers || [],
+            isRunning: isScanRunning(),
+            runningInfo: getScanRunningInfo()
         }
     };
 }
 
-module.exports = { start, getStatus, runStructureCheck, runFullScan };
+module.exports = { start, getStatus, runStructureCheck, runFullScan, isScanRunning };

@@ -194,6 +194,26 @@ router.get('/', (req, res) => {
     .scorer-rank { color: var(--text-faint); width: 24px; font-size: 13px; }
     .scorer-score { font-size: 14px; color: var(--accent); font-weight: 600; }
     .scorer-price { font-size: 13px; color: var(--text-muted); }
+    .scan-running { font-size: 12px; color: var(--accent); font-weight: 600; }
+    .health-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
+    .health-row:last-child { border-bottom: none; }
+    .health-label { font-size: 13px; color: var(--text-secondary); }
+    .health-value { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .fill-bar-wrap { display: flex; align-items: center; gap: 10px; }
+    .fill-bar { width: 100px; height: 6px; background: var(--bg-inset); border-radius: 3px; overflow: hidden; }
+    .fill-bar-inner { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+    .fill-green .fill-bar-inner { background: var(--green); }
+    .fill-yellow .fill-bar-inner { background: var(--yellow); }
+    .fill-red .fill-bar-inner { background: var(--red); }
+    .fill-pct { font-size: 12px; font-weight: 600; min-width: 36px; }
+    .fill-pct.green { color: var(--green); }
+    .fill-pct.yellow { color: var(--yellow); }
+    .fill-pct.red { color: var(--red); }
+    .backup-list { margin-top: 12px; }
+    .backup-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 12px; color: var(--text-muted); }
+    .backup-item:first-child { color: var(--text-secondary); }
+    #health-section { opacity: 0; transition: opacity 0.3s; }
+    #health-section.loaded { opacity: 1; }
 </style>
 </head>
 <body>
@@ -222,7 +242,9 @@ router.get('/', (req, res) => {
         <div class="label">Alerts Sent</div>
     </div>
     <div class="stat">
-        <div class="value">${status.fullScan?.lastRun ? timeAgo(status.fullScan.lastRun) : 'Never'}</div>
+        <div class="value">${status.fullScan?.isRunning
+            ? `<span class="scan-running">Running (${status.fullScan.runningInfo?.elapsed || 0}s)</span>`
+            : (status.fullScan?.lastRun ? timeAgo(status.fullScan.lastRun) : 'Never')}</div>
         <div class="label">Last Full Scan</div>
     </div>
     <div class="stat">
@@ -264,11 +286,18 @@ ${status.fullScan?.topScorers?.length > 0 ? `
     }
 </div>
 
+<h2>Portfolio Health</h2>
+<div class="card" id="health-section">
+    <div class="empty-state">Loading...</div>
+</div>
+
 <h2>Actions</h2>
 <div class="card">
     <button class="btn" onclick="doAction('pull')">Pull & Restart</button>
     <button class="btn" onclick="doAction('scan')">Run Scanner Now</button>
-    <button class="btn" onclick="doAction('fullscan')" id="fullscanBtn">Run Full Scan</button>
+    <button class="btn" onclick="doAction('fullscan')" id="fullscanBtn" ${status.fullScan?.isRunning ? 'disabled' : ''}>
+        ${status.fullScan?.isRunning ? 'Scan Running...' : 'Run Full Scan'}
+    </button>
     <button class="btn secondary" onclick="loadLogs('server')">Server Logs</button>
     <button class="btn secondary" onclick="loadLogs('pull')">Pull Logs</button>
     <div id="result"></div>
@@ -276,20 +305,40 @@ ${status.fullScan?.topScorers?.length > 0 ? `
 </div>
 
 <script>
+const CONFIRM_MESSAGES = {
+    pull: 'This will pull latest code and restart the server. All browser connections will drop briefly. Continue?',
+    fullscan: 'Run full market scan? This takes 2-5 minutes. Continue?'
+};
+
 async function doAction(action) {
+    if (CONFIRM_MESSAGES[action] && !confirm(CONFIRM_MESSAGES[action])) return;
+
     const el = document.getElementById('result');
     el.className = ''; el.style.display = 'none';
     el.textContent = 'Working...'; el.className = 'success'; el.style.display = 'block';
+
+    if (action === 'fullscan') {
+        const btn = document.getElementById('fullscanBtn');
+        btn.disabled = true;
+        btn.textContent = 'Scan Running...';
+    }
+
     try {
         const res = await fetch('/admin/action/' + action, { method: 'POST' });
         const data = await res.json();
         el.textContent = data.message || data.error;
         el.className = res.ok ? 'success' : 'error';
     } catch (err) {
-        el.textContent = 'Request failed: ' + err.message;
-        el.className = 'error';
+        if (action === 'pull') {
+            el.textContent = 'Pull complete — server restarting...';
+            el.className = 'success';
+        } else {
+            el.textContent = 'Request failed: ' + err.message;
+            el.className = 'error';
+        }
     }
 }
+
 async function loadLogs(type) {
     const el = document.getElementById('logs');
     try {
@@ -302,6 +351,67 @@ async function loadLogs(type) {
         el.style.display = 'block';
     }
 }
+
+function fillColor(pct) {
+    if (pct >= 90) return 'red';
+    if (pct >= 70) return 'yellow';
+    return 'green';
+}
+
+function renderFillBar(count, cap, label) {
+    const pct = Math.round((count / cap) * 100);
+    const color = fillColor(pct);
+    return '<div class="health-row">' +
+        '<span class="health-label">' + label + '</span>' +
+        '<div class="fill-bar-wrap">' +
+            '<span class="health-value">' + count + ' / ' + cap + '</span>' +
+            '<div class="fill-bar fill-' + color + '"><div class="fill-bar-inner" style="width:' + pct + '%"></div></div>' +
+            '<span class="fill-pct ' + color + '">' + pct + '%</span>' +
+        '</div></div>';
+}
+
+async function loadHealth() {
+    const section = document.getElementById('health-section');
+    try {
+        const res = await fetch('/api/portfolio/health');
+        const h = await res.json();
+
+        let html = renderFillBar(h.transactionCount, h.transactionCap, 'Transactions');
+        html += renderFillBar(h.closedTradesCount, h.closedTradesCap, 'Closed Trades');
+        html += renderFillBar(h.perfHistoryCount, h.perfHistoryCap, 'Performance History');
+
+        html += '<div class="health-row">' +
+            '<span class="health-label">Holdings</span>' +
+            '<span class="health-value">' + h.holdingsCount + ' positions</span></div>';
+
+        html += '<div class="health-row">' +
+            '<span class="health-label">Portfolio Size</span>' +
+            '<span class="health-value">' + h.portfolioSizeKb + ' KB</span></div>';
+
+        html += '<div class="health-row">' +
+            '<span class="health-label">Last Save</span>' +
+            '<span class="health-value">' + (h.lastSave ? new Date(h.lastSave).toLocaleString() : 'Never') + '</span></div>';
+
+        if (h.backups && h.backups.length > 0) {
+            html += '<div class="backup-list">';
+            html += '<div class="health-row"><span class="health-label">Backups (' + h.backups.length + ')</span></div>';
+            h.backups.forEach(function(b) {
+                html += '<div class="backup-item">' +
+                    '<span>' + new Date(b.timestamp).toLocaleString() + '</span>' +
+                    '<span>' + b.sizeKb + ' KB</span></div>';
+            });
+            html += '</div>';
+        }
+
+        section.innerHTML = html;
+        section.classList.add('loaded');
+    } catch (err) {
+        section.innerHTML = '<div class="empty-state">Failed to load portfolio health</div>';
+        section.classList.add('loaded');
+    }
+}
+
+loadHealth();
 </script>
 </body>
 </html>`);
@@ -333,6 +443,9 @@ router.post('/action/scan', (req, res) => {
 
 // POST /admin/action/fullscan — trigger full market scan
 router.post('/action/fullscan', (req, res) => {
+    if (scanner.isScanRunning()) {
+        return res.status(409).json({ error: 'Full scan already in progress. Please wait for it to complete.' });
+    }
     res.json({ message: 'Full scan started — this takes 2-5 minutes. Check back for results.' });
     scanner.runFullScan({ force: true }).catch(err => {
         console.error('Admin full scan error:', err.message);

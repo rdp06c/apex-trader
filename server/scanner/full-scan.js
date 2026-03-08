@@ -52,16 +52,36 @@ function saveScanState(state) {
     }
 }
 
+let scanRunning = false;
+let scanStartTime = null;
+
+function isScanRunning() {
+    return scanRunning;
+}
+
+function getScanRunningInfo() {
+    if (!scanRunning) return null;
+    return { startTime: scanStartTime, elapsed: Math.round((Date.now() - scanStartTime) / 1000) };
+}
+
 /**
  * Run a full market scan — fetches data and scores all ~537 stocks.
  * Results are saved to portfolio.json fields that the browser reads:
  *   lastCandidateScores, lastSectorRotation, lastVIX, lastFullScan
  */
 async function runFullScan({ force = false } = {}) {
+    if (scanRunning) {
+        console.log('Full scan: already running, skipping');
+        return { skipped: true };
+    }
+
     if (!force && !isMarketOpen()) {
         console.log('Full scan: market closed, skipping');
         return null;
     }
+
+    scanRunning = true;
+    scanStartTime = Date.now();
 
     const apiKey = process.env.MASSIVE_API_KEY;
     const anthropicApiUrl = process.env.ANTHROPIC_API_URL;
@@ -315,6 +335,9 @@ async function runFullScan({ force = false } = {}) {
         }
 
         return null;
+    } finally {
+        scanRunning = false;
+        scanStartTime = null;
     }
 }
 
@@ -322,4 +345,4 @@ function getScanStatus() {
     return loadScanState();
 }
 
-module.exports = { runFullScan, getScanStatus };
+module.exports = { runFullScan, getScanStatus, isScanRunning, getScanRunningInfo };

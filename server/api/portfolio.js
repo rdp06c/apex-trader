@@ -127,6 +127,59 @@ router.post('/portfolio', (req, res) => {
     });
 });
 
+// GET /api/portfolio/health
+router.get('/portfolio/health', (req, res) => {
+    try {
+        // Read portfolio
+        let portfolio = DEFAULT_PORTFOLIO;
+        if (fs.existsSync(PORTFOLIO_PATH)) {
+            portfolio = JSON.parse(fs.readFileSync(PORTFOLIO_PATH, 'utf8'));
+        }
+
+        // Portfolio file stats
+        let lastSave = null;
+        let portfolioSizeKb = 0;
+        if (fs.existsSync(PORTFOLIO_PATH)) {
+            const stat = fs.statSync(PORTFOLIO_PATH);
+            lastSave = stat.mtime.toISOString();
+            portfolioSizeKb = Math.round(stat.size / 1024);
+        }
+
+        // Backup info
+        let backups = [];
+        if (fs.existsSync(BACKUP_DIR)) {
+            backups = fs.readdirSync(BACKUP_DIR)
+                .filter(f => f.endsWith('.json'))
+                .sort()
+                .reverse()
+                .map(f => {
+                    const stat = fs.statSync(path.join(BACKUP_DIR, f));
+                    return {
+                        filename: f,
+                        timestamp: stat.mtime.toISOString(),
+                        sizeKb: Math.round(stat.size / 1024)
+                    };
+                });
+        }
+
+        res.json({
+            holdingsCount: Object.keys(portfolio.holdings || {}).filter(s => (portfolio.holdings[s] || 0) > 0).length,
+            transactionCount: (portfolio.transactions || []).length,
+            transactionCap: TX_CAP,
+            closedTradesCount: (portfolio.closedTrades || []).length,
+            closedTradesCap: CLOSED_CAP,
+            perfHistoryCount: (portfolio.performanceHistory || []).length,
+            perfHistoryCap: PERF_CAP,
+            backups,
+            lastSave,
+            portfolioSizeKb
+        });
+    } catch (err) {
+        console.error('Error reading portfolio health:', err.message);
+        res.status(500).json({ error: 'Failed to read portfolio health' });
+    }
+});
+
 // GET /api/portfolio/backups
 router.get('/portfolio/backups', (req, res) => {
     try {
