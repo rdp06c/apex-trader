@@ -281,14 +281,20 @@
                 <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="holdingsDetailBody" onclick="toggleSection('holdingsDetail')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('holdingsDetail')}">
                     <h2 class="chart-title">Current Holdings</h2>
                     <div class="holdings-sort-controls" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
-                        <label for="holdingsSortSelect" class="holdings-sort-label">Sort:</label>
-                        <select id="holdingsSortSelect" class="holdings-sort-select" onchange="applyHoldingsSort(this.value)">
-                            <option value="dateAdded">Date Added</option>
-                            <option value="totalPL">Total P&amp;L %</option>
-                            <option value="dailyChange">Daily Change %</option>
-                            <option value="positionSize">Position Size</option>
-                            <option value="health">Health</option>
-                        </select>
+                        <span class="holdings-sort-label">Sort:</span>
+                        <div class="custom-select" id="holdingsSortWrapper">
+                            <button class="custom-select-btn" id="holdingsSortBtn" onclick="toggleSortDropdown()">
+                                <span id="holdingsSortLabel">Date Added</span>
+                                <span class="custom-select-arrow">&#9660;</span>
+                            </button>
+                            <div class="custom-select-menu" id="holdingsSortMenu">
+                                <div class="custom-select-option selected" data-value="dateAdded" onclick="selectSortOption(this)">Date Added</div>
+                                <div class="custom-select-option" data-value="totalPL" onclick="selectSortOption(this)">Total P&amp;L %</div>
+                                <div class="custom-select-option" data-value="dailyChange" onclick="selectSortOption(this)">Daily Change %</div>
+                                <div class="custom-select-option" data-value="positionSize" onclick="selectSortOption(this)">Position Size</div>
+                                <div class="custom-select-option" data-value="health" onclick="selectSortOption(this)">Health</div>
+                            </div>
+                        </div>
                         <button id="holdingsSortDir" class="holdings-sort-dir" onclick="toggleHoldingsSortDir()" title="Toggle sort direction">&#9660;</button>
                     </div>
                     <span class="toggle-icon" id="holdingsDetailToggle">&#9662;</span>

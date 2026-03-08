@@ -515,8 +515,14 @@
             letter-spacing: 0.03em;
         }
 
-        .holdings-sort-select {
-            background-color: var(--bg-card);
+        .custom-select {
+            position: relative;
+        }
+        .custom-select-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-card);
             color: var(--text-secondary);
             border: 1px solid rgba(255, 200, 100, 0.12);
             border-radius: 6px;
@@ -524,29 +530,48 @@
             font-size: 11px;
             font-family: 'Inter', sans-serif;
             cursor: pointer;
-            outline: none;
             transition: border-color var(--transition-fast);
-            color-scheme: dark;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239ca3af'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 6px center;
-            padding-right: 20px;
+            white-space: nowrap;
         }
-
-        .holdings-sort-select option {
-            background: var(--bg-card);
-            color: var(--text-secondary);
-        }
-
-        .holdings-sort-select:hover {
+        .custom-select-btn:hover {
             border-color: rgba(245, 158, 11, 0.3);
         }
-
-        .holdings-sort-select:focus {
-            border-color: var(--accent);
+        .custom-select-arrow {
+            font-size: 9px;
+            color: var(--text-muted);
+        }
+        .custom-select-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            min-width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border-medium);
+            border-radius: 6px;
+            padding: 4px 0;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        .custom-select-menu.open {
+            display: block;
+        }
+        .custom-select-option {
+            padding: 5px 12px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background var(--transition-fast);
+        }
+        .custom-select-option:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .custom-select-option.selected {
+            color: var(--accent);
+            font-weight: 600;
         }
 
         .holdings-sort-dir {
@@ -3250,14 +3275,20 @@
                 <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="holdingsDetailBody" onclick="toggleSection('holdingsDetail')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('holdingsDetail')}">
                     <h2 class="chart-title">Current Holdings</h2>
                     <div class="holdings-sort-controls" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
-                        <label for="holdingsSortSelect" class="holdings-sort-label">Sort:</label>
-                        <select id="holdingsSortSelect" class="holdings-sort-select" onchange="applyHoldingsSort(this.value)">
-                            <option value="dateAdded">Date Added</option>
-                            <option value="totalPL">Total P&amp;L %</option>
-                            <option value="dailyChange">Daily Change %</option>
-                            <option value="positionSize">Position Size</option>
-                            <option value="health">Health</option>
-                        </select>
+                        <span class="holdings-sort-label">Sort:</span>
+                        <div class="custom-select" id="holdingsSortWrapper">
+                            <button class="custom-select-btn" id="holdingsSortBtn" onclick="toggleSortDropdown()">
+                                <span id="holdingsSortLabel">Date Added</span>
+                                <span class="custom-select-arrow">&#9660;</span>
+                            </button>
+                            <div class="custom-select-menu" id="holdingsSortMenu">
+                                <div class="custom-select-option selected" data-value="dateAdded" onclick="selectSortOption(this)">Date Added</div>
+                                <div class="custom-select-option" data-value="totalPL" onclick="selectSortOption(this)">Total P&amp;L %</div>
+                                <div class="custom-select-option" data-value="dailyChange" onclick="selectSortOption(this)">Daily Change %</div>
+                                <div class="custom-select-option" data-value="positionSize" onclick="selectSortOption(this)">Position Size</div>
+                                <div class="custom-select-option" data-value="health" onclick="selectSortOption(this)">Health</div>
+                            </div>
+                        </div>
                         <button id="holdingsSortDir" class="holdings-sort-dir" onclick="toggleHoldingsSortDir()" title="Toggle sort direction">&#9660;</button>
                     </div>
                     <span class="toggle-icon" id="holdingsDetailToggle">&#9662;</span>
@@ -6003,6 +6034,7 @@
         // Cached holding data for sort-only re-renders (avoids refetching prices)
         let lastHoldingDataArray = [];
         let holdingsSortAsc = false;
+        let holdingsSortMode = 'dateAdded';
         
         async function fetchBulkSnapshot(symbols) {
             const now = Date.now();
@@ -11857,7 +11889,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         // Update UI
         function sortAndRenderHoldings(dataArray) {
-            const sortMode = document.getElementById('holdingsSortSelect')?.value || 'dateAdded';
+            const sortMode = holdingsSortMode || 'dateAdded';
             const sorted = [...dataArray];
             switch (sortMode) {
                 case 'totalPL':
@@ -12018,6 +12050,30 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (btn) btn.innerHTML = holdingsSortAsc ? '&#9650;' : '&#9660;';
             applyHoldingsSort();
         }
+
+        function toggleSortDropdown() {
+            const menu = document.getElementById('holdingsSortMenu');
+            if (menu) menu.classList.toggle('open');
+        }
+
+        function selectSortOption(el) {
+            holdingsSortMode = el.dataset.value;
+            document.getElementById('holdingsSortLabel').textContent = el.textContent;
+            const menu = document.getElementById('holdingsSortMenu');
+            menu.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
+            el.classList.add('selected');
+            menu.classList.remove('open');
+            applyHoldingsSort();
+        }
+
+        // Close custom dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const wrapper = document.getElementById('holdingsSortWrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                const menu = document.getElementById('holdingsSortMenu');
+                if (menu) menu.classList.remove('open');
+            }
+        });
 
         async function updateUI() {
             try {

@@ -502,8 +502,14 @@
             letter-spacing: 0.03em;
         }
 
-        .holdings-sort-select {
-            background-color: var(--bg-card);
+        .custom-select {
+            position: relative;
+        }
+        .custom-select-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-card);
             color: var(--text-secondary);
             border: 1px solid rgba(255, 200, 100, 0.12);
             border-radius: 6px;
@@ -511,29 +517,48 @@
             font-size: 11px;
             font-family: 'Inter', sans-serif;
             cursor: pointer;
-            outline: none;
             transition: border-color var(--transition-fast);
-            color-scheme: dark;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239ca3af'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 6px center;
-            padding-right: 20px;
+            white-space: nowrap;
         }
-
-        .holdings-sort-select option {
-            background: var(--bg-card);
-            color: var(--text-secondary);
-        }
-
-        .holdings-sort-select:hover {
+        .custom-select-btn:hover {
             border-color: rgba(245, 158, 11, 0.3);
         }
-
-        .holdings-sort-select:focus {
-            border-color: var(--accent);
+        .custom-select-arrow {
+            font-size: 9px;
+            color: var(--text-muted);
+        }
+        .custom-select-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            min-width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border-medium);
+            border-radius: 6px;
+            padding: 4px 0;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        .custom-select-menu.open {
+            display: block;
+        }
+        .custom-select-option {
+            padding: 5px 12px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background var(--transition-fast);
+        }
+        .custom-select-option:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .custom-select-option.selected {
+            color: var(--accent);
+            font-weight: 600;
         }
 
         .holdings-sort-dir {

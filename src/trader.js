@@ -2585,6 +2585,7 @@
         // Cached holding data for sort-only re-renders (avoids refetching prices)
         let lastHoldingDataArray = [];
         let holdingsSortAsc = false;
+        let holdingsSortMode = 'dateAdded';
         
         async function fetchBulkSnapshot(symbols) {
             const now = Date.now();
@@ -8439,7 +8440,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         // Update UI
         function sortAndRenderHoldings(dataArray) {
-            const sortMode = document.getElementById('holdingsSortSelect')?.value || 'dateAdded';
+            const sortMode = holdingsSortMode || 'dateAdded';
             const sorted = [...dataArray];
             switch (sortMode) {
                 case 'totalPL':
@@ -8600,6 +8601,30 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (btn) btn.innerHTML = holdingsSortAsc ? '&#9650;' : '&#9660;';
             applyHoldingsSort();
         }
+
+        function toggleSortDropdown() {
+            const menu = document.getElementById('holdingsSortMenu');
+            if (menu) menu.classList.toggle('open');
+        }
+
+        function selectSortOption(el) {
+            holdingsSortMode = el.dataset.value;
+            document.getElementById('holdingsSortLabel').textContent = el.textContent;
+            const menu = document.getElementById('holdingsSortMenu');
+            menu.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
+            el.classList.add('selected');
+            menu.classList.remove('open');
+            applyHoldingsSort();
+        }
+
+        // Close custom dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const wrapper = document.getElementById('holdingsSortWrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                const menu = document.getElementById('holdingsSortMenu');
+                if (menu) menu.classList.remove('open');
+            }
+        });
 
         async function updateUI() {
             try {
