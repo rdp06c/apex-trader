@@ -748,6 +748,7 @@
             color: var(--text-muted);
             padding-top: 8px;
             border-top: 1px solid var(--border-subtle);
+            margin-top: auto;
         }
 
         .holding-card-footer-label {
@@ -780,6 +781,8 @@
 
         .holdings-detail-grid .holding-card {
             padding: 16px;
+            display: flex;
+            flex-direction: column;
         }
 
         .holdings-detail-grid .empty-state {
