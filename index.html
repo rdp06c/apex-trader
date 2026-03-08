@@ -12344,11 +12344,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 lastEntry.totalReturnPct = Math.round(_totalReturnPct * 100) / 100;
             }
 
-            // Hard cap: keep at most 3000 entries
-            if (portfolio.performanceHistory.length > 3000) {
-                portfolio.performanceHistory = portfolio.performanceHistory.slice(-3000);
-            }
-
             await updatePerformanceChart();
             updatePerformanceAnalytics();
             updateSectorAllocation(priceData); // Pass priceData to avoid re-fetching
@@ -12440,19 +12435,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
         // Save portfolio to localStorage and server (if available)
         async function savePortfolio(localOnly = false) {
-            // Cap unbounded arrays to prevent storage bloat
-            const TX_CAP = 500;
-            if (portfolio.transactions.length > TX_CAP) {
-                portfolio.transactions = portfolio.transactions.slice(-TX_CAP);
-            }
-            const CLOSED_CAP = 300;
-            if ((portfolio.closedTrades || []).length > CLOSED_CAP) {
-                portfolio.closedTrades = portfolio.closedTrades.slice(-CLOSED_CAP);
-            }
-            const PERF_CAP = 3000;
-            if ((portfolio.performanceHistory || []).length > PERF_CAP) {
-                portfolio.performanceHistory = portfolio.performanceHistory.slice(-PERF_CAP);
-            }
             await portfolioStorage.save(portfolio);
 
             // Also save to Google Drive if authorized (and not in recovery mode or local-only)

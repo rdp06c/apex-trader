@@ -8,10 +8,6 @@ const PORTFOLIO_PATH = path.join(DATA_DIR, 'portfolio.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const MAX_BACKUPS = 5;
 
-const TX_CAP = 500;
-const CLOSED_CAP = 300;
-const PERF_CAP = 3000;
-
 const DEFAULT_PORTFOLIO = {
     cash: 0,
     initialBalance: 0,
@@ -44,19 +40,6 @@ function getETag() {
     } catch {
         return null;
     }
-}
-
-function capArrays(portfolio) {
-    if (portfolio.transactions && portfolio.transactions.length > TX_CAP) {
-        portfolio.transactions = portfolio.transactions.slice(-TX_CAP);
-    }
-    if (portfolio.closedTrades && portfolio.closedTrades.length > CLOSED_CAP) {
-        portfolio.closedTrades = portfolio.closedTrades.slice(-CLOSED_CAP);
-    }
-    if (portfolio.performanceHistory && portfolio.performanceHistory.length > PERF_CAP) {
-        portfolio.performanceHistory = portfolio.performanceHistory.slice(-PERF_CAP);
-    }
-    return portfolio;
 }
 
 function rotateBackups() {
@@ -108,9 +91,6 @@ router.post('/portfolio', (req, res) => {
         try {
             // Backup current version before overwriting
             saveBackup();
-
-            // Apply array caps
-            capArrays(portfolio);
 
             // Atomic write: tmp file then rename
             const tmpPath = PORTFOLIO_PATH + '.tmp.json';
@@ -165,11 +145,8 @@ router.get('/portfolio/health', (req, res) => {
         res.json({
             holdingsCount: Object.keys(portfolio.holdings || {}).filter(s => (portfolio.holdings[s] || 0) > 0).length,
             transactionCount: (portfolio.transactions || []).length,
-            transactionCap: TX_CAP,
             closedTradesCount: (portfolio.closedTrades || []).length,
-            closedTradesCap: CLOSED_CAP,
             perfHistoryCount: (portfolio.performanceHistory || []).length,
-            perfHistoryCap: PERF_CAP,
             backups,
             lastSave,
             portfolioSizeKb

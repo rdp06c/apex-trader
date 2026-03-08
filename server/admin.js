@@ -199,16 +199,6 @@ router.get('/', (req, res) => {
     .health-row:last-child { border-bottom: none; }
     .health-label { font-size: 13px; color: var(--text-secondary); }
     .health-value { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-    .fill-bar-wrap { display: flex; align-items: center; gap: 10px; }
-    .fill-bar { width: 100px; height: 6px; background: var(--bg-inset); border-radius: 3px; overflow: hidden; }
-    .fill-bar-inner { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
-    .fill-green .fill-bar-inner { background: var(--green); }
-    .fill-yellow .fill-bar-inner { background: var(--yellow); }
-    .fill-red .fill-bar-inner { background: var(--red); }
-    .fill-pct { font-size: 12px; font-weight: 600; min-width: 36px; }
-    .fill-pct.green { color: var(--green); }
-    .fill-pct.yellow { color: var(--yellow); }
-    .fill-pct.red { color: var(--red); }
     .backup-list { margin-top: 12px; }
     .backup-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 12px; color: var(--text-muted); }
     .backup-item:first-child { color: var(--text-secondary); }
@@ -352,22 +342,10 @@ async function loadLogs(type) {
     }
 }
 
-function fillColor(pct) {
-    if (pct >= 90) return 'red';
-    if (pct >= 70) return 'yellow';
-    return 'green';
-}
-
-function renderFillBar(count, cap, label) {
-    const pct = Math.round((count / cap) * 100);
-    const color = fillColor(pct);
+function healthRow(label, value) {
     return '<div class="health-row">' +
         '<span class="health-label">' + label + '</span>' +
-        '<div class="fill-bar-wrap">' +
-            '<span class="health-value">' + count + ' / ' + cap + '</span>' +
-            '<div class="fill-bar fill-' + color + '"><div class="fill-bar-inner" style="width:' + pct + '%"></div></div>' +
-            '<span class="fill-pct ' + color + '">' + pct + '%</span>' +
-        '</div></div>';
+        '<span class="health-value">' + value + '</span></div>';
 }
 
 async function loadHealth() {
@@ -376,21 +354,12 @@ async function loadHealth() {
         const res = await fetch('/api/portfolio/health');
         const h = await res.json();
 
-        let html = renderFillBar(h.transactionCount, h.transactionCap, 'Transactions');
-        html += renderFillBar(h.closedTradesCount, h.closedTradesCap, 'Closed Trades');
-        html += renderFillBar(h.perfHistoryCount, h.perfHistoryCap, 'Performance History');
-
-        html += '<div class="health-row">' +
-            '<span class="health-label">Holdings</span>' +
-            '<span class="health-value">' + h.holdingsCount + ' positions</span></div>';
-
-        html += '<div class="health-row">' +
-            '<span class="health-label">Portfolio Size</span>' +
-            '<span class="health-value">' + h.portfolioSizeKb + ' KB</span></div>';
-
-        html += '<div class="health-row">' +
-            '<span class="health-label">Last Save</span>' +
-            '<span class="health-value">' + (h.lastSave ? new Date(h.lastSave).toLocaleString() : 'Never') + '</span></div>';
+        let html = healthRow('Holdings', h.holdingsCount + ' positions');
+        html += healthRow('Transactions', h.transactionCount.toLocaleString());
+        html += healthRow('Closed Trades', h.closedTradesCount.toLocaleString());
+        html += healthRow('Performance History', h.perfHistoryCount.toLocaleString() + ' entries');
+        html += healthRow('Portfolio Size', h.portfolioSizeKb + ' KB');
+        html += healthRow('Last Save', h.lastSave ? new Date(h.lastSave).toLocaleString() : 'Never');
 
         if (h.backups && h.backups.length > 0) {
             html += '<div class="backup-list">';
