@@ -217,13 +217,16 @@
         }
 
         .status {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
             padding: 3px 8px;
-            background: var(--green);
-            color: #000;
-            border-radius: 20px;
+            background: var(--green-dim);
+            color: var(--green);
+            border: 1px solid var(--green-border);
+            border-radius: var(--radius-sm);
             font-size: 10px;
-            font-weight: 700;
+            font-weight: 600;
             letter-spacing: 0.3px;
         }
 
@@ -585,28 +588,34 @@
         .holding-card {
             flex-direction: column;
             align-items: stretch;
-            padding: 14px 12px;
-            border-bottom: 1px solid var(--border-subtle);
-            border-radius: 0;
+            padding: 14px 14px 14px 16px;
+            margin-bottom: 8px;
+            background: var(--bg-inset);
+            border: 1px solid var(--border-subtle);
+            border-left: 3px solid var(--border-medium);
+            border-radius: var(--radius-sm);
+            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
         }
+        .holding-card.card-positive { border-left-color: var(--green); }
+        .holding-card.card-negative { border-left-color: var(--red); }
 
-        .holding-card:last-child {
-            border-bottom: none;
-        }
+        .holding-card:last-child { margin-bottom: 0; }
 
         .holding-card:hover {
-            background: var(--bg-hover);
+            border-color: var(--border-strong);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         .holding-card-header {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 8px;
+            align-items: flex-start;
+            margin-bottom: 10px;
         }
 
         .holding-card-symbol {
-            font-size: 16px;
-            font-weight: 700;
+            font-size: 17px;
+            font-weight: 800;
             color: var(--text-primary);
             letter-spacing: 0.5px;
         }
@@ -629,8 +638,8 @@
         }
 
         .holding-card-value {
-            font-size: 16px;
-            font-weight: 700;
+            font-size: 17px;
+            font-weight: 800;
             color: var(--text-primary);
             text-align: right;
         }
@@ -680,7 +689,7 @@
 
         /* ── Holding Card Action Banner ──────────────────── */
         .holding-card-action {
-            margin: 8px 0 4px;
+            margin: 0 0 8px;
             padding: 6px 10px;
             border-radius: var(--radius-sm);
             font-size: 11px;
@@ -702,24 +711,38 @@
             border-left: 3px solid var(--red);
         }
 
-        /* ── Holding Card Indicators Line ───────────────── */
+        /* ── Holding Card Indicators ─────────────────────── */
         .holding-card-indicators {
-            margin: 6px 0;
-            padding: 6px 10px;
-            background: var(--bg-inset);
-            border-radius: var(--radius-sm);
-            font-size: 11px;
-            color: var(--text-secondary);
-            line-height: 1.6;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
         }
+        .ind-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 3px 8px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-subtle);
+            border-radius: 4px;
+            font-size: 10px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .ind-chip strong {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        .ind-chip .positive { color: var(--green); }
+        .ind-chip .negative { color: var(--red); }
 
         /* ── Holding Card Levels Row ────────────────────── */
         .holding-card-levels {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            font-size: 11px;
-            color: var(--text-muted);
-            padding: 4px 0 2px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
         }
         .level-item {
             white-space: nowrap;
@@ -728,7 +751,7 @@
         .holding-card-timeframe {
             margin: 8px 0;
             padding: 8px 10px;
-            background: var(--bg-inset);
+            background: var(--bg-raised);
             border-radius: var(--radius-sm);
             font-size: 11px;
             color: var(--text-secondary);
@@ -742,8 +765,9 @@
         }
 
         .holding-card-footer {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
             font-size: 11px;
             color: var(--text-muted);
             padding-top: 8px;
@@ -779,21 +803,7 @@
         }
 
         .holdings-detail-grid .holding-card {
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-md);
-            background: var(--bg-inset);
             padding: 16px;
-            border-bottom: none;
-            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-        }
-
-        .holdings-detail-grid .holding-card:hover {
-            border-color: var(--border-medium);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .holdings-detail-grid .holding-card:last-child {
-            border-bottom: none;
         }
 
         .holdings-detail-grid .empty-state {
@@ -2856,20 +2866,9 @@
             .holding-card-symbol { font-size: 15px; }
             .holding-card-value { font-size: 15px; }
 
-            /* Holding card footer + levels: stack to 1 column */
             .holding-card-footer {
-                grid-template-columns: 1fr;
+                flex-direction: column;
                 gap: 4px;
-            }
-
-            .holding-card-levels {
-                grid-template-columns: 1fr;
-                gap: 4px;
-            }
-
-            .holding-card-indicators {
-                font-size: 10px;
-                line-height: 1.8;
             }
 
             /* Sector rotation: 1 column */
@@ -11891,7 +11890,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 `;
 
                 detailHtml += `
-                    <div class="holding-item holding-card">
+                    <div class="holding-item holding-card ${h.gainLoss >= 0 ? 'card-positive' : 'card-negative'}">
                         <div class="holding-card-header">
                             <div>
                                 <div class="holding-card-symbol">${h.symbol}</div>
@@ -11917,10 +11916,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             }
                         </div>` : ''}
                         <div class="holding-card-indicators">
-                            <strong>${h.daysHeld === 0 ? 'Bought today' : `Held ${h.daysHeld}d`}</strong>
-                            ${h.isPastTimeframe ? '<span class="holding-card-timeframe-warning">OVERDUE</span>' : ''}
-                            <span class="text-muted">·</span>
-                            Mtm: ${(() => {
+                            <span class="ind-chip"><strong>${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'}</strong>${h.isPastTimeframe ? ' <span class="negative">OVERDUE</span>' : ''}</span>
+                            <span class="ind-chip">Mtm ${(() => {
                                 const entry = h.entryMomentum;
                                 const now = h._candidateNow?.momentum;
                                 if (entry == null) return '<strong>--</strong>';
@@ -11930,8 +11927,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     return '<strong>' + entry.toFixed(1) + '</strong><span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span>';
                                 }
                                 return '<strong>' + entry.toFixed(1) + '</strong>';
-                            })()}
-                            · RS: ${(() => {
+                            })()}</span>
+                            <span class="ind-chip">RS ${(() => {
                                 const entry = h.entryRS;
                                 const now = h._candidateNow?.rs;
                                 if (entry == null) return '<strong>--</strong>';
@@ -11941,39 +11938,38 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     return '<strong>' + Math.round(entry) + '</strong><span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span>';
                                 }
                                 return '<strong>' + Math.round(entry) + '</strong>';
-                            })()}
-                            ${h._rsiVal != null ? '· RSI: <strong class="' + (h._rsiVal < 30 ? 'rsi-oversold' : h._rsiVal > 70 ? 'rsi-overbought' : '') + '">' + Math.round(h._rsiVal) + '</strong>' : ''}
-                            ${h._macdResult ? '· MACD: <strong class="' + (h._macdResult.crossover === 'bullish' ? 'macd-bullish' : h._macdResult.crossover === 'bearish' ? 'macd-bearish' : h._macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish') + '">' + (h._macdResult.crossover === 'bullish' ? '▲ Cross' : h._macdResult.crossover === 'bearish' ? '▼ Cross' : h._macdResult.histogram >= 0 ? '▲' : '▼') + '</strong>' : ''}
-                            ${h._struct ? '· Struct: <strong class="' + (h._struct.structure === 'bullish' || h._struct.structure === 'bullish_continuation' ? 'sig-green' : h._struct.structure === 'bearish' || h._struct.structure === 'bearish_continuation' ? 'sig-red' : '') + '">' + (h._struct.structure || 'unknown').replace(/_/g, ' ') + '</strong>' : ''}
-                            ${h._dtcVal && h._dtcVal > 0 ? '· DTC: <strong class="' + (h._dtcVal > 5 ? 'dtc-squeeze' : h._dtcVal > 3 ? 'dtc-elevated' : '') + '">' + h._dtcVal.toFixed(1) + '</strong>' : ''}
-                            ${h._struct?.choch ? '· CHoCH: <strong class="' + (h._struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._struct.chochType === 'bullish' ? '▲' : '▼') + '</strong>' : ''}
-                            ${h._volDiv?.divergence ? '· <span class="' + (h._volDiv.direction === 'bearish' ? 'negative' : 'positive') + '" style="font-weight:600">Vol ' + h._volDiv.direction + '</span>' : ''}
-                        </div>
-                        <div class="holding-card-footer">
-                            <div><span class="holding-card-footer-label">Avg Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
-                            <div><span class="holding-card-footer-label">Current:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span> <span class="stat-change ${h.changeClass}">${h.stockPrice.changePercent >= 0 ? '+' : ''}${h.stockPrice.changePercent.toFixed(2)}%</span></div>
-                            <div><span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString() + ' ' + h.earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span></div>
+                            })()}</span>
+                            ${h._rsiVal != null ? '<span class="ind-chip">RSI <strong class="' + (h._rsiVal < 30 ? 'rsi-oversold' : h._rsiVal > 70 ? 'rsi-overbought' : '') + '">' + Math.round(h._rsiVal) + '</strong></span>' : ''}
+                            ${h._macdResult ? '<span class="ind-chip">MACD <strong class="' + (h._macdResult.crossover === 'bullish' ? 'macd-bullish' : h._macdResult.crossover === 'bearish' ? 'macd-bearish' : h._macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish') + '">' + (h._macdResult.crossover === 'bullish' ? '▲ Cross' : h._macdResult.crossover === 'bearish' ? '▼ Cross' : h._macdResult.histogram >= 0 ? '▲' : '▼') + '</strong></span>' : ''}
+                            ${h._struct ? '<span class="ind-chip">Struct <strong class="' + (h._struct.structure === 'bullish' || h._struct.structure === 'bullish_continuation' ? 'sig-green' : h._struct.structure === 'bearish' || h._struct.structure === 'bearish_continuation' ? 'sig-red' : '') + '">' + (h._struct.structure || 'unknown').replace(/_/g, ' ') + '</strong></span>' : ''}
+                            ${h._dtcVal && h._dtcVal > 0 ? '<span class="ind-chip">DTC <strong class="' + (h._dtcVal > 5 ? 'dtc-squeeze' : h._dtcVal > 3 ? 'dtc-elevated' : '') + '">' + h._dtcVal.toFixed(1) + '</strong></span>' : ''}
+                            ${h._struct?.choch ? '<span class="ind-chip">CHoCH <strong class="' + (h._struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._struct.chochType === 'bullish' ? '▲' : '▼') + '</strong></span>' : ''}
+                            ${h._volDiv?.divergence ? '<span class="ind-chip ' + (h._volDiv.direction === 'bearish' ? 'negative' : 'positive') + '">Vol ' + h._volDiv.direction + '</span>' : ''}
                         </div>
                         <div class="holding-card-levels">
-                            <div>${(() => {
+                            ${(() => {
                                 const thesisStop = h._thesis?.stopPrice;
                                 const atr = h._atrStop;
                                 const stop = thesisStop || atr;
                                 const label = thesisStop ? 'Stop' : 'ATR Stop';
-                                return stop ? '<span class="holding-card-footer-label">' + label + ':</span> <span class="holding-card-footer-value ' + (h.stockPrice.price <= stop ? 'negative' : '') + '">$' + stop.toFixed(2) + '</span>' : '';
-                            })()}</div>
-                            <div>${(() => {
+                                return stop ? '<span class="ind-chip"><span class="holding-card-footer-label">' + label + '</span> <strong class="' + (h.stockPrice.price <= stop ? 'negative' : '') + '">$' + stop.toFixed(2) + '</strong></span>' : '';
+                            })()}
+                            ${(() => {
                                 const thesisTarget = h._thesis?.targetPrice;
                                 const fib = h._fib?.type === 'bullish' ? h._fib : null;
                                 if (thesisTarget) {
-                                    return '<span class="holding-card-footer-label">Target:</span> <span class="holding-card-footer-value ' + (h.stockPrice.price >= thesisTarget ? 'positive' : '') + '">$' + thesisTarget.toFixed(2) + '</span>';
+                                    return '<span class="ind-chip"><span class="holding-card-footer-label">Target</span> <strong class="' + (h.stockPrice.price >= thesisTarget ? 'positive' : '') + '">$' + thesisTarget.toFixed(2) + '</strong></span>';
                                 }
                                 if (fib) {
-                                    return '<span class="holding-card-footer-label">Fib Target:</span> <span class="holding-card-footer-value ' + (h.stockPrice.price >= fib.fib1272 ? 'positive' : '') + '">$' + fib.fib1272.toFixed(2) + '</span> · <span class="holding-card-footer-value ' + (h.stockPrice.price >= fib.fib1618 ? 'positive' : '') + '">$' + fib.fib1618.toFixed(2) + '</span>';
+                                    return '<span class="ind-chip"><span class="holding-card-footer-label">Fib</span> <strong class="' + (h.stockPrice.price >= fib.fib1272 ? 'positive' : '') + '">$' + fib.fib1272.toFixed(2) + '</strong> · <strong class="' + (h.stockPrice.price >= fib.fib1618 ? 'positive' : '') + '">$' + fib.fib1618.toFixed(2) + '</strong></span>';
                                 }
                                 return '';
-                            })()}</div>
-                            <div></div>
+                            })()}
+                        </div>
+                        <div class="holding-card-footer">
+                            <div><span class="holding-card-footer-label">Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
+                            <div><span class="holding-card-footer-label">Now:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span></div>
+                            <div><span class="holding-card-footer-label">Entry:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'N/A'}</span></div>
                         </div>
                         ${(() => {
                             const articles = newsCache[h.symbol];

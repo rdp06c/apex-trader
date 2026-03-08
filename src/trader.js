@@ -8477,7 +8477,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 `;
 
                 detailHtml += `
-                    <div class="holding-item holding-card">
+                    <div class="holding-item holding-card ${h.gainLoss >= 0 ? 'card-positive' : 'card-negative'}">
                         <div class="holding-card-header">
                             <div>
                                 <div class="holding-card-symbol">${h.symbol}</div>
@@ -8503,10 +8503,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             }
                         </div>` : ''}
                         <div class="holding-card-indicators">
-                            <strong>${h.daysHeld === 0 ? 'Bought today' : `Held ${h.daysHeld}d`}</strong>
-                            ${h.isPastTimeframe ? '<span class="holding-card-timeframe-warning">OVERDUE</span>' : ''}
-                            <span class="text-muted">·</span>
-                            Mtm: ${(() => {
+                            <span class="ind-chip"><strong>${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'}</strong>${h.isPastTimeframe ? ' <span class="negative">OVERDUE</span>' : ''}</span>
+                            <span class="ind-chip">Mtm ${(() => {
                                 const entry = h.entryMomentum;
                                 const now = h._candidateNow?.momentum;
                                 if (entry == null) return '<strong>--</strong>';
@@ -8516,8 +8514,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     return '<strong>' + entry.toFixed(1) + '</strong><span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span>';
                                 }
                                 return '<strong>' + entry.toFixed(1) + '</strong>';
-                            })()}
-                            · RS: ${(() => {
+                            })()}</span>
+                            <span class="ind-chip">RS ${(() => {
                                 const entry = h.entryRS;
                                 const now = h._candidateNow?.rs;
                                 if (entry == null) return '<strong>--</strong>';
@@ -8527,39 +8525,38 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     return '<strong>' + Math.round(entry) + '</strong><span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span>';
                                 }
                                 return '<strong>' + Math.round(entry) + '</strong>';
-                            })()}
-                            ${h._rsiVal != null ? '· RSI: <strong class="' + (h._rsiVal < 30 ? 'rsi-oversold' : h._rsiVal > 70 ? 'rsi-overbought' : '') + '">' + Math.round(h._rsiVal) + '</strong>' : ''}
-                            ${h._macdResult ? '· MACD: <strong class="' + (h._macdResult.crossover === 'bullish' ? 'macd-bullish' : h._macdResult.crossover === 'bearish' ? 'macd-bearish' : h._macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish') + '">' + (h._macdResult.crossover === 'bullish' ? '▲ Cross' : h._macdResult.crossover === 'bearish' ? '▼ Cross' : h._macdResult.histogram >= 0 ? '▲' : '▼') + '</strong>' : ''}
-                            ${h._struct ? '· Struct: <strong class="' + (h._struct.structure === 'bullish' || h._struct.structure === 'bullish_continuation' ? 'sig-green' : h._struct.structure === 'bearish' || h._struct.structure === 'bearish_continuation' ? 'sig-red' : '') + '">' + (h._struct.structure || 'unknown').replace(/_/g, ' ') + '</strong>' : ''}
-                            ${h._dtcVal && h._dtcVal > 0 ? '· DTC: <strong class="' + (h._dtcVal > 5 ? 'dtc-squeeze' : h._dtcVal > 3 ? 'dtc-elevated' : '') + '">' + h._dtcVal.toFixed(1) + '</strong>' : ''}
-                            ${h._struct?.choch ? '· CHoCH: <strong class="' + (h._struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._struct.chochType === 'bullish' ? '▲' : '▼') + '</strong>' : ''}
-                            ${h._volDiv?.divergence ? '· <span class="' + (h._volDiv.direction === 'bearish' ? 'negative' : 'positive') + '" style="font-weight:600">Vol ' + h._volDiv.direction + '</span>' : ''}
-                        </div>
-                        <div class="holding-card-footer">
-                            <div><span class="holding-card-footer-label">Avg Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
-                            <div><span class="holding-card-footer-label">Current:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span> <span class="stat-change ${h.changeClass}">${h.stockPrice.changePercent >= 0 ? '+' : ''}${h.stockPrice.changePercent.toFixed(2)}%</span></div>
-                            <div><span class="holding-card-footer-label">Purchased:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString() + ' ' + h.earliestDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span></div>
+                            })()}</span>
+                            ${h._rsiVal != null ? '<span class="ind-chip">RSI <strong class="' + (h._rsiVal < 30 ? 'rsi-oversold' : h._rsiVal > 70 ? 'rsi-overbought' : '') + '">' + Math.round(h._rsiVal) + '</strong></span>' : ''}
+                            ${h._macdResult ? '<span class="ind-chip">MACD <strong class="' + (h._macdResult.crossover === 'bullish' ? 'macd-bullish' : h._macdResult.crossover === 'bearish' ? 'macd-bearish' : h._macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish') + '">' + (h._macdResult.crossover === 'bullish' ? '▲ Cross' : h._macdResult.crossover === 'bearish' ? '▼ Cross' : h._macdResult.histogram >= 0 ? '▲' : '▼') + '</strong></span>' : ''}
+                            ${h._struct ? '<span class="ind-chip">Struct <strong class="' + (h._struct.structure === 'bullish' || h._struct.structure === 'bullish_continuation' ? 'sig-green' : h._struct.structure === 'bearish' || h._struct.structure === 'bearish_continuation' ? 'sig-red' : '') + '">' + (h._struct.structure || 'unknown').replace(/_/g, ' ') + '</strong></span>' : ''}
+                            ${h._dtcVal && h._dtcVal > 0 ? '<span class="ind-chip">DTC <strong class="' + (h._dtcVal > 5 ? 'dtc-squeeze' : h._dtcVal > 3 ? 'dtc-elevated' : '') + '">' + h._dtcVal.toFixed(1) + '</strong></span>' : ''}
+                            ${h._struct?.choch ? '<span class="ind-chip">CHoCH <strong class="' + (h._struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._struct.chochType === 'bullish' ? '▲' : '▼') + '</strong></span>' : ''}
+                            ${h._volDiv?.divergence ? '<span class="ind-chip ' + (h._volDiv.direction === 'bearish' ? 'negative' : 'positive') + '">Vol ' + h._volDiv.direction + '</span>' : ''}
                         </div>
                         <div class="holding-card-levels">
-                            <div>${(() => {
+                            ${(() => {
                                 const thesisStop = h._thesis?.stopPrice;
                                 const atr = h._atrStop;
                                 const stop = thesisStop || atr;
                                 const label = thesisStop ? 'Stop' : 'ATR Stop';
-                                return stop ? '<span class="holding-card-footer-label">' + label + ':</span> <span class="holding-card-footer-value ' + (h.stockPrice.price <= stop ? 'negative' : '') + '">$' + stop.toFixed(2) + '</span>' : '';
-                            })()}</div>
-                            <div>${(() => {
+                                return stop ? '<span class="ind-chip"><span class="holding-card-footer-label">' + label + '</span> <strong class="' + (h.stockPrice.price <= stop ? 'negative' : '') + '">$' + stop.toFixed(2) + '</strong></span>' : '';
+                            })()}
+                            ${(() => {
                                 const thesisTarget = h._thesis?.targetPrice;
                                 const fib = h._fib?.type === 'bullish' ? h._fib : null;
                                 if (thesisTarget) {
-                                    return '<span class="holding-card-footer-label">Target:</span> <span class="holding-card-footer-value ' + (h.stockPrice.price >= thesisTarget ? 'positive' : '') + '">$' + thesisTarget.toFixed(2) + '</span>';
+                                    return '<span class="ind-chip"><span class="holding-card-footer-label">Target</span> <strong class="' + (h.stockPrice.price >= thesisTarget ? 'positive' : '') + '">$' + thesisTarget.toFixed(2) + '</strong></span>';
                                 }
                                 if (fib) {
-                                    return '<span class="holding-card-footer-label">Fib Target:</span> <span class="holding-card-footer-value ' + (h.stockPrice.price >= fib.fib1272 ? 'positive' : '') + '">$' + fib.fib1272.toFixed(2) + '</span> · <span class="holding-card-footer-value ' + (h.stockPrice.price >= fib.fib1618 ? 'positive' : '') + '">$' + fib.fib1618.toFixed(2) + '</span>';
+                                    return '<span class="ind-chip"><span class="holding-card-footer-label">Fib</span> <strong class="' + (h.stockPrice.price >= fib.fib1272 ? 'positive' : '') + '">$' + fib.fib1272.toFixed(2) + '</strong> · <strong class="' + (h.stockPrice.price >= fib.fib1618 ? 'positive' : '') + '">$' + fib.fib1618.toFixed(2) + '</strong></span>';
                                 }
                                 return '';
-                            })()}</div>
-                            <div></div>
+                            })()}
+                        </div>
+                        <div class="holding-card-footer">
+                            <div><span class="holding-card-footer-label">Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
+                            <div><span class="holding-card-footer-label">Now:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span></div>
+                            <div><span class="holding-card-footer-label">Entry:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'N/A'}</span></div>
                         </div>
                         ${(() => {
                             const articles = newsCache[h.symbol];
