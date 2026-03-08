@@ -320,8 +320,9 @@ async function doAction(action) {
         el.className = res.ok ? 'success' : 'error';
     } catch (err) {
         if (action === 'pull') {
-            el.textContent = 'Pull complete — server restarting...';
+            el.textContent = 'Pull complete — server restarting, page will reload...';
             el.className = 'success';
+            setTimeout(function() { location.reload(); }, 5000);
         } else {
             el.textContent = 'Request failed: ' + err.message;
             el.className = 'error';
