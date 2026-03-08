@@ -8678,6 +8678,32 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('investedValue').textContent = '$' + totalInvested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('positionsCount').textContent = Object.keys(portfolio.holdings).length;
 
+            // Hero daily change
+            const heroChangeEl = document.getElementById('heroChange');
+            if (heroChangeEl) {
+                if (dailyGain !== 0 || dailyGainPercent !== 0) {
+                    const sign = dailyGain >= 0 ? '+' : '';
+                    heroChangeEl.textContent = sign + '$' + dailyGain.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' (' + sign + dailyGainPercent.toFixed(2) + '%) today';
+                    heroChangeEl.className = 'hero-change ' + (dailyGain >= 0 ? 'positive' : 'negative');
+                } else {
+                    heroChangeEl.textContent = '';
+                }
+            }
+
+            // Unrealized & Realized P&L
+            const unrealizedPL = totalValue - totalInvested;
+            const unrealizedEl = document.getElementById('unrealizedPL');
+            if (unrealizedEl) {
+                unrealizedEl.textContent = (unrealizedPL >= 0 ? '+' : '') + '$' + unrealizedPL.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                unrealizedEl.style.color = unrealizedPL >= 0 ? 'var(--green)' : 'var(--red)';
+            }
+            const realizedTotal = (portfolio.closedTrades || []).reduce((s, t) => s + t.profitLoss, 0);
+            const realizedEl = document.getElementById('realizedPL');
+            if (realizedEl) {
+                realizedEl.textContent = (realizedTotal >= 0 ? '+' : '') + '$' + realizedTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                realizedEl.style.color = realizedTotal >= 0 ? 'var(--green)' : 'var(--red)';
+            }
+
             // Update holdings (compact sidebar + detail main area)
             const holdingsList = document.getElementById('holdingsList');
             const holdingsDetailGrid = document.getElementById('holdingsDetailGrid');

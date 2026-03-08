@@ -121,11 +121,6 @@
 
         /* ── Sidebar Header ──────────────────────────────── */
         .sidebar-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            flex-wrap: wrap;
-            gap: 12px;
             padding-bottom: 16px;
             margin-bottom: 16px;
             border-bottom: 1px solid var(--border-subtle);
@@ -175,18 +170,24 @@
             margin-top: 2px;
         }
 
-        .header-actions {
+        .header-title-row {
             display: flex;
-            gap: 8px;
+            align-items: baseline;
+            gap: 12px;
+        }
+
+        .header-meta-row {
+            display: flex;
             align-items: center;
-            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
         }
 
         .header-link {
             font-size: 11px;
             color: var(--text-muted);
             text-decoration: none;
-            padding: 6px 10px;
+            padding: 4px 10px;
             background: var(--bg-raised);
             border: 1px solid var(--border-subtle);
             border-radius: var(--radius-sm);
@@ -217,11 +218,11 @@
 
         .status {
             display: inline-block;
-            padding: 5px 12px;
+            padding: 3px 8px;
             background: var(--green);
             color: #000;
             border-radius: 20px;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
             letter-spacing: 0.3px;
         }
@@ -264,10 +265,20 @@
             letter-spacing: -1px;
         }
 
-        /* ── Secondary Stats (Sidebar — stacked) ─────────── */
+        .hero-change {
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 4px;
+            z-index: 1;
+            position: relative;
+        }
+        .hero-change.positive { color: var(--green); }
+        .hero-change.negative { color: var(--red); }
+
+        /* ── Secondary Stats (Sidebar — 2×2 grid) ─────────── */
         .secondary-stats {
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 8px;
             margin-bottom: 20px;
         }
@@ -276,10 +287,10 @@
             background: var(--bg-inset);
             border: 1px solid var(--border-subtle);
             border-radius: var(--radius-sm);
-            padding: 10px 14px;
+            padding: 10px 12px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .stat-label {
@@ -2774,13 +2785,8 @@
             h1 { font-size: 22px; }
             .hero-value { font-size: 24px; }
 
-            .header-actions {
+            .header-meta-row {
                 width: 100%;
-            }
-
-            .header-actions button,
-            .header-actions select {
-                flex: 1;
             }
 
             /* Sidebar action buttons: 2-column grid for bigger touch targets */
@@ -2964,16 +2970,17 @@
             <div class="sidebar-header">
                 <div class="header-branding">
                     <div class="header-subtitle">Powered by ARC Investments</div>
-                    <h1>APEX</h1>
-                    <p class="header-tagline">Scorecard-Guided Trading</p>
-                </div>
-                <div class="header-actions">
-                    <a href="/analytics" class="header-link">Analytics</a>
-                    <div id="cloudSyncStatus" class="sync-status" onclick="handleCloudSyncClick()">
-                        <span id="syncIcon">&#9729;&#65039;</span>
-                        <span id="syncText">Not synced</span>
+                    <div class="header-title-row">
+                        <h1>APEX</h1>
+                        <a href="/analytics" class="header-link">Analytics</a>
                     </div>
-                    <span class="status" id="status">&#9679; Active</span>
+                    <div class="header-meta-row">
+                        <span id="status" class="status">&#9679; Active</span>
+                        <div id="cloudSyncStatus" class="sync-status" onclick="handleCloudSyncClick()">
+                            <span id="syncIcon">&#9729;&#65039;</span>
+                            <span id="syncText">Not synced</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2981,6 +2988,7 @@
             <div class="hero">
                 <div class="hero-label">Holdings Value</div>
                 <div class="hero-value" id="portfolioValue">$0.00</div>
+                <div class="hero-change" id="heroChange"></div>
             </div>
 
             <!-- Secondary Stats -->
@@ -2988,6 +2996,14 @@
                 <div class="secondary-stat">
                     <div class="stat-label">Cost Basis</div>
                     <div class="stat-value" id="investedValue">$0.00</div>
+                </div>
+                <div class="secondary-stat">
+                    <div class="stat-label">Unrealized P&L</div>
+                    <div class="stat-value" id="unrealizedPL">$0.00</div>
+                </div>
+                <div class="secondary-stat">
+                    <div class="stat-label">Realized P&L</div>
+                    <div class="stat-value" id="realizedPL">$0.00</div>
                 </div>
                 <div class="secondary-stat">
                     <div class="stat-label">Positions</div>
@@ -12075,6 +12091,32 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('portfolioValue').textContent = '$' + totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('investedValue').textContent = '$' + totalInvested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('positionsCount').textContent = Object.keys(portfolio.holdings).length;
+
+            // Hero daily change
+            const heroChangeEl = document.getElementById('heroChange');
+            if (heroChangeEl) {
+                if (dailyGain !== 0 || dailyGainPercent !== 0) {
+                    const sign = dailyGain >= 0 ? '+' : '';
+                    heroChangeEl.textContent = sign + '$' + dailyGain.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' (' + sign + dailyGainPercent.toFixed(2) + '%) today';
+                    heroChangeEl.className = 'hero-change ' + (dailyGain >= 0 ? 'positive' : 'negative');
+                } else {
+                    heroChangeEl.textContent = '';
+                }
+            }
+
+            // Unrealized & Realized P&L
+            const unrealizedPL = totalValue - totalInvested;
+            const unrealizedEl = document.getElementById('unrealizedPL');
+            if (unrealizedEl) {
+                unrealizedEl.textContent = (unrealizedPL >= 0 ? '+' : '') + '$' + unrealizedPL.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                unrealizedEl.style.color = unrealizedPL >= 0 ? 'var(--green)' : 'var(--red)';
+            }
+            const realizedTotal = (portfolio.closedTrades || []).reduce((s, t) => s + t.profitLoss, 0);
+            const realizedEl = document.getElementById('realizedPL');
+            if (realizedEl) {
+                realizedEl.textContent = (realizedTotal >= 0 ? '+' : '') + '$' + realizedTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                realizedEl.style.color = realizedTotal >= 0 ? 'var(--green)' : 'var(--red)';
+            }
 
             // Update holdings (compact sidebar + detail main area)
             const holdingsList = document.getElementById('holdingsList');

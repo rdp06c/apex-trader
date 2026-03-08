@@ -4,16 +4,17 @@
             <div class="sidebar-header">
                 <div class="header-branding">
                     <div class="header-subtitle">Powered by ARC Investments</div>
-                    <h1>APEX</h1>
-                    <p class="header-tagline">Scorecard-Guided Trading</p>
-                </div>
-                <div class="header-actions">
-                    <a href="/analytics" class="header-link">Analytics</a>
-                    <div id="cloudSyncStatus" class="sync-status" onclick="handleCloudSyncClick()">
-                        <span id="syncIcon">&#9729;&#65039;</span>
-                        <span id="syncText">Not synced</span>
+                    <div class="header-title-row">
+                        <h1>APEX</h1>
+                        <a href="/analytics" class="header-link">Analytics</a>
                     </div>
-                    <span class="status" id="status">&#9679; Active</span>
+                    <div class="header-meta-row">
+                        <span id="status" class="status">&#9679; Active</span>
+                        <div id="cloudSyncStatus" class="sync-status" onclick="handleCloudSyncClick()">
+                            <span id="syncIcon">&#9729;&#65039;</span>
+                            <span id="syncText">Not synced</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -21,6 +22,7 @@
             <div class="hero">
                 <div class="hero-label">Holdings Value</div>
                 <div class="hero-value" id="portfolioValue">$0.00</div>
+                <div class="hero-change" id="heroChange"></div>
             </div>
 
             <!-- Secondary Stats -->
@@ -28,6 +30,14 @@
                 <div class="secondary-stat">
                     <div class="stat-label">Cost Basis</div>
                     <div class="stat-value" id="investedValue">$0.00</div>
+                </div>
+                <div class="secondary-stat">
+                    <div class="stat-label">Unrealized P&L</div>
+                    <div class="stat-value" id="unrealizedPL">$0.00</div>
+                </div>
+                <div class="secondary-stat">
+                    <div class="stat-label">Realized P&L</div>
+                    <div class="stat-value" id="realizedPL">$0.00</div>
                 </div>
                 <div class="secondary-stat">
                     <div class="stat-label">Positions</div>
