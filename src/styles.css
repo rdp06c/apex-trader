@@ -509,7 +509,7 @@
             display: flex;
             align-items: center;
             gap: 6px;
-            background: var(--bg-card);
+            background: var(--bg-raised);
             color: var(--text-secondary);
             border: 1px solid rgba(255, 200, 100, 0.12);
             border-radius: 6px;
@@ -534,7 +534,7 @@
             left: 0;
             margin-top: 4px;
             min-width: 100%;
-            background: var(--bg-card);
+            background: var(--bg-raised);
             border: 1px solid var(--border-medium);
             border-radius: 6px;
             padding: 4px 0;
@@ -562,7 +562,7 @@
         }
 
         .holdings-sort-dir {
-            background: var(--bg-card);
+            background: var(--bg-raised);
             color: var(--text-secondary);
             border: 1px solid rgba(255, 200, 100, 0.12);
             border-radius: 6px;
