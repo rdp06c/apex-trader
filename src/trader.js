@@ -8519,9 +8519,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 if (now != null) {
                                     const delta = now - entry;
                                     const cls = delta <= -3 ? 'negative' : delta >= 3 ? 'positive' : '';
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">Mtm</span><span class="hc-stat-val">' + entry.toFixed(1) + '<span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span></span></span>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">MOM</span><span class="hc-stat-val">' + entry.toFixed(1) + '<span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span></span></span>';
                                 }
-                                return '<span class="hc-stat"><span class="hc-stat-lbl">Mtm</span><span class="hc-stat-val">' + entry.toFixed(1) + '</span></span>';
+                                return '<span class="hc-stat"><span class="hc-stat-lbl">MOM</span><span class="hc-stat-val">' + entry.toFixed(1) + '</span></span>';
                             })()}
                             ${(() => {
                                 const entry = h.entryRS;
@@ -8558,6 +8558,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 }
                                 return '';
                             })()}
+                        </div>
+                        <div class="holding-card-footer">
+                            <div><span class="holding-card-footer-label">Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
+                            <div><span class="holding-card-footer-label">Now:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span></div>
+                            <div><span class="holding-card-footer-label">Entry:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'N/A'}</span></div>
                             ${(() => {
                                 const articles = newsCache[h.symbol];
                                 if (!articles || !articles.length) return '';
@@ -8573,13 +8578,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     const age = formatTimeAgo(a.published_utc || a.publishedUtc);
                                     return age + ' \u2014 ' + t + ' (' + s + ')';
                                 }).join('\n'));
-                                return '<span class="hc-stat" title="' + tip + '"><span class="hc-stat-lbl">News</span><span class="hc-stat-val ' + cls + '">' + recent.length + '</span></span>';
+                                return '<div><span class="holding-card-footer-label">News:</span> <span class="holding-card-footer-value ' + cls + '" title="' + tip + '">' + recent.length + '</span></div>';
                             })()}
-                        </div>
-                        <div class="holding-card-footer">
-                            <div><span class="holding-card-footer-label">Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
-                            <div><span class="holding-card-footer-label">Now:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span></div>
-                            <div><span class="holding-card-footer-label">Entry:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'N/A'}</span></div>
                         </div>
                     </div>
                 `;
@@ -12474,6 +12474,14 @@ Current Portfolio:
                 },
                 dtc: c => c.daysToCover || 0,
                 mcap: c => c.marketCap || 0,
+                structure: c => {
+                    const s = c.structure || 'unknown';
+                    if (s === 'bullish' || s === 'bullish_continuation') return 3;
+                    if (s === 'ranging') return 2;
+                    if (s === 'contracting') return 1;
+                    if (s === 'bearish' || s === 'bearish_continuation') return 0;
+                    return -1;
+                },
                 sig: c => c._entrySignal?.bestMatchCount ?? 0,
                 heat: c => c._comboHeat?.netHeat ?? 0,
             };
@@ -12532,7 +12540,7 @@ Current Portfolio:
                 sh('rs', "Relative Strength vs market (0-100). Mid-range is ideal. RS 85+ triggers mean-reversion penalties up to -6.0. When both Mom ≥9 and RS ≥85, extension penalty jumps to -5.0.", 'RS') +
                 sh('rsi', "RSI oscillator (0-100). Below 40 is a strong buy signal (+1.5 to +2.5). Above 70 is danger (-3.0). Above 80 is severe (-5.0 and entry multiplier drops to 0.3x). Biggest single unconditional bonus in the system.", 'RSI') +
                 sh('macd', "MACD crossover state. Bullish ▲ = +2.5, Bearish ▼ Cross = -2.0, Bearish ▼ = -0.5. A 4.5-point swing between bullish and bearish crossover — one of the largest score differentiators.", 'MACD') +
-                '<th title="Market structure (ICT/SMC). Bullish is best: adds +2.5 to +3.75 AND unlocks pullback bonus (up to +5), squeeze bonus, SMA bonus, and 1.3x entry multiplier. Ranging misses most conditional bonuses.">Structure</th>' +
+                sh('structure', "Market structure (ICT/SMC). Bullish is best: adds +2.5 to +3.75 AND unlocks pullback bonus (up to +5), squeeze bonus, SMA bonus, and 1.3x entry multiplier. Ranging misses most conditional bonuses.", 'Structure') +
                 sh('dtc', "Days to Cover (short interest). DTC >5 with Bullish structure = +1.5 squeeze bonus. DTC >3 with structure = +0.75. High DTC without Bullish structure gets nothing — structure is the gatekeeper.", 'DTC') +
                 '<th title="Sector classification. Sector rotation (inflow/outflow) affects score: inflow +2.0, modest inflow +1.0, outflow -1.0. 35% sector concentration cap enforced.">Sector</th>' +
                 sh('mcap', "Market capitalization.", 'MCap') +
