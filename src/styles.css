@@ -699,52 +699,30 @@
             border-left: 3px solid var(--red);
         }
 
-        /* ── Holding Card Indicator Grid ───────────────── */
-        .holding-card-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 2px 0;
-            margin-bottom: 8px;
-            padding: 8px 0;
-            border-top: 1px solid var(--border-subtle);
-            border-bottom: 1px solid var(--border-subtle);
-        }
-        .hcg-cell {
+        /* ── Holding Card Stat Line ─────────────────────── */
+        .holding-card-stats {
             display: flex;
-            flex-direction: column;
-            gap: 1px;
-            padding: 4px 0;
+            flex-wrap: wrap;
+            gap: 2px 10px;
+            padding: 6px 0;
+            margin-bottom: 6px;
+            border-top: 1px solid var(--border-subtle);
+            font-size: 11px;
         }
-        .hcg-label {
-            font-size: 9px;
-            font-weight: 600;
+        .hc-stat { white-space: nowrap; }
+        .hc-stat-lbl {
             color: var(--text-faint);
+            font-weight: 500;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            font-size: 10px;
+            letter-spacing: 0.3px;
+            margin-right: 2px;
         }
-        .hcg-value {
-            font-size: 12px;
+        .hc-stat-val {
             font-weight: 700;
             color: var(--text-primary);
         }
-        .hcg-value .positive, .hcg-value.positive { color: var(--green); }
-        .hcg-value .negative, .hcg-value.negative { color: var(--red); }
-        .hcg-value .health-arrow { font-size: 11px; }
-
-        /* ── Holding Card Levels Row ────────────────────── */
-        .holding-card-levels {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 8px;
-        }
-        .hcl-item {
-            display: flex;
-            flex-direction: column;
-            gap: 1px;
-        }
-        .hcl-item .hcg-label { font-size: 9px; }
-        .hcl-item .hcg-value { font-size: 12px; }
+        .hc-stat-val .health-arrow { font-size: 11px; }
 
         .holding-card-timeframe {
             margin: 8px 0;
@@ -2863,10 +2841,6 @@
 
             .holding-card-symbol { font-size: 15px; }
             .holding-card-value { font-size: 15px; }
-
-            .holding-card-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
 
             .holding-card-footer {
                 flex-direction: column;

@@ -8483,7 +8483,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             <div>
                                 <div class="holding-card-symbol">${h.symbol}</div>
                                 <div class="holding-card-name">${h.stockName} <span class="holding-card-sector">· ${h.stockSector}</span></div>
-                                <div class="holding-card-shares">${h.shares} shares · ${h.positionSizePercent.toFixed(1)}% of portfolio</div>
+                                <div class="holding-card-shares">${h.shares} shares · ${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'}${h.isPastTimeframe ? ' <span class="negative">OVERDUE</span>' : ''} · ${h.positionSizePercent.toFixed(1)}% of portfolio</div>
                             </div>
                             <div>
                                 <div class="holding-card-value">$${h.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
@@ -8503,62 +8503,50 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 : '<strong>TAKE PROFIT ' + h._profitSignals.length + '/5:</strong> ' + h._profitSignals.join(', ')
                             }
                         </div>` : ''}
-                        <div class="holding-card-grid">
-                            <div class="hcg-cell">
-                                <span class="hcg-label">Held</span>
-                                <span class="hcg-value">${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'}${h.isPastTimeframe ? ' <span class="negative">!</span>' : ''}</span>
-                            </div>
-                            <div class="hcg-cell">
-                                <span class="hcg-label">Mtm</span>
-                                <span class="hcg-value">${(() => {
-                                    const entry = h.entryMomentum;
-                                    const now = h._candidateNow?.momentum;
-                                    if (entry == null) return '--';
-                                    if (now != null) {
-                                        const delta = now - entry;
-                                        const cls = delta <= -3 ? 'negative' : delta >= 3 ? 'positive' : '';
-                                        return entry.toFixed(1) + '<span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span>';
-                                    }
-                                    return entry.toFixed(1);
-                                })()}</span>
-                            </div>
-                            <div class="hcg-cell">
-                                <span class="hcg-label">RS</span>
-                                <span class="hcg-value">${(() => {
-                                    const entry = h.entryRS;
-                                    const now = h._candidateNow?.rs;
-                                    if (entry == null) return '--';
-                                    if (now != null) {
-                                        const delta = now - entry;
-                                        const cls = delta <= -15 ? 'negative' : delta >= 15 ? 'positive' : '';
-                                        return Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span>';
-                                    }
-                                    return Math.round(entry);
-                                })()}</span>
-                            </div>
-                            ${h._rsiVal != null ? '<div class="hcg-cell"><span class="hcg-label">RSI</span><span class="hcg-value ' + (h._rsiVal < 30 ? 'rsi-oversold' : h._rsiVal > 70 ? 'rsi-overbought' : '') + '">' + Math.round(h._rsiVal) + '</span></div>' : ''}
-                            ${h._macdResult ? '<div class="hcg-cell"><span class="hcg-label">MACD</span><span class="hcg-value ' + (h._macdResult.crossover === 'bullish' ? 'macd-bullish' : h._macdResult.crossover === 'bearish' ? 'macd-bearish' : h._macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish') + '">' + (h._macdResult.crossover === 'bullish' ? '▲ Cross' : h._macdResult.crossover === 'bearish' ? '▼ Cross' : h._macdResult.histogram >= 0 ? '▲' : '▼') + '</span></div>' : ''}
-                            ${h._struct ? '<div class="hcg-cell"><span class="hcg-label">Struct</span><span class="hcg-value ' + (h._struct.structure === 'bullish' || h._struct.structure === 'bullish_continuation' ? 'sig-green' : h._struct.structure === 'bearish' || h._struct.structure === 'bearish_continuation' ? 'sig-red' : '') + '">' + (h._struct.structure || 'unknown').replace(/_/g, ' ') + '</span></div>' : ''}
-                            ${h._dtcVal && h._dtcVal > 0 ? '<div class="hcg-cell"><span class="hcg-label">DTC</span><span class="hcg-value ' + (h._dtcVal > 5 ? 'dtc-squeeze' : h._dtcVal > 3 ? 'dtc-elevated' : '') + '">' + h._dtcVal.toFixed(1) + '</span></div>' : ''}
-                            ${h._struct?.choch ? '<div class="hcg-cell"><span class="hcg-label">CHoCH</span><span class="hcg-value ' + (h._struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._struct.chochType === 'bullish' ? '▲' : '▼') + '</span></div>' : ''}
-                            ${h._volDiv?.divergence ? '<div class="hcg-cell"><span class="hcg-label">Vol</span><span class="hcg-value ' + (h._volDiv.direction === 'bearish' ? 'negative' : 'positive') + '">' + h._volDiv.direction + '</span></div>' : ''}
-                        </div>
-                        <div class="holding-card-levels">
+                        <div class="holding-card-stats">
+                            ${(() => {
+                                const entry = h.entryMomentum;
+                                const now = h._candidateNow?.momentum;
+                                if (entry == null) return '';
+                                if (now != null) {
+                                    const delta = now - entry;
+                                    const cls = delta <= -3 ? 'negative' : delta >= 3 ? 'positive' : '';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">Mtm</span><span class="hc-stat-val">' + entry.toFixed(1) + '<span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span></span></span>';
+                                }
+                                return '<span class="hc-stat"><span class="hc-stat-lbl">Mtm</span><span class="hc-stat-val">' + entry.toFixed(1) + '</span></span>';
+                            })()}
+                            ${(() => {
+                                const entry = h.entryRS;
+                                const now = h._candidateNow?.rs;
+                                if (entry == null) return '';
+                                if (now != null) {
+                                    const delta = now - entry;
+                                    const cls = delta <= -15 ? 'negative' : delta >= 15 ? 'positive' : '';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RS</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span></span></span>';
+                                }
+                                return '<span class="hc-stat"><span class="hc-stat-lbl">RS</span><span class="hc-stat-val">' + Math.round(entry) + '</span></span>';
+                            })()}
+                            ${h._rsiVal != null ? '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val ' + (h._rsiVal < 30 ? 'rsi-oversold' : h._rsiVal > 70 ? 'rsi-overbought' : '') + '">' + Math.round(h._rsiVal) + '</span></span>' : ''}
+                            ${h._macdResult ? '<span class="hc-stat"><span class="hc-stat-lbl">MACD</span><span class="hc-stat-val ' + (h._macdResult.crossover === 'bullish' ? 'macd-bullish' : h._macdResult.crossover === 'bearish' ? 'macd-bearish' : h._macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish') + '">' + (h._macdResult.crossover === 'bullish' ? '▲ Cross' : h._macdResult.crossover === 'bearish' ? '▼ Cross' : h._macdResult.histogram >= 0 ? '▲' : '▼') + '</span></span>' : ''}
+                            ${h._struct ? '<span class="hc-stat"><span class="hc-stat-lbl">Struct</span><span class="hc-stat-val ' + (h._struct.structure === 'bullish' || h._struct.structure === 'bullish_continuation' ? 'sig-green' : h._struct.structure === 'bearish' || h._struct.structure === 'bearish_continuation' ? 'sig-red' : '') + '">' + (h._struct.structure || 'unknown').replace(/_/g, ' ') + '</span></span>' : ''}
+                            ${h._dtcVal && h._dtcVal > 0 ? '<span class="hc-stat"><span class="hc-stat-lbl">DTC</span><span class="hc-stat-val ' + (h._dtcVal > 5 ? 'dtc-squeeze' : h._dtcVal > 3 ? 'dtc-elevated' : '') + '">' + h._dtcVal.toFixed(1) + '</span></span>' : ''}
+                            ${h._struct?.choch ? '<span class="hc-stat"><span class="hc-stat-lbl">CHoCH</span><span class="hc-stat-val ' + (h._struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._struct.chochType === 'bullish' ? '▲' : '▼') + '</span></span>' : ''}
+                            ${h._volDiv?.divergence ? '<span class="hc-stat"><span class="hc-stat-lbl">Vol</span><span class="hc-stat-val ' + (h._volDiv.direction === 'bearish' ? 'negative' : 'positive') + '">' + h._volDiv.direction + '</span></span>' : ''}
                             ${(() => {
                                 const thesisStop = h._thesis?.stopPrice;
                                 const atr = h._atrStop;
                                 const stop = thesisStop || atr;
                                 const label = thesisStop ? 'Stop' : 'ATR Stop';
-                                return stop ? '<div class="hcl-item"><span class="hcg-label">' + label + '</span><span class="hcg-value ' + (h.stockPrice.price <= stop ? 'negative' : '') + '">$' + stop.toFixed(2) + '</span></div>' : '';
+                                return stop ? '<span class="hc-stat"><span class="hc-stat-lbl">' + label + '</span><span class="hc-stat-val ' + (h.stockPrice.price <= stop ? 'negative' : '') + '">$' + stop.toFixed(2) + '</span></span>' : '';
                             })()}
                             ${(() => {
                                 const thesisTarget = h._thesis?.targetPrice;
                                 const fib = h._fib?.type === 'bullish' ? h._fib : null;
                                 if (thesisTarget) {
-                                    return '<div class="hcl-item"><span class="hcg-label">Target</span><span class="hcg-value ' + (h.stockPrice.price >= thesisTarget ? 'positive' : '') + '">$' + thesisTarget.toFixed(2) + '</span></div>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">Target</span><span class="hc-stat-val ' + (h.stockPrice.price >= thesisTarget ? 'positive' : '') + '">$' + thesisTarget.toFixed(2) + '</span></span>';
                                 }
                                 if (fib) {
-                                    return '<div class="hcl-item"><span class="hcg-label">Fib 1.272 / 1.618</span><span class="hcg-value"><span class="' + (h.stockPrice.price >= fib.fib1272 ? 'positive' : '') + '">$' + fib.fib1272.toFixed(2) + '</span> · <span class="' + (h.stockPrice.price >= fib.fib1618 ? 'positive' : '') + '">$' + fib.fib1618.toFixed(2) + '</span></span></div>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">Fib</span><span class="hc-stat-val"><span class="' + (h.stockPrice.price >= fib.fib1272 ? 'positive' : '') + '">$' + fib.fib1272.toFixed(2) + '</span> · <span class="' + (h.stockPrice.price >= fib.fib1618 ? 'positive' : '') + '">$' + fib.fib1618.toFixed(2) + '</span></span></span>';
                                 }
                                 return '';
                             })()}
