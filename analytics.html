@@ -350,17 +350,15 @@
   </div>
 
   <!-- ═══ WHAT'S WORKING ═══ -->
-  <div class="grid">
-    <div class="card">
-      <div class="chart-title">Win &amp; Loss Streaks</div>
-      <div class="section-sub">Consecutive W/L runs over time &mdash; are losses clustering (tilt)?</div>
-      <canvas id="streakChart"></canvas>
-    </div>
-    <div class="card">
-      <div class="chart-title">Rolling Expectancy</div>
-      <div class="section-sub">Expected $ per trade over last 10 trades: (win% &times; avg win) &minus; (loss% &times; avg loss)</div>
-      <canvas id="expectancyChart"></canvas>
-    </div>
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Win &amp; Loss Streaks</div>
+    <div class="section-sub">Consecutive W/L runs over time &mdash; are losses clustering (tilt)?</div>
+    <canvas id="streakChart"></canvas>
+  </div>
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Rolling Expectancy</div>
+    <div class="section-sub">Expected $ per trade over last 10 trades: (win% &times; avg win) &minus; (loss% &times; avg loss)</div>
+    <canvas id="expectancyChart"></canvas>
   </div>
 
   <!-- ═══ EXIT QUALITY ═══ -->
@@ -692,7 +690,7 @@ function renderPerfChart() {
   const perf = data.performanceHistory || [];
   if (!perf.length) return;
 
-  let cumDeposits = 0;
+  let cumDeposits = data.initialBalance || 0;
   const labels = [];
   const returnPcts = [];
 
@@ -1596,6 +1594,7 @@ function renderReturnDistChart() {
     },
     options: {
       responsive: true,
+      layout: { padding: { top: 20 } },
       scales: {
         y: {
           beginAtZero: true,
@@ -1649,7 +1648,7 @@ function renderDrawdownChart() {
   const perf = data.performanceHistory || [];
   if (perf.length < 2) return;
 
-  let cumDeposits = 0;
+  let cumDeposits = data.initialBalance || 0;
   const labels = [];
   const drawdowns = [];
   let peakReturn = -Infinity;
