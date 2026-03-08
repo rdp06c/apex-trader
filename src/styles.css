@@ -503,7 +503,7 @@
         }
 
         .holdings-sort-select {
-            background: var(--bg-card);
+            background-color: var(--bg-card);
             color: var(--text-secondary);
             border: 1px solid rgba(255, 200, 100, 0.12);
             border-radius: 6px;
@@ -514,6 +514,18 @@
             outline: none;
             transition: border-color var(--transition-fast);
             color-scheme: dark;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239ca3af'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 6px center;
+            padding-right: 20px;
+        }
+
+        .holdings-sort-select option {
+            background: var(--bg-card);
+            color: var(--text-secondary);
         }
 
         .holdings-sort-select:hover {
