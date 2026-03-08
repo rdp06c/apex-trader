@@ -231,6 +231,7 @@
     <div class="header-tagline">Scoring engine validation &amp; trade pattern insights</div>
   </div>
   <div>
+    <a href="/" class="header-btn secondary" style="text-decoration:none;display:inline-block;text-align:center">Dashboard</a>
     <button class="header-btn secondary" onclick="loadFromAPI()" title="Reload from server">Reload</button>
     <button class="header-btn" onclick="document.getElementById('fileInput').click()">Load File</button>
     <input type="file" id="fileInput" accept=".json" onchange="handleFileLoad(event)">
@@ -249,21 +250,34 @@
   <div class="stats-row" id="statsRow"></div>
 
   <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Portfolio Value Over Time</div>
+    <div class="chart-title">Return % Over Time</div>
+    <div class="section-sub">Percentage return on invested capital, excluding deposit effects</div>
     <canvas id="perfChart"></canvas>
   </div>
 
   <!-- ═══ P&L DEEP DIVE ═══ -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Cumulative Realized P&amp;L</div>
+    <div class="section-sub">Running total of closed-trade profits</div>
+    <canvas id="cumulativePL"></canvas>
+  </div>
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Rolling Win Rate</div>
+    <div class="section-sub">Win rate over the last 10 trades &mdash; are you improving?</div>
+    <canvas id="rollingWinRate"></canvas>
+  </div>
+
+  <!-- ═══ RISK ═══ -->
   <div class="grid">
     <div class="card">
-      <div class="chart-title">Cumulative Realized P&amp;L</div>
-      <div class="section-sub">Running total of closed-trade profits</div>
-      <canvas id="cumulativePL"></canvas>
+      <div class="chart-title">Return Distribution</div>
+      <div class="section-sub">Histogram of individual trade returns &mdash; are your wins bigger than your losses?</div>
+      <canvas id="returnDistChart"></canvas>
     </div>
     <div class="card">
-      <div class="chart-title">Rolling Win Rate</div>
-      <div class="section-sub">Win rate over the last 10 trades &mdash; are you improving?</div>
-      <canvas id="rollingWinRate"></canvas>
+      <div class="chart-title">Drawdown from Peak</div>
+      <div class="section-sub">How deep the valleys get &mdash; max decline from highest return %</div>
+      <canvas id="drawdownChart"></canvas>
     </div>
   </div>
 
@@ -332,6 +346,20 @@
       <div class="chart-title">P&amp;L by Exit Reason</div>
       <div class="section-sub">Which exit strategies protect capital best?</div>
       <canvas id="exitReasonPL"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══ WHAT'S WORKING ═══ -->
+  <div class="grid">
+    <div class="card">
+      <div class="chart-title">Win &amp; Loss Streaks</div>
+      <div class="section-sub">Consecutive W/L runs over time &mdash; are losses clustering (tilt)?</div>
+      <canvas id="streakChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Rolling Expectancy</div>
+      <div class="section-sub">Expected $ per trade over last 10 trades: (win% &times; avg win) &minus; (loss% &times; avg loss)</div>
+      <canvas id="expectancyChart"></canvas>
     </div>
   </div>
 
@@ -598,6 +626,8 @@ function renderAll() {
   renderPerfChart();
   renderCumulativePL();
   renderRollingWinRate();
+  renderReturnDistChart();
+  renderDrawdownChart();
   renderEntrySignalOutcome();
   renderCompositeScatter();
   renderRSIScatter();
@@ -608,6 +638,8 @@ function renderAll() {
   renderStructureChart();
   renderHoldChart();
   renderExitReasonPL();
+  renderStreakChart();
+  renderExpectancyChart();
   renderPostExitChart();
 }
 
@@ -655,21 +687,20 @@ function renderStats() {
   `).join('');
 }
 
-/* ── Portfolio Value Over Time ──────────────────────────── */
+/* ── Return % Over Time ────────────────────────────────── */
 function renderPerfChart() {
   const perf = data.performanceHistory || [];
   if (!perf.length) return;
 
   let cumDeposits = 0;
   const labels = [];
-  const values = [];
-  const depositAdj = [];
+  const returnPcts = [];
 
   perf.forEach(p => {
     if (p.deposit) cumDeposits += p.deposit;
     labels.push(new Date(p.timestamp));
-    values.push(p.value);
-    depositAdj.push(p.value - cumDeposits);
+    const pct = cumDeposits > 0 ? ((p.value - cumDeposits) / cumDeposits) * 100 : 0;
+    returnPcts.push(pct);
   });
 
   new Chart(document.getElementById('perfChart'), {
@@ -678,35 +709,25 @@ function renderPerfChart() {
       labels,
       datasets: [
         {
-          label: 'Portfolio Value',
-          data: values,
+          label: 'Return %',
+          data: returnPcts,
           borderColor: COLORS.accent,
           backgroundColor: 'rgba(245, 158, 11, 0.08)',
           fill: true,
           tension: 0.3,
           pointRadius: 0,
           borderWidth: 2
-        },
-        {
-          label: 'Value Minus Deposits (Gains Only)',
-          data: depositAdj,
-          borderColor: COLORS.loss,
-          borderDash: [5, 3],
-          tension: 0.3,
-          pointRadius: 0,
-          borderWidth: 1.5,
-          fill: false
         }
       ]
     },
     options: {
       responsive: true,
       plugins: {
-        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        legend: { display: false },
         tooltip: {
           callbacks: {
             title: ctx => new Date(ctx[0].label).toLocaleDateString(),
-            label: ctx => ctx.dataset.label + ': $' + ctx.parsed.y.toFixed(2)
+            label: ctx => (ctx.parsed.y >= 0 ? '+' : '') + ctx.parsed.y.toFixed(2) + '%'
           }
         }
       },
@@ -726,7 +747,7 @@ function renderPerfChart() {
           grid: { display: false }
         },
         y: {
-          ticks: { callback: v => '$' + v },
+          ticks: { callback: v => (v >= 0 ? '+' : '') + v + '%' },
           grid: { color: COLORS.gridLine }
         }
       }
@@ -1238,7 +1259,7 @@ function renderSectorFlowChart() {
     options: {
       responsive: true,
       scales: {
-        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        y: { beginAtZero: true, max: 110, ticks: { callback: v => v <= 100 ? v + '%' : '' }, grid: { color: COLORS.gridLine } },
         x: { grid: { display: false } }
       },
       plugins: {
@@ -1346,7 +1367,7 @@ function renderMomentumChart() {
     options: {
       responsive: true,
       scales: {
-        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        y: { beginAtZero: true, max: 110, ticks: { callback: v => v <= 100 ? v + '%' : '' }, grid: { color: COLORS.gridLine } },
         x: { grid: { display: false } }
       },
       plugins: {
@@ -1462,7 +1483,7 @@ function renderHoldChart() {
     options: {
       responsive: true,
       scales: {
-        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine } },
+        y: { beginAtZero: true, max: 110, ticks: { callback: v => v <= 100 ? v + '%' : '' }, grid: { color: COLORS.gridLine } },
         x: { grid: { display: false } }
       },
       plugins: {
@@ -1538,6 +1559,287 @@ function renderExitReasonPL() {
         y: { grid: { display: false } }
       }
     }
+  });
+}
+
+/* ── Return Distribution ─────────────────────────────── */
+function renderReturnDistChart() {
+  const ct = (data.closedTrades || []).filter(t => t.returnPercent != null);
+  if (ct.length < 3) return;
+
+  // Build histogram buckets from floor to ceil in 2% steps
+  const returns = ct.map(t => t.returnPercent);
+  const minR = Math.floor(Math.min(...returns) / 2) * 2;
+  const maxR = Math.ceil(Math.max(...returns) / 2) * 2;
+  const buckets = [];
+  for (let edge = minR; edge < maxR; edge += 2) {
+    buckets.push({ lo: edge, hi: edge + 2, count: 0 });
+  }
+  returns.forEach(r => {
+    const b = buckets.find(b => r >= b.lo && r < b.hi) || buckets[buckets.length - 1];
+    b.count++;
+  });
+
+  const avgReturn = returns.reduce((s, r) => s + r, 0) / returns.length;
+
+  new Chart(document.getElementById('returnDistChart'), {
+    type: 'bar',
+    data: {
+      labels: buckets.map(b => (b.lo >= 0 ? '+' : '') + b.lo + '%'),
+      datasets: [{
+        data: buckets.map(b => b.count),
+        backgroundColor: buckets.map(b => b.lo >= 0 ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: buckets.map(b => b.lo >= 0 ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, font: { size: 10 } },
+          title: { display: true, text: 'Number of trades', color: COLORS.muted },
+          grid: { color: COLORS.gridLine }
+        },
+        x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            title: ctx => {
+              const b = buckets[ctx[0].dataIndex];
+              return `${b.lo >= 0 ? '+' : ''}${b.lo}% to ${b.hi >= 0 ? '+' : ''}${b.hi}%`;
+            },
+            label: ctx => ctx.parsed.y + ' trades'
+          }
+        }
+      }
+    },
+    plugins: [{
+      id: 'avgLine',
+      beforeDraw(chart) {
+        const xScale = chart.scales.x;
+        const ctx = chart.ctx;
+        // Find the bucket index closest to average return
+        let avgIdx = buckets.findIndex(b => avgReturn >= b.lo && avgReturn < b.hi);
+        if (avgIdx < 0) avgIdx = buckets.length - 1;
+        const x = xScale.getPixelForValue(avgIdx);
+        ctx.save();
+        ctx.strokeStyle = COLORS.accent;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x, chart.chartArea.top);
+        ctx.lineTo(x, chart.chartArea.bottom);
+        ctx.stroke();
+        ctx.fillStyle = COLORS.accent;
+        ctx.font = "10px 'Inter', sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText('avg ' + (avgReturn >= 0 ? '+' : '') + avgReturn.toFixed(1) + '%', x, chart.chartArea.top - 4);
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+/* ── Drawdown from Peak ─────────────────────────────── */
+function renderDrawdownChart() {
+  const perf = data.performanceHistory || [];
+  if (perf.length < 2) return;
+
+  let cumDeposits = 0;
+  const labels = [];
+  const drawdowns = [];
+  let peakReturn = -Infinity;
+
+  perf.forEach(p => {
+    if (p.deposit) cumDeposits += p.deposit;
+    labels.push(new Date(p.timestamp));
+    const returnPct = cumDeposits > 0 ? ((p.value - cumDeposits) / cumDeposits) * 100 : 0;
+    if (returnPct > peakReturn) peakReturn = returnPct;
+    drawdowns.push(returnPct - peakReturn); // always <= 0
+  });
+
+  const maxDD = Math.min(...drawdowns);
+
+  new Chart(document.getElementById('drawdownChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Drawdown',
+        data: drawdowns,
+        borderColor: COLORS.loss,
+        backgroundColor: COLORS.loss + '18',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 1.5
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: ctx => new Date(ctx[0].label).toLocaleDateString(),
+            label: ctx => 'Drawdown: ' + ctx.parsed.y.toFixed(2) + '%'
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'category',
+          ticks: {
+            callback: function(val, i) {
+              const d = labels[i];
+              return (i === 0 || d.getDate() !== labels[Math.max(0, i - 1)].getDate())
+                ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : '';
+            },
+            maxTicksLimit: 15,
+            font: { size: 10 }
+          },
+          grid: { display: false }
+        },
+        y: {
+          ticks: { callback: v => v + '%' },
+          grid: { color: COLORS.gridLine },
+          title: { display: true, text: 'Max DD: ' + maxDD.toFixed(2) + '%', color: COLORS.loss, font: { size: 10 } }
+        }
+      }
+    }
+  });
+}
+
+/* ── Win & Loss Streaks ──────────────────────────────── */
+function renderStreakChart() {
+  const sorted = [...(data.closedTrades || [])].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+  if (sorted.length < 3) return;
+
+  const labels = [];
+  const streakValues = [];
+  let currentStreak = 0;
+
+  sorted.forEach(t => {
+    const isWin = t.profitLoss > 0;
+    if (isWin) {
+      currentStreak = currentStreak > 0 ? currentStreak + 1 : 1;
+    } else {
+      currentStreak = currentStreak < 0 ? currentStreak - 1 : -1;
+    }
+    labels.push(t.symbol);
+    streakValues.push(currentStreak);
+  });
+
+  new Chart(document.getElementById('streakChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: streakValues,
+        backgroundColor: streakValues.map(v => v > 0 ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: streakValues.map(v => v > 0 ? COLORS.win : COLORS.loss),
+        borderWidth: 1,
+        borderRadius: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          grid: { color: COLORS.gridLine },
+          title: { display: true, text: 'Streak length', color: COLORS.muted },
+          ticks: {
+            stepSize: 1,
+            callback: v => (v > 0 ? '+' : '') + v
+          }
+        },
+        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45 } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              return v > 0 ? v + ' wins in a row' : Math.abs(v) + ' losses in a row';
+            }
+          }
+        }
+      }
+    },
+    plugins: [zeroLinePlugin]
+  });
+}
+
+/* ── Rolling Expectancy ─────────────────────────────── */
+function renderExpectancyChart() {
+  const sorted = [...(data.closedTrades || [])].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+  const WINDOW = 10;
+  if (sorted.length < WINDOW) return;
+
+  const labels = [];
+  const expectancy = [];
+
+  for (let i = WINDOW - 1; i < sorted.length; i++) {
+    const window = sorted.slice(i - WINDOW + 1, i + 1);
+    const wins = window.filter(t => t.profitLoss > 0);
+    const losses = window.filter(t => t.profitLoss <= 0);
+    const winRate = wins.length / window.length;
+    const avgWin = wins.length ? wins.reduce((s, t) => s + t.profitLoss, 0) / wins.length : 0;
+    const avgLoss = losses.length ? Math.abs(losses.reduce((s, t) => s + t.profitLoss, 0) / losses.length) : 0;
+    const exp = (winRate * avgWin) - ((1 - winRate) * avgLoss);
+    labels.push(sorted[i].symbol);
+    expectancy.push(exp);
+  }
+
+  new Chart(document.getElementById('expectancyChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Expectancy ($/trade)',
+        data: expectancy,
+        borderColor: COLORS.accent,
+        backgroundColor: expectancy.map(v => v >= 0 ? COLORS.win + '18' : COLORS.loss + '18'),
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+        pointBackgroundColor: expectancy.map(v => v >= 0 ? COLORS.win : COLORS.loss),
+        borderWidth: 1.5,
+        segment: {
+          borderColor: ctx => {
+            const v = ctx.p1.parsed.y;
+            return v >= 0 ? COLORS.win : COLORS.loss;
+          }
+        }
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              return 'Expectancy: ' + (v >= 0 ? '+' : '') + '$' + v.toFixed(2) + '/trade';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45 } },
+        y: {
+          grid: { color: COLORS.gridLine },
+          ticks: { callback: v => (v >= 0 ? '+' : '-') + '$' + Math.abs(v).toFixed(0) }
+        }
+      }
+    },
+    plugins: [zeroLinePlugin]
   });
 }
 

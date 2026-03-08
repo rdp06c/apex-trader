@@ -182,6 +182,21 @@
             flex-wrap: wrap;
         }
 
+        .header-link {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 6px 10px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s;
+        }
+        .header-link:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
         .sync-status {
             display: flex;
             align-items: center;
@@ -2953,6 +2968,7 @@
                     <p class="header-tagline">Scorecard-Guided Trading</p>
                 </div>
                 <div class="header-actions">
+                    <a href="/analytics" class="header-link">Analytics</a>
                     <div id="cloudSyncStatus" class="sync-status" onclick="handleCloudSyncClick()">
                         <span id="syncIcon">&#9729;&#65039;</span>
                         <span id="syncText">Not synced</span>
