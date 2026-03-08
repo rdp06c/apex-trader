@@ -77,9 +77,9 @@ Browser (index.html)
 
 ## Core Workflow
 
-1. **Scan Market** — fetches prices, ~65-day OHLCV bars, ticker details, short interest, server indicators (RSI, MACD, SMA50), VIX for ~540 stocks across 14 sectors. Populates all caches. Server indicators fetched for ALL stocks (no cap).
+1. **Scan Market** — fetches prices, ~65-day OHLCV bars, ticker details, short interest, server indicators (RSI, MACD, SMA50), VIX for ~540 stocks across 14 sectors. Populates all caches. Server indicators fetched for ALL stocks (no cap). Auto-refreshes UI (holding cards, portfolio metrics) on completion — no manual "Refresh Prices" needed.
 2. **Score** — `calculateCompositeScore` produces weighted sum of ~15 components (momentum, RS, structure, RSI, MACD, pullback, extension, etc.) with entry quality multiplier
-3. **Candidate Scorecard** — full universe displayed with sortable, color-coded columns: Sig (entry signal badge), Heat (combo heat dots), Score, Price, Day%, 5D, MOM, VOL, RS, RSI, MACD, Structure, DTC, Sector, MCap. Click column headers to sort. Sector filter dropdown. Paginated (40 per page). Entry signal filter checkbox.
+3. **Candidate Scorecard** — full universe displayed with sortable, color-coded columns: Sig (entry signal badge), Heat (combo heat dots), Score, Price, Day%, 5D, MOM, VOL, RS, RSI, MACD, Structure, DTC, Sector, MCap. All columns sortable (click header to toggle asc/desc). Sector filter dropdown. Paginated (40 per page). Entry signal filter checkbox.
 4. **Manual Trade** — user enters buy/sell via modal. Same-day trades auto-capture all live signals from caches (run Scan Market first for richest data).
 5. **Trade Insights** — derived rules, performance summary, signal accuracy table, signal combinations (from calibration), regime history — all computed from `closedTrades` and calibration data
 
@@ -118,7 +118,7 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 - `SIGNAL_COMBO_DEFS` + `evaluateComboHeat()` — tests each stock's current signals against 18 combos, cross-references calibration results to show green dots (hot combos) and red dots (cold combos) in the Heat column. Requires calibration data to function.
 - Score driver badge (S/M) indicates whether a stock's score is signal-driven or momentum-driven.
 
-**Holdings Health**: Holdings cards show entry vs current comparison (momentum, RS arrows with color coding), thesis-based sell signals (stop breached, RS collapse, momentum collapse, structure flip), and sortable by health (most distressed first).
+**Holdings Health**: Holdings cards show a compact inline stat line (MOM, RS with entry→current arrows, RSI, MACD, Structure, DTC, CHoCH, Vol, Stop/Target levels) and a footer row (Cost, Now, Entry, News count with tooltip). Sell/profit signals display as a centered badge in the card header. Cards are sortable by Date Added, Total P&L%, Daily Change%, Position Size, or Health (with ascending/descending toggle). Custom themed dropdown replaces native `<select>` for dark mode compatibility.
 
 **Trade Insights** (`updateLearningInsightsDisplay`): Renders in the Trade Insights section (expanded by default). Shows:
 - Trading rules derived from `deriveTradingRules()` — patterns that work/don't work
@@ -168,7 +168,7 @@ Scoring in `server/lib/scoring.js`: all pure scoring functions adapted to accept
 
 ## Admin Panel
 
-Available at `/admin`. Shows:
+Available at `/admin` (linked from dashboard header nav). Shows:
 - Server uptime, market status, last scanner run, last full scan, total alerts sent, stocks scored
 - Top scorers from last full scan (symbol, score, price)
 - Scanner readings for each holding (price, structure, RSI, MACD, CHoCH, loss signal count with warnings)
