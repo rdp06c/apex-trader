@@ -215,6 +215,7 @@
             font-size: 10px;
             font-weight: 600;
             letter-spacing: 0.3px;
+            white-space: nowrap;
         }
 
         /* ── Hero (Sidebar) ──────────────────────────────── */
@@ -698,42 +699,52 @@
             border-left: 3px solid var(--red);
         }
 
-        /* ── Holding Card Indicators ─────────────────────── */
-        .holding-card-indicators {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
+        /* ── Holding Card Indicator Grid ───────────────── */
+        .holding-card-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2px 0;
             margin-bottom: 8px;
+            padding: 8px 0;
+            border-top: 1px solid var(--border-subtle);
+            border-bottom: 1px solid var(--border-subtle);
         }
-        .ind-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 3px;
-            padding: 3px 8px;
-            background: var(--bg-raised);
-            border: 1px solid var(--border-subtle);
-            border-radius: 4px;
-            font-size: 10px;
-            color: var(--text-secondary);
-            white-space: nowrap;
+        .hcg-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            padding: 4px 0;
         }
-        .ind-chip strong {
-            color: var(--text-primary);
+        .hcg-label {
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--text-faint);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .hcg-value {
+            font-size: 12px;
             font-weight: 700;
+            color: var(--text-primary);
         }
-        .ind-chip .positive { color: var(--green); }
-        .ind-chip .negative { color: var(--red); }
+        .hcg-value .positive, .hcg-value.positive { color: var(--green); }
+        .hcg-value .negative, .hcg-value.negative { color: var(--red); }
+        .hcg-value .health-arrow { font-size: 11px; }
 
         /* ── Holding Card Levels Row ────────────────────── */
         .holding-card-levels {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
+            gap: 12px;
             margin-bottom: 8px;
         }
-        .level-item {
-            white-space: nowrap;
+        .hcl-item {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
         }
+        .hcl-item .hcg-label { font-size: 9px; }
+        .hcl-item .hcg-value { font-size: 12px; }
 
         .holding-card-timeframe {
             margin: 8px 0;
@@ -2852,6 +2863,10 @@
 
             .holding-card-symbol { font-size: 15px; }
             .holding-card-value { font-size: 15px; }
+
+            .holding-card-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
 
             .holding-card-footer {
                 flex-direction: column;
