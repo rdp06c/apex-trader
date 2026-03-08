@@ -2584,6 +2584,7 @@
 
         // Cached holding data for sort-only re-renders (avoids refetching prices)
         let lastHoldingDataArray = [];
+        let holdingsSortAsc = false;
         
         async function fetchBulkSnapshot(symbols) {
             const now = Date.now();
@@ -8458,6 +8459,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     sorted.sort((a, b) => a.insertionOrder - b.insertionOrder);
                     break;
             }
+            if (holdingsSortAsc) sorted.reverse();
 
             const holdingsList = document.getElementById('holdingsList');
             const holdingsDetailGrid = document.getElementById('holdingsDetailGrid');
@@ -8495,14 +8497,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     }
                                 </div>
                             </div>
+                            ${(() => {
+                                if (h._lossSignals.length >= 1) {
+                                    const cls = h._lossSignals.length >= 2 ? 'sell' : 'warn';
+                                    const tip = escapeHtml(h._lossSignals.join(', '));
+                                    const total = h._lossSignals.length + (h._profitSignals.length || 0) || 1;
+                                    return '<span class="hc-signal-badge ' + cls + '" title="' + tip + '">\u26A0 SELL ' + h._lossSignals.length + '/' + total + '</span>';
+                                }
+                                if (h._profitSignals.length >= 2) {
+                                    const tip = escapeHtml(h._profitSignals.join(', '));
+                                    return '<span class="hc-signal-badge profit" title="' + tip + '">\u2713 PROFIT ' + h._profitSignals.length + '/5</span>';
+                                }
+                                return '';
+                            })()}
                         </div>
-                        ${h._profitSignals.length >= 2 || h._lossSignals.length >= 1 ? `
-                        <div class="holding-card-action ${h._lossSignals.length >= 2 ? 'action-sell' : h._lossSignals.length >= 1 ? 'action-warning' : 'action-profit'}">
-                            ${h._lossSignals.length >= 1
-                                ? '<strong>SELL SIGNAL ' + h._lossSignals.length + '/' + (h._lossSignals.length + h._profitSignals.length || 1) + ':</strong> ' + h._lossSignals.join(', ')
-                                : '<strong>TAKE PROFIT ' + h._profitSignals.length + '/5:</strong> ' + h._profitSignals.join(', ')
-                            }
-                        </div>` : ''}
                         <div class="holding-card-stats">
                             ${(() => {
                                 const entry = h.entryMomentum;
@@ -8559,7 +8567,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 const pos = recent.filter(a => (a.sentiment || '').toLowerCase() === 'positive').length;
                                 const neg = recent.filter(a => (a.sentiment || '').toLowerCase() === 'negative').length;
                                 const cls = pos > neg ? 'positive' : neg > pos ? 'negative' : '';
-                                return '<span class="hc-stat"><span class="hc-stat-lbl">News</span><span class="hc-stat-val ' + cls + '">' + recent.length + '</span></span>';
+                                const tip = escapeHtml(recent.slice(0, 3).map(a => {
+                                    const t = (a.title || '').substring(0, 80);
+                                    const s = (a.sentiment || 'neutral').toLowerCase();
+                                    const age = formatTimeAgo(a.published_utc || a.publishedUtc);
+                                    return age + ' \u2014 ' + t + ' (' + s + ')';
+                                }).join('\n'));
+                                return '<span class="hc-stat" title="' + tip + '"><span class="hc-stat-lbl">News</span><span class="hc-stat-val ' + cls + '">' + recent.length + '</span></span>';
                             })()}
                         </div>
                         <div class="holding-card-footer">
@@ -8578,6 +8592,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (lastHoldingDataArray.length > 0) {
                 sortAndRenderHoldings(lastHoldingDataArray);
             }
+        }
+
+        function toggleHoldingsSortDir() {
+            holdingsSortAsc = !holdingsSortAsc;
+            const btn = document.getElementById('holdingsSortDir');
+            if (btn) btn.innerHTML = holdingsSortAsc ? '&#9650;' : '&#9660;';
+            applyHoldingsSort();
         }
 
         async function updateUI() {

@@ -513,6 +513,7 @@
             cursor: pointer;
             outline: none;
             transition: border-color var(--transition-fast);
+            color-scheme: dark;
         }
 
         .holdings-sort-select:hover {
@@ -521,6 +522,21 @@
 
         .holdings-sort-select:focus {
             border-color: var(--accent);
+        }
+
+        .holdings-sort-dir {
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 200, 100, 0.12);
+            border-radius: 6px;
+            padding: 3px 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: border-color var(--transition-fast);
+            line-height: 1;
+        }
+        .holdings-sort-dir:hover {
+            border-color: rgba(245, 158, 11, 0.3);
         }
 
         .toggle-icon {
@@ -599,6 +615,7 @@
             justify-content: space-between;
             align-items: flex-start;
             margin-bottom: 10px;
+            position: relative;
         }
 
         .holding-card-symbol {
@@ -675,29 +692,21 @@
             letter-spacing: 0.3px;
         }
 
-        /* ── Holding Card Action Banner ──────────────────── */
-        .holding-card-action {
-            margin: 0 0 8px;
-            padding: 6px 10px;
-            border-radius: var(--radius-sm);
-            font-size: 11px;
-            line-height: 1.4;
+        /* ── Holding Card Signal Badge ──────────────────── */
+        .hc-signal-badge {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 3px;
+            white-space: nowrap;
         }
-        .holding-card-action.action-profit {
-            background: var(--green-dim);
-            color: var(--green);
-            border-left: 3px solid var(--green);
-        }
-        .holding-card-action.action-warning {
-            background: rgba(255, 193, 7, 0.1);
-            color: var(--yellow);
-            border-left: 3px solid var(--yellow);
-        }
-        .holding-card-action.action-sell {
-            background: var(--red-dim);
-            color: var(--red);
-            border-left: 3px solid var(--red);
-        }
+        .hc-signal-badge.sell { background: var(--red-dim); color: var(--red); }
+        .hc-signal-badge.warn { background: rgba(255, 193, 7, 0.1); color: var(--yellow); }
+        .hc-signal-badge.profit { background: var(--green-dim); color: var(--green); }
 
         /* ── Holding Card Stat Line ─────────────────────── */
         .holding-card-stats {
