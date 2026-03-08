@@ -250,8 +250,8 @@
   <div class="stats-row" id="statsRow"></div>
 
   <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Return % Over Time</div>
-    <div class="section-sub">Percentage return on invested capital, excluding deposit effects</div>
+    <div class="chart-title">Return on Capital Deployed</div>
+    <div class="section-sub">Cumulative P&amp;L as a percentage of total capital put to work across closed trades</div>
     <canvas id="perfChart"></canvas>
   </div>
 
@@ -685,20 +685,22 @@ function renderStats() {
   `).join('');
 }
 
-/* ── Return % Over Time ────────────────────────────────── */
+/* ── Return on Capital Deployed ─────────────────────────── */
 function renderPerfChart() {
-  const perf = data.performanceHistory || [];
-  if (!perf.length) return;
+  const sorted = [...(data.closedTrades || [])].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+  if (sorted.length < 2) return;
 
-  let cumDeposits = data.initialBalance || 0;
+  let cumPL = 0;
+  let cumCost = 0;
   const labels = [];
   const returnPcts = [];
 
-  perf.forEach(p => {
-    if (p.deposit) cumDeposits += p.deposit;
-    labels.push(new Date(p.timestamp));
-    const pct = cumDeposits > 0 ? ((p.value - cumDeposits) / cumDeposits) * 100 : 0;
-    returnPcts.push(pct);
+  sorted.forEach(t => {
+    const cost = t.buyPrice * t.shares;
+    cumCost += cost;
+    cumPL += t.profitLoss;
+    labels.push(t.symbol);
+    returnPcts.push(cumCost > 0 ? (cumPL / cumCost) * 100 : 0);
   });
 
   new Chart(document.getElementById('perfChart'), {
@@ -707,13 +709,14 @@ function renderPerfChart() {
       labels,
       datasets: [
         {
-          label: 'Return %',
+          label: 'Return on Capital',
           data: returnPcts,
           borderColor: COLORS.accent,
           backgroundColor: 'rgba(245, 158, 11, 0.08)',
           fill: true,
           tension: 0.3,
-          pointRadius: 0,
+          pointRadius: 2,
+          pointBackgroundColor: returnPcts.map(v => v >= 0 ? COLORS.win : COLORS.loss),
           borderWidth: 2
         }
       ]
@@ -724,32 +727,26 @@ function renderPerfChart() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: ctx => new Date(ctx[0].label).toLocaleDateString(),
-            label: ctx => (ctx.parsed.y >= 0 ? '+' : '') + ctx.parsed.y.toFixed(2) + '%'
+            label: ctx => {
+              const t = sorted[ctx.dataIndex];
+              return [
+                'Return on capital: ' + (ctx.parsed.y >= 0 ? '+' : '') + ctx.parsed.y.toFixed(2) + '%',
+                'Cumulative P&L: ' + (cumPL >= 0 ? '+' : '') + '$' + sorted.slice(0, ctx.dataIndex + 1).reduce((s, t) => s + t.profitLoss, 0).toFixed(2),
+                'Total deployed: $' + sorted.slice(0, ctx.dataIndex + 1).reduce((s, t) => s + t.buyPrice * t.shares, 0).toFixed(2)
+              ];
+            }
           }
         }
       },
       scales: {
-        x: {
-          type: 'category',
-          ticks: {
-            callback: function(val, i) {
-              const d = labels[i];
-              return (i === 0 || d.getDate() !== labels[Math.max(0, i - 1)].getDate())
-                ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                : '';
-            },
-            maxTicksLimit: 15,
-            font: { size: 10 }
-          },
-          grid: { display: false }
-        },
+        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45 } },
         y: {
           ticks: { callback: v => (v >= 0 ? '+' : '') + v + '%' },
           grid: { color: COLORS.gridLine }
         }
       }
-    }
+    },
+    plugins: [zeroLinePlugin]
   });
 }
 
@@ -1645,20 +1642,22 @@ function renderReturnDistChart() {
 
 /* ── Drawdown from Peak ─────────────────────────────── */
 function renderDrawdownChart() {
-  const perf = data.performanceHistory || [];
-  if (perf.length < 2) return;
+  const sorted = [...(data.closedTrades || [])].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+  if (sorted.length < 2) return;
 
-  let cumDeposits = data.initialBalance || 0;
+  let cumPL = 0;
+  let cumCost = 0;
+  let peakReturn = -Infinity;
   const labels = [];
   const drawdowns = [];
-  let peakReturn = -Infinity;
 
-  perf.forEach(p => {
-    if (p.deposit) cumDeposits += p.deposit;
-    labels.push(new Date(p.timestamp));
-    const returnPct = cumDeposits > 0 ? ((p.value - cumDeposits) / cumDeposits) * 100 : 0;
+  sorted.forEach(t => {
+    cumCost += t.buyPrice * t.shares;
+    cumPL += t.profitLoss;
+    const returnPct = cumCost > 0 ? (cumPL / cumCost) * 100 : 0;
     if (returnPct > peakReturn) peakReturn = returnPct;
-    drawdowns.push(returnPct - peakReturn); // always <= 0
+    labels.push(t.symbol);
+    drawdowns.push(returnPct - peakReturn);
   });
 
   const maxDD = Math.min(...drawdowns);
@@ -1674,7 +1673,8 @@ function renderDrawdownChart() {
         backgroundColor: COLORS.loss + '18',
         fill: true,
         tension: 0.3,
-        pointRadius: 0,
+        pointRadius: 2,
+        pointBackgroundColor: COLORS.loss,
         borderWidth: 1.5
       }]
     },
@@ -1684,26 +1684,12 @@ function renderDrawdownChart() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: ctx => new Date(ctx[0].label).toLocaleDateString(),
             label: ctx => 'Drawdown: ' + ctx.parsed.y.toFixed(2) + '%'
           }
         }
       },
       scales: {
-        x: {
-          type: 'category',
-          ticks: {
-            callback: function(val, i) {
-              const d = labels[i];
-              return (i === 0 || d.getDate() !== labels[Math.max(0, i - 1)].getDate())
-                ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                : '';
-            },
-            maxTicksLimit: 15,
-            font: { size: 10 }
-          },
-          grid: { display: false }
-        },
+        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45 } },
         y: {
           ticks: { callback: v => v + '%' },
           grid: { color: COLORS.gridLine },
