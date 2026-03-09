@@ -7,6 +7,7 @@
                     <div class="header-title-row">
                         <h1>APEX</h1>
                         <a href="/analytics" class="header-link">Analytics</a>
+                        <a href="/journal" class="header-link">Journal</a>
                         <a href="/admin" class="header-link">Admin</a>
                     </div>
                     <div class="header-meta-row">
@@ -303,6 +304,19 @@
                 <div class="section-body" id="holdingsDetailBody">
                     <div class="holdings-detail-grid" id="holdingsDetailGrid">
                         <div class="empty-state">No positions yet</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Risk Dashboard (collapsible, collapsed by default) -->
+            <div class="card collapsible-section" id="riskDashboardSection">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="riskDashboardBody" onclick="toggleSection('riskDashboard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('riskDashboard')}">
+                    <h2 class="chart-title">Risk Dashboard</h2>
+                    <span class="toggle-icon collapsed" id="riskDashboardToggle">&#9662;</span>
+                </div>
+                <div class="section-body collapsed" id="riskDashboardBody">
+                    <div id="riskDashboardContent">
+                        <div class="empty-state">Run Scan Market to populate risk data</div>
                     </div>
                 </div>
             </div>

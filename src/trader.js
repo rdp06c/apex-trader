@@ -8438,6 +8438,88 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             return { total, priceData };
         }
 
+        // Risk Dashboard
+        function updateRiskDashboard(dataArray) {
+            const container = document.getElementById('riskDashboardContent');
+            if (!container) return;
+            if (!dataArray || dataArray.length === 0) {
+                container.innerHTML = '<div class="empty-state">Run Scan Market to populate risk data</div>';
+                return;
+            }
+
+            // Classify each holding
+            const rows = dataArray.map(h => {
+                const signals = (h._lossSignals || []).length;
+                const level = signals >= 2 ? 'danger' : signals === 1 ? 'caution' : 'healthy';
+                const price = h.stockPrice?.price;
+                const stopPrice = h._thesis?.stopPrice || h._atrStop;
+                let stopDist = null;
+                if (stopPrice && price && price > 0) {
+                    stopDist = ((price - stopPrice) / price * 100).toFixed(1);
+                }
+                const structLabel = h._struct?.structure || '—';
+                const rsi = h._rsiVal != null ? Math.round(h._rsiVal) : '—';
+                const macd = h._macdResult?.crossover || '—';
+                return { ...h, signals, level, price, stopDist, structLabel, rsi, macd };
+            });
+
+            // Sort: danger first, then caution, then healthy
+            const levelOrder = { danger: 0, caution: 1, healthy: 2 };
+            rows.sort((a, b) => (levelOrder[a.level] - levelOrder[b.level]) || (b.signals - a.signals));
+
+            const counts = { healthy: 0, caution: 0, danger: 0 };
+            rows.forEach(r => counts[r.level]++);
+
+            let html = '<div class="risk-summary">';
+            html += `<span class="risk-pill risk-pill-healthy">${counts.healthy} Healthy</span>`;
+            html += `<span class="risk-pill risk-pill-caution">${counts.caution} Caution</span>`;
+            html += `<span class="risk-pill risk-pill-danger">${counts.danger} At Risk</span>`;
+            html += '</div>';
+
+            html += '<div class="risk-table-wrap"><table class="risk-table">';
+            html += '<thead><tr>';
+            html += '<th>Symbol</th><th>Price</th><th>P&L %</th><th>Stop Dist</th>';
+            html += '<th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
+            html += '</tr></thead><tbody>';
+
+            for (const r of rows) {
+                const structClass = r.structLabel === 'bullish' ? 'risk-struct-bullish' :
+                    r.structLabel === 'bearish' ? 'risk-struct-bearish' : 'risk-struct-neutral';
+
+                const plColor = r.gainLossPercent > 0 ? 'color:#22c55e' :
+                    r.gainLossPercent < 0 ? 'color:#ef4444' : '';
+
+                const stopDistDisplay = r.stopDist != null
+                    ? `<span style="${parseFloat(r.stopDist) < 5 ? 'color:#ef4444' : parseFloat(r.stopDist) < 10 ? 'color:#f59e0b' : 'color:#22c55e'}">${r.stopDist}%</span>`
+                    : '—';
+
+                const rsiColor = r.rsi !== '—'
+                    ? (r.rsi >= 70 ? 'color:#ef4444' : r.rsi <= 30 ? 'color:#22c55e' : '')
+                    : '';
+
+                const macdColor = r.macd === 'bullish' ? 'color:#22c55e' :
+                    r.macd === 'bearish' ? 'color:#ef4444' : '';
+
+                const signalBadgeClass = r.level;
+                const signalList = (r._lossSignals || []).join(', ');
+                const signalTitle = signalList ? ` title="${escapeHtml(signalList)}"` : '';
+
+                html += `<tr class="risk-row-${r.level}">`;
+                html += `<td style="font-weight:600">${escapeHtml(r.symbol)}</td>`;
+                html += `<td>$${r.price ? r.price.toFixed(2) : '—'}</td>`;
+                html += `<td style="${plColor}">${r.gainLossPercent != null ? (r.gainLossPercent > 0 ? '+' : '') + r.gainLossPercent.toFixed(1) + '%' : '—'}</td>`;
+                html += `<td>${stopDistDisplay}</td>`;
+                html += `<td><span class="risk-struct-badge ${structClass}">${r.structLabel}</span></td>`;
+                html += `<td style="${rsiColor}">${r.rsi}</td>`;
+                html += `<td style="${macdColor}">${r.macd}</td>`;
+                html += `<td><span class="risk-signal-badge ${signalBadgeClass}"${signalTitle}>${r.signals}</span></td>`;
+                html += '</tr>';
+            }
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
         // Update UI
         function sortAndRenderHoldings(dataArray) {
             const sortMode = holdingsSortMode || 'dateAdded';
@@ -8859,6 +8941,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 lastHoldingDataArray = holdingDataArray;
 
                 sortAndRenderHoldings(holdingDataArray);
+                updateRiskDashboard(holdingDataArray);
             }
 
             // Update chart

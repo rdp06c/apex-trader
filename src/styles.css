@@ -2404,6 +2404,135 @@
             color: var(--text-faint);
         }
 
+        /* ── Risk Dashboard ─────────────────────────────── */
+        .risk-summary {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .risk-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .risk-pill-healthy {
+            background: rgba(34, 197, 94, 0.12);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.25);
+        }
+
+        .risk-pill-caution {
+            background: rgba(245, 158, 11, 0.12);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.25);
+        }
+
+        .risk-pill-danger {
+            background: rgba(239, 68, 68, 0.12);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+
+        .risk-table-wrap {
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-medium) transparent;
+        }
+
+        .risk-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .risk-table th {
+            text-align: left;
+            padding: 8px 10px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-faint);
+            border-bottom: 1px solid var(--border-subtle);
+            white-space: nowrap;
+            font-weight: 600;
+        }
+
+        .risk-table td {
+            padding: 7px 10px;
+            border-bottom: 1px solid var(--border-subtle);
+            white-space: nowrap;
+        }
+
+        .risk-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .risk-row-healthy {
+            border-left: 3px solid #22c55e;
+        }
+
+        .risk-row-caution {
+            border-left: 3px solid #f59e0b;
+        }
+
+        .risk-row-danger {
+            border-left: 3px solid #ef4444;
+        }
+
+        .risk-signal-badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .risk-signal-badge.danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .risk-signal-badge.caution {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+        }
+
+        .risk-signal-badge.healthy {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+        }
+
+        .risk-struct-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .risk-struct-bullish {
+            color: #22c55e;
+            background: rgba(34, 197, 94, 0.1);
+        }
+
+        .risk-struct-bearish {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .risk-struct-neutral {
+            color: var(--text-faint);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
         /* ── Candidate Scorecard ─────────────────────────── */
         .scorecard-table-wrap {
             max-height: 500px;

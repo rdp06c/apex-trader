@@ -67,6 +67,11 @@ app.get('/analytics', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'analytics.html'));
 });
 
+// Trade journal
+app.get('/journal', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'journal.html'));
+});
+
 app.use(express.static(path.join(__dirname, '..')));
 
 app.listen(PORT, () => {

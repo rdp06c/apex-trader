@@ -210,7 +210,9 @@ router.get('/', (req, res) => {
 <div class="page-header">
     <div class="subtitle">System Administration</div>
     <h1>APEX Admin</h1>
-    <a href="/" class="back-link">&larr; Back to Dashboard</a>
+    <a href="/" class="back-link">&larr; Dashboard</a>
+    <a href="/journal" class="back-link">Journal</a>
+    <a href="/analytics" class="back-link">Analytics</a>
 </div>
 
 <h2>Server Status</h2>
