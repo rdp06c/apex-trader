@@ -12584,8 +12584,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         _lossSignals.push('Structure flipped');
                     if (daysHeld >= 5 && Math.abs(gainLossPercent) <= 3) _lossSignals.push('Stale capital');
                     const _intraday = _sr?.intraday;
-                    if (_intraday?.choch && _intraday.chochType === 'bearish' && _struct?.structure === 'bullish')
-                        _lossSignals.push('5m CHoCH vs daily');
 
                     if (_thesis?.targetPrice && stockPrice.price >= _thesis.targetPrice) _profitSignals.push('Target reached');
 

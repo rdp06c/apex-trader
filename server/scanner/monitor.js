@@ -243,20 +243,6 @@ async function runStructureCheck({ force = false } = {}) {
                             timestamp: new Date().toISOString()
                         };
                     }
-                    // Alert: daily bullish + intraday bearish CHoCH = divergence
-                    const dailyStruct = state.readings[symbol]?.structure;
-                    if (dailyStruct === 'bullish' && idStruct?.choch && idStruct.chochType === 'bearish') {
-                        if (shouldAlert(state, symbol, 'intraday-choch-divergence')) {
-                            alerts.push({
-                                symbol,
-                                condition: 'intraday-choch-divergence',
-                                title: `APEX: ${symbol} Intraday Structure Warning`,
-                                body: `${symbol} daily structure is bullish but 5-min shows bearish CHoCH.\nPrice: $${state.readings[symbol]?.price || '?'}\n5m RSI: ${idRsi != null ? Math.round(idRsi) : '?'} | 5m MACD: ${idMacd?.crossover || '?'}`,
-                                tags: ['warning']
-                            });
-                            recordAlert(state, symbol, 'intraday-choch-divergence');
-                        }
-                    }
                 }
                 console.log(`Intraday signals computed for ${Object.keys(intradayBars).length} holdings`);
             } catch (err) {
