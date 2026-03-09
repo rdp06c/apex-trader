@@ -8592,7 +8592,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         <div class="holding-card-header">
                             <div>
                                 <div class="holding-card-symbol">${h.symbol}</div>
-                                <div class="holding-card-name"><a href="https://www.investing.com/search/?q=${encodeURIComponent(h.symbol)}" target="_blank" rel="noopener" class="holding-card-link">${h.stockName}</a> <span class="holding-card-sector">· ${h.stockSector}</span></div>
+                                <div class="holding-card-name"><a href="https://www.tradingview.com/symbols/${encodeURIComponent(h.symbol)}" target="_blank" rel="noopener" class="holding-card-link">${h.stockName}</a> <span class="holding-card-sector">· ${h.stockSector}</span></div>
                                 <div class="holding-card-shares">${h.shares} shares · ${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'}${h.isPastTimeframe ? ' <span class="negative">OVERDUE</span>' : ''} · ${h.positionSizePercent.toFixed(1)}% of portfolio</div>
                             </div>
                             <div>
