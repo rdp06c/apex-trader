@@ -7852,6 +7852,7 @@
 
         async function updatePostExitTracking() {
             const closedTrades = portfolio.closedTrades || [];
+            console.log(`📊 Post-exit tracking: ${closedTrades.length} closed trades`);
             if (closedTrades.length === 0) return;
 
             const now = new Date();
@@ -7870,6 +7871,11 @@
                 const sellDate = new Date(trade.sellDate);
                 if (isNaN(sellDate.getTime())) continue;
                 const tradingDaysSinceSell = countTradingDays(sellDate, now);
+                const needs3d = trade.tracking.priceAfter3d === null && tradingDaysSinceSell >= 3;
+                const needs5d = trade.tracking.priceAfter5d === null && tradingDaysSinceSell >= 5;
+                if (needs3d || needs5d) {
+                    console.log(`📊 ${trade.symbol}: sellDate=${trade.sellDate?.slice(0,10)}, ${tradingDaysSinceSell} trading days ago, needs3d=${needs3d}, needs5d=${needs5d}, sellPrice=${trade.sellPrice}`);
+                }
 
                 // Determine if we need historical bars (sold >7 trading days ago) vs live price
                 const needsHistorical = tradingDaysSinceSell > 7;
