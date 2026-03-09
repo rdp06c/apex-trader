@@ -1831,8 +1831,9 @@ function renderExpectancyChart() {
 
 /* ── Post-Exit Tracker ───────────────────────────────── */
 function renderPostExitChart() {
+  // Include trades with either 3d or 5d tracking (or old weekReturnVsSell)
   const trades = (data.closedTrades || []).filter(t =>
-    t.tracking && t.tracking.weekReturnVsSell != null
+    t.tracking && (t.tracking.return3d != null || t.tracking.return5d != null || t.tracking.weekReturnVsSell != null)
   ).sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
 
   if (!trades.length) {
@@ -1845,35 +1846,53 @@ function renderPostExitChart() {
   }
 
   const labels = trades.map(t => t.symbol);
-  const deltas = trades.map(t => parseFloat(String(t.tracking.weekReturnVsSell)));
-  const barColors = deltas.map(d => d > 0 ? COLORS.loss + 'cc' : COLORS.win + 'cc');
-  const barBorders = deltas.map(d => d > 0 ? COLORS.loss : COLORS.win);
+  const d3 = trades.map(t => t.tracking.return3d != null ? parseFloat(String(t.tracking.return3d)) : null);
+  const d5 = trades.map(t => {
+    if (t.tracking.return5d != null) return parseFloat(String(t.tracking.return5d));
+    if (t.tracking.weekReturnVsSell != null) return parseFloat(String(t.tracking.weekReturnVsSell));
+    return null;
+  });
 
   new Chart(document.getElementById('postExitChart'), {
     type: 'bar',
     data: {
       labels,
-      datasets: [{
-        label: 'Post-exit 1-week move',
-        data: deltas,
-        backgroundColor: barColors,
-        borderColor: barBorders,
-        borderWidth: 1,
-        borderRadius: 3
-      }]
+      datasets: [
+        {
+          label: '3-day move',
+          data: d3,
+          backgroundColor: d3.map(d => d != null && d > 0 ? COLORS.loss + '99' : COLORS.win + '99'),
+          borderColor: d3.map(d => d != null && d > 0 ? COLORS.loss : COLORS.win),
+          borderWidth: 1,
+          borderRadius: 3
+        },
+        {
+          label: '5-day move',
+          data: d5,
+          backgroundColor: d5.map(d => d != null && d > 0 ? COLORS.loss + 'cc' : COLORS.win + 'cc'),
+          borderColor: d5.map(d => d != null && d > 0 ? COLORS.loss : COLORS.win),
+          borderWidth: 1,
+          borderRadius: 3
+        }
+      ]
     },
     options: {
       responsive: true,
       plugins: {
+        legend: {
+          labels: { color: COLORS.muted, font: { size: 11 } }
+        },
         tooltip: {
           boxPadding: 6,
           callbacks: {
             label: ctx => {
-              const d = deltas[ctx.dataIndex];
+              const d = ctx.parsed.y;
+              if (d == null) return '';
               const t = trades[ctx.dataIndex];
+              const period = ctx.datasetIndex === 0 ? '3d' : '5d';
               const lines = [
                 `Exit return: ${t.returnPercent > 0 ? '+' : ''}${t.returnPercent.toFixed(1)}%`,
-                `Post-exit move: ${d > 0 ? '+' : ''}${d.toFixed(1)}%`
+                `${period} move: ${d > 0 ? '+' : ''}${d.toFixed(1)}%`
               ];
               if (d > 0) lines.push(`Left +${d.toFixed(1)}% on the table`);
               else lines.push(`Avoided ${Math.abs(d).toFixed(1)}% further drop`);
