@@ -2551,9 +2551,34 @@
             const status = confirmReasons.length >= 2 ? 'confirmed' :
                 failReasons.length >= 2 ? 'failed' : 'pending';
 
-            const reasons = status === 'confirmed' ? confirmReasons :
-                status === 'failed' ? failReasons :
-                [...confirmReasons.map(r => '\u2713 ' + r), ...failReasons.map(r => '\u2717 ' + r)];
+            let reasons;
+            if (status === 'confirmed') {
+                reasons = confirmReasons;
+            } else if (status === 'failed') {
+                reasons = failReasons;
+            } else {
+                // Pending — show what's confirmed, what's failing, and what's still waiting
+                reasons = [
+                    ...confirmReasons.map(r => '\u2713 ' + r),
+                    ...failReasons.map(r => '\u2717 ' + r)
+                ];
+                if (reasons.length === 0) {
+                    // No checks matched either way — explain what we're waiting for
+                    const waiting = [];
+                    if (isReversal) {
+                        if (momentum == null && rsi == null) waiting.push('Run Scan Market for current data');
+                        else {
+                            if (macdCrossover !== 'bullish') waiting.push('Waiting: MACD bullish crossover');
+                            if (structure !== 'bullish') waiting.push('Waiting: structure to turn bullish');
+                            if (rsi != null && entryRSI != null && rsi <= 45) waiting.push('Waiting: RSI to bounce above 45');
+                        }
+                    } else {
+                        if (momentum == null) waiting.push('Run Scan Market for current data');
+                        else waiting.push('Waiting: price/momentum confirmation');
+                    }
+                    reasons = waiting;
+                }
+            }
 
             return { status, reasons, type: isReversal ? 'reversal' : 'momentum' };
         }
@@ -9850,7 +9875,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     entryATR: entryBars ? calculateATR(entryBars) : null,
                     targetPrice: (() => {
                         const fib = entryBars ? calculateFibTargets(entryBars) : null;
-                        return fib?.type === 'bullish' ? fib.fib100 : null;
+                        if (fib?.type === 'bullish') return fib.fib100;
+                        // For bearish fib (reversal entries), target the prior swing high
+                        if (fib?.type === 'bearish') return fib.swingHigh;
+                        return null;
                     })(),
                     stopPrice: (() => {
                         const atr = entryBars ? calculateATR(entryBars) : null;
