@@ -766,6 +766,13 @@
             border-top: 1px solid var(--border-subtle);
             font-size: 11px;
         }
+
+        .hc-intraday {
+            margin-top: -2px;
+            margin-bottom: 6px;
+            opacity: 0.8;
+            border-top: 1px dashed var(--border-subtle);
+        }
         .hc-stat { white-space: nowrap; }
         .hc-stat-lbl {
             color: var(--text-muted);

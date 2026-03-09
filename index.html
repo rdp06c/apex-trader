@@ -779,6 +779,13 @@
             border-top: 1px solid var(--border-subtle);
             font-size: 11px;
         }
+
+        .hc-intraday {
+            margin-top: -2px;
+            margin-bottom: 6px;
+            opacity: 0.8;
+            border-top: 1px dashed var(--border-subtle);
+        }
         .hc-stat { white-space: nowrap; }
         .hc-stat-lbl {
             color: var(--text-muted);
@@ -5636,12 +5643,12 @@
             if (lastSL.index < lastSH.index) {
                 const swingRange = lastSH.price - lastSL.price;
                 const pullback = currentPrice < lastSH.price ? currentPrice : lastSL.price;
-                return { type: 'bullish', swingLow: Math.round(lastSL.price * 100) / 100, swingHigh: Math.round(lastSH.price * 100) / 100, fib1272: Math.round((pullback + swingRange * 1.272) * 100) / 100, fib1618: Math.round((pullback + swingRange * 1.618) * 100) / 100 };
+                return { type: 'bullish', swingLow: Math.round(lastSL.price * 100) / 100, swingHigh: Math.round(lastSH.price * 100) / 100, fib100: Math.round((pullback + swingRange) * 100) / 100, fib1272: Math.round((pullback + swingRange * 1.272) * 100) / 100, fib1618: Math.round((pullback + swingRange * 1.618) * 100) / 100 };
             }
             if (lastSH.index < lastSL.index) {
                 const swingRange = lastSH.price - lastSL.price;
                 const bounce = currentPrice > lastSL.price ? currentPrice : lastSH.price;
-                return { type: 'bearish', swingHigh: Math.round(lastSH.price * 100) / 100, swingLow: Math.round(lastSL.price * 100) / 100, fib1272: Math.round((bounce - swingRange * 1.272) * 100) / 100, fib1618: Math.round((bounce - swingRange * 1.618) * 100) / 100 };
+                return { type: 'bearish', swingHigh: Math.round(lastSH.price * 100) / 100, swingLow: Math.round(lastSL.price * 100) / 100, fib100: Math.round((bounce - swingRange) * 100) / 100, fib1272: Math.round((bounce - swingRange * 1.272) * 100) / 100, fib1618: Math.round((bounce - swingRange * 1.618) * 100) / 100 };
             }
             return null;
         }
@@ -12285,11 +12292,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                     return '<span class="hc-stat"><span class="hc-stat-lbl">Target</span><span class="hc-stat-val ' + (h.stockPrice.price >= thesisTarget ? 'positive' : '') + '">$' + thesisTarget.toFixed(2) + '</span></span>';
                                 }
                                 if (fib) {
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">Fib</span><span class="hc-stat-val"><span class="' + (h.stockPrice.price >= fib.fib1272 ? 'positive' : '') + '">$' + fib.fib1272.toFixed(2) + '</span> · <span class="' + (h.stockPrice.price >= fib.fib1618 ? 'positive' : '') + '">$' + fib.fib1618.toFixed(2) + '</span></span></span>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">Fib</span><span class="hc-stat-val"><span class="' + (h.stockPrice.price >= fib.fib100 ? 'positive' : '') + '">$' + fib.fib100.toFixed(2) + '</span> · <span class="' + (h.stockPrice.price >= fib.fib1272 ? 'positive' : '') + '">$' + fib.fib1272.toFixed(2) + '</span></span></span>';
                                 }
                                 return '';
                             })()}
                         </div>
+                        ${h._intraday ? `<div class="holding-card-stats hc-intraday">
+                            <span class="hc-stat"><span class="hc-stat-lbl">5m RSI</span><span class="hc-stat-val ${h._intraday.rsi != null ? (h._intraday.rsi < 30 ? 'rsi-oversold' : h._intraday.rsi > 70 ? 'rsi-overbought' : '') : ''}">${h._intraday.rsi != null ? Math.round(h._intraday.rsi) : '--'}</span></span>
+                            <span class="hc-stat"><span class="hc-stat-lbl">5m MACD</span><span class="hc-stat-val ${h._intraday.macd === 'bullish' ? 'macd-bullish' : h._intraday.macd === 'bearish' ? 'macd-bearish' : h._intraday.macdHistogram >= 0 ? 'macd-bullish' : 'macd-bearish'}">${h._intraday.macd === 'bullish' ? '▲ Cross' : h._intraday.macd === 'bearish' ? '▼ Cross' : h._intraday.macdHistogram >= 0 ? '▲' : '▼'}</span></span>
+                            <span class="hc-stat"><span class="hc-stat-lbl">5m Struct</span><span class="hc-stat-val ${h._intraday.structure === 'bullish' ? 'sig-green' : h._intraday.structure === 'bearish' ? 'sig-red' : ''}">${h._intraday.structure || '--'}</span></span>
+                            ${h._intraday.choch ? '<span class="hc-stat"><span class="hc-stat-lbl">5m CHoCH</span><span class="hc-stat-val ' + (h._intraday.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._intraday.chochType === 'bullish' ? '▲' : '▼') + '</span></span>' : ''}
+                        </div>` : ''}
                         <div class="holding-card-footer">
                             <div><span class="holding-card-footer-label">Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
                             <div><span class="holding-card-footer-label">Now:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span></div>
@@ -12549,7 +12562,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const _struct = _bars && _bars.length >= 5 ? detectStructure(symbol) : null;
 
                     const _profitSignals = [];
-                    if (_fib?.type === 'bullish' && stockPrice.price >= _fib.fib1272) _profitSignals.push('Fib target');
+                    if (_fib?.type === 'bullish' && stockPrice.price >= _fib.fib100) _profitSignals.push('Fib target');
                     if (_rsiVal != null && _rsiVal > 70) _profitSignals.push('RSI overbought');
                     if (_macdResult?.crossover === 'bearish') _profitSignals.push('MACD bearish');
                     if (_volDiv?.divergence && _volDiv.direction === 'bearish') _profitSignals.push('Vol divergence');
@@ -12572,6 +12585,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         _lossSignals.push(`Mom ${_thesis.entryMomentum.toFixed(1)}\u2192${_candidateNow.momentum.toFixed(1)}`);
                     if (_thesis?.entryStructure === 'bullish' && _struct?.structure === 'bearish')
                         _lossSignals.push('Structure flipped');
+                    if (daysHeld >= 5 && Math.abs(gainLossPercent) <= 3) _lossSignals.push('Stale capital');
+                    const _intraday = _sr?.intraday;
+                    if (_intraday?.choch && _intraday.chochType === 'bearish' && _struct?.structure === 'bullish')
+                        _lossSignals.push('5m CHoCH vs daily');
 
                     if (_thesis?.targetPrice && stockPrice.price >= _thesis.targetPrice) _profitSignals.push('Target reached');
 
@@ -12580,7 +12597,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         earliestDate, conviction, daysHeld, gainLoss, gainLossPercent, gainLossClass,
                         positionSizePercent, isPastTimeframe, stockName, stockSector, entryMomentum,
                         entryRS, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
-                        _struct, _profitSignals, _lossSignals, _thesis, _candidateNow,
+                        _struct, _profitSignals, _lossSignals, _thesis, _candidateNow, _intraday,
                         insertionOrder: insertionOrder++
                     });
                 }
@@ -13316,7 +13333,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     entryATR: entryBars ? calculateATR(entryBars) : null,
                     targetPrice: (() => {
                         const fib = entryBars ? calculateFibTargets(entryBars) : null;
-                        return fib?.type === 'bullish' ? fib.fib1272 : null;
+                        return fib?.type === 'bullish' ? fib.fib100 : null;
                     })(),
                     stopPrice: (() => {
                         const atr = entryBars ? calculateATR(entryBars) : null;

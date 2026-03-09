@@ -583,6 +583,7 @@ function calculateFibTargets(bars) {
             swingLow: Math.round(lastSL.price * 100) / 100,
             swingHigh: Math.round(lastSH.price * 100) / 100,
             pullback: Math.round(pullback * 100) / 100,
+            fib100: Math.round((pullback + swingRange) * 100) / 100,
             fib1272: Math.round((pullback + swingRange * 1.272) * 100) / 100,
             fib1618: Math.round((pullback + swingRange * 1.618) * 100) / 100
         };
@@ -598,6 +599,7 @@ function calculateFibTargets(bars) {
             swingHigh: Math.round(lastSH.price * 100) / 100,
             swingLow: Math.round(lastSL.price * 100) / 100,
             bounce: Math.round(bounce * 100) / 100,
+            fib100: Math.round((bounce - swingRange) * 100) / 100,
             fib1272: Math.round((bounce - swingRange * 1.272) * 100) / 100,
             fib1618: Math.round((bounce - swingRange * 1.618) * 100) / 100
         };

@@ -272,6 +272,7 @@ ${status.fullScan?.topScorers?.length > 0 ? `
                 <span class="reading-meta">MACD: ${r.macdCrossover === 'bullish' ? '<span class="macd-bull">▲</span>' : r.macdCrossover === 'bearish' ? '<span class="macd-bear">▼</span>' : '—'}</span>
                 ${r.choch ? `<span class="reading-choch">⚠ CHoCH ${r.chochType}</span>` : ''}
                 ${r.lossSignals && r.lossSignals.length > 0 ? `<span class="warning-badge" title="${r.lossSignals.join(', ')}">${r.lossSignals.length} warning${r.lossSignals.length > 1 ? 's' : ''}</span>` : ''}
+                ${r.intraday ? `<span class="reading-meta">5m: RSI ${r.intraday.rsi != null ? Math.round(r.intraday.rsi) : '—'} | MACD ${r.intraday.macd === 'bullish' ? '<span class="macd-bull">▲</span>' : r.intraday.macd === 'bearish' ? '<span class="macd-bear">▼</span>' : '—'} | ${r.intraday.structure || '—'}${r.intraday.choch ? ' ⚠CHoCH' + r.intraday.chochType : ''}</span>` : ''}
                 <span class="time-ago">${r.timestamp ? timeAgo(r.timestamp) : ''}</span>
             </div>
         `).join('')

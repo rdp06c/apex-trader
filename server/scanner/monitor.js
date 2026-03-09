@@ -7,7 +7,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 const { isMarketOpen, detectStructure, calculateRSI, calculateMACD, calculateATR, detectVolumeDivergence, calculateFibTargets } = require('../lib/scoring');
-const { fetchBulkSnapshot, fetchGroupedDailyBars } = require('../lib/fetchers');
+const { fetchBulkSnapshot, fetchGroupedDailyBars, fetchIntradayBars } = require('../lib/fetchers');
 const { sendAlert } = require('./alerts');
 const { runFullScan, getScanStatus, isScanRunning, getScanRunningInfo } = require('./full-scan');
 
@@ -124,6 +124,9 @@ async function runStructureCheck({ force = false } = {}) {
             if (thesis?.entryStructure === 'bullish' && current.structure === 'bearish')
                 lossSignals.push('Structure flipped');
             if (volDiv.divergence && volDiv.direction === 'bearish') lossSignals.push('Vol divergence');
+            const holdDays = thesis?.entryDate ? Math.round((Date.now() - new Date(thesis.entryDate).getTime()) / 86400000) : 0;
+            const holdReturn = thesis?.entryPrice && price ? ((price - thesis.entryPrice) / thesis.entryPrice) * 100 : null;
+            if (holdDays >= 5 && holdReturn != null && Math.abs(holdReturn) <= 3) lossSignals.push('Stale capital');
 
             // Store current readings in state
             if (!state.readings) state.readings = {};
@@ -203,6 +206,50 @@ async function runStructureCheck({ force = false } = {}) {
                     });
                     recordAlert(state, symbol, 'volume-divergence');
                 }
+            }
+        }
+
+        // Intraday signals (5-min bars) — only during market hours
+        if (isMarketOpen()) {
+            try {
+                const intradayBars = await fetchIntradayBars(heldSymbols, apiKey);
+                for (const symbol of heldSymbols) {
+                    const bars5m = intradayBars[symbol];
+                    if (!bars5m || bars5m.length < 14) continue;
+                    const idRsi = calculateRSI(bars5m);
+                    const idMacd = calculateMACD(bars5m);
+                    const idStruct = detectStructure(bars5m);
+                    if (state.readings[symbol]) {
+                        state.readings[symbol].intraday = {
+                            rsi: idRsi != null ? Math.round(idRsi * 100) / 100 : null,
+                            macd: idMacd?.crossover || 'none',
+                            macdHistogram: idMacd?.histogram ?? null,
+                            structure: idStruct?.structure || null,
+                            structureScore: idStruct?.structureScore ?? 0,
+                            choch: idStruct?.choch || false,
+                            chochType: idStruct?.chochType || null,
+                            barCount: bars5m.length,
+                            timestamp: new Date().toISOString()
+                        };
+                    }
+                    // Alert: daily bullish + intraday bearish CHoCH = divergence
+                    const dailyStruct = state.readings[symbol]?.structure;
+                    if (dailyStruct === 'bullish' && idStruct?.choch && idStruct.chochType === 'bearish') {
+                        if (shouldAlert(state, symbol, 'intraday-choch-divergence')) {
+                            alerts.push({
+                                symbol,
+                                condition: 'intraday-choch-divergence',
+                                title: `APEX: ${symbol} Intraday Structure Warning`,
+                                body: `${symbol} daily structure is bullish but 5-min shows bearish CHoCH.\nPrice: $${state.readings[symbol]?.price || '?'}\n5m RSI: ${idRsi != null ? Math.round(idRsi) : '?'} | 5m MACD: ${idMacd?.crossover || '?'}`,
+                                tags: ['warning']
+                            });
+                            recordAlert(state, symbol, 'intraday-choch-divergence');
+                        }
+                    }
+                }
+                console.log(`Intraday signals computed for ${Object.keys(intradayBars).length} holdings`);
+            } catch (err) {
+                console.warn('Intraday signal fetch failed:', err.message);
             }
         }
 

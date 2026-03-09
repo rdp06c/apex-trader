@@ -398,11 +398,47 @@ async function fetchVIX(apiKey, anthropicApiUrl) {
     return null;
 }
 
+/**
+ * Fetch intraday 5-minute bars for a set of symbols (today only).
+ * Returns { [symbol]: [{o, h, l, c, v, t}, ...] }
+ */
+async function fetchIntradayBars(symbols, apiKey) {
+    if (!apiKey || symbols.length === 0) return {};
+
+    const today = new Date().toISOString().slice(0, 10);
+    const result = {};
+    const BATCH = 25;
+    let fetched = 0;
+
+    for (let i = 0; i < symbols.length; i += BATCH) {
+        const batch = symbols.slice(i, i + BATCH);
+        await Promise.all(batch.map(async (symbol) => {
+            try {
+                const res = await fetch(
+                    `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/5/minute/${today}/${today}?adjusted=true&sort=asc&apiKey=${apiKey}`,
+                    { signal: AbortSignal.timeout(15000) }
+                );
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.results && data.results.length > 0) {
+                    result[symbol] = data.results.map(b => ({ o: b.o, h: b.h, l: b.l, c: b.c, v: b.v, t: b.t }));
+                    fetched++;
+                }
+            } catch { /* skip failed fetches */ }
+        }));
+        if (i + BATCH < symbols.length) await new Promise(r => setTimeout(r, 50));
+    }
+
+    console.log(`Intraday bars fetched: ${fetched}/${symbols.length} symbols (${result[symbols[0]]?.length || 0} bars avg)`);
+    return result;
+}
+
 module.exports = {
     fetchBulkSnapshot,
     fetchGroupedDailyBars,
     fetchServerIndicators,
     fetchTickerDetails,
     fetchShortInterest,
-    fetchVIX
+    fetchVIX,
+    fetchIntradayBars
 };
