@@ -365,8 +365,11 @@
   <!-- ═══ EXIT QUALITY ═══ -->
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Did I Sell Too Early?</div>
-    <div class="section-sub">Stock price movement 1 week after selling &mdash; green = stock fell (good exit), red = stock rose (left money on table)</div>
+    <div class="section-sub">Stock price movement after selling &mdash; green = stock fell (good exit), red = stock rose (left money on table)</div>
+    <div id="postExitSummary" style="margin-bottom:16px"></div>
     <canvas id="postExitChart"></canvas>
+    <div id="postExitTable" style="margin-top:20px"></div>
+    <div id="postExitPatterns" style="margin-top:20px"></div>
   </div>
 
 </div>
@@ -1830,11 +1833,25 @@ function renderExpectancyChart() {
 }
 
 /* ── Post-Exit Tracker ───────────────────────────────── */
-function renderPostExitChart() {
-  // Include trades with either 3d or 5d tracking (or old weekReturnVsSell)
-  const trades = (data.closedTrades || []).filter(t =>
+function getPostExitTrades() {
+  return (data.closedTrades || []).filter(t =>
     t.tracking && (t.tracking.return3d != null || t.tracking.return5d != null || t.tracking.weekReturnVsSell != null)
   ).sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+}
+
+function parseReturn(val) {
+  if (val == null) return null;
+  return parseFloat(String(val));
+}
+
+function get5dReturn(t) {
+  if (t.tracking.return5d != null) return parseReturn(t.tracking.return5d);
+  if (t.tracking.weekReturnVsSell != null) return parseReturn(t.tracking.weekReturnVsSell);
+  return null;
+}
+
+function renderPostExitChart() {
+  const trades = getPostExitTrades();
 
   if (!trades.length) {
     const ctx = document.getElementById('postExitChart').getContext('2d');
@@ -1845,13 +1862,13 @@ function renderPostExitChart() {
     return;
   }
 
+  // ── Summary Stats ──
+  renderPostExitSummary(trades);
+
+  // ── Chart ──
   const labels = trades.map(t => t.symbol);
-  const d3 = trades.map(t => t.tracking.return3d != null ? parseFloat(String(t.tracking.return3d)) : null);
-  const d5 = trades.map(t => {
-    if (t.tracking.return5d != null) return parseFloat(String(t.tracking.return5d));
-    if (t.tracking.weekReturnVsSell != null) return parseFloat(String(t.tracking.weekReturnVsSell));
-    return null;
-  });
+  const d3 = trades.map(t => parseReturn(t.tracking.return3d));
+  const d5 = trades.map(t => get5dReturn(t));
 
   new Chart(document.getElementById('postExitChart'), {
     type: 'bar',
@@ -1912,6 +1929,193 @@ function renderPostExitChart() {
     },
     plugins: [zeroLinePlugin]
   });
+
+  // ── Detail Table ──
+  renderPostExitTable(trades);
+
+  // ── Pattern Detection ──
+  renderPostExitPatterns(trades);
+}
+
+function renderPostExitSummary(trades) {
+  const el = document.getElementById('postExitSummary');
+  if (!el) return;
+
+  const with5d = trades.filter(t => get5dReturn(t) != null);
+  const with3d = trades.filter(t => parseReturn(t.tracking.return3d) != null);
+
+  const tooEarly5d = with5d.filter(t => get5dReturn(t) > 0);
+  const goodExit5d = with5d.filter(t => get5dReturn(t) <= 0);
+  const avg5d = with5d.length > 0 ? with5d.reduce((s, t) => s + get5dReturn(t), 0) / with5d.length : 0;
+
+  const tooEarly3d = with3d.filter(t => parseReturn(t.tracking.return3d) > 0);
+  const avg3d = with3d.length > 0 ? with3d.reduce((s, t) => s + parseReturn(t.tracking.return3d), 0) / with3d.length : 0;
+
+  // Dollar impact — sum of money left on the table (positive moves * position size)
+  let dollarsLeft = 0;
+  let dollarsAvoided = 0;
+  for (const t of with5d) {
+    const move = get5dReturn(t);
+    const posSize = Math.abs(t.sellPrice * t.shares);
+    if (move > 0) dollarsLeft += posSize * (move / 100);
+    else dollarsAvoided += posSize * (Math.abs(move) / 100);
+  }
+
+  const pctTooEarly = with5d.length > 0 ? ((tooEarly5d.length / with5d.length) * 100).toFixed(0) : 0;
+  const exitGrade = pctTooEarly >= 60 ? { label: 'Poor', color: COLORS.loss } :
+    pctTooEarly >= 40 ? { label: 'Mixed', color: COLORS.accent } :
+    { label: 'Good', color: COLORS.win };
+
+  el.innerHTML = `
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <div class="stat-card" style="flex:1;min-width:140px">
+        <div class="stat-label">Exit Grade</div>
+        <div class="stat-value" style="color:${exitGrade.color}">${exitGrade.label}</div>
+        <div class="stat-sub">${pctTooEarly}% of sells were too early</div>
+      </div>
+      <div class="stat-card" style="flex:1;min-width:140px">
+        <div class="stat-label">5-Day Score</div>
+        <div class="stat-value">${goodExit5d.length}<span style="color:${COLORS.muted};font-size:14px">/${with5d.length}</span></div>
+        <div class="stat-sub">good exits (stock fell after sell)</div>
+      </div>
+      <div class="stat-card" style="flex:1;min-width:140px">
+        <div class="stat-label">Avg Post-Exit Move</div>
+        <div class="stat-value" style="color:${avg5d > 0 ? COLORS.loss : COLORS.win}">${avg5d > 0 ? '+' : ''}${avg5d.toFixed(1)}%</div>
+        <div class="stat-sub">5d: ${avg5d > 0 ? '+' : ''}${avg5d.toFixed(1)}%${with3d.length > 0 ? ` / 3d: ${avg3d > 0 ? '+' : ''}${avg3d.toFixed(1)}%` : ''}</div>
+      </div>
+      <div class="stat-card" style="flex:1;min-width:140px">
+        <div class="stat-label">$ Impact</div>
+        <div class="stat-value" style="color:${dollarsLeft > dollarsAvoided ? COLORS.loss : COLORS.win}">$${Math.round(dollarsLeft > dollarsAvoided ? dollarsLeft : dollarsAvoided)}</div>
+        <div class="stat-sub">${dollarsLeft > dollarsAvoided ? 'left on the table' : 'in losses avoided'}</div>
+      </div>
+    </div>`;
+}
+
+function renderPostExitTable(trades) {
+  const el = document.getElementById('postExitTable');
+  if (!el) return;
+
+  let html = '<div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px">Exit Detail</div>';
+  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html += '<thead><tr style="border-bottom:1px solid var(--border-medium)">';
+  html += '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary)">Symbol</th>';
+  html += '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary)">Exit Reason</th>';
+  html += '<th style="text-align:right;padding:6px 8px;color:var(--text-secondary)">Exit P&L</th>';
+  html += '<th style="text-align:right;padding:6px 8px;color:var(--text-secondary)">3d Move</th>';
+  html += '<th style="text-align:right;padding:6px 8px;color:var(--text-secondary)">5d Move</th>';
+  html += '<th style="text-align:center;padding:6px 8px;color:var(--text-secondary)">Verdict</th>';
+  html += '</tr></thead><tbody>';
+
+  // Sort by 5d move descending (biggest "too early" first)
+  const sorted = [...trades].sort((a, b) => {
+    const ma = get5dReturn(a) ?? parseReturn(a.tracking.return3d) ?? 0;
+    const mb = get5dReturn(b) ?? parseReturn(b.tracking.return3d) ?? 0;
+    return mb - ma;
+  });
+
+  for (const t of sorted) {
+    const r3 = parseReturn(t.tracking.return3d);
+    const r5 = get5dReturn(t);
+    const bestMove = r5 ?? r3 ?? 0;
+
+    let verdict, verdictColor;
+    if (bestMove > 3) { verdict = 'Too Early'; verdictColor = COLORS.loss; }
+    else if (bestMove > 0) { verdict = 'Slightly Early'; verdictColor = COLORS.accent; }
+    else if (bestMove > -3) { verdict = 'Good Exit'; verdictColor = COLORS.win; }
+    else { verdict = 'Great Exit'; verdictColor = COLORS.win; }
+
+    const exitReason = (t.exitReason || 'manual').replace(/_/g, ' ');
+    const plColor = t.returnPercent > 0 ? COLORS.win : t.returnPercent < 0 ? COLORS.loss : COLORS.muted;
+
+    html += `<tr style="border-bottom:1px solid var(--border-subtle)">`;
+    html += `<td style="padding:5px 8px;font-weight:600">${t.symbol}</td>`;
+    html += `<td style="padding:5px 8px;color:${COLORS.secondary}">${exitReason}</td>`;
+    html += `<td style="padding:5px 8px;text-align:right;color:${plColor}">${t.returnPercent > 0 ? '+' : ''}${t.returnPercent.toFixed(1)}%</td>`;
+    html += `<td style="padding:5px 8px;text-align:right;color:${r3 != null ? (r3 > 0 ? COLORS.loss : COLORS.win) : COLORS.muted}">${r3 != null ? (r3 > 0 ? '+' : '') + r3.toFixed(1) + '%' : '--'}</td>`;
+    html += `<td style="padding:5px 8px;text-align:right;color:${r5 != null ? (r5 > 0 ? COLORS.loss : COLORS.win) : COLORS.muted}">${r5 != null ? (r5 > 0 ? '+' : '') + r5.toFixed(1) + '%' : '--'}</td>`;
+    html += `<td style="padding:5px 8px;text-align:center"><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:${verdictColor}22;color:${verdictColor}">${verdict}</span></td>`;
+    html += '</tr>';
+  }
+
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function renderPostExitPatterns(trades) {
+  const el = document.getElementById('postExitPatterns');
+  if (!el || trades.length < 5) { if (el) el.innerHTML = ''; return; }
+
+  const patterns = [];
+
+  // Pattern 1: Exit reason breakdown
+  const byReason = {};
+  for (const t of trades) {
+    const reason = t.exitReason || 'manual';
+    if (!byReason[reason]) byReason[reason] = { total: 0, tooEarly: 0, moves: [] };
+    const move = get5dReturn(t) ?? parseReturn(t.tracking.return3d);
+    if (move == null) continue;
+    byReason[reason].total++;
+    byReason[reason].moves.push(move);
+    if (move > 0) byReason[reason].tooEarly++;
+  }
+  for (const [reason, stats] of Object.entries(byReason)) {
+    if (stats.total < 2) continue;
+    const pct = ((stats.tooEarly / stats.total) * 100).toFixed(0);
+    const avg = (stats.moves.reduce((s, m) => s + m, 0) / stats.moves.length).toFixed(1);
+    const label = reason.replace(/_/g, ' ');
+    if (stats.tooEarly / stats.total > 0.5) {
+      patterns.push({ type: 'warning', text: `<strong>${label}</strong> exits are too early ${pct}% of the time (avg ${avg > 0 ? '+' : ''}${avg}% post-exit move, ${stats.total} trades)` });
+    } else if (stats.tooEarly / stats.total < 0.35) {
+      patterns.push({ type: 'success', text: `<strong>${label}</strong> exits are well-timed: only ${pct}% went higher after (${stats.total} trades)` });
+    }
+  }
+
+  // Pattern 2: Losers that recovered vs kept falling
+  const lossSells = trades.filter(t => t.returnPercent < 0);
+  const lossRecovered = lossSells.filter(t => (get5dReturn(t) ?? 0) > 2);
+  const lossKeptFalling = lossSells.filter(t => (get5dReturn(t) ?? 0) < -2);
+  if (lossSells.length >= 3) {
+    const recPct = ((lossRecovered.length / lossSells.length) * 100).toFixed(0);
+    const fellPct = ((lossKeptFalling.length / lossSells.length) * 100).toFixed(0);
+    if (lossRecovered.length > lossKeptFalling.length) {
+      patterns.push({ type: 'warning', text: `<strong>${recPct}%</strong> of losing sells recovered 2%+ within 5 days vs <strong>${fellPct}%</strong> that kept falling. You may be cutting losses too quickly on positions that need more time.` });
+    } else {
+      patterns.push({ type: 'success', text: `<strong>${fellPct}%</strong> of losing sells kept falling vs <strong>${recPct}%</strong> that recovered. Your loss-cutting instinct is mostly correct.` });
+    }
+  }
+
+  // Pattern 3: Win sells — did profitable exits leave more on the table?
+  const winSells = trades.filter(t => t.returnPercent > 0);
+  const winKeptRunning = winSells.filter(t => (get5dReturn(t) ?? 0) > 2);
+  if (winSells.length >= 2 && winKeptRunning.length > 0) {
+    const pct = ((winKeptRunning.length / winSells.length) * 100).toFixed(0);
+    const avgMore = (winKeptRunning.reduce((s, t) => s + get5dReturn(t), 0) / winKeptRunning.length).toFixed(1);
+    patterns.push({ type: 'warning', text: `<strong>${pct}%</strong> of winning sells kept running (+${avgMore}% avg). Winners: ${winKeptRunning.map(t => t.symbol).join(', ')}. Consider holding winners longer or using trailing stops.` });
+  }
+
+  // Pattern 4: Hold time correlation
+  const shortHolds = trades.filter(t => t.holdTime && t.holdTime < 3 * 86400000);
+  const longHolds = trades.filter(t => t.holdTime && t.holdTime >= 3 * 86400000);
+  if (shortHolds.length >= 3 && longHolds.length >= 3) {
+    const shortRecovery = shortHolds.filter(t => (get5dReturn(t) ?? 0) > 0).length / shortHolds.length;
+    const longRecovery = longHolds.filter(t => (get5dReturn(t) ?? 0) > 0).length / longHolds.length;
+    if (shortRecovery > longRecovery + 0.15) {
+      patterns.push({ type: 'warning', text: `Quick exits (<3 days held) recover <strong>${(shortRecovery * 100).toFixed(0)}%</strong> of the time vs <strong>${(longRecovery * 100).toFixed(0)}%</strong> for longer holds. You may be panic-selling early moves.` });
+    }
+  }
+
+  if (patterns.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+
+  let html = '<div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px">Patterns Detected</div>';
+  for (const p of patterns) {
+    const icon = p.type === 'warning' ? '&#9888;' : '&#10003;';
+    const borderColor = p.type === 'warning' ? COLORS.loss : COLORS.win;
+    html += `<div style="padding:8px 12px;margin-bottom:6px;border-left:3px solid ${borderColor};background:${borderColor}11;border-radius:0 6px 6px 0;font-size:12px;line-height:1.5;color:${COLORS.secondary}">${icon} ${p.text}</div>`;
+  }
+  el.innerHTML = html;
 }
 </script>
 </body>

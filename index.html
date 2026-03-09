@@ -2541,6 +2541,35 @@
             color: #22c55e;
         }
 
+        .risk-thesis-badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.4;
+            cursor: help;
+        }
+
+        .risk-thesis-badge.confirmed {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+        }
+
+        .risk-thesis-badge.pending {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+        }
+
+        .risk-thesis-badge.failed {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .risk-thesis-badge.unknown {
+            color: #6b7280;
+        }
+
         .risk-struct-badge {
             font-size: 10px;
             font-weight: 600;
@@ -6119,6 +6148,75 @@
             return { patterns: results, bestMatch, bestMatchCount };
         }
 
+        // Thesis status evaluation — compares entry technicals to current state
+        // to determine if the trade thesis (reversal or momentum) is playing out.
+        function evaluateThesisStatus(thesis, currentData, daysHeld) {
+            if (!thesis) return { status: 'unknown', reasons: ['No entry data'] };
+
+            const { entryMomentum, entryRSI, entryMACDCrossover, entryStructure } = thesis;
+            const hasEntryData = entryMomentum != null || entryRSI != null || entryStructure != null;
+            if (!hasEntryData) return { status: 'unknown', reasons: ['No entry data'] };
+
+            const { rsi, macdCrossover, structure, momentum, price, choch, chochType } = currentData;
+
+            // Detect entry type: reversal vs momentum
+            const isReversal = (entryMomentum != null && entryMomentum < 5) ||
+                (entryRSI != null && entryRSI < 45) ||
+                (entryStructure === 'bearish' || entryStructure === 'ranging');
+
+            const confirmReasons = [];
+            const failReasons = [];
+
+            if (isReversal) {
+                // Reversal confirmation checks
+                if (entryMACDCrossover && entryMACDCrossover !== 'bullish' && macdCrossover === 'bullish')
+                    confirmReasons.push('MACD flipped bullish');
+                if (entryRSI != null && entryRSI < 40 && rsi != null && rsi > 45)
+                    confirmReasons.push(`RSI bouncing ${Math.round(entryRSI)}\u2192${Math.round(rsi)}`);
+                if ((entryStructure === 'bearish' || entryStructure === 'ranging') && structure === 'bullish')
+                    confirmReasons.push('Structure improved');
+                if (entryMomentum != null && momentum != null && (momentum - entryMomentum) >= 2)
+                    confirmReasons.push(`Momentum +${(momentum - entryMomentum).toFixed(1)}`);
+
+                // Reversal failure checks
+                if (structure === 'bearish')
+                    failReasons.push('Structure bearish');
+                if (entryRSI != null && rsi != null && rsi < entryRSI && rsi < 35)
+                    failReasons.push(`RSI new low ${Math.round(rsi)}`);
+                if (macdCrossover !== 'bullish' && daysHeld >= 3)
+                    failReasons.push('MACD still bearish 3d+');
+                if (thesis.stopPrice && price != null && price <= thesis.stopPrice)
+                    failReasons.push('Below stop');
+                if (choch && chochType === 'bearish')
+                    failReasons.push('Bearish CHoCH');
+            } else {
+                // Momentum confirmation checks
+                if (thesis.entryPrice && price != null && price > thesis.entryPrice)
+                    confirmReasons.push('Price above entry');
+                if (structure === 'bullish')
+                    confirmReasons.push('Structure bullish');
+                if (entryMomentum != null && momentum != null && (entryMomentum - momentum) < 3)
+                    confirmReasons.push('Momentum held');
+
+                // Momentum failure checks
+                if (entryStructure === 'bullish' && structure === 'bearish')
+                    failReasons.push('Structure flipped');
+                if (entryMomentum != null && momentum != null && (entryMomentum - momentum) >= 3)
+                    failReasons.push(`Momentum collapsed ${entryMomentum.toFixed(1)}\u2192${momentum.toFixed(1)}`);
+                if (thesis.stopPrice && price != null && price <= thesis.stopPrice)
+                    failReasons.push('Below stop');
+            }
+
+            const status = confirmReasons.length >= 2 ? 'confirmed' :
+                failReasons.length >= 2 ? 'failed' : 'pending';
+
+            const reasons = status === 'confirmed' ? confirmReasons :
+                status === 'failed' ? failReasons :
+                [...confirmReasons.map(r => '\u2713 ' + r), ...failReasons.map(r => '\u2717 ' + r)];
+
+            return { status, reasons, type: isReversal ? 'reversal' : 'momentum' };
+        }
+
         // Signal combo definitions — shared between calibration analysis and live heat evaluation.
         // Uses scoreInputs field names (same shape as calibration observations).
         const sectorFlowIsInflow = f => f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow';
@@ -7698,6 +7796,29 @@
 
         // POST-EXIT TRACKING: Check if sold stocks did better/worse after we exited
         // This helps calibrate exit timing - "did I sell too early?"
+        // Fetch the closing price N trading days after a given date using historical bars
+        async function fetchPriceAfterNDays(symbol, sellDate, nDays) {
+            const from = new Date(sellDate);
+            const to = new Date(sellDate);
+            to.setDate(to.getDate() + (nDays * 2) + 5); // buffer for weekends/holidays
+            const fromStr = from.toISOString().split('T')[0];
+            const toStr = to.toISOString().split('T')[0];
+            try {
+                const response = await fetch(
+                    `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${fromStr}/${toStr}?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`
+                );
+                const data = await response.json();
+                if ((data.status === 'OK' || data.status === 'DELAYED') && data.results && data.results.length > nDays) {
+                    // results[0] is the sell date bar; results[nDays] is N trading days later
+                    return data.results[nDays].c; // close price
+                }
+                return null;
+            } catch (e) {
+                console.warn(`📊 fetchPriceAfterNDays failed for ${symbol}:`, e.message);
+                return null;
+            }
+        }
+
         async function updatePostExitTracking() {
             const closedTrades = portfolio.closedTrades || [];
             if (closedTrades.length === 0) return;
@@ -7719,15 +7840,24 @@
                 if (isNaN(sellDate.getTime())) continue;
                 const tradingDaysSinceSell = countTradingDays(sellDate, now);
 
+                // Determine if we need historical bars (sold >7 trading days ago) vs live price
+                const needsHistorical = tradingDaysSinceSell > 7;
+
                 // Check 3-trading-day tracking
                 if (trade.tracking.priceAfter3d === null && tradingDaysSinceSell >= 3) {
                     try {
-                        const priceData = await getStockPrice(trade.symbol);
-                        if (priceData && priceData.price > 0 && trade.sellPrice > 0) {
-                            trade.tracking.priceAfter3d = priceData.price;
-                            trade.tracking.return3d = ((priceData.price - trade.sellPrice) / trade.sellPrice * 100).toFixed(2) + '%';
+                        let price3d;
+                        if (needsHistorical) {
+                            price3d = await fetchPriceAfterNDays(trade.symbol, trade.sellDate, 3);
+                        } else {
+                            const priceData = await getStockPrice(trade.symbol);
+                            price3d = priceData?.price;
+                        }
+                        if (price3d > 0 && trade.sellPrice > 0) {
+                            trade.tracking.priceAfter3d = price3d;
+                            trade.tracking.return3d = ((price3d - trade.sellPrice) / trade.sellPrice * 100).toFixed(2) + '%';
                             updated = true;
-                            console.log(`📊 Post-exit 3d: ${trade.symbol} sold at $${trade.sellPrice.toFixed(2)}, now $${priceData.price.toFixed(2)} (${trade.tracking.return3d})`);
+                            console.log(`📊 Post-exit 3d: ${trade.symbol} sold at $${trade.sellPrice.toFixed(2)}, ${needsHistorical ? 'historical' : 'live'} $${price3d.toFixed(2)} (${trade.tracking.return3d})`);
                         }
                     } catch (e) { console.warn(`📊 Post-exit 3d tracking failed for ${trade.symbol}:`, e.message); }
                 }
@@ -7735,12 +7865,18 @@
                 // Check 5-trading-day tracking
                 if (trade.tracking.priceAfter5d === null && tradingDaysSinceSell >= 5) {
                     try {
-                        const priceData = await getStockPrice(trade.symbol);
-                        if (priceData && priceData.price > 0 && trade.sellPrice > 0) {
-                            trade.tracking.priceAfter5d = priceData.price;
-                            trade.tracking.return5d = ((priceData.price - trade.sellPrice) / trade.sellPrice * 100).toFixed(2) + '%';
+                        let price5d;
+                        if (needsHistorical) {
+                            price5d = await fetchPriceAfterNDays(trade.symbol, trade.sellDate, 5);
+                        } else {
+                            const priceData = await getStockPrice(trade.symbol);
+                            price5d = priceData?.price;
+                        }
+                        if (price5d > 0 && trade.sellPrice > 0) {
+                            trade.tracking.priceAfter5d = price5d;
+                            trade.tracking.return5d = ((price5d - trade.sellPrice) / trade.sellPrice * 100).toFixed(2) + '%';
                             updated = true;
-                            console.log(`📊 Post-exit 5d: ${trade.symbol} sold at $${trade.sellPrice.toFixed(2)}, now $${priceData.price.toFixed(2)} (${trade.tracking.return5d})`);
+                            console.log(`📊 Post-exit 5d: ${trade.symbol} sold at $${trade.sellPrice.toFixed(2)}, ${needsHistorical ? 'historical' : 'live'} $${price5d.toFixed(2)} (${trade.tracking.return5d})`);
                         }
                     } catch (e) { console.warn(`📊 Post-exit 5d tracking failed for ${trade.symbol}:`, e.message); }
                 }
@@ -12139,7 +12275,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             html += '<div class="risk-table-wrap"><table class="risk-table">';
             html += '<thead><tr>';
-            html += '<th>Symbol</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th>';
+            html += '<th>Symbol</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>Thesis</th>';
             html += '<th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
             html += '</tr></thead><tbody>';
 
@@ -12174,6 +12310,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     ? `<span style="${r.targetDist != null && parseFloat(r.targetDist) <= 2 ? 'color:#22c55e' : ''}" title="${parseFloat(r.targetDist)}% away">$${r.targetPrice.toFixed(2)}</span>`
                     : '—';
                 html += `<td>${targetDisplay}</td>`;
+                const thesisStatus = r._thesisStatus || { status: 'unknown', reasons: [] };
+                const thesisIcon = thesisStatus.status === 'confirmed' ? '\u2713' :
+                    thesisStatus.status === 'failed' ? '\u2717' :
+                    thesisStatus.status === 'pending' ? '\u23F3' : '\u2014';
+                const thesisLabel = thesisStatus.type ? ` ${thesisStatus.type[0].toUpperCase()}` : '';
+                const thesisTooltip = thesisStatus.reasons.length > 0 ? thesisStatus.reasons.join('\n') : '';
+                html += `<td><span class="risk-thesis-badge ${thesisStatus.status}" title="${escapeHtml(thesisTooltip)}">${thesisIcon}${thesisLabel}</span></td>`;
                 html += `<td><span class="risk-struct-badge ${structClass}">${r.structLabel}</span></td>`;
                 html += `<td style="${rsiColor}">${r.rsi}</td>`;
                 html += `<td style="${macdColor}">${r.macd}</td>`;
@@ -12597,13 +12740,27 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                     if (_thesis?.targetPrice && stockPrice.price >= _thesis.targetPrice) _profitSignals.push('Target reached');
 
+                    const _thesisStatus = evaluateThesisStatus(
+                        _thesis,
+                        {
+                            rsi: _rsiVal,
+                            macdCrossover: _macdResult?.crossover || 'none',
+                            structure: _struct?.structure || 'unknown',
+                            momentum: _candidateNow?.momentum ?? null,
+                            price: stockPrice.price,
+                            choch: _struct?.choch || false,
+                            chochType: _struct?.chochType || 'none'
+                        },
+                        daysHeld
+                    );
+
                     holdingDataArray.push({
                         symbol, shares, stockPrice, currentValue, changeClass, avgPurchasePrice,
                         earliestDate, conviction, daysHeld, gainLoss, gainLossPercent, gainLossClass,
                         positionSizePercent, isPastTimeframe, stockName, stockSector, entryMomentum,
                         entryRS, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
                         _struct, _profitSignals, _lossSignals, _thesis, _candidateNow, _intraday,
-                        insertionOrder: insertionOrder++
+                        _thesisStatus, insertionOrder: insertionOrder++
                     });
                 }
 

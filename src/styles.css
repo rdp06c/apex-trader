@@ -2528,6 +2528,35 @@
             color: #22c55e;
         }
 
+        .risk-thesis-badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.4;
+            cursor: help;
+        }
+
+        .risk-thesis-badge.confirmed {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+        }
+
+        .risk-thesis-badge.pending {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+        }
+
+        .risk-thesis-badge.failed {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .risk-thesis-badge.unknown {
+            color: #6b7280;
+        }
+
         .risk-struct-badge {
             font-size: 10px;
             font-weight: 600;
