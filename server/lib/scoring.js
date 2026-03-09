@@ -297,8 +297,17 @@ function calculateVolumeRatio(bars) {
     const validBars = histBars.filter(b => b.v > 0);
     if (validBars.length < 5) return null;
     const avgVol = validBars.reduce((s, b) => s + b.v, 0) / validBars.length;
+    // Time-normalize: during market hours, project today's partial volume to full-day
+    let projectedVol = todayVol;
+    if (isMarketOpen()) {
+        const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const elapsedMin = (et.getHours() * 60 + et.getMinutes()) - 570; // 570 = 9:30 AM
+        if (elapsedMin > 0) {
+            projectedVol = todayVol * (390 / elapsedMin);
+        }
+    }
     return {
-        ratio: Math.round((todayVol / avgVol) * 100) / 100,
+        ratio: Math.round((projectedVol / avgVol) * 100) / 100,
         todayVolume: todayVol,
         avgVolume: Math.round(avgVol)
     };
