@@ -293,6 +293,46 @@
     color: var(--text-faint); font-size: 13px;
   }
 
+  /* ── Transaction Log ──────────────────────────────── */
+  .tx-log-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+  }
+  .tx-log-table th {
+    text-align: left; padding: 8px 10px; font-size: 10px;
+    color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px;
+    font-weight: 600; border-bottom: 1px solid var(--border-medium);
+    white-space: nowrap;
+  }
+  .tx-log-table td {
+    padding: 7px 10px; border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
+  }
+  .tx-log-table tr.tx-buy { background: var(--green-dim); }
+  .tx-log-table tr.tx-sell { background: var(--red-dim); }
+  .tx-log-table tr:hover { background: var(--bg-hover); }
+  .tx-type-buy { color: var(--green); font-weight: 700; }
+  .tx-type-sell { color: var(--red); font-weight: 700; }
+  .tx-symbol { color: var(--text-primary); font-weight: 600; }
+  .tx-reasoning {
+    max-width: 250px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; color: var(--text-muted); cursor: default;
+  }
+  .tx-log-pagination {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; margin-top: 14px;
+  }
+  .tx-log-pagination button {
+    background: var(--bg-raised); color: var(--text-secondary);
+    border: 1px solid var(--border-medium); border-radius: var(--radius-sm);
+    padding: 5px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: all var(--transition-fast);
+  }
+  .tx-log-pagination button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .tx-log-pagination button:disabled { opacity: 0.3; cursor: default; }
+  .tx-log-pagination .tx-page-info { font-size: 12px; color: var(--text-muted); }
+  .tx-log-collapsed #txLogBody { display: none; }
+  .tx-log-collapsed .journal-toggle { transform: rotate(-90deg); }
+
   /* ── Responsive ─────────────────────────────────── */
   @media (max-width: 700px) {
     body { padding: 16px; }
@@ -330,6 +370,17 @@
     <div id="openPositions"></div>
   </div>
 
+  <!-- Transaction Log -->
+  <div class="card" id="txLogSection" style="display:none">
+    <div class="chart-title" onclick="toggleTxLog()" style="cursor:pointer">
+      Transaction Log <span class="journal-toggle" id="txLogToggle">&#9662;</span>
+    </div>
+    <div id="txLogBody">
+      <table class="tx-log-table" id="txLogTable"></table>
+      <div class="tx-log-pagination" id="txLogPagination"></div>
+    </div>
+  </div>
+
   <!-- Filters -->
   <div class="filters-bar" id="filtersBar">
     <input type="text" class="filter-input" id="filterSymbol" placeholder="Search symbol..." style="width:130px">
@@ -350,6 +401,8 @@
 let data = null;
 let outcomeFilter = 'all';
 let allEntries = [];
+let txLogPage = 1;
+const TX_PAGE_SIZE = 40;
 
 function escapeHtml(str) {
   if (typeof str !== 'string') return '';
@@ -603,6 +656,66 @@ function renderJournalEntries(trades) {
   container.innerHTML = html;
 }
 
+function toggleTxLog() {
+  const section = document.getElementById('txLogSection');
+  section.classList.toggle('tx-log-collapsed');
+}
+
+function txLogSetPage(p) {
+  txLogPage = p;
+  renderTransactionLog();
+}
+
+function renderTransactionLog() {
+  const section = document.getElementById('txLogSection');
+  const table = document.getElementById('txLogTable');
+  const pagination = document.getElementById('txLogPagination');
+  const txns = data.transactions || [];
+  if (txns.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+
+  // Sort most recent first
+  const sorted = [...txns].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  const totalPages = Math.ceil(sorted.length / TX_PAGE_SIZE);
+  if (txLogPage > totalPages) txLogPage = totalPages;
+  if (txLogPage < 1) txLogPage = 1;
+  const start = (txLogPage - 1) * TX_PAGE_SIZE;
+  const page = sorted.slice(start, start + TX_PAGE_SIZE);
+
+  let html = '<thead><tr><th>Date</th><th>Type</th><th>Symbol</th><th>Shares</th><th>Price</th><th>Total</th><th>Reasoning</th></tr></thead><tbody>';
+  for (const tx of page) {
+    const isBuy = tx.type === 'BUY';
+    const date = formatDate(tx.timestamp);
+    const total = isBuy ? (tx.cost || tx.price * tx.shares) : (tx.revenue || tx.price * tx.shares);
+    const reasoning = tx.reasoning || tx.reason || '';
+    const truncated = reasoning.length > 50 ? reasoning.substring(0, 50) + '...' : reasoning;
+    html += `<tr class="${isBuy ? 'tx-buy' : 'tx-sell'}">
+      <td>${date}</td>
+      <td class="${isBuy ? 'tx-type-buy' : 'tx-type-sell'}">${tx.type}</td>
+      <td class="tx-symbol">${escapeHtml(tx.symbol)}</td>
+      <td>${tx.shares}</td>
+      <td>$${tx.price.toFixed(2)}</td>
+      <td>$${total.toFixed(0)}</td>
+      <td class="tx-reasoning" title="${escapeHtml(reasoning)}">${escapeHtml(truncated)}</td>
+    </tr>`;
+  }
+  html += '</tbody>';
+  table.innerHTML = html;
+
+  if (totalPages > 1) {
+    pagination.innerHTML = `
+      <button onclick="txLogSetPage(${txLogPage - 1})"${txLogPage <= 1 ? ' disabled' : ''}>&laquo; Prev</button>
+      <span class="tx-page-info">Page ${txLogPage} of ${totalPages} (${sorted.length} transactions)</span>
+      <button onclick="txLogSetPage(${txLogPage + 1})"${txLogPage >= totalPages ? ' disabled' : ''}">Next &raquo;</button>`;
+  } else {
+    pagination.innerHTML = `<span class="tx-page-info">${sorted.length} transaction${sorted.length !== 1 ? 's' : ''}</span>`;
+  }
+}
+
 function renderAll() {
   const ct = data.closedTrades || [];
   // Sort most recent first
@@ -610,6 +723,7 @@ function renderAll() {
 
   renderSummaryStats(allEntries);
   renderOpenPositions();
+  renderTransactionLog();
   populateSectorFilter(allEntries);
   setOutcomeFilter('all');
 }
