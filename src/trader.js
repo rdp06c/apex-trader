@@ -9616,6 +9616,33 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     smaCrossover: signals.smaCrossover?.crossover || null
                 } : {};
 
+                // Evaluate entry signals and combo heat at time of purchase
+                if (Object.keys(entryTechnicals).length > 0) {
+                    const sigCandidate = {
+                        macdCrossover: entryTechnicals.macdCrossover,
+                        rsi: entryTechnicals.rsi,
+                        structure: entryTechnicals.structure,
+                        structureScore: entryTechnicals.structureScore,
+                        return5d: entryTechnicals.totalReturn5d,
+                        momentum: entryTechnicals.momentumScore,
+                        rs: entryTechnicals.rsScore,
+                        dayChange: entryTechnicals.todayChange,
+                        sectorFlow: entryTechnicals.sectorRotation,
+                        volumeRatio: entryTechnicals.volumeRatio,
+                        volumeTrend: entryTechnicals.volumeTrend,
+                        isAccelerating: entryTechnicals.isAccelerating,
+                        upDays: entryTechnicals.upDays,
+                        totalDays: entryTechnicals.totalDays,
+                        fvg: entryTechnicals.fvg,
+                        sma20: entryTechnicals.sma20,
+                        smaCrossover: entryTechnicals.smaCrossover,
+                        price: price
+                    };
+                    entryTechnicals.entrySignal = evaluateEntrySignals(sigCandidate);
+                    const heat = evaluateComboHeat(sigCandidate);
+                    if (heat) entryTechnicals.comboHeat = heat;
+                }
+
                 // Auto-remove from watchlist on buy
                 if (portfolio.watchlist) {
                     const wIdx = portfolio.watchlist.indexOf(symbol);
