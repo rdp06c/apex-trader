@@ -4212,8 +4212,8 @@
                 const sellDate = new Date(trade.sellDate);
                 if (isNaN(sellDate.getTime())) continue;
                 const tradingDaysSinceSell = countTradingDays(sellDate, now);
-                const needs3d = trade.tracking.priceAfter3d === null && tradingDaysSinceSell >= 3;
-                const needs5d = trade.tracking.priceAfter5d === null && tradingDaysSinceSell >= 5;
+                const needs3d = trade.tracking.priceAfter3d == null && tradingDaysSinceSell >= 3;
+                const needs5d = trade.tracking.priceAfter5d == null && tradingDaysSinceSell >= 5;
                 if (needs3d || needs5d) {
                     console.log(`📊 ${trade.symbol}: sellDate=${trade.sellDate?.slice(0,10)}, ${tradingDaysSinceSell} trading days ago, needs3d=${needs3d}, needs5d=${needs5d}, sellPrice=${trade.sellPrice}`);
                 }
@@ -4222,7 +4222,7 @@
                 const needsHistorical = tradingDaysSinceSell > 7;
 
                 // Check 3-trading-day tracking
-                if (trade.tracking.priceAfter3d === null && tradingDaysSinceSell >= 3) {
+                if (trade.tracking.priceAfter3d == null && tradingDaysSinceSell >= 3) {
                     try {
                         let price3d;
                         if (needsHistorical) {
@@ -4241,7 +4241,7 @@
                 }
 
                 // Check 5-trading-day tracking
-                if (trade.tracking.priceAfter5d === null && tradingDaysSinceSell >= 5) {
+                if (trade.tracking.priceAfter5d == null && tradingDaysSinceSell >= 5) {
                     try {
                         let price5d;
                         if (needsHistorical) {
@@ -4260,7 +4260,7 @@
                 }
 
                 // Mark as fully tracked if both filled
-                if (trade.tracking.priceAfter3d !== null && trade.tracking.priceAfter5d !== null) {
+                if (trade.tracking.priceAfter3d != null && trade.tracking.priceAfter5d != null) {
                     trade.tracking.tracked = true;
                 }
             }
