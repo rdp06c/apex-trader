@@ -3752,7 +3752,9 @@
             // Post-exit quality one-liner
             const postExit = summarizePostExitQuality();
             if (postExit) {
-                let exitQLine = `EXIT QUALITY: ${postExit.weekWentHigher}/${postExit.weekTracked} exits went higher 1wk later (avg ${postExit.weekAvgMove >= 0 ? '+' : ''}${postExit.weekAvgMove.toFixed(1)}%)`;
+                let exitQLine = 'EXIT QUALITY:';
+                if (postExit.d3Tracked >= 3) exitQLine += ` 3d: ${postExit.d3WentHigher}/${postExit.d3Tracked} higher (avg ${postExit.d3AvgMove >= 0 ? '+' : ''}${postExit.d3AvgMove.toFixed(1)}%)`;
+                if (postExit.d5Tracked >= 3) exitQLine += ` | 5d: ${postExit.d5WentHigher}/${postExit.d5Tracked} higher (avg ${postExit.d5AvgMove >= 0 ? '+' : ''}${postExit.d5AvgMove.toFixed(1)}%)`;
                 if (postExit.sellingTooEarly) exitQLine += ` — HOLDING WINNERS LONGER would improve returns`;
                 insights += exitQLine + '\n';
             }
@@ -4003,10 +4005,9 @@
             // Post-exit quality from summarizePostExitQuality
             const postExit = summarizePostExitQuality();
             if (postExit) {
-                insights += `EXIT QUALITY: ${postExit.weekWentHigher}/${postExit.weekTracked} sells went HIGHER 1 week later (avg ${postExit.weekAvgMove >= 0 ? '+' : ''}${postExit.weekAvgMove.toFixed(1)}%).`;
-                if (postExit.monthTracked > 0) {
-                    insights += ` 1 month: ${postExit.monthWentHigher}/${postExit.monthTracked} higher (avg ${postExit.monthAvgMove >= 0 ? '+' : ''}${postExit.monthAvgMove.toFixed(1)}%).`;
-                }
+                insights += 'EXIT QUALITY:';
+                if (postExit.d3Tracked >= 3) insights += ` 3d: ${postExit.d3WentHigher}/${postExit.d3Tracked} higher (avg ${postExit.d3AvgMove >= 0 ? '+' : ''}${postExit.d3AvgMove.toFixed(1)}%).`;
+                if (postExit.d5Tracked >= 3) insights += ` 5d: ${postExit.d5WentHigher}/${postExit.d5Tracked} higher (avg ${postExit.d5AvgMove >= 0 ? '+' : ''}${postExit.d5AvgMove.toFixed(1)}%).`;
                 if (postExit.sellingTooEarly) {
                     insights += ` ⚠️ Pattern suggests selling winners too early.`;
                 }
@@ -4023,38 +4024,45 @@
         // Summarize post-exit tracking data for prompt injection
         function summarizePostExitQuality() {
             const closedTrades = portfolio.closedTrades || [];
-            const tracked = closedTrades.filter(t => t.tracking?.priceAfter1Week != null);
-            if (tracked.length < 3) return null;
+            const tracked3d = closedTrades.filter(t => t.tracking?.priceAfter3d != null);
+            const tracked5d = closedTrades.filter(t => t.tracking?.priceAfter5d != null || t.tracking?.priceAfter1Week != null);
+            if (tracked3d.length < 3 && tracked5d.length < 3) return null;
 
-            let weekHigher = 0, weekTotalMove = 0;
-            let monthHigher = 0, monthTotalMove = 0, monthCount = 0;
+            let d3Higher = 0, d3TotalMove = 0;
+            let d5Higher = 0, d5TotalMove = 0;
 
-            for (const t of tracked) {
+            for (const t of tracked3d) {
                 const sellPrice = t.tracking.sellPrice || t.sellPrice;
                 if (!sellPrice || sellPrice <= 0) continue;
-                const weekMove = ((t.tracking.priceAfter1Week - sellPrice) / sellPrice) * 100;
-                weekTotalMove += weekMove;
-                if (weekMove > 0) weekHigher++;
-
-                if (t.tracking.priceAfter1Month != null) {
-                    const monthMove = ((t.tracking.priceAfter1Month - sellPrice) / sellPrice) * 100;
-                    monthTotalMove += monthMove;
-                    if (monthMove > 0) monthHigher++;
-                    monthCount++;
-                }
+                const move = ((t.tracking.priceAfter3d - sellPrice) / sellPrice) * 100;
+                d3TotalMove += move;
+                if (move > 0) d3Higher++;
             }
 
-            const weekAvg = weekTotalMove / tracked.length;
-            const monthAvg = monthCount > 0 ? monthTotalMove / monthCount : null;
+            for (const t of tracked5d) {
+                const sellPrice = t.tracking.sellPrice || t.sellPrice;
+                if (!sellPrice || sellPrice <= 0) continue;
+                const price5d = t.tracking.priceAfter5d ?? t.tracking.priceAfter1Week;
+                const move = ((price5d - sellPrice) / sellPrice) * 100;
+                d5TotalMove += move;
+                if (move > 0) d5Higher++;
+            }
+
+            const d3Avg = tracked3d.length > 0 ? d3TotalMove / tracked3d.length : null;
+            const d5Avg = tracked5d.length > 0 ? d5TotalMove / tracked5d.length : null;
+
+            const primaryTracked = tracked5d.length >= 3 ? tracked5d.length : tracked3d.length;
+            const primaryHigher = tracked5d.length >= 3 ? d5Higher : d3Higher;
+            const primaryAvg = tracked5d.length >= 3 ? d5Avg : d3Avg;
 
             return {
-                weekTracked: tracked.length,
-                weekWentHigher: weekHigher,
-                weekAvgMove: weekAvg,
-                monthTracked: monthCount,
-                monthWentHigher: monthHigher,
-                monthAvgMove: monthAvg,
-                sellingTooEarly: (weekHigher / tracked.length) > 0.6 && weekAvg > 3
+                d3Tracked: tracked3d.length,
+                d3WentHigher: d3Higher,
+                d3AvgMove: d3Avg,
+                d5Tracked: tracked5d.length,
+                d5WentHigher: d5Higher,
+                d5AvgMove: d5Avg,
+                sellingTooEarly: primaryTracked >= 3 && (primaryHigher / primaryTracked) > 0.6 && primaryAvg > 3
             };
         }
 
@@ -4063,54 +4071,56 @@
         async function updatePostExitTracking() {
             const closedTrades = portfolio.closedTrades || [];
             if (closedTrades.length === 0) return;
-            
-            const now = Date.now();
-            const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
-            const ONE_MONTH = 30 * 24 * 60 * 60 * 1000;
+
+            const now = new Date();
             let updated = false;
-            
+
             for (const trade of closedTrades) {
                 if (!trade.tracking) {
-                    trade.tracking = { priceAfter1Week: null, priceAfter1Month: null, tracked: false };
+                    trade.tracking = { priceAfter3d: null, priceAfter5d: null, tracked: false };
                 }
-                
-                const sellTime = new Date(trade.sellDate).getTime();
-                if (isNaN(sellTime)) continue; // Skip trades with invalid dates
-                const timeSinceSell = now - sellTime;
+                // Migrate old 1-week data to 5-day slot if present
+                if (trade.tracking.priceAfter1Week != null && trade.tracking.priceAfter5d == null) {
+                    trade.tracking.priceAfter5d = trade.tracking.priceAfter1Week;
+                    trade.tracking.return5d = trade.tracking.weekReturnVsSell;
+                }
 
-                // Check 1-week tracking (after 7+ days)
-                if (trade.tracking.priceAfter1Week === null && timeSinceSell >= ONE_WEEK) {
+                const sellDate = new Date(trade.sellDate);
+                if (isNaN(sellDate.getTime())) continue;
+                const tradingDaysSinceSell = countTradingDays(sellDate, now);
+
+                // Check 3-trading-day tracking
+                if (trade.tracking.priceAfter3d === null && tradingDaysSinceSell >= 3) {
                     try {
                         const priceData = await getStockPrice(trade.symbol);
                         if (priceData && priceData.price > 0 && trade.sellPrice > 0) {
-                            trade.tracking.priceAfter1Week = priceData.price;
-                            trade.tracking.weekReturnVsSell = ((priceData.price - trade.sellPrice) / trade.sellPrice * 100).toFixed(2) + '%';
+                            trade.tracking.priceAfter3d = priceData.price;
+                            trade.tracking.return3d = ((priceData.price - trade.sellPrice) / trade.sellPrice * 100).toFixed(2) + '%';
                             updated = true;
-                            console.log(`📊 Post-exit 1wk: ${trade.symbol} sold at $${trade.sellPrice.toFixed(2)}, now $${priceData.price.toFixed(2)} (${trade.tracking.weekReturnVsSell})`);
+                            console.log(`📊 Post-exit 3d: ${trade.symbol} sold at $${trade.sellPrice.toFixed(2)}, now $${priceData.price.toFixed(2)} (${trade.tracking.return3d})`);
                         }
-                    } catch (e) { console.warn(`📊 Post-exit 1wk tracking failed for ${trade.symbol}:`, e.message); }
+                    } catch (e) { console.warn(`📊 Post-exit 3d tracking failed for ${trade.symbol}:`, e.message); }
                 }
 
-                // Check 1-month tracking (after 30+ days)
-                if (trade.tracking.priceAfter1Month === null && timeSinceSell >= ONE_MONTH) {
+                // Check 5-trading-day tracking
+                if (trade.tracking.priceAfter5d === null && tradingDaysSinceSell >= 5) {
                     try {
                         const priceData = await getStockPrice(trade.symbol);
                         if (priceData && priceData.price > 0 && trade.sellPrice > 0) {
-                            trade.tracking.priceAfter1Month = priceData.price;
-                            trade.tracking.monthReturnVsSell = ((priceData.price - trade.sellPrice) / trade.sellPrice * 100).toFixed(2) + '%';
-                            trade.tracking.tracked = true;
+                            trade.tracking.priceAfter5d = priceData.price;
+                            trade.tracking.return5d = ((priceData.price - trade.sellPrice) / trade.sellPrice * 100).toFixed(2) + '%';
                             updated = true;
-                            console.log(`📊 Post-exit 1mo: ${trade.symbol} sold at $${trade.sellPrice.toFixed(2)}, now $${priceData.price.toFixed(2)} (${trade.tracking.monthReturnVsSell})`);
+                            console.log(`📊 Post-exit 5d: ${trade.symbol} sold at $${trade.sellPrice.toFixed(2)}, now $${priceData.price.toFixed(2)} (${trade.tracking.return5d})`);
                         }
-                    } catch (e) { console.warn(`📊 Post-exit 1mo tracking failed for ${trade.symbol}:`, e.message); }
+                    } catch (e) { console.warn(`📊 Post-exit 5d tracking failed for ${trade.symbol}:`, e.message); }
                 }
-                
+
                 // Mark as fully tracked if both filled
-                if (trade.tracking.priceAfter1Week !== null && trade.tracking.priceAfter1Month !== null) {
+                if (trade.tracking.priceAfter3d !== null && trade.tracking.priceAfter5d !== null) {
                     trade.tracking.tracked = true;
                 }
             }
-            
+
             if (updated) {
                 console.log('✅ Post-exit tracking updated');
                 // Portfolio will be saved by the normal save flow after analysis
@@ -8370,8 +8380,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             
                             // Placeholder for post-exit tracking (will be filled later)
                             tracking: {
-                                priceAfter1Week: null,
-                                priceAfter1Month: null,
+                                priceAfter3d: null,
+                                priceAfter5d: null,
                                 tracked: false
                             }
                         });
@@ -9341,7 +9351,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 exitHoldingsCount: null,
                                 exitTechnicals: {},
                                 positionSizePercent: matchedBuys[0].positionSizePercent || null,
-                                tracking: { priceAfter1Week: null, priceAfter1Month: null, tracked: false },
+                                tracking: { priceAfter3d: null, priceAfter5d: null, tracked: false },
                                 manual: true,
                                 backfilled: true
                             });
@@ -9819,7 +9829,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         exitHoldingsCount: Object.keys(portfolio.holdings).length,
                         exitTechnicals: {},
                         positionSizePercent: originalBuyTx.positionSizePercent || null,
-                        tracking: { priceAfter1Week: null, priceAfter1Month: null, tracked: false },
+                        tracking: { priceAfter3d: null, priceAfter5d: null, tracked: false },
                         manual: true
                     });
                 }

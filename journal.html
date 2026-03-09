@@ -140,7 +140,7 @@
 
   /* ── Filters ────────────────────────────────────── */
   .filters-bar {
-    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;
+    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;
     align-items: center;
   }
   .filter-input {
@@ -168,124 +168,14 @@
   .filter-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
   .filter-count { font-size: 12px; color: var(--text-faint); margin-left: auto; }
 
-  /* ── Journal Entry ──────────────────────────────── */
-  .journal-entry {
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    margin-bottom: 8px;
-    overflow: hidden;
-    transition: border-color var(--transition-fast);
-  }
-  .journal-entry:hover { border-color: var(--border-medium); }
-  .journal-entry.expanded { border-color: var(--border-strong); }
-
-  .journal-header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 16px; cursor: pointer;
-    background: var(--bg-inset);
-    transition: background var(--transition-fast);
-    flex-wrap: wrap;
-  }
-  .journal-header:hover { background: var(--bg-hover); }
-
-  .journal-symbol {
-    font-weight: 700; font-size: 14px; color: var(--text-primary);
-    min-width: 55px;
-  }
-  .journal-dates {
-    font-size: 11px; color: var(--text-muted); min-width: 160px;
-  }
-  .journal-return {
-    font-size: 12px; font-weight: 700;
-    padding: 3px 10px; border-radius: 12px;
-    min-width: 60px; text-align: center;
-  }
-  .journal-return.win {
-    background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border);
-  }
-  .journal-return.loss {
-    background: var(--red-dim); color: var(--red); border: 1px solid var(--red-border);
-  }
-  .journal-hold {
-    font-size: 11px; color: var(--text-faint); min-width: 60px;
-  }
-  .journal-exit-reason {
-    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
-    letter-spacing: 0.5px; font-weight: 600;
-    padding: 2px 8px; border-radius: 4px;
-    background: rgba(255,255,255,0.04);
-  }
-  .journal-sector {
-    font-size: 10px; color: var(--text-faint); margin-left: auto;
-  }
   .journal-toggle {
     color: var(--text-faint); font-size: 10px;
     transition: transform var(--transition-fast);
   }
   .journal-toggle.open { transform: rotate(180deg); }
 
-  .journal-body {
-    display: none; padding: 16px 20px;
-    background: var(--bg-surface);
-    border-top: 1px solid var(--border-subtle);
-  }
-  .journal-entry.expanded .journal-body { display: block; }
-
-  .journal-section-title {
-    font-size: 11px; font-weight: 700; color: var(--text-faint);
-    text-transform: uppercase; letter-spacing: 1px;
-    margin-bottom: 8px; margin-top: 16px;
-  }
-  .journal-section-title:first-child { margin-top: 0; }
-
-  .signal-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 6px; margin-bottom: 12px;
-  }
-  .signal-item {
-    background: var(--bg-inset); border-radius: 6px;
-    padding: 6px 10px; border: 1px solid var(--border-subtle);
-  }
-  .signal-label {
-    font-size: 9px; color: var(--text-faint); text-transform: uppercase;
-    letter-spacing: 0.5px; font-weight: 600;
-  }
-  .signal-value {
-    font-size: 13px; font-weight: 600; color: var(--text-primary); margin-top: 1px;
-  }
-
-  .journal-reasoning {
-    font-size: 12px; color: var(--text-secondary); line-height: 1.6;
-    padding: 10px 14px; background: var(--bg-inset);
-    border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);
-    margin-bottom: 8px;
-  }
-
-  .outcome-row {
-    display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px;
-    padding: 12px 14px; background: var(--bg-inset);
-    border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);
-  }
-  .outcome-item {
-    display: flex; flex-direction: column;
-  }
-  .outcome-label {
-    font-size: 9px; color: var(--text-faint); text-transform: uppercase;
-    letter-spacing: 0.5px; font-weight: 600;
-  }
-  .outcome-value {
-    font-size: 14px; font-weight: 700; color: var(--text-primary); margin-top: 1px;
-  }
-
-  /* ── Open Positions ─────────────────────────────── */
-  .open-position {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 14px; border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm); margin-bottom: 6px;
-    background: var(--bg-inset);
-  }
-  .open-symbol { font-weight: 700; font-size: 14px; color: var(--text-primary); min-width: 55px; }
-  .open-detail { font-size: 11px; color: var(--text-muted); }
+  .ct-collapsed #closedTradesBody { display: none; }
+  .ct-collapsed .journal-toggle { transform: rotate(-90deg); }
 
   /* ── Empty state ────────────────────────────────── */
   .empty-state {
@@ -364,12 +254,6 @@
 <div id="dashboard">
   <div class="stats-row" id="statsRow"></div>
 
-  <!-- Open Positions -->
-  <div class="card" id="openSection" style="display:none">
-    <div class="chart-title">Open Positions</div>
-    <div id="openPositions"></div>
-  </div>
-
   <!-- Transaction Log -->
   <div class="card" id="txLogSection" style="display:none">
     <div class="chart-title" onclick="toggleTxLog()" style="cursor:pointer">
@@ -381,28 +265,37 @@
     </div>
   </div>
 
-  <!-- Filters -->
-  <div class="filters-bar" id="filtersBar">
-    <input type="text" class="filter-input" id="filterSymbol" placeholder="Search symbol..." style="width:130px">
-    <button class="filter-btn" id="filterAll" onclick="setOutcomeFilter('all')">All</button>
-    <button class="filter-btn" id="filterWins" onclick="setOutcomeFilter('win')">Wins</button>
-    <button class="filter-btn" id="filterLosses" onclick="setOutcomeFilter('loss')">Losses</button>
-    <select class="filter-select" id="filterSector" onchange="applyFilters()">
-      <option value="">All Sectors</option>
-    </select>
-    <span class="filter-count" id="filterCount"></span>
+  <!-- Closed Trades -->
+  <div class="card" id="closedTradesSection" style="display:none">
+    <div class="chart-title" onclick="toggleClosedTrades()" style="cursor:pointer">
+      Closed Trades <span class="journal-toggle" id="closedTradesToggle">&#9662;</span>
+    </div>
+    <div id="closedTradesBody">
+      <div class="filters-bar">
+        <input type="text" class="filter-input" id="filterSymbol" placeholder="Search symbol..." style="width:130px">
+        <button class="filter-btn active" id="filterAll" onclick="setOutcomeFilter('all')">All</button>
+        <button class="filter-btn" id="filterWins" onclick="setOutcomeFilter('win')">Wins</button>
+        <button class="filter-btn" id="filterLosses" onclick="setOutcomeFilter('loss')">Losses</button>
+        <select class="filter-select" id="filterSector" onchange="applyFilters()">
+          <option value="">All Sectors</option>
+        </select>
+        <span class="filter-count" id="filterCount"></span>
+      </div>
+      <table class="tx-log-table" id="closedTradesTable"></table>
+      <div class="tx-log-pagination" id="closedTradesPagination"></div>
+    </div>
   </div>
-
-  <!-- Journal Entries -->
-  <div id="journalEntries"></div>
 </div>
 
 <script>
 let data = null;
 let outcomeFilter = 'all';
 let allEntries = [];
+let filteredEntries = [];
 let txLogPage = 1;
+let ctPage = 1;
 const TX_PAGE_SIZE = 40;
+const CT_PAGE_SIZE = 40;
 
 function escapeHtml(str) {
   if (typeof str !== 'string') return '';
@@ -416,71 +309,34 @@ function formatDate(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function formatHoldTime(ms) {
-  if (!ms || ms <= 0) return '—';
-  const days = Math.round(ms / (1000 * 60 * 60 * 24));
-  if (days === 0) return '<1d';
-  if (days === 1) return '1 day';
-  return days + ' days';
+function formatDateShort(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function countTradingDays(startDate, endDate) {
+  const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+  let count = 0;
+  const d = new Date(start);
+  while (d < end) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+  }
+  return count;
+}
+
+function formatHoldDays(t) {
+  if (!t.buyDate || !t.sellDate) return '—';
+  const days = countTradingDays(new Date(t.buyDate), new Date(t.sellDate));
+  return days <= 1 ? '<1d' : days + 'd';
 }
 
 function formatExitReason(reason) {
   if (!reason) return '—';
   return reason.replace(/_/g, ' ');
-}
-
-function signalColor(label, value) {
-  if (value == null || value === '—') return '';
-  const v = typeof value === 'string' ? value.toLowerCase() : value;
-  if (label === 'RSI') return v <= 30 ? 'color:var(--green)' : v >= 70 ? 'color:var(--red)' : '';
-  if (label === 'MACD') return v === 'bullish' ? 'color:var(--green)' : v === 'bearish' ? 'color:var(--red)' : '';
-  if (label === 'Structure') return v === 'bullish' ? 'color:var(--green)' : v === 'bearish' ? 'color:var(--red)' : '';
-  if (label === 'Momentum') return v >= 7 ? 'color:var(--green)' : v < 4 ? 'color:var(--red)' : 'color:var(--yellow)';
-  if (label === 'RS') return v >= 70 ? 'color:var(--green)' : v < 30 ? 'color:var(--red)' : '';
-  if (label === 'Day%' || label === '5D%') return v > 0 ? 'color:var(--green)' : v < 0 ? 'color:var(--red)' : '';
-  if (label === 'Sector') {
-    if (v === 'accumulate' || v === 'favorable') return 'color:var(--green)';
-    if (v === 'avoid' || v === 'caution') return 'color:var(--red)';
-  }
-  return '';
-}
-
-function renderSignalGrid(technicals) {
-  if (!technicals || Object.keys(technicals).length === 0) {
-    return '<div style="font-size:12px;color:var(--text-faint)">No signal data captured</div>';
-  }
-  const items = [];
-  const add = (label, val, fmt) => {
-    if (val == null) return;
-    const display = fmt ? fmt(val) : val;
-    const color = signalColor(label, val);
-    items.push(`<div class="signal-item"><div class="signal-label">${escapeHtml(label)}</div><div class="signal-value" style="${color}">${escapeHtml(String(display))}</div></div>`);
-  };
-  add('Momentum', technicals.momentumScore);
-  add('RS', technicals.rsScore);
-  add('RSI', technicals.rsi, v => Math.round(v));
-  add('MACD', technicals.macdCrossover);
-  add('Structure', technicals.structure);
-  add('Day%', technicals.todayChange, v => (v > 0 ? '+' : '') + v.toFixed(1) + '%');
-  add('5D%', technicals.totalReturn5d, v => (v > 0 ? '+' : '') + v.toFixed(1) + '%');
-  add('Sector', technicals.sectorRotation);
-  add('DTC', technicals.daysToCover, v => v.toFixed(1));
-  add('VIX', technicals.vixLevel, v => v.toFixed(1));
-  add('Score', technicals.compositeScore, v => v.toFixed(1));
-  add('MCap', technicals.marketCap, v => {
-    if (v >= 1e12) return '$' + (v/1e12).toFixed(1) + 'T';
-    if (v >= 1e9) return '$' + (v/1e9).toFixed(1) + 'B';
-    if (v >= 1e6) return '$' + (v/1e6).toFixed(0) + 'M';
-    return '$' + v;
-  });
-  add('Vol Ratio', technicals.volumeRatio, v => v.toFixed(2) + 'x');
-  add('SMA50', technicals.sma50, v => '$' + v.toFixed(2));
-  add('SMA Cross', technicals.smaCrossover);
-  if (technicals.choch) add('CHoCH', technicals.chochType || 'yes');
-  if (technicals.bos) add('BOS', technicals.bosType || 'yes');
-  if (technicals.sweep) add('Sweep', 'yes');
-  if (items.length === 0) return '<div style="font-size:12px;color:var(--text-faint)">No signal data</div>';
-  return '<div class="signal-grid">' + items.join('') + '</div>';
 }
 
 function renderSummaryStats(trades) {
@@ -495,9 +351,6 @@ function renderSummaryStats(trades) {
   const avgReturn = trades.length > 0 ? (trades.reduce((s, t) => s + (t.returnPercent || 0), 0) / trades.length).toFixed(1) : '0';
   const avgWin = wins.length > 0 ? (wins.reduce((s, t) => s + t.returnPercent, 0) / wins.length).toFixed(1) : '0';
   const avgLoss = losses.length > 0 ? (losses.reduce((s, t) => s + t.returnPercent, 0) / losses.length).toFixed(1) : '0';
-  const avgHold = trades.filter(t => t.holdTime).length > 0
-    ? Math.round(trades.filter(t => t.holdTime).reduce((s, t) => s + t.holdTime, 0) / trades.filter(t => t.holdTime).length / 86400000)
-    : 0;
   const totalPL = trades.reduce((s, t) => s + (t.profitLoss || 0), 0);
   const grossWins = wins.reduce((s, t) => s + (t.profitLoss || 0), 0);
   const grossLosses = Math.abs(losses.reduce((s, t) => s + (t.profitLoss || 0), 0));
@@ -507,48 +360,14 @@ function renderSummaryStats(trades) {
     <div class="stat-card"><div class="stat-label">Total Trades</div><div class="stat-value">${trades.length}</div><div class="stat-sub">${wins.length}W / ${losses.length}L</div></div>
     <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value ${+winRate >= 50 ? 'positive' : 'negative'}">${winRate}%</div></div>
     <div class="stat-card"><div class="stat-label">Avg Return</div><div class="stat-value ${+avgReturn >= 0 ? 'positive' : 'negative'}">${avgReturn}%</div><div class="stat-sub">W: +${avgWin}% / L: ${avgLoss}%</div></div>
-    <div class="stat-card"><div class="stat-label">Avg Hold</div><div class="stat-value">${avgHold}d</div></div>
     <div class="stat-card"><div class="stat-label">Total P&L</div><div class="stat-value ${totalPL >= 0 ? 'positive' : 'negative'}">$${totalPL.toFixed(0)}</div></div>
     <div class="stat-card"><div class="stat-label">Profit Factor</div><div class="stat-value">${profitFactor}</div></div>
   `;
 }
 
-function renderOpenPositions() {
-  const section = document.getElementById('openSection');
-  const container = document.getElementById('openPositions');
-  const theses = data.holdingTheses || {};
-  const holdings = data.holdings || {};
-  const openSymbols = Object.keys(holdings).filter(s => holdings[s] > 0);
-  if (openSymbols.length === 0) {
-    section.style.display = 'none';
-    return;
-  }
-  section.style.display = '';
-  let html = '';
-  for (const sym of openSymbols) {
-    const thesis = theses[sym];
-    const shares = holdings[sym];
-    const entry = thesis?.entryPrice ? '$' + thesis.entryPrice.toFixed(2) : '—';
-    const stop = thesis?.stopPrice ? '$' + thesis.stopPrice.toFixed(2) : '—';
-    const target = thesis?.targetPrice ? '$' + thesis.targetPrice.toFixed(2) : '—';
-    const conviction = thesis?.conviction || '—';
-    const date = thesis?.entryDate ? formatDate(thesis.entryDate) : '—';
-    html += `<div class="open-position">
-      <span class="open-symbol">${escapeHtml(sym)}</span>
-      <span class="open-detail">${shares} shares @ ${entry}</span>
-      <span class="open-detail">Stop: ${stop}</span>
-      <span class="open-detail">Target: ${target}</span>
-      <span class="open-detail">Conv: ${escapeHtml(String(conviction))}</span>
-      <span class="open-detail">${date}</span>
-    </div>`;
-  }
-  container.innerHTML = html;
-}
-
 function populateSectorFilter(trades) {
   const select = document.getElementById('filterSector');
   const sectors = [...new Set(trades.map(t => t.sector).filter(Boolean))].sort();
-  // Keep existing value if valid
   const current = select.value;
   select.innerHTML = '<option value="">All Sectors</option>';
   for (const s of sectors) {
@@ -568,92 +387,76 @@ function setOutcomeFilter(f) {
 function applyFilters() {
   const symbolQ = document.getElementById('filterSymbol').value.trim().toUpperCase();
   const sectorQ = document.getElementById('filterSector').value;
-  const filtered = allEntries.filter(t => {
+  filteredEntries = allEntries.filter(t => {
     if (symbolQ && !t.symbol.toUpperCase().includes(symbolQ)) return false;
     if (sectorQ && t.sector !== sectorQ) return false;
     if (outcomeFilter === 'win' && (t.returnPercent || 0) <= 0) return false;
     if (outcomeFilter === 'loss' && (t.returnPercent || 0) > 0) return false;
     return true;
   });
-  renderJournalEntries(filtered);
-  document.getElementById('filterCount').textContent = filtered.length + ' of ' + allEntries.length + ' trades';
+  ctPage = 1;
+  renderClosedTrades();
+  document.getElementById('filterCount').textContent = filteredEntries.length + ' of ' + allEntries.length + ' trades';
 }
 
-function toggleEntry(id) {
-  const el = document.getElementById('entry-' + id);
-  if (!el) return;
-  el.classList.toggle('expanded');
-  const icon = el.querySelector('.journal-toggle');
-  if (icon) icon.classList.toggle('open');
+function ctSetPage(p) {
+  ctPage = p;
+  renderClosedTrades();
 }
 
-function findEntryReasoning(symbol, buyDate) {
-  if (!data.transactions) return null;
-  // Find the BUY transaction closest to buyDate for this symbol
-  const buys = data.transactions.filter(t => t.type === 'BUY' && t.symbol === symbol);
-  if (buys.length === 0) return null;
-  // Try exact match first
-  const exact = buys.find(t => t.timestamp === buyDate);
-  if (exact) return exact.reasoning || exact.reason || null;
-  // Try date-only match
-  const buyDay = buyDate ? buyDate.substring(0, 10) : null;
-  if (buyDay) {
-    const dayMatch = buys.find(t => t.timestamp && t.timestamp.substring(0, 10) === buyDay);
-    if (dayMatch) return dayMatch.reasoning || dayMatch.reason || null;
-  }
-  return null;
+function toggleClosedTrades() {
+  document.getElementById('closedTradesSection').classList.toggle('ct-collapsed');
 }
 
-function renderJournalEntries(trades) {
-  const container = document.getElementById('journalEntries');
-  if (!trades || trades.length === 0) {
-    container.innerHTML = '<div class="empty-state">No trades match your filters</div>';
+function renderClosedTrades() {
+  const section = document.getElementById('closedTradesSection');
+  const table = document.getElementById('closedTradesTable');
+  const pagination = document.getElementById('closedTradesPagination');
+
+  if (filteredEntries.length === 0) {
+    table.innerHTML = '<tbody><tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-faint)">No trades match your filters</td></tr></tbody>';
+    pagination.innerHTML = '';
     return;
   }
 
-  let html = '';
-  trades.forEach((t, i) => {
+  const totalPages = Math.ceil(filteredEntries.length / CT_PAGE_SIZE);
+  if (ctPage > totalPages) ctPage = totalPages;
+  if (ctPage < 1) ctPage = 1;
+  const start = (ctPage - 1) * CT_PAGE_SIZE;
+  const page = filteredEntries.slice(start, start + CT_PAGE_SIZE);
+
+  let html = '<thead><tr><th>Date</th><th>Symbol</th><th>Shares</th><th>Buy</th><th>Sell</th><th>P&L</th><th>Return</th><th>Hold</th><th>Exit Reason</th></tr></thead><tbody>';
+  for (const t of page) {
     const isWin = (t.returnPercent || 0) > 0;
-    const returnStr = (isWin ? '+' : '') + (t.returnPercent || 0).toFixed(1) + '%';
-    const plStr = (t.profitLoss >= 0 ? '+$' : '-$') + Math.abs(t.profitLoss || 0).toFixed(0);
+    const plColor = isWin ? 'var(--green)' : 'var(--red)';
+    const plSign = isWin ? '+' : '';
+    const returnStr = plSign + (t.returnPercent || 0).toFixed(1) + '%';
+    const plStr = plSign + '$' + (t.profitLoss || 0).toFixed(2);
+    const rowClass = isWin ? 'tx-buy' : 'tx-sell';
 
-    // Find entry reasoning from transactions
-    const entryReasoning = findEntryReasoning(t.symbol, t.buyDate);
+    html += `<tr class="${rowClass}">
+      <td>${formatDateShort(t.buyDate)} &rarr; ${formatDateShort(t.sellDate)}</td>
+      <td class="tx-symbol">${escapeHtml(t.symbol)}</td>
+      <td>${t.shares || '—'}</td>
+      <td>$${t.buyPrice ? t.buyPrice.toFixed(2) : '—'}</td>
+      <td>$${t.sellPrice ? t.sellPrice.toFixed(2) : '—'}</td>
+      <td style="color:${plColor};font-weight:600">${plStr}</td>
+      <td style="color:${plColor};font-weight:600">${returnStr}</td>
+      <td>${formatHoldDays(t)}</td>
+      <td style="font-size:10px;text-transform:uppercase;letter-spacing:0.3px;color:var(--text-muted)">${escapeHtml(formatExitReason(t.exitReason))}</td>
+    </tr>`;
+  }
+  html += '</tbody>';
+  table.innerHTML = html;
 
-    html += `<div class="journal-entry" id="entry-${i}">
-      <div class="journal-header" onclick="toggleEntry(${i})">
-        <span class="journal-symbol">${escapeHtml(t.symbol)}</span>
-        <span class="journal-dates">${formatDate(t.buyDate)} &rarr; ${formatDate(t.sellDate)}</span>
-        <span class="journal-return ${isWin ? 'win' : 'loss'}">${returnStr}</span>
-        <span class="journal-hold">${formatHoldTime(t.holdTime)}</span>
-        <span class="journal-exit-reason">${escapeHtml(formatExitReason(t.exitReason))}</span>
-        <span class="journal-sector">${escapeHtml(t.sector || '')}</span>
-        <span class="journal-toggle">&#9662;</span>
-      </div>
-      <div class="journal-body">
-        <div class="journal-section-title">Entry Signals</div>
-        ${renderSignalGrid(t.entryTechnicals)}
-        ${entryReasoning ? `<div class="journal-section-title">Entry Reasoning</div><div class="journal-reasoning">${escapeHtml(entryReasoning)}</div>` : ''}
-        ${t.entryConviction ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Conviction: <strong style="color:var(--text-primary)">${escapeHtml(String(t.entryConviction))}</strong>${t.entryMarketRegime ? ' &middot; Regime: <strong style="color:var(--text-primary)">' + escapeHtml(t.entryMarketRegime) + '</strong>' : ''}</div>` : ''}
-
-        ${t.exitTechnicals && Object.keys(t.exitTechnicals).length > 0 ? `<div class="journal-section-title">Exit Signals</div>${renderSignalGrid(t.exitTechnicals)}` : ''}
-        ${t.exitReasoning ? `<div class="journal-section-title">Exit Reasoning</div><div class="journal-reasoning">${escapeHtml(t.exitReasoning)}</div>` : ''}
-        ${t.exitMarketRegime ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Exit Regime: <strong style="color:var(--text-primary)">${escapeHtml(t.exitMarketRegime)}</strong></div>` : ''}
-
-        <div class="journal-section-title">Outcome</div>
-        <div class="outcome-row">
-          <div class="outcome-item"><span class="outcome-label">P&L</span><span class="outcome-value ${isWin ? 'positive' : 'negative'}">${plStr}</span></div>
-          <div class="outcome-item"><span class="outcome-label">Return</span><span class="outcome-value ${isWin ? 'positive' : 'negative'}">${returnStr}</span></div>
-          <div class="outcome-item"><span class="outcome-label">Hold Time</span><span class="outcome-value">${formatHoldTime(t.holdTime)}</span></div>
-          <div class="outcome-item"><span class="outcome-label">Shares</span><span class="outcome-value">${t.shares || '—'}</span></div>
-          <div class="outcome-item"><span class="outcome-label">Buy Price</span><span class="outcome-value">$${t.buyPrice ? t.buyPrice.toFixed(2) : '—'}</span></div>
-          <div class="outcome-item"><span class="outcome-label">Sell Price</span><span class="outcome-value">$${t.sellPrice ? t.sellPrice.toFixed(2) : '—'}</span></div>
-          ${t.positionSizePercent != null ? `<div class="outcome-item"><span class="outcome-label">Position Size</span><span class="outcome-value">${t.positionSizePercent.toFixed(1)}%</span></div>` : ''}
-        </div>
-      </div>
-    </div>`;
-  });
-  container.innerHTML = html;
+  if (totalPages > 1) {
+    pagination.innerHTML = `
+      <button onclick="ctSetPage(${ctPage - 1})"${ctPage <= 1 ? ' disabled' : ''}>&laquo; Prev</button>
+      <span class="tx-page-info">Page ${ctPage} of ${totalPages} (${filteredEntries.length} trades)</span>
+      <button onclick="ctSetPage(${ctPage + 1})"${ctPage >= totalPages ? ' disabled' : ''}>Next &raquo;</button>`;
+  } else {
+    pagination.innerHTML = `<span class="tx-page-info">${filteredEntries.length} trade${filteredEntries.length !== 1 ? 's' : ''}</span>`;
+  }
 }
 
 function toggleTxLog() {
@@ -722,8 +525,11 @@ function renderAll() {
   allEntries = [...ct].sort((a, b) => new Date(b.sellDate) - new Date(a.sellDate));
 
   renderSummaryStats(allEntries);
-  renderOpenPositions();
   renderTransactionLog();
+  // Show closed trades section
+  if (allEntries.length > 0) {
+    document.getElementById('closedTradesSection').style.display = '';
+  }
   populateSectorFilter(allEntries);
   setOutcomeFilter('all');
 }
