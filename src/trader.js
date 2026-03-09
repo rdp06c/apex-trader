@@ -8883,10 +8883,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         earliestDate = new Date(buyTransactions[0].timestamp);
                         conviction = buyTransactions[0].conviction || null;
                         reasoning = buyTransactions[0].reasoning || '';
-                        const nowDate = new Date();
-                        const todayStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
-                        const buyDayStart = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), earliestDate.getDate());
-                        daysHeld = Math.round((todayStart - buyDayStart) / (1000 * 60 * 60 * 24));
+                        daysHeld = countTradingDays(earliestDate, new Date());
                     }
 
                     const gainLoss = currentValue - (avgPurchasePrice * shares);
@@ -9064,6 +9061,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 out += ch;
             }
             return out;
+        }
+
+        // Count trading days (weekdays only) between two dates
+        function countTradingDays(startDate, endDate) {
+            const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+            const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+            let count = 0;
+            const d = new Date(start);
+            while (d < end) {
+                d.setDate(d.getDate() + 1);
+                const dow = d.getDay();
+                if (dow !== 0 && dow !== 6) count++;
+            }
+            return count;
         }
 
         // Escape HTML entities to prevent XSS from AI/user content
@@ -10900,7 +10911,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const plSign = t.profitLoss >= 0 ? '+' : '';
                 const buyDate = t.buyDate ? new Date(t.buyDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--';
                 const sellDate = t.sellDate ? new Date(t.sellDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--';
-                const holdDays = t.holdTime ? Math.max(0, Math.floor(t.holdTime / 86400000)) : '--';
+                const holdDays = (t.buyDate && t.sellDate) ? countTradingDays(new Date(t.buyDate), new Date(t.sellDate)) : '--';
                 const holdStr = holdDays === '--' ? '--' : holdDays <= 1 ? '<1d' : holdDays + 'd';
 
                 html += `<tr>

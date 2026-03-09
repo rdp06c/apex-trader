@@ -124,7 +124,18 @@ async function runStructureCheck({ force = false } = {}) {
             if (thesis?.entryStructure === 'bullish' && current.structure === 'bearish')
                 lossSignals.push('Structure flipped');
             if (volDiv.divergence && volDiv.direction === 'bearish') lossSignals.push('Vol divergence');
-            const holdDays = thesis?.entryDate ? Math.round((Date.now() - new Date(thesis.entryDate).getTime()) / 86400000) : 0;
+            let holdDays = 0;
+            if (thesis?.entryDate) {
+                const start = new Date(thesis.entryDate);
+                const end = new Date();
+                const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+                const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+                while (d < endDay) {
+                    d.setDate(d.getDate() + 1);
+                    const dow = d.getDay();
+                    if (dow !== 0 && dow !== 6) holdDays++;
+                }
+            }
             const holdReturn = thesis?.entryPrice && price ? ((price - thesis.entryPrice) / thesis.entryPrice) * 100 : null;
             if (holdDays >= 5 && holdReturn != null && Math.abs(holdReturn) <= 3) lossSignals.push('Stale capital');
 
