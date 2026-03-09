@@ -4924,12 +4924,16 @@
                     });
                 }
 
+                // Update post-exit tracking for closed trades (backfills 3d/5d data)
+                thinkingDetail.textContent = 'Checking post-exit price tracking...';
+                try { await updatePostExitTracking(); } catch (e) { console.warn('Post-exit tracking failed (non-fatal):', e.message); }
+
                 savePortfolio();
                 updatePerformanceAnalytics();
 
                 const endTime = performance.now();
                 const duration = ((endTime - startTime) / 1000).toFixed(2);
-                
+
                 // Success report
                 console.log(`\n✅ MARKET SCAN COMPLETE in ${duration}s`);
                 console.log(`📊 Data: ${Object.keys(marketData).length} prices, ${Object.keys(multiDayCache).length} histories`);
