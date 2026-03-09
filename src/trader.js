@@ -8465,7 +8465,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const structLabel = h._struct?.structure || '—';
                 const rsi = h._rsiVal != null ? Math.round(h._rsiVal) : '—';
                 const macd = h._macdResult?.crossover || '—';
-                return { ...h, signals, level, price, stopDist, targetPrice, targetDist, structLabel, rsi, macd };
+                return { ...h, signals, level, price, stopPrice, stopDist, targetPrice, targetDist, structLabel, rsi, macd };
             });
 
             // Sort: danger first, then caution, then healthy
@@ -8483,7 +8483,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             html += '<div class="risk-table-wrap"><table class="risk-table">';
             html += '<thead><tr>';
-            html += '<th>Symbol</th><th>Price</th><th>P&L %</th><th>Stop Dist</th><th>Target</th>';
+            html += '<th>Symbol</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th>';
             html += '<th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
             html += '</tr></thead><tbody>';
 
@@ -8494,8 +8494,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const plColor = r.gainLossPercent > 0 ? 'color:#22c55e' :
                     r.gainLossPercent < 0 ? 'color:#ef4444' : '';
 
-                const stopDistDisplay = r.stopDist != null
-                    ? `<span style="${parseFloat(r.stopDist) < 5 ? 'color:#ef4444' : parseFloat(r.stopDist) < 10 ? 'color:#f59e0b' : 'color:#22c55e'}">${r.stopDist}%</span>`
+                const stopDistDisplay = r.stopPrice != null
+                    ? `<span style="${parseFloat(r.stopDist) < 5 ? 'color:#ef4444' : parseFloat(r.stopDist) < 10 ? 'color:#f59e0b' : 'color:#22c55e'}" title="${r.stopDist}% away">$${r.stopPrice.toFixed(2)}</span>`
                     : '—';
 
                 const rsiColor = r.rsi !== '—'
