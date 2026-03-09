@@ -2593,6 +2593,26 @@
             background: var(--bg-hover);
         }
 
+        .watchlist-col {
+            width: 24px;
+            text-align: center;
+            color: #666;
+        }
+        .watchlist-star {
+            width: 24px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 14px;
+            color: #555;
+            user-select: none;
+        }
+        .watchlist-star:hover {
+            color: #f59e0b;
+        }
+        .watchlist-star.watched {
+            color: #f59e0b;
+        }
+
         .scorecard-rank {
             color: var(--text-faint);
             font-weight: 600;

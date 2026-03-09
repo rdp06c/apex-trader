@@ -8117,6 +8117,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const cost = price * shares;
                 if (portfolio.cash >= cost) {
                     portfolio.cash -= cost;
+                    // Auto-remove from watchlist on buy
+                    if (portfolio.watchlist) {
+                        const wIdx = portfolio.watchlist.indexOf(symbol);
+                        if (wIdx >= 0) portfolio.watchlist.splice(wIdx, 1);
+                    }
                     portfolio.holdings[symbol] = (portfolio.holdings[symbol] || 0) + shares;
                     
                     // Calculate position size for learning (fall back to priceCache/bulkSnapshotCache for holdings not in marketData)
@@ -9599,6 +9604,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     sma50: signals.smaCrossover?.sma50 ?? null,
                     smaCrossover: signals.smaCrossover?.crossover || null
                 } : {};
+
+                // Auto-remove from watchlist on buy
+                if (portfolio.watchlist) {
+                    const wIdx = portfolio.watchlist.indexOf(symbol);
+                    if (wIdx >= 0) portfolio.watchlist.splice(wIdx, 1);
+                }
 
                 // Update holdings and push transaction together so they stay in sync
                 // (if enrichment above throws, neither gets saved)
@@ -12452,7 +12463,7 @@ Current Portfolio:
         }
 
         // Module 2: Candidate Scorecard (paginated, full universe)
-        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: false, sortField: 'score', sortDir: 'desc' };
+        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: false, filterWatchlist: false, sortField: 'score', sortDir: 'desc' };
         const SCORECARD_PAGE_SIZE = 40;
 
         function scorecardSetSector(val) {
@@ -12470,6 +12481,24 @@ Current Portfolio:
         function scorecardToggleSignal() {
             scorecardState.filterSignal = !scorecardState.filterSignal;
             scorecardState.page = 1;
+            updateCandidateScorecard();
+        }
+
+        function scorecardToggleWatchlist() {
+            scorecardState.filterWatchlist = !scorecardState.filterWatchlist;
+            scorecardState.page = 1;
+            updateCandidateScorecard();
+        }
+
+        function toggleWatchlistSymbol(symbol) {
+            if (!portfolio.watchlist) portfolio.watchlist = [];
+            const idx = portfolio.watchlist.indexOf(symbol);
+            if (idx >= 0) {
+                portfolio.watchlist.splice(idx, 1);
+            } else {
+                portfolio.watchlist.push(symbol);
+            }
+            savePortfolio();
             updateCandidateScorecard();
         }
 
@@ -12549,6 +12578,11 @@ Current Portfolio:
                 candidates = candidates.filter(c => (c._entrySignal?.bestMatchCount ?? 0) >= 3);
             }
 
+            const watchlistSet = new Set(portfolio.watchlist || []);
+            if (scorecardState.filterWatchlist) {
+                candidates = candidates.filter(c => watchlistSet.has(c.symbol));
+            }
+
             if (scorecardState.filterSector) {
                 candidates = candidates.filter(c => c.sector === scorecardState.filterSector);
             }
@@ -12601,6 +12635,7 @@ Current Portfolio:
             let html = '<div class="scorecard-controls">';
             html += `<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8rem;color:#888;cursor:pointer;margin-right:12px;"><input type="checkbox" onchange="scorecardToggleHeld()"${scorecardState.filterHeld ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> Holdings only</label>`;
             html += `<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8rem;color:#888;cursor:pointer;margin-right:12px;"><input type="checkbox" onchange="scorecardToggleSignal()"${scorecardState.filterSignal ? ' checked' : ''} style="accent-color:#2ecc40;cursor:pointer;"> Entry signals</label>`;
+            html += `<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8rem;color:#888;cursor:pointer;margin-right:12px;"><input type="checkbox" onchange="scorecardToggleWatchlist()"${scorecardState.filterWatchlist ? ' checked' : ''} style="accent-color:#f59e0b;cursor:pointer;"> ★ Watchlist${watchlistSet.size > 0 ? ' (' + watchlistSet.size + ')' : ''}</label>`;
             html += `<select onchange="scorecardSetSector(this.value)" class="scorecard-sector-filter">`;
             html += `<option value="">All Sectors (${totalCount})</option>`;
             sectors.forEach(s => {
@@ -12627,7 +12662,7 @@ Current Portfolio:
             const sh = (field, title, label) => `<th title="${title}" class="sortable-header${sf === field ? ' sorted' : ''}" onclick="scorecardSetSort('${field}')">${label}${sortArrow(field)}</th>`;
 
             html += '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
-                '<th>#</th><th>Symbol</th>' +
+                '<th class="watchlist-col" title="Click star to add/remove from watchlist">★</th><th>#</th><th>Symbol</th>' +
                 sh('sig', "Entry signal match. Evaluates reversal criteria: MACD Bull + RSI<40 + Bull Structure + 5D Pullback. ENTRY=4/4, 3/4=strong, 2/4=partial.", 'Sig') +
                 sh('heat', "Combo heat from calibration backtesting. Green dots = hot combos, red dots = cold combos. Number = weighted net edge vs baseline. Positive = historically outperforms, negative = underperforms.", 'Heat') +
                 sh('score', "Composite score from ~15 weighted signals. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
@@ -12772,7 +12807,9 @@ Current Portfolio:
                 }
 
                 const globalRank = start + i + 1;
+                const watched = watchlistSet.has(c.symbol);
                 html += `<tr>
+                    <td class="watchlist-star ${watched ? 'watched' : ''}" onclick="toggleWatchlistSymbol('${c.symbol}')" title="${watched ? 'Remove from watchlist' : 'Add to watchlist'}">${watched ? '★' : '☆'}</td>
                     <td class="scorecard-rank">${globalRank}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
                     <td>${sigBadge}</td>
