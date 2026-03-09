@@ -12050,10 +12050,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 if (stopPrice && price && price > 0) {
                     stopDist = ((price - stopPrice) / price * 100).toFixed(1);
                 }
+                const targetPrice = h._thesis?.targetPrice;
+                let targetDist = null;
+                if (targetPrice && price && price > 0) {
+                    targetDist = ((targetPrice - price) / price * 100).toFixed(1);
+                }
                 const structLabel = h._struct?.structure || '—';
                 const rsi = h._rsiVal != null ? Math.round(h._rsiVal) : '—';
                 const macd = h._macdResult?.crossover || '—';
-                return { ...h, signals, level, price, stopDist, structLabel, rsi, macd };
+                return { ...h, signals, level, price, stopDist, targetPrice, targetDist, structLabel, rsi, macd };
             });
 
             // Sort: danger first, then caution, then healthy
@@ -12071,7 +12076,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             html += '<div class="risk-table-wrap"><table class="risk-table">';
             html += '<thead><tr>';
-            html += '<th>Symbol</th><th>Price</th><th>P&L %</th><th>Stop Dist</th>';
+            html += '<th>Symbol</th><th>Price</th><th>P&L %</th><th>Stop Dist</th><th>Target</th>';
             html += '<th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
             html += '</tr></thead><tbody>';
 
@@ -12102,6 +12107,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 html += `<td>$${r.price ? r.price.toFixed(2) : '—'}</td>`;
                 html += `<td style="${plColor}">${r.gainLossPercent != null ? (r.gainLossPercent > 0 ? '+' : '') + r.gainLossPercent.toFixed(1) + '%' : '—'}</td>`;
                 html += `<td>${stopDistDisplay}</td>`;
+                const targetDisplay = r.targetPrice != null
+                    ? `<span style="${r.targetDist != null && parseFloat(r.targetDist) <= 2 ? 'color:#22c55e' : ''}" title="${parseFloat(r.targetDist)}% away">$${r.targetPrice.toFixed(2)}</span>`
+                    : '—';
+                html += `<td>${targetDisplay}</td>`;
                 html += `<td><span class="risk-struct-badge ${structClass}">${r.structLabel}</span></td>`;
                 html += `<td style="${rsiColor}">${r.rsi}</td>`;
                 html += `<td style="${macdColor}">${r.macd}</td>`;
