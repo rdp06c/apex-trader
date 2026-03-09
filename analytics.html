@@ -1991,29 +1991,93 @@ function renderPostExitSummary(trades) {
     </div>`;
 }
 
+// Exit Detail table state
+let exitDetailSort = { col: '5d', dir: 'desc' };
+let exitDetailPage = 0;
+const EXIT_DETAIL_PER_PAGE = 15;
+let exitDetailTrades = [];
+
+function getExitDetailSortValue(t, col) {
+  switch (col) {
+    case 'symbol': return t.symbol;
+    case 'date': return t.sellDate || '';
+    case 'reason': return t.exitReason || 'manual';
+    case 'pl': return t.returnPercent || 0;
+    case '3d': return parseReturn(t.tracking.return3d) ?? -999;
+    case '5d': return get5dReturn(t) ?? -999;
+    case 'verdict': return get5dReturn(t) ?? parseReturn(t.tracking.return3d) ?? 0;
+    default: return 0;
+  }
+}
+
+function sortExitDetail(col) {
+  if (exitDetailSort.col === col) {
+    exitDetailSort.dir = exitDetailSort.dir === 'desc' ? 'asc' : 'desc';
+  } else {
+    exitDetailSort.col = col;
+    exitDetailSort.dir = 'desc';
+  }
+  exitDetailPage = 0;
+  drawExitDetailTable();
+}
+
+function exitDetailPageNav(delta) {
+  const maxPage = Math.max(0, Math.ceil(exitDetailTrades.length / EXIT_DETAIL_PER_PAGE) - 1);
+  exitDetailPage = Math.max(0, Math.min(maxPage, exitDetailPage + delta));
+  drawExitDetailTable();
+}
+
 function renderPostExitTable(trades) {
+  exitDetailTrades = trades;
+  exitDetailPage = 0;
+  exitDetailSort = { col: '5d', dir: 'desc' };
+  drawExitDetailTable();
+}
+
+function drawExitDetailTable() {
   const el = document.getElementById('postExitTable');
   if (!el) return;
+  const trades = exitDetailTrades;
+  if (!trades.length) { el.innerHTML = ''; return; }
 
-  let html = '<div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px">Exit Detail</div>';
-  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
-  html += '<thead><tr style="border-bottom:1px solid var(--border-medium)">';
-  html += '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary)">Symbol</th>';
-  html += '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary)">Exit Reason</th>';
-  html += '<th style="text-align:right;padding:6px 8px;color:var(--text-secondary)">Exit P&L</th>';
-  html += '<th style="text-align:right;padding:6px 8px;color:var(--text-secondary)">3d Move</th>';
-  html += '<th style="text-align:right;padding:6px 8px;color:var(--text-secondary)">5d Move</th>';
-  html += '<th style="text-align:center;padding:6px 8px;color:var(--text-secondary)">Verdict</th>';
-  html += '</tr></thead><tbody>';
-
-  // Sort by 5d move descending (biggest "too early" first)
+  const { col, dir } = exitDetailSort;
   const sorted = [...trades].sort((a, b) => {
-    const ma = get5dReturn(a) ?? parseReturn(a.tracking.return3d) ?? 0;
-    const mb = get5dReturn(b) ?? parseReturn(b.tracking.return3d) ?? 0;
-    return mb - ma;
+    const va = getExitDetailSortValue(a, col);
+    const vb = getExitDetailSortValue(b, col);
+    const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+    return dir === 'desc' ? -cmp : cmp;
   });
 
-  for (const t of sorted) {
+  const totalPages = Math.ceil(sorted.length / EXIT_DETAIL_PER_PAGE);
+  const pageStart = exitDetailPage * EXIT_DETAIL_PER_PAGE;
+  const pageItems = sorted.slice(pageStart, pageStart + EXIT_DETAIL_PER_PAGE);
+
+  const arrow = c => col === c ? (dir === 'desc' ? ' \u25BC' : ' \u25B2') : '';
+  const thStyle = 'padding:6px 8px;color:var(--text-secondary);cursor:pointer;user-select:none;white-space:nowrap';
+
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+  html += '<div style="font-size:13px;font-weight:600;color:var(--accent)">Exit Detail</div>';
+  if (totalPages > 1) {
+    html += `<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:${COLORS.secondary}">`;
+    html += `<button onclick="exitDetailPageNav(-1)" style="background:none;border:1px solid var(--border-medium);color:${COLORS.secondary};border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px" ${exitDetailPage === 0 ? 'disabled' : ''}>\u25C0</button>`;
+    html += `${exitDetailPage + 1} / ${totalPages}`;
+    html += `<button onclick="exitDetailPageNav(1)" style="background:none;border:1px solid var(--border-medium);color:${COLORS.secondary};border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px" ${exitDetailPage >= totalPages - 1 ? 'disabled' : ''}>\u25B6</button>`;
+    html += '</div>';
+  }
+  html += '</div>';
+
+  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html += '<thead><tr style="border-bottom:1px solid var(--border-medium)">';
+  html += `<th style="text-align:left;${thStyle}" onclick="sortExitDetail('symbol')">Symbol${arrow('symbol')}</th>`;
+  html += `<th style="text-align:left;${thStyle}" onclick="sortExitDetail('date')">Sell Date${arrow('date')}</th>`;
+  html += `<th style="text-align:left;${thStyle}" onclick="sortExitDetail('reason')">Exit Reason${arrow('reason')}</th>`;
+  html += `<th style="text-align:right;${thStyle}" onclick="sortExitDetail('pl')">Exit P&L${arrow('pl')}</th>`;
+  html += `<th style="text-align:right;${thStyle}" onclick="sortExitDetail('3d')">3d Move${arrow('3d')}</th>`;
+  html += `<th style="text-align:right;${thStyle}" onclick="sortExitDetail('5d')">5d Move${arrow('5d')}</th>`;
+  html += `<th style="text-align:center;${thStyle}" onclick="sortExitDetail('verdict')">Verdict${arrow('verdict')}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const t of pageItems) {
     const r3 = parseReturn(t.tracking.return3d);
     const r5 = get5dReturn(t);
     const bestMove = r5 ?? r3 ?? 0;
@@ -2026,9 +2090,11 @@ function renderPostExitTable(trades) {
 
     const exitReason = (t.exitReason || 'manual').replace(/_/g, ' ');
     const plColor = t.returnPercent > 0 ? COLORS.win : t.returnPercent < 0 ? COLORS.loss : COLORS.muted;
+    const sellDate = t.sellDate ? new Date(t.sellDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--';
 
     html += `<tr style="border-bottom:1px solid var(--border-subtle)">`;
     html += `<td style="padding:5px 8px;font-weight:600">${t.symbol}</td>`;
+    html += `<td style="padding:5px 8px;color:${COLORS.secondary}">${sellDate}</td>`;
     html += `<td style="padding:5px 8px;color:${COLORS.secondary}">${exitReason}</td>`;
     html += `<td style="padding:5px 8px;text-align:right;color:${plColor}">${t.returnPercent > 0 ? '+' : ''}${t.returnPercent.toFixed(1)}%</td>`;
     html += `<td style="padding:5px 8px;text-align:right;color:${r3 != null ? (r3 > 0 ? COLORS.loss : COLORS.win) : COLORS.muted}">${r3 != null ? (r3 > 0 ? '+' : '') + r3.toFixed(1) + '%' : '--'}</td>`;
