@@ -7823,8 +7823,11 @@
         // This helps calibrate exit timing - "did I sell too early?"
         // Fetch the closing price N trading days after a given date using historical bars
         async function fetchPriceAfterNDays(symbol, sellDate, nDays) {
-            const from = new Date(sellDate);
-            const to = new Date(sellDate);
+            // Start from the day AFTER the sell to get N post-exit trading days
+            const sellDt = new Date(sellDate);
+            const from = new Date(sellDt);
+            from.setDate(from.getDate() + 1); // day after sell
+            const to = new Date(sellDt);
             to.setDate(to.getDate() + (nDays * 2) + 5); // buffer for weekends/holidays
             const fromStr = from.toISOString().split('T')[0];
             const toStr = to.toISOString().split('T')[0];
@@ -7833,10 +7836,13 @@
                     `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${fromStr}/${toStr}?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`
                 );
                 const data = await response.json();
-                if ((data.status === 'OK' || data.status === 'DELAYED') && data.results && data.results.length > nDays) {
-                    // results[0] is the sell date bar; results[nDays] is N trading days later
-                    return data.results[nDays].c; // close price
+                if ((data.status === 'OK' || data.status === 'DELAYED') && data.results && data.results.length >= nDays) {
+                    // results[0] is first trading day after sell; results[nDays-1] is N trading days later
+                    const bar = data.results[nDays - 1];
+                    console.log(`📊 fetchPriceAfterNDays ${symbol} ${nDays}d: ${data.results.length} bars, using bar ${nDays - 1} close=$${bar.c.toFixed(2)}`);
+                    return bar.c;
                 }
+                console.warn(`📊 fetchPriceAfterNDays ${symbol} ${nDays}d: insufficient bars (got ${data.results?.length || 0}, need ${nDays})`);
                 return null;
             } catch (e) {
                 console.warn(`📊 fetchPriceAfterNDays failed for ${symbol}:`, e.message);
