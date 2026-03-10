@@ -1230,7 +1230,7 @@ function renderRSScatter() {
         }
       },
       scales: {
-        x: { title: { display: true, text: 'RS at Entry', color: COLORS.muted }, grid: { color: COLORS.gridLine }, min: 0, max: 105 },
+        x: { title: { display: true, text: 'RS at Entry', color: COLORS.muted }, grid: { color: COLORS.gridLine }, min: 0, max: 105, ticks: { callback: v => v <= 100 ? v : '' } },
         y: { title: { display: true, text: 'Return %', color: COLORS.muted }, grid: { color: COLORS.gridLine }, ticks: { callback: v => v + '%' } }
       }
     },
@@ -1331,8 +1331,8 @@ function renderRSvsRSI() {
         }
       },
       scales: {
-        x: { title: { display: true, text: 'RS at Entry', color: COLORS.muted }, grid: { color: COLORS.gridLine }, min: 0, max: 105 },
-        y: { title: { display: true, text: 'RSI at Entry', color: COLORS.muted }, grid: { color: COLORS.gridLine }, min: 0, max: 105 }
+        x: { title: { display: true, text: 'RS at Entry', color: COLORS.muted }, grid: { color: COLORS.gridLine }, min: 0, max: 105, ticks: { callback: v => v <= 100 ? v : '' } },
+        y: { title: { display: true, text: 'RSI at Entry', color: COLORS.muted }, grid: { color: COLORS.gridLine }, min: 0, max: 105, ticks: { callback: v => v <= 100 ? v : '' } }
       }
     },
     plugins: [{
