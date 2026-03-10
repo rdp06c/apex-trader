@@ -289,17 +289,22 @@
     <div id="entrySignalContent"></div>
   </div>
 
-  <div class="grid">
-    <div class="card">
-      <div class="chart-title">Composite Score vs. Outcome</div>
-      <div class="section-sub">Do higher-scored trades perform better?</div>
-      <canvas id="compositeScatter"></canvas>
-    </div>
-    <div class="card">
-      <div class="chart-title">Entry RSI vs. Outcome</div>
-      <div class="section-sub">Does buying oversold stocks improve returns?</div>
-      <canvas id="rsiScatter"></canvas>
-    </div>
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Composite Score vs. Outcome</div>
+    <div class="section-sub">Do higher-scored trades perform better?</div>
+    <canvas id="compositeScatter"></canvas>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Entry RSI vs. Outcome</div>
+    <div class="section-sub">Does buying oversold stocks improve returns?</div>
+    <canvas id="rsiScatter"></canvas>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Entry RS vs. Outcome</div>
+    <div class="section-sub">Does buying high relative strength stocks improve returns?</div>
+    <canvas id="rsScatter"></canvas>
   </div>
 
   <!-- ═══ MARKET CONTEXT ═══ -->
@@ -633,6 +638,7 @@ function renderAll() {
   renderEntrySignalOutcome();
   renderCompositeScatter();
   renderRSIScatter();
+  renderRSScatter();
   renderRegimePerformance();
   renderSectorFlowChart();
   renderSectorChart();
@@ -1171,6 +1177,103 @@ function renderRSIScatter() {
           ctx.fillStyle = 'rgba(52, 211, 153, 0.50)';
           ctx.font = "10px 'Inter', sans-serif";
           ctx.fillText('Entry zone', x40 - 55, area.top + 12);
+        }
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+/* ── Entry RS vs Outcome ─────────────────────────────── */
+function renderRSScatter() {
+  const points = (data.closedTrades || [])
+    .filter(t => t.entryTechnicals && t.entryTechnicals.rsScore != null)
+    .map(t => ({
+      x: t.entryTechnicals.rsScore,
+      y: t.returnPercent,
+      r: 6,
+      symbol: t.symbol,
+      rs: t.entryTechnicals.rsScore,
+      ret: t.returnPercent,
+      win: t.profitLoss > 0
+    }));
+
+  if (!points.length) {
+    const ctx = document.getElementById('rsScatter').getContext('2d');
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "13px 'Inter', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('No RS data yet. Run Scan Market before entering trades.', ctx.canvas.width / 2, 80);
+    return;
+  }
+
+  new Chart(document.getElementById('rsScatter'), {
+    type: 'bubble',
+    data: {
+      datasets: [
+        { label: 'Wins', data: points.filter(p => p.win), backgroundColor: COLORS.win + '88', borderWidth: 0 },
+        { label: 'Losses', data: points.filter(p => !p.win), backgroundColor: COLORS.loss + '88', borderWidth: 0 }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          boxPadding: 6,
+          callbacks: {
+            label: ctx => {
+              const p = ctx.raw;
+              return [`${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`, `Entry RS: ${p.rs.toFixed(0)}`];
+            }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'RS at Entry', color: COLORS.muted }, grid: { color: COLORS.gridLine }, min: 0, max: 100 },
+        y: { title: { display: true, text: 'Return %', color: COLORS.muted }, grid: { color: COLORS.gridLine }, ticks: { callback: v => v + '%' } }
+      }
+    },
+    plugins: [{
+      id: 'rsZones',
+      beforeDraw(chart) {
+        const xScale = chart.scales.x;
+        const yScale = chart.scales.y;
+        const ctx = chart.ctx;
+        const area = chart.chartArea;
+
+        const y0 = yScale.getPixelForValue(0);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(area.left, y0);
+        ctx.lineTo(area.right, y0);
+        ctx.stroke();
+
+        const x85 = xScale.getPixelForValue(85);
+        if (x85 >= area.left && x85 <= area.right) {
+          ctx.strokeStyle = 'rgba(248, 113, 113, 0.30)';
+          ctx.beginPath();
+          ctx.moveTo(x85, area.top);
+          ctx.lineTo(x85, area.bottom);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(248, 113, 113, 0.50)';
+          ctx.font = "10px 'Inter', sans-serif";
+          ctx.fillText('Penalty zone', x85 + 4, area.top + 12);
+        }
+
+        const x50 = xScale.getPixelForValue(50);
+        if (x50 >= area.left && x50 <= area.right) {
+          ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
+          ctx.beginPath();
+          ctx.moveTo(x50, area.top);
+          ctx.lineTo(x50, area.bottom);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(255, 200, 100, 0.30)';
+          ctx.font = "10px 'Inter', sans-serif";
+          ctx.fillText('Midpoint', x50 + 4, area.top + 12);
         }
         ctx.restore();
       }

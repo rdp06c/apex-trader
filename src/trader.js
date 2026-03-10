@@ -63,7 +63,7 @@
             rsiOversold30: 2.5, rsiOversold40: 1.5, rsiOversold50: 0.5,
             rsiOverbought70: -3.0, rsiOverbought80: -5.0,
             macdBullish: 2.5, macdBearish: -2.0, macdNone: -0.5,
-            rsMeanRev95: -6.0, rsMeanRev90: -4.0, rsMeanRev85: -2.0,
+            rsMeanRev95: -3.0, rsMeanRev90: -2.0, rsMeanRev85: -1.0,
             squeezeBonusHigh: 1.5, squeezeBonusMod: 0.75,
             smaProxNear: 2.0, smaProxBelow: 1.0, smaProxFar15: -1.5, smaProxFar10: -0.5,
             smaCrossoverBullish: 2.0, smaCrossoverBearish: -2.0,
