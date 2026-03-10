@@ -8638,8 +8638,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
                 const structLabel = h._struct?.structure || '—';
                 const rsi = h._rsiVal != null ? Math.round(h._rsiVal) : '—';
+                const rsiEntry = h.entryRSI != null ? Math.round(h.entryRSI) : null;
                 const macd = h._macdResult?.crossover || '—';
-                return { ...h, signals, level, price, stopPrice, stopDist, targetPrice, targetDist, structLabel, rsi, macd };
+                return { ...h, signals, level, price, stopPrice, stopDist, targetPrice, targetDist, structLabel, rsi, rsiEntry, macd };
             });
 
             // Sort: danger first, then caution, then healthy
@@ -8672,9 +8673,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     ? `<span style="${parseFloat(r.stopDist) < 5 ? 'color:#ef4444' : parseFloat(r.stopDist) < 10 ? 'color:#f59e0b' : 'color:#22c55e'}" title="${r.stopDist}% away">$${r.stopPrice.toFixed(2)}</span>`
                     : '—';
 
-                const rsiColor = r.rsi !== '—'
+                const rsiNowColor = r.rsi !== '—'
                     ? (r.rsi >= 70 ? 'color:#ef4444' : r.rsi <= 30 ? 'color:#22c55e' : '')
                     : '';
+                const rsiDisplay = r.rsiEntry != null && r.rsi !== '—'
+                    ? `${r.rsiEntry}<span style="opacity:0.5">\u2192</span><span style="${rsiNowColor}">${r.rsi}</span>`
+                    : `<span style="${rsiNowColor}">${r.rsi}</span>`;
 
                 const macdColor = r.macd === 'bullish' ? 'color:#22c55e' :
                     r.macd === 'bearish' ? 'color:#ef4444' : '';
@@ -8700,7 +8704,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const thesisTooltip = thesisStatus.reasons.length > 0 ? thesisStatus.reasons.join('\n') : '';
                 html += `<td><span class="risk-thesis-badge ${thesisStatus.status}" title="${escapeHtml(thesisTooltip)}">${thesisIcon}${thesisLabel}</span></td>`;
                 html += `<td><span class="risk-struct-badge ${structClass}">${r.structLabel}</span></td>`;
-                html += `<td style="${rsiColor}">${r.rsi}</td>`;
+                html += `<td>${rsiDisplay}</td>`;
                 html += `<td style="${macdColor}">${r.macd}</td>`;
                 html += `<td><span class="risk-signal-badge ${signalBadgeClass}"${signalTitle}>${r.signals}</span></td>`;
                 html += '</tr>';
@@ -8807,7 +8811,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 }
                                 return '<span class="hc-stat"><span class="hc-stat-lbl">RS</span><span class="hc-stat-val">' + Math.round(entry) + '</span></span>';
                             })()}
-                            ${h._rsiVal != null ? '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val ' + (h._rsiVal < 30 ? 'rsi-oversold' : h._rsiVal > 70 ? 'rsi-overbought' : '') + '">' + Math.round(h._rsiVal) + '</span></span>' : ''}
+                            ${(() => {
+                                const entry = h.entryRSI;
+                                const now = h._rsiVal;
+                                if (entry != null && now != null) {
+                                    const delta = now - entry;
+                                    const cls = delta <= -20 ? 'negative' : delta >= 20 ? 'positive' : '';
+                                    const nowCls = now < 30 ? 'rsi-oversold' : now > 70 ? 'rsi-overbought' : '';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192<span class="' + nowCls + '">' + Math.round(now) + '</span></span></span></span>';
+                                }
+                                if (now != null) {
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val ' + (now < 30 ? 'rsi-oversold' : now > 70 ? 'rsi-overbought' : '') + '">' + Math.round(now) + '</span></span>';
+                                }
+                                if (entry != null) {
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(entry) + '</span></span>';
+                                }
+                                return '';
+                            })()}
                             ${h._macdResult ? '<span class="hc-stat"><span class="hc-stat-lbl">MACD</span><span class="hc-stat-val ' + (h._macdResult.crossover === 'bullish' ? 'macd-bullish' : h._macdResult.crossover === 'bearish' ? 'macd-bearish' : h._macdResult.histogram >= 0 ? 'macd-bullish' : 'macd-bearish') + '">' + (h._macdResult.crossover === 'bullish' ? '▲ Cross' : h._macdResult.crossover === 'bearish' ? '▼ Cross' : h._macdResult.histogram >= 0 ? '▲' : '▼') + '</span></span>' : ''}
                             ${h._struct ? '<span class="hc-stat"><span class="hc-stat-lbl">Struct</span><span class="hc-stat-val ' + (h._struct.structure === 'bullish' || h._struct.structure === 'bullish_continuation' ? 'sig-green' : h._struct.structure === 'bearish' || h._struct.structure === 'bearish_continuation' ? 'sig-red' : '') + '">' + (h._struct.structure || 'unknown').replace(/_/g, ' ') + '</span></span>' : ''}
                             ${h._dtcVal && h._dtcVal > 0 ? '<span class="hc-stat"><span class="hc-stat-lbl">DTC</span><span class="hc-stat-val ' + (h._dtcVal > 5 ? 'dtc-squeeze' : h._dtcVal > 3 ? 'dtc-elevated' : '') + '">' + h._dtcVal.toFixed(1) + '</span></span>' : ''}
@@ -9076,6 +9096,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const _cs = portfolio.lastCandidateScores?.candidates?.find(c => c.symbol === symbol);
                     const entryMomentum = thesis?.entryMomentum ?? _et?.momentumScore ?? _cs?.momentum ?? null;
                     const entryRS = thesis?.entryRS ?? _et?.rsScore ?? _cs?.rs ?? null;
+                    const entryRSI = thesis?.entryRSI ?? _et?.rsi ?? null;
 
                     const gainLossClass = gainLoss >= 0 ? 'positive' : 'negative';
                     const dailyClass = daysHeld === 0
@@ -9140,7 +9161,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         symbol, shares, stockPrice, currentValue, changeClass, avgPurchasePrice,
                         earliestDate, conviction, daysHeld, gainLoss, gainLossPercent, gainLossClass,
                         positionSizePercent, isPastTimeframe, stockName, stockSector, entryMomentum,
-                        entryRS, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
+                        entryRS, entryRSI, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
                         _struct, _profitSignals, _lossSignals, _thesis, _candidateNow, _intraday,
                         _thesisStatus, insertionOrder: insertionOrder++
                     });
