@@ -8632,9 +8632,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     stopDist = ((price - stopPrice) / price * 100).toFixed(1);
                 }
                 const targetPrice = h._thesis?.targetPrice;
+                const fibTarget = !targetPrice && h._fib?.type === 'bullish' ? h._fib : null;
+                const effectiveTarget = targetPrice || (fibTarget ? fibTarget.fib100 : null);
                 let targetDist = null;
-                if (targetPrice && price && price > 0) {
-                    targetDist = ((targetPrice - price) / price * 100).toFixed(1);
+                if (effectiveTarget && price && price > 0) {
+                    targetDist = ((effectiveTarget - price) / price * 100).toFixed(1);
                 }
                 const structLabel = h._struct?.structure || '—';
                 const mom = h._candidateNow?.momentum != null ? +h._candidateNow.momentum.toFixed(1) : null;
@@ -8644,7 +8646,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const rsi = h._rsiVal != null ? Math.round(h._rsiVal) : '—';
                 const rsiEntry = h.entryRSI != null ? Math.round(h.entryRSI) : null;
                 const macd = h._macdResult?.crossover || '—';
-                return { ...h, signals, level, price, stopPrice, stopDist, targetPrice, targetDist, structLabel, mom, momEntry, rs, rsEntry, rsi, rsiEntry, macd };
+                return { ...h, signals, level, price, stopPrice, stopDist, targetPrice, effectiveTarget, fibTarget, targetDist, structLabel, mom, momEntry, rs, rsEntry, rsi, rsiEntry, macd };
             });
 
             // Sort: danger first, then caution, then healthy
@@ -8696,8 +8698,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 html += `<td>$${r.price ? r.price.toFixed(2) : '—'}</td>`;
                 html += `<td style="${plColor}">${r.gainLossPercent != null ? (r.gainLossPercent > 0 ? '+' : '') + r.gainLossPercent.toFixed(1) + '%' : '—'}</td>`;
                 html += `<td>${stopDistDisplay}</td>`;
-                const targetDisplay = r.targetPrice != null
-                    ? `<span style="${r.targetDist != null && parseFloat(r.targetDist) <= 2 ? 'color:#22c55e' : ''}" title="${parseFloat(r.targetDist)}% away">$${r.targetPrice.toFixed(2)}</span>`
+                const targetDisplay = r.effectiveTarget != null
+                    ? `<span style="${r.targetDist != null && parseFloat(r.targetDist) <= 2 ? 'color:#22c55e' : ''}" title="${r.targetDist}% away${r.fibTarget ? ' (Fib)' : ''}">$${r.effectiveTarget.toFixed(2)}${r.fibTarget ? ' <span style="opacity:0.5;font-size:0.8em">Fib</span>' : ''}</span>`
                     : '—';
                 html += `<td>${targetDisplay}</td>`;
                 const thesisStatus = r._thesisStatus || { status: 'unknown', reasons: [] };
