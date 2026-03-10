@@ -8673,12 +8673,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     ? `<span style="${parseFloat(r.stopDist) < 5 ? 'color:#ef4444' : parseFloat(r.stopDist) < 10 ? 'color:#f59e0b' : 'color:#22c55e'}" title="${r.stopDist}% away">$${r.stopPrice.toFixed(2)}</span>`
                     : '—';
 
-                const rsiNowColor = r.rsi !== '—'
-                    ? (r.rsi >= 70 ? 'color:#ef4444' : r.rsi <= 30 ? 'color:#22c55e' : '')
+                const rsiDeltaColor = r.rsiEntry != null && r.rsi !== '—'
+                    ? (r.rsi - r.rsiEntry <= -20 ? 'color:#ef4444' : r.rsi - r.rsiEntry >= 20 ? 'color:#22c55e' : '')
                     : '';
                 const rsiDisplay = r.rsiEntry != null && r.rsi !== '—'
-                    ? `${r.rsiEntry}<span style="opacity:0.5">\u2192</span><span style="${rsiNowColor}">${r.rsi}</span>`
-                    : `<span style="${rsiNowColor}">${r.rsi}</span>`;
+                    ? `${r.rsiEntry}<span style="opacity:0.5">\u2192</span><span style="${rsiDeltaColor}">${r.rsi}</span>`
+                    : `${r.rsi}`;
 
                 const macdColor = r.macd === 'bullish' ? 'color:#22c55e' :
                     r.macd === 'bearish' ? 'color:#ef4444' : '';
@@ -8817,11 +8817,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 if (entry != null && now != null) {
                                     const delta = now - entry;
                                     const cls = delta <= -20 ? 'negative' : delta >= 20 ? 'positive' : '';
-                                    const nowCls = now < 30 ? 'rsi-oversold' : now > 70 ? 'rsi-overbought' : '';
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192<span class="' + nowCls + '">' + Math.round(now) + '</span></span></span></span>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span></span></span>';
                                 }
                                 if (now != null) {
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val ' + (now < 30 ? 'rsi-oversold' : now > 70 ? 'rsi-overbought' : '') + '">' + Math.round(now) + '</span></span>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(now) + '</span></span>';
                                 }
                                 if (entry != null) {
                                     return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(entry) + '</span></span>';
