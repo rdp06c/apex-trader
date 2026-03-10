@@ -233,6 +233,7 @@
   <div>
     <a href="/" class="header-btn secondary" style="text-decoration:none;display:inline-block;text-align:center">Dashboard</a>
     <a href="/journal" class="header-btn secondary" style="text-decoration:none;display:inline-block;text-align:center">Journal</a>
+    <a href="/admin" class="header-btn secondary" style="text-decoration:none;display:inline-block;text-align:center">Admin</a>
     <button class="header-btn secondary" onclick="loadFromAPI()" title="Reload from server">Reload</button>
     <button class="header-btn" onclick="document.getElementById('fileInput').click()">Load File</button>
     <input type="file" id="fileInput" accept=".json" onchange="handleFileLoad(event)">
@@ -1723,7 +1724,12 @@ function renderHoldChart() {
 /* ── Return Distribution ─────────────────────────────── */
 function renderReturnDistChart() {
   const ct = (data.closedTrades || []).filter(t => t.returnPercent != null);
-  if (ct.length < 3) return;
+  if (ct.length < 3) {
+    const ctx = document.getElementById('returnDistChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted; ctx.font = '14px Inter'; ctx.textAlign = 'center';
+    ctx.fillText('Need at least 3 trades for return distribution.', ctx.canvas.width / 2, 80);
+    return;
+  }
 
   // Build histogram buckets from floor to ceil in 2% steps
   const returns = ct.map(t => t.returnPercent);
@@ -1806,7 +1812,12 @@ function renderReturnDistChart() {
 /* ── Drawdown from Peak ─────────────────────────────── */
 function renderDrawdownChart() {
   const sorted = [...(data.closedTrades || [])].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
-  if (sorted.length < 2) return;
+  if (sorted.length < 2) {
+    const ctx = document.getElementById('drawdownChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted; ctx.font = '14px Inter'; ctx.textAlign = 'center';
+    ctx.fillText('Need at least 2 trades for drawdown chart.', ctx.canvas.width / 2, 80);
+    return;
+  }
 
   let cumPL = 0;
   let cumCost = 0;
@@ -1866,7 +1877,12 @@ function renderDrawdownChart() {
 /* ── Win & Loss Streaks ──────────────────────────────── */
 function renderStreakChart() {
   const sorted = [...(data.closedTrades || [])].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
-  if (sorted.length < 3) return;
+  if (sorted.length < 3) {
+    const ctx = document.getElementById('streakChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted; ctx.font = '14px Inter'; ctx.textAlign = 'center';
+    ctx.fillText('Need at least 3 trades for streak chart.', ctx.canvas.width / 2, 80);
+    return;
+  }
 
   const labels = [];
   const streakValues = [];
@@ -1927,7 +1943,12 @@ function renderStreakChart() {
 function renderExpectancyChart() {
   const sorted = [...(data.closedTrades || [])].sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
   const WINDOW = 10;
-  if (sorted.length < WINDOW) return;
+  if (sorted.length < WINDOW) {
+    const ctx = document.getElementById('expectancyChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted; ctx.font = '14px Inter'; ctx.textAlign = 'center';
+    ctx.fillText('Need at least 10 trades for rolling expectancy.', ctx.canvas.width / 2, 80);
+    return;
+  }
 
   const labels = [];
   const expectancy = [];

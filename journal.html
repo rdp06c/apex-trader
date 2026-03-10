@@ -534,9 +534,108 @@ function renderAll() {
   setOutcomeFilter('all');
 }
 
+// ── Closed trade reconstruction (for legacy portfolio data) ──
+function classifyExitReason(reasoning, returnPercent) {
+  if (!reasoning) return 'manual';
+  const rl = reasoning.toLowerCase();
+  if (rl.includes('stop') || rl.includes('loss')) return 'stop_loss';
+  if (rl.includes('catalyst') || rl.includes('thesis') || rl.includes('broke')) return 'catalyst_failure';
+  if (returnPercent >= 2) return 'profit_target';
+  if (returnPercent <= -8) return 'stop_loss';
+  if (returnPercent < 0) return 'catalyst_failure';
+  return 'profit_target';
+}
+
+function reconstructMissingClosedTrades(d) {
+  if (!d.transactions || !d.transactions.length) return;
+  if (!d.closedTrades) d.closedTrades = [];
+
+  const existing = new Set(d.closedTrades.map(ct => ct.symbol + '|' + ct.sellDate));
+
+  const bySymbol = {};
+  d.transactions.forEach(t => {
+    if (!bySymbol[t.symbol]) bySymbol[t.symbol] = [];
+    bySymbol[t.symbol].push(t);
+  });
+
+  for (const symbol of Object.keys(bySymbol)) {
+    const txns = bySymbol[symbol];
+    let buyQueue = [];
+
+    for (const t of txns) {
+      if (t.type === 'BUY') {
+        buyQueue.push(t);
+      } else if (t.type === 'SELL') {
+        if (existing.has(symbol + '|' + t.timestamp)) {
+          let sharesToDrain = t.shares;
+          while (sharesToDrain > 0 && buyQueue.length > 0) {
+            if (buyQueue[0].shares <= sharesToDrain) {
+              sharesToDrain -= buyQueue[0].shares;
+              buyQueue.shift();
+            } else {
+              buyQueue[0] = { ...buyQueue[0], shares: buyQueue[0].shares - sharesToDrain };
+              sharesToDrain = 0;
+            }
+          }
+          continue;
+        }
+
+        let sharesToMatch = t.shares;
+        let totalCost = 0;
+        let totalShares = 0;
+        let firstBuy = buyQueue[0] || null;
+
+        while (sharesToMatch > 0 && buyQueue.length > 0) {
+          const buy = buyQueue[0];
+          const matched = Math.min(buy.shares, sharesToMatch);
+          totalCost += matched * buy.price;
+          totalShares += matched;
+          sharesToMatch -= matched;
+          if (matched >= buy.shares) {
+            buyQueue.shift();
+          } else {
+            buyQueue[0] = { ...buy, shares: buy.shares - matched };
+          }
+        }
+
+        if (totalShares > 0 && firstBuy) {
+          const avgBuyPrice = totalCost / totalShares;
+          const profitLoss = (t.price - avgBuyPrice) * totalShares;
+          const returnPercent = ((t.price - avgBuyPrice) / avgBuyPrice) * 100;
+
+          d.closedTrades.push({
+            symbol,
+            sector: firstBuy.entryTechnicals?.sector || t.sector || null,
+            buyPrice: avgBuyPrice,
+            sellPrice: t.price,
+            shares: totalShares,
+            profitLoss,
+            returnPercent,
+            buyDate: firstBuy.timestamp,
+            sellDate: t.timestamp,
+            holdTime: new Date(t.timestamp).getTime() - new Date(firstBuy.timestamp).getTime(),
+            entryConviction: firstBuy.conviction || null,
+            entryTechnicals: firstBuy.entryTechnicals || {},
+            entryMarketRegime: firstBuy.entryMarketRegime || null,
+            entryHoldingsCount: firstBuy.entryHoldingsCount || null,
+            exitReason: t.reasoning ? classifyExitReason(t.reasoning, returnPercent) : (returnPercent >= 2 ? 'profit_target' : returnPercent <= -8 ? 'stop_loss' : 'manual'),
+            exitReasoning: t.reasoning || 'Manual sell',
+            positionSizePercent: firstBuy.positionSizePercent || null,
+            tracking: { priceAfter1Week: null, priceAfter1Month: null, tracked: false },
+            reconstructed: true
+          });
+        }
+      }
+    }
+  }
+
+  d.closedTrades.sort((a, b) => new Date(a.sellDate) - new Date(b.sellDate));
+}
+
 // Data loading
 function loadData(d, source) {
   data = d;
+  reconstructMissingClosedTrades(data);
   document.getElementById('landing').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
   renderAll();

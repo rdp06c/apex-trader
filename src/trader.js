@@ -13335,7 +13335,7 @@ Current Portfolio:
                 warnings.push('Anthropic URL should start with https://');
             }
             if (polygonKey && polygonKey.length < 10) {
-                warnings.push('Polygon API key looks too short');
+                warnings.push('Massive API key looks too short');
             }
             if (googleClientId && !googleClientId.includes('.apps.googleusercontent.com')) {
                 warnings.push('Google Client ID should end with .apps.googleusercontent.com');
@@ -13599,10 +13599,10 @@ Current Portfolio:
             
             if (localStorage.getItem('polygon_api_key')) {
                 polygonStatus.style.color = '#34d399';
-                polygonStatus.textContent = '✅ Polygon: Configured';
+                polygonStatus.textContent = '✅ Massive: Configured';
             } else {
                 polygonStatus.style.color = '#f87171';
-                polygonStatus.textContent = '❌ Polygon: Not configured';
+                polygonStatus.textContent = '❌ Massive: Not configured';
             }
             
             if (localStorage.getItem('google_client_id') && localStorage.getItem('google_api_key')) {
