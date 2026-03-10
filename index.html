@@ -16181,6 +16181,185 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             };
         }
 
+        function buildChatContext(totalValue, priceData) {
+            // Section 1: Portfolio Overview
+            const closedTrades = portfolio.closedTrades || [];
+            const realizedPL = closedTrades.reduce((sum, t) => sum + (t.profitLoss || 0), 0);
+            let costBasis = 0;
+            const holdingSymbols = Object.keys(portfolio.holdings || {});
+            for (const sym of holdingSymbols) {
+                const buys = getCurrentPositionBuys(sym);
+                if (buys.length > 0) {
+                    const tc = buys.reduce((s, t) => s + (t.price * t.shares), 0);
+                    const ts = buys.reduce((s, t) => s + t.shares, 0);
+                    costBasis += ts > 0 ? (tc / ts) * portfolio.holdings[sym] : 0;
+                }
+            }
+            const unrealizedPL = totalValue - costBasis;
+            const totalReturnPct = costBasis > 0 ? ((realizedPL + unrealizedPL) / costBasis * 100).toFixed(2) : '0.00';
+            let spyLine = '';
+            if (portfolio.spyBaseline) {
+                const spySnap = snapshotCache?.['SPY'];
+                const spyPrice = spySnap?.lastTrade?.p || spySnap?.day?.c;
+                if (spyPrice) {
+                    const spyReturn = ((spyPrice - portfolio.spyBaseline.price) / portfolio.spyBaseline.price * 100).toFixed(2);
+                    spyLine = ` | SPY: ${spyReturn}% | Alpha: ${(parseFloat(totalReturnPct) - parseFloat(spyReturn)).toFixed(2)}%`;
+                }
+            }
+
+            let sections = [];
+            sections.push(`Portfolio: $${totalValue.toFixed(0)} | ${holdingSymbols.length} positions | Cost Basis: $${costBasis.toFixed(0)} | Return: ${totalReturnPct}% (Realized: $${realizedPL.toFixed(0)}, Unrealized: $${unrealizedPL.toFixed(0)})${spyLine}`);
+
+            // Section 2: Market Environment
+            const vix = portfolio.lastVIX;
+            const regime = portfolio.lastMarketRegime;
+            let marketLine = 'Market:';
+            if (regime?.regime) marketLine += ` Regime=${regime.regime}`;
+            if (vix?.level != null) {
+                const interp = vix.level < 15 ? 'low' : vix.level <= 20 ? 'normal' : vix.level <= 30 ? 'elevated' : 'panic';
+                marketLine += ` | VIX=${vix.level.toFixed(1)} (${interp})`;
+            }
+            if (portfolio.lastSectorRotation?.sectors) {
+                const sects = Object.entries(portfolio.lastSectorRotation.sectors);
+                const inflows = sects.filter(([, s]) => s.moneyFlow === 'inflow' || s.moneyFlow === 'modest-inflow').map(([n]) => n);
+                const outflows = sects.filter(([, s]) => s.moneyFlow === 'outflow' || s.moneyFlow === 'modest-outflow').map(([n]) => n);
+                if (inflows.length) marketLine += ` | Inflow: ${inflows.join(', ')}`;
+                if (outflows.length) marketLine += ` | Outflow: ${outflows.join(', ')}`;
+            }
+            sections.push(marketLine);
+
+            // Section 3: Holdings Detail (entry vs current technicals)
+            const scanTimestamp = portfolio.lastCandidateScores?.timestamp;
+            if (scanTimestamp) sections.push(`Last scan: ${new Date(scanTimestamp).toLocaleString('en-US', { timeZone: 'America/New_York' })} ET`);
+
+            const holdingLines = [];
+            for (const sym of holdingSymbols) {
+                const shares = portfolio.holdings[sym];
+                const thesis = (portfolio.holdingTheses || {})[sym];
+                const candidate = (portfolio.lastCandidateScores?.candidates || []).find(c => c.symbol === sym);
+                const pd = priceData[sym];
+                const buys = getCurrentPositionBuys(sym);
+
+                // Cost basis and P&L
+                let avgCost = 0;
+                if (buys.length > 0) {
+                    const tc = buys.reduce((s, t) => s + (t.price * t.shares), 0);
+                    const ts = buys.reduce((s, t) => s + t.shares, 0);
+                    avgCost = ts > 0 ? tc / ts : 0;
+                }
+                const curPrice = pd?.price || candidate?.price || 0;
+                const pnlPct = avgCost > 0 ? ((curPrice - avgCost) / avgCost * 100).toFixed(1) : '?';
+                const dayChg = pd?.changePercent != null ? pd.changePercent.toFixed(1) : (candidate?.dayChange != null ? candidate.dayChange.toFixed(1) : '?');
+
+                // Days held
+                const entryDate = thesis?.entryDate || (buys.length > 0 ? buys[0].timestamp : null);
+                const daysHeld = entryDate ? Math.round((Date.now() - new Date(entryDate).getTime()) / 86400000) : '?';
+
+                // Entry technicals (from thesis)
+                let entryLine = '';
+                if (thesis) {
+                    const parts = [];
+                    if (thesis.entryMomentum != null) parts.push(`MOM=${typeof thesis.entryMomentum === 'number' ? thesis.entryMomentum.toFixed(1) : thesis.entryMomentum}`);
+                    if (thesis.entryRS != null) parts.push(`RS=${Math.round(thesis.entryRS)}`);
+                    if (thesis.entryRSI != null) parts.push(`RSI=${Math.round(thesis.entryRSI)}`);
+                    if (thesis.entryMACDCrossover) parts.push(`MACD=${thesis.entryMACDCrossover}`);
+                    if (thesis.entryStructure) parts.push(`Struct=${thesis.entryStructure}`);
+                    if (thesis.entryCompositeScore != null) parts.push(`Score=${thesis.entryCompositeScore.toFixed(1)}`);
+                    if (thesis.entryVIX != null) parts.push(`VIX=${thesis.entryVIX.toFixed(1)}`);
+                    if (parts.length) entryLine = `  Entry: ${parts.join(' ')}`;
+                }
+
+                // Current technicals (from last scan)
+                let nowLine = '';
+                if (candidate) {
+                    const parts = [];
+                    if (candidate.momentum != null) parts.push(`MOM=${candidate.momentum.toFixed(1)}`);
+                    if (candidate.rs != null) parts.push(`RS=${Math.round(candidate.rs)}`);
+                    if (candidate.rsi != null) parts.push(`RSI=${Math.round(candidate.rsi)}`);
+                    if (candidate.macdCrossover) parts.push(`MACD=${candidate.macdCrossover}`);
+                    if (candidate.structure) parts.push(`Struct=${candidate.structure}`);
+                    if (candidate.compositeScore != null) parts.push(`Score=${candidate.compositeScore.toFixed(1)}`);
+                    if (candidate.volumeTrend != null) parts.push(`Vol=${candidate.volumeTrend.toFixed(2)}`);
+                    if (candidate.sectorFlow) parts.push(`Flow=${candidate.sectorFlow}`);
+                    if (parts.length) nowLine = `  Now: ${parts.join(' ')}`;
+                }
+
+                // Loss/profit signals
+                const signals = [];
+                if (thesis?.stopPrice && curPrice > 0 && curPrice <= thesis.stopPrice) signals.push('STOP BREACHED');
+                if (thesis?.targetPrice && curPrice > 0 && curPrice >= thesis.targetPrice) signals.push('TARGET REACHED');
+                if (thesis?.entryRS != null && candidate?.rs != null && (candidate.rs - thesis.entryRS) <= -30)
+                    signals.push(`RS collapse ${Math.round(thesis.entryRS)}->${Math.round(candidate.rs)}`);
+                if (thesis?.entryMomentum >= 7 && candidate?.momentum != null && candidate.momentum < 3)
+                    signals.push(`MOM collapse ${thesis.entryMomentum.toFixed(1)}->${candidate.momentum.toFixed(1)}`);
+                if (thesis?.entryStructure === 'bullish' && candidate?.structure === 'bearish')
+                    signals.push('Structure flipped bull->bear');
+                if (daysHeld !== '?' && daysHeld >= 5 && pnlPct !== '?' && Math.abs(parseFloat(pnlPct)) <= 3)
+                    signals.push('Stale capital');
+
+                let line = `${sym}: ${shares}sh @$${avgCost.toFixed(2)} now $${curPrice.toFixed(2)} (${pnlPct}%) day:${dayChg}% ${daysHeld}d`;
+                if (thesis?.stopPrice) line += ` stop=$${thesis.stopPrice.toFixed(2)}`;
+                if (thesis?.targetPrice) line += ` target=$${thesis.targetPrice.toFixed(2)}`;
+                if (entryLine) line += '\n' + entryLine;
+                if (nowLine) line += '\n' + nowLine;
+                if (signals.length) line += '\n  ALERTS: ' + signals.join(', ');
+
+                holdingLines.push({ line, pnlPct: parseFloat(pnlPct) || 0, signals: signals.length });
+            }
+
+            // Sort: most alerts first, then worst P&L first
+            holdingLines.sort((a, b) => b.signals - a.signals || a.pnlPct - b.pnlPct);
+            const maxHoldings = 20;
+            const displayed = holdingLines.slice(0, maxHoldings);
+            if (displayed.length > 0) {
+                let holdingSection = 'Holdings:\n' + displayed.map(h => h.line).join('\n');
+                if (holdingLines.length > maxHoldings) holdingSection += `\n...and ${holdingLines.length - maxHoldings} more positions`;
+                sections.push(holdingSection);
+            }
+
+            // Section 4: Trading Performance Summary
+            if (closedTrades.length >= 3) {
+                const wins = closedTrades.filter(t => t.profitLoss > 0);
+                const losses = closedTrades.filter(t => t.profitLoss <= 0);
+                const avgWin = wins.length > 0 ? (wins.reduce((s, t) => s + t.returnPercent, 0) / wins.length).toFixed(1) : '0';
+                const avgLoss = losses.length > 0 ? (losses.reduce((s, t) => s + t.returnPercent, 0) / losses.length).toFixed(1) : '0';
+                const pf = losses.length > 0 && Math.abs(losses.reduce((s, t) => s + t.profitLoss, 0)) > 0
+                    ? (wins.reduce((s, t) => s + t.profitLoss, 0) / Math.abs(losses.reduce((s, t) => s + t.profitLoss, 0))).toFixed(2) : 'N/A';
+                const recentN = Math.min(10, closedTrades.length);
+                const recent = closedTrades.slice(-recentN);
+                const recentWins = recent.filter(t => t.profitLoss > 0).length;
+                sections.push(`Performance: ${closedTrades.length} trades, ${(wins.length / closedTrades.length * 100).toFixed(0)}% WR, avg win +${avgWin}%, avg loss ${avgLoss}%, PF ${pf}, net $${realizedPL.toFixed(0)}. Last ${recentN}: ${recentWins}W/${recentN - recentWins}L`);
+            }
+
+            // Section 5: Recent Closed Trades
+            if (closedTrades.length > 0) {
+                const recent5 = closedTrades.slice(-5).reverse();
+                const exitLines = recent5.map(t => {
+                    const ret = t.returnPercent >= 0 ? `+${t.returnPercent.toFixed(1)}%` : `${t.returnPercent.toFixed(1)}%`;
+                    const days = t.holdTime ? Math.round(t.holdTime / 86400000) : '?';
+                    const reason = t.exitReason || 'manual';
+                    return `${t.symbol} ${ret} (${days}d, ${reason})`;
+                });
+                sections.push('Recent exits: ' + exitLines.join(' | '));
+            }
+
+            // Section 6: Active Trading Rules
+            try {
+                const rulesData = deriveTradingRules();
+                if (rulesData.rules && rulesData.rules.length > 0) {
+                    const topRules = rulesData.rules.slice(0, 5).map(r => r.description);
+                    sections.push('Trading rules (data-derived):\n- ' + topRules.join('\n- '));
+                }
+            } catch (e) {
+                // Rules computation failed — skip silently
+            }
+
+            // Assemble system prompt
+            const personality = `You are APEX, an AI trading assistant for ARC Investments. You have full visibility into Ryan's holdings (entry vs current technicals, loss signals, stop/target levels), market environment (VIX, regime, sector rotation), and trading history (closed trades, performance patterns, derived rules). Use this data to give specific, actionable answers. Reference specific numbers — don't be vague. If scan data is stale or missing, note that. Confident but honest. Keep responses focused and scannable with **bold headers** and short paragraphs.`;
+
+            return personality + '\n\n' + sections.join('\n\n');
+        }
+
         async function sendMessage() {
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
@@ -16308,35 +16487,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             try {
                 // Get portfolio context
                 const { total: totalValue, priceData } = await calculatePortfolioValue();
-                const recentTransactions = portfolio.transactions.slice(-5);
+                const systemPrompt = buildChatContext(totalValue, priceData);
 
                 // Call Claude API via Cloudflare Worker proxy
                 const data = await fetchAnthropicStreaming({
                         model: 'claude-sonnet-4-6',
-                        max_tokens: 1500,
-                        system: `You are APEX (Autonomous Portfolio EXpert), an AI trading agent created by ARC Investments. Confident but self-aware trader, patient teacher who explains the "why" behind decisions, light humor to keep it engaging. Aggressive swing-trading strategy — calculated risks, let winners run, cut losers fast.
-
-Use web_search for current news, earnings, company info, or market developments. Cite sources naturally.
-
-Format responses with **bold headers**, short paragraphs, and clear sections for scannability.
-
-Current Portfolio:
-- Value: $${totalValue.toFixed(2)} | Cash: $${portfolio.cash.toFixed(2)}
-- Holdings: ${(() => {
-    const summary = {};
-    Object.entries(portfolio.holdings).forEach(([sym, shares]) => {
-        const buys = getCurrentPositionBuys(sym);
-        let totalCost = 0, totalShares = 0;
-        buys.forEach(t => { totalShares += t.shares; totalCost += t.price * t.shares; });
-        const avgCost = totalShares > 0 ? totalCost / totalShares : 0;
-        const pd = priceData[sym];
-        const curPrice = pd ? pd.price : null;
-        const dayChg = pd ? pd.changePercent : null;
-        summary[sym] = { shares, avgCost: '$' + avgCost.toFixed(2), currentPrice: curPrice ? '$' + curPrice.toFixed(2) : 'unknown', dayChange: dayChg != null ? dayChg.toFixed(2) + '%' : 'unknown' };
-    });
-    return JSON.stringify(summary);
-})()}
-- Recent Transactions: ${JSON.stringify(recentTransactions)}`,
+                        max_tokens: 4000,
+                        system: systemPrompt,
                         tools: [{
                             type: "web_search_20250305",
                             name: "web_search"
