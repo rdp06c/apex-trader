@@ -292,6 +292,42 @@ async function runFullScan({ force = false } = {}) {
 
         savePortfolio(freshPortfolio);
 
+        // Record daily health snapshots for held positions
+        const today = new Date().toISOString().slice(0, 10);
+        let healthRecorded = 0;
+        if (freshPortfolio.holdingTheses) {
+            for (const symbol of Object.keys(freshPortfolio.holdings || {})) {
+                const thesis = freshPortfolio.holdingTheses[symbol];
+                if (!thesis) continue;
+                if (!thesis.healthHistory) thesis.healthHistory = [];
+
+                // Deduplicate: skip if already recorded today
+                if (thesis.healthHistory.length > 0 && thesis.healthHistory[thesis.healthHistory.length - 1].date === today) continue;
+
+                const candidate = candidateScores.find(c => c.symbol === symbol);
+                if (!candidate) continue;
+
+                thesis.healthHistory.push({
+                    date: today,
+                    price: candidate.price,
+                    rs: candidate.rs,
+                    momentum: candidate.momentum,
+                    rsi: candidate.rsi ?? candidate.serverRsi ?? null,
+                    macd: candidate.macdCrossover,
+                    structure: candidate.structure,
+                    compositeScore: candidate.compositeScore
+                });
+
+                // Cap at 120 entries (~4 months of daily data)
+                if (thesis.healthHistory.length > 120) thesis.healthHistory = thesis.healthHistory.slice(-120);
+                healthRecorded++;
+            }
+            if (healthRecorded > 0) {
+                savePortfolio(freshPortfolio);
+                console.log(`Full scan: recorded health snapshots for ${healthRecorded} holdings`);
+            }
+        }
+
         // Save scan state
         const scanState = loadScanState();
         scanState.lastRun = new Date().toISOString();

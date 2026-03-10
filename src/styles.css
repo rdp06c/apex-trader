@@ -2723,6 +2723,11 @@
         .health-arrow.negative { color: var(--red, #ff4757); }
         .health-arrow.positive { color: var(--green); }
 
+        .hc-trend { font-size: 9px; margin-left: 2px; vertical-align: super; }
+        .hc-trend.up { color: var(--green); }
+        .hc-trend.down { color: var(--red); }
+        .hc-trend.flat { color: var(--text-faint); }
+
         .scorecard-score-cell {
             display: flex;
             align-items: center;

@@ -140,6 +140,59 @@
   .positive { color: var(--green); }
   .negative { color: var(--red); }
 
+  /* ── Filter Bar ───────────────────────────────────────── */
+  .filters-bar {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;
+    align-items: center; padding: 14px 16px;
+    background: var(--bg-surface); border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+  .filter-group {
+    display: flex; align-items: center; gap: 4px;
+  }
+  .filter-label {
+    font-size: 10px; color: var(--text-faint); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;
+    white-space: nowrap;
+  }
+  .filter-input {
+    background: var(--bg-inset); color: var(--text-primary);
+    border: 1px solid var(--border-medium); border-radius: var(--radius-sm);
+    padding: 6px 10px; font-size: 12px; font-family: inherit;
+    outline: none; transition: border-color var(--transition-fast);
+  }
+  .filter-input:focus { border-color: var(--accent); }
+  .filter-input::placeholder { color: var(--text-faint); }
+  .filter-input[type="date"] { width: 130px; }
+  .filter-input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+  }
+  .filter-select {
+    background: var(--bg-inset); color: var(--text-primary);
+    border: 1px solid var(--border-medium); border-radius: var(--radius-sm);
+    padding: 6px 10px; font-size: 12px; font-family: inherit;
+    cursor: pointer; outline: none;
+  }
+  .filter-select option { background: var(--bg-raised); color: var(--text-primary); }
+  .filter-btn {
+    background: var(--bg-raised); color: var(--text-secondary);
+    border: 1px solid var(--border-medium); border-radius: var(--radius-sm);
+    padding: 6px 12px; font-size: 11px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: all var(--transition-fast);
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .filter-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+  .filter-sep {
+    width: 1px; height: 24px; background: var(--border-subtle); margin: 0 4px;
+  }
+  .filter-count { font-size: 11px; color: var(--text-faint); margin-left: auto; white-space: nowrap; }
+  .filter-reset {
+    background: none; border: none; color: var(--text-faint);
+    font-size: 11px; cursor: pointer; font-family: inherit;
+    padding: 6px 8px; transition: color var(--transition-fast);
+  }
+  .filter-reset:hover { color: var(--red); }
+
   /* ── Grid Layout ───────────────────────────────────────── */
   .grid {
     display: grid; grid-template-columns: 1fr 1fr;
@@ -250,6 +303,42 @@
 
   <!-- ═══ OVERVIEW ═══ -->
   <div class="stats-row" id="statsRow"></div>
+
+  <!-- ═══ FILTERS ═══ -->
+  <div class="filters-bar" id="filterBar" style="display:none">
+    <div class="filter-group">
+      <span class="filter-label">Period</span>
+      <button class="filter-btn active" onclick="setDatePreset('all')">All</button>
+      <button class="filter-btn" onclick="setDatePreset('30d')">30D</button>
+      <button class="filter-btn" onclick="setDatePreset('90d')">90D</button>
+      <button class="filter-btn" onclick="setDatePreset('ytd')">YTD</button>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <span class="filter-label">From</span>
+      <input type="date" class="filter-input" id="filterDateFrom" onchange="onCustomDateChange()">
+      <span class="filter-label">To</span>
+      <input type="date" class="filter-input" id="filterDateTo" onchange="onCustomDateChange()">
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <span class="filter-label">Outcome</span>
+      <button class="filter-btn active" id="filterOutcomeAll" onclick="setOutcomeFilter('all')">All</button>
+      <button class="filter-btn" id="filterOutcomeWin" onclick="setOutcomeFilter('win')">Wins</button>
+      <button class="filter-btn" id="filterOutcomeLoss" onclick="setOutcomeFilter('loss')">Losses</button>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <select class="filter-select" id="filterSector" onchange="filterState.sector=this.value;applyFilters()">
+        <option value="">All Sectors</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <input type="text" class="filter-input" id="filterSymbol" placeholder="Symbol..." style="width:90px" oninput="filterState.symbol=this.value;applyFilters()">
+    </div>
+    <span class="filter-count" id="filterCount"></span>
+    <button class="filter-reset" onclick="resetFilters()" title="Reset all filters">&#x2715; Reset</button>
+  </div>
 
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Return on Capital Deployed</div>
@@ -418,6 +507,8 @@ Chart.defaults.plugins.tooltip.padding = 12;
 Chart.defaults.font.family = "'Inter', sans-serif";
 
 let data = null;
+let allClosedTrades = [];
+let filterState = { dateFrom: '', dateTo: '', sector: '', outcome: 'all', symbol: '' };
 
 /* ── Reconstruct missing closedTrades from transactions ── */
 function reconstructMissingClosedTrades(d) {
@@ -521,10 +612,13 @@ function classifyExitReason(reasoning, returnPercent) {
 function loadData(d, source) {
   data = d;
   reconstructMissingClosedTrades(data);
+  allClosedTrades = [...(data.closedTrades || [])];
+  populateFilterSectors();
   document.getElementById('loadStatus').textContent = 'Loaded: ' + source;
   document.getElementById('landing').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
-  renderAll();
+  document.getElementById('filterBar').style.display = '';
+  applyFilters();
 }
 
 async function loadFromAPI() {
@@ -556,6 +650,100 @@ function handleFileLoad(event) {
 }
 
 document.addEventListener('DOMContentLoaded', loadFromAPI);
+
+/* ── Global Filter Logic ─────────────────────────────── */
+function applyFilters() {
+  const { dateFrom, dateTo, sector, outcome, symbol } = filterState;
+  data.closedTrades = allClosedTrades.filter(t => {
+    if (dateFrom && new Date(t.sellDate) < new Date(dateFrom)) return false;
+    if (dateTo && new Date(t.sellDate) > new Date(dateTo + 'T23:59:59')) return false;
+    if (sector && (t.sector || SECTOR_MAP[t.symbol] || 'Unknown') !== sector) return false;
+    if (outcome === 'win' && (t.profitLoss || 0) <= 0) return false;
+    if (outcome === 'loss' && (t.profitLoss || 0) > 0) return false;
+    if (symbol && !t.symbol.toUpperCase().includes(symbol.toUpperCase())) return false;
+    return true;
+  });
+  updateFilterCount();
+  renderAll();
+}
+
+function setDatePreset(preset) {
+  const now = new Date();
+  if (preset === '30d') filterState.dateFrom = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+  else if (preset === '90d') filterState.dateFrom = new Date(now.getTime() - 90 * 86400000).toISOString().slice(0, 10);
+  else if (preset === 'ytd') filterState.dateFrom = now.getFullYear() + '-01-01';
+  else filterState.dateFrom = '';
+  filterState.dateTo = '';
+  syncFilterUI();
+  applyFilters();
+}
+
+function onCustomDateChange() {
+  filterState.dateFrom = document.getElementById('filterDateFrom').value;
+  filterState.dateTo = document.getElementById('filterDateTo').value;
+  // Clear preset highlighting when using custom dates
+  document.querySelectorAll('#filterBar .filter-group:first-child .filter-btn').forEach(b => b.classList.remove('active'));
+  applyFilters();
+}
+
+function setOutcomeFilter(outcome) {
+  filterState.outcome = outcome;
+  document.getElementById('filterOutcomeAll').classList.toggle('active', outcome === 'all');
+  document.getElementById('filterOutcomeWin').classList.toggle('active', outcome === 'win');
+  document.getElementById('filterOutcomeLoss').classList.toggle('active', outcome === 'loss');
+  applyFilters();
+}
+
+function populateFilterSectors() {
+  const select = document.getElementById('filterSector');
+  const sectors = [...new Set(allClosedTrades.map(t =>
+    t.sector || SECTOR_MAP[t.symbol] || 'Unknown'
+  ).filter(Boolean))].sort();
+  select.innerHTML = '<option value="">All Sectors</option>';
+  sectors.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    select.appendChild(opt);
+  });
+}
+
+function syncFilterUI() {
+  document.getElementById('filterDateFrom').value = filterState.dateFrom;
+  document.getElementById('filterDateTo').value = filterState.dateTo;
+  document.getElementById('filterSector').value = filterState.sector;
+  document.getElementById('filterSymbol').value = filterState.symbol;
+  // Update date preset buttons
+  const presets = document.querySelectorAll('#filterBar .filter-group:first-child .filter-btn');
+  const now = new Date();
+  presets.forEach(b => {
+    const text = b.textContent;
+    let expected = '';
+    if (text === 'All') expected = '';
+    else if (text === '30D') expected = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+    else if (text === '90D') expected = new Date(now.getTime() - 90 * 86400000).toISOString().slice(0, 10);
+    else if (text === 'YTD') expected = now.getFullYear() + '-01-01';
+    b.classList.toggle('active', filterState.dateFrom === expected && !filterState.dateTo);
+  });
+  // Update outcome buttons
+  document.getElementById('filterOutcomeAll').classList.toggle('active', filterState.outcome === 'all');
+  document.getElementById('filterOutcomeWin').classList.toggle('active', filterState.outcome === 'win');
+  document.getElementById('filterOutcomeLoss').classList.toggle('active', filterState.outcome === 'loss');
+}
+
+function updateFilterCount() {
+  const el = document.getElementById('filterCount');
+  if (!el) return;
+  const total = allClosedTrades.length;
+  const shown = data.closedTrades.length;
+  el.textContent = shown === total ? total + ' trades' : shown + ' of ' + total + ' trades';
+}
+
+function resetFilters() {
+  filterState = { dateFrom: '', dateTo: '', sector: '', outcome: 'all', symbol: '' };
+  syncFilterUI();
+  applyFilters();
+}
 
 function destroyAllCharts() {
   document.querySelectorAll('canvas').forEach(c => {

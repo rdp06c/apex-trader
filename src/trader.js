@@ -8521,6 +8521,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 daysToCover: marketData[symbol]?.shortInterest?.daysToCover ?? null,
                                 vixLevel: vixCache?.level ?? null,
                                 vixInterpretation: vixCache?.interpretation ?? null,
+                                healthHistory: portfolio.holdingTheses?.[symbol]?.healthHistory || [],
                             },
 
                             // Position context
@@ -8734,6 +8735,19 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             container.innerHTML = html;
         }
 
+        // Health trend indicator from daily snapshots
+        function getHealthTrend(healthHistory, metric, currentValue) {
+            if (!healthHistory || healthHistory.length < 2 || currentValue == null) return '';
+            const lookback = healthHistory.length >= 5 ? healthHistory[healthHistory.length - 5] : healthHistory[0];
+            const oldVal = lookback[metric];
+            if (oldVal == null) return '';
+            const delta = currentValue - oldVal;
+            const threshold = metric === 'rs' ? 5 : metric === 'momentum' ? 1 : 5;
+            if (delta > threshold) return '<span class="hc-trend up">\u25B2</span>';
+            if (delta < -threshold) return '<span class="hc-trend down">\u25BC</span>';
+            return '<span class="hc-trend flat">\u25B8</span>';
+        }
+
         // Update UI
         function sortAndRenderHoldings(dataArray) {
             const sortMode = holdingsSortMode || 'dateAdded';
@@ -8816,7 +8830,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 if (now != null) {
                                     const delta = now - entry;
                                     const cls = delta <= -3 ? 'negative' : delta >= 3 ? 'positive' : '';
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">MOM</span><span class="hc-stat-val">' + entry.toFixed(1) + '<span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span></span></span>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">MOM</span><span class="hc-stat-val">' + entry.toFixed(1) + '<span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span>' + getHealthTrend(h._thesis?.healthHistory, 'momentum', now) + '</span></span>';
                                 }
                                 return '<span class="hc-stat"><span class="hc-stat-lbl">MOM</span><span class="hc-stat-val">' + entry.toFixed(1) + '</span></span>';
                             })()}
@@ -8827,7 +8841,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 if (now != null) {
                                     const delta = now - entry;
                                     const cls = delta <= -15 ? 'negative' : delta >= 15 ? 'positive' : '';
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RS</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span></span></span>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RS</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span>' + getHealthTrend(h._thesis?.healthHistory, 'rs', now) + '</span></span>';
                                 }
                                 return '<span class="hc-stat"><span class="hc-stat-lbl">RS</span><span class="hc-stat-val">' + Math.round(entry) + '</span></span>';
                             })()}
@@ -8837,7 +8851,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 if (entry != null && now != null) {
                                     const delta = now - entry;
                                     const cls = delta <= -20 ? 'negative' : delta >= 20 ? 'positive' : '';
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span></span></span>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span>' + getHealthTrend(h._thesis?.healthHistory, 'rsi', now) + '</span></span>';
                                 }
                                 if (now != null) {
                                     return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(now) + '</span></span>';
@@ -10039,7 +10053,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         exitConviction: null,
                         exitMarketRegime: portfolio.lastMarketRegime?.regime || null,
                         exitHoldingsCount: Object.keys(portfolio.holdings).length,
-                        exitTechnicals: {},
+                        exitTechnicals: {
+                            healthHistory: portfolio.holdingTheses?.[symbol]?.healthHistory || []
+                        },
                         positionSizePercent: originalBuyTx.positionSizePercent || null,
                         tracking: { priceAfter3d: null, priceAfter5d: null, tracked: false },
                         manual: true
