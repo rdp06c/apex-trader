@@ -348,17 +348,10 @@
   </div>
 
   <!-- ═══ TRADE MECHANICS ═══ -->
-  <div class="grid">
-    <div class="card">
-      <div class="chart-title">Win Rate by Hold Duration</div>
-      <div class="section-sub">How long should trades be held?</div>
-      <canvas id="holdChart"></canvas>
-    </div>
-    <div class="card">
-      <div class="chart-title">P&amp;L by Exit Reason</div>
-      <div class="section-sub">Which exit strategies protect capital best?</div>
-      <canvas id="exitReasonPL"></canvas>
-    </div>
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Win Rate by Hold Duration</div>
+    <div class="section-sub">How long should trades be held?</div>
+    <canvas id="holdChart"></canvas>
   </div>
 
   <!-- ═══ WHAT'S WORKING ═══ -->
@@ -652,7 +645,7 @@ function renderAll() {
   renderMomentumChart();
   renderStructureChart();
   renderHoldChart();
-  renderExitReasonPL();
+
   renderStreakChart();
   renderExpectancyChart();
   renderPostExitChart();
@@ -1722,67 +1715,6 @@ function renderHoldChart() {
       }
     },
     plugins: [countLabelPlugin, fiftyLinePlugin]
-  });
-}
-
-/* ── P&L by Exit Reason ──────────────────────────────── */
-function renderExitReasonPL() {
-  const buckets = {};
-  (data.closedTrades || []).forEach(t => {
-    if (!t.exitReason) return;
-    const reason = t.exitReason.replace(/_/g, ' ');
-    if (!buckets[reason]) buckets[reason] = { wins: 0, total: 0, sumReturn: 0 };
-    buckets[reason].total++;
-    buckets[reason].sumReturn += t.returnPercent;
-    if (t.profitLoss > 0) buckets[reason].wins++;
-  });
-
-  const entries = Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
-  const avgReturns = entries.map(e => e[1].sumReturn / e[1].total);
-
-  const richLabels = entries.map(e => {
-    const b = e[1];
-    return `${e[0]}  (${b.wins}W/${b.total - b.wins}L)`;
-  });
-
-  new Chart(document.getElementById('exitReasonPL'), {
-    type: 'bar',
-    data: {
-      labels: richLabels,
-      datasets: [{
-        data: avgReturns,
-        backgroundColor: avgReturns.map(v => v >= 0 ? COLORS.win + '99' : COLORS.loss + '99'),
-        borderColor: avgReturns.map(v => v >= 0 ? COLORS.win : COLORS.loss),
-        borderWidth: 1,
-        borderRadius: 4
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      layout: { padding: { right: 8 } },
-      plugins: {
-        tooltip: {
-          boxPadding: 6,
-          callbacks: {
-            title: ctx => entries[ctx[0].dataIndex][0],
-            label: ctx => {
-              const i = ctx.dataIndex;
-              const b = entries[i][1];
-              const avg = avgReturns[i];
-              return [
-                `Avg return: ${avg > 0 ? '+' : ''}${avg.toFixed(1)}%`,
-                `Win rate: ${(b.wins / b.total * 100).toFixed(0)}%  (${b.wins}W / ${b.total - b.wins}L)`
-              ];
-            }
-          }
-        }
-      },
-      scales: {
-        x: { grid: { color: COLORS.gridLine }, ticks: { callback: v => (v > 0 ? '+' : '') + v + '%' } },
-        y: { grid: { display: false } }
-      }
-    }
   });
 }
 
