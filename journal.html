@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>APEX Trade Journal</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -223,11 +224,96 @@
   .tx-log-collapsed #txLogBody { display: none; }
   .tx-log-collapsed .journal-toggle { transform: rotate(-90deg); }
 
+  /* ── Trade Detail Modal ─────────────────────────── */
+  .trade-detail-overlay {
+    display: none; position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px);
+    justify-content: center; align-items: flex-start;
+    padding: 40px 20px; overflow-y: auto;
+  }
+  .trade-detail-overlay.active { display: flex; }
+  .trade-detail-modal {
+    background: var(--bg-surface); border: 1px solid var(--border-medium);
+    border-radius: var(--radius-lg); box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    max-width: 720px; width: 100%; position: relative;
+    padding: 32px; margin: auto;
+  }
+  .trade-detail-close {
+    position: absolute; top: 16px; right: 20px;
+    background: none; border: none; color: var(--text-faint);
+    font-size: 24px; cursor: pointer; line-height: 1;
+    transition: color var(--transition-fast);
+  }
+  .trade-detail-close:hover { color: var(--text-primary); }
+
+  .td-header { margin-bottom: 24px; }
+  .td-header-top {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;
+  }
+  .td-symbol { font-size: 22px; font-weight: 800; color: var(--text-primary); }
+  .td-sector { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .td-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 3px 10px; border-radius: 20px;
+  }
+  .td-badge.profit { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+  .td-badge.loss { background: var(--red-dim); color: var(--red); border: 1px solid var(--red-border); }
+  .td-badge.manual { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(245,158,11,0.3); }
+  .td-header-metrics {
+    display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px;
+  }
+  .td-header-metric { font-size: 13px; color: var(--text-secondary); }
+  .td-header-metric strong { color: var(--text-primary); font-weight: 700; }
+
+  .td-section {
+    margin-bottom: 20px; padding-top: 16px;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .td-section-title {
+    font-size: 12px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;
+  }
+
+  .td-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .td-stat {
+    background: var(--bg-inset); border-radius: var(--radius-sm);
+    padding: 8px 10px; border: 1px solid var(--border-subtle);
+  }
+  .td-stat-label {
+    font-size: 9px; color: var(--text-faint); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .td-stat-value { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-top: 2px; }
+  .td-stat.wide { grid-column: span 2; }
+
+  .td-notes {
+    background: var(--bg-inset); border-radius: var(--radius-sm);
+    padding: 12px 14px; border: 1px solid var(--border-subtle);
+    font-size: 13px; color: var(--text-secondary); line-height: 1.6;
+  }
+  .td-notes-label {
+    font-size: 10px; color: var(--text-faint); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+  }
+
+  .td-empty {
+    text-align: center; padding: 24px; color: var(--text-faint); font-size: 12px;
+  }
+
+  .td-chart-container { margin-top: 8px; }
+  .td-chart-container canvas { max-height: 200px; }
+
   /* ── Responsive ─────────────────────────────────── */
   @media (max-width: 700px) {
     body { padding: 16px; }
     .header { flex-direction: column; align-items: flex-start; }
     .signal-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+    .td-grid { grid-template-columns: 1fr 1fr; }
+    .trade-detail-modal { padding: 20px; }
+    .trade-detail-overlay { padding: 20px 10px; }
   }
 </style>
 </head>
@@ -287,8 +373,16 @@
   </div>
 </div>
 
+<div class="trade-detail-overlay" id="tradeDetailOverlay" onclick="if(event.target===this)closeTradeDetail()">
+  <div class="trade-detail-modal">
+    <button class="trade-detail-close" onclick="closeTradeDetail()">&times;</button>
+    <div id="tradeDetailContent"></div>
+  </div>
+</div>
+
 <script>
 let data = null;
+let healthChart = null;
 let outcomeFilter = 'all';
 let allEntries = [];
 let filteredEntries = [];
@@ -434,7 +528,8 @@ function renderClosedTrades() {
     const plStr = plSign + '$' + (t.profitLoss || 0).toFixed(2);
     const rowClass = isWin ? 'tx-buy' : 'tx-sell';
 
-    html += `<tr class="${rowClass}">
+    const filtIdx = start + page.indexOf(t);
+    html += `<tr class="${rowClass}" style="cursor:pointer" onclick="openTradeDetail(${filtIdx})">
       <td>${formatDateShort(t.buyDate)} &rarr; ${formatDateShort(t.sellDate)}</td>
       <td class="tx-symbol">${escapeHtml(t.symbol)}</td>
       <td>${t.shares || '—'}</td>
@@ -513,7 +608,7 @@ function renderTransactionLog() {
     pagination.innerHTML = `
       <button onclick="txLogSetPage(${txLogPage - 1})"${txLogPage <= 1 ? ' disabled' : ''}>&laquo; Prev</button>
       <span class="tx-page-info">Page ${txLogPage} of ${totalPages} (${sorted.length} transactions)</span>
-      <button onclick="txLogSetPage(${txLogPage + 1})"${txLogPage >= totalPages ? ' disabled' : ''}">Next &raquo;</button>`;
+      <button onclick="txLogSetPage(${txLogPage + 1})"${txLogPage >= totalPages ? ' disabled' : ''}>Next &raquo;</button>`;
   } else {
     pagination.innerHTML = `<span class="tx-page-info">${sorted.length} transaction${sorted.length !== 1 ? 's' : ''}</span>`;
   }
@@ -660,6 +755,186 @@ async function loadFromAPI() {
       }
     } catch (e) { /* ignore */ }
   }
+}
+
+/* ── Trade Detail View ───────────────────────────── */
+function openTradeDetail(idx) {
+  const t = filteredEntries[idx];
+  if (!t) return;
+  const content = document.getElementById('tradeDetailContent');
+  content.innerHTML = renderTradeDetailHTML(t);
+  document.getElementById('tradeDetailOverlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  renderHealthChart(t);
+}
+
+function closeTradeDetail() {
+  document.getElementById('tradeDetailOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+  if (healthChart) { healthChart.destroy(); healthChart = null; }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTradeDetail(); });
+
+function exitBadgeClass(reason) {
+  if (!reason) return 'manual';
+  if (reason === 'profit_target') return 'profit';
+  if (reason === 'stop_loss' || reason === 'catalyst_failure') return 'loss';
+  return 'manual';
+}
+
+function exitBadgeLabel(reason) {
+  if (!reason) return 'manual';
+  return reason.replace(/_/g, ' ');
+}
+
+function metricHTML(label, value, opts) {
+  if (value == null || value === '') return '';
+  const cls = opts?.wide ? ' wide' : '';
+  const valCls = opts?.color || '';
+  const display = typeof value === 'number' ? (opts?.decimals != null ? value.toFixed(opts.decimals) : (Number.isInteger(value) ? value : value.toFixed(1))) : escapeHtml(String(value));
+  const suffix = opts?.suffix || '';
+  return `<div class="td-stat${cls}"><div class="td-stat-label">${escapeHtml(label)}</div><div class="td-stat-value ${valCls}">${display}${suffix}</div></div>`;
+}
+
+function renderTradeDetailHTML(t) {
+  const et = t.entryTechnicals || {};
+  const xt = t.exitTechnicals || {};
+  const isWin = (t.returnPercent || 0) > 0;
+  const plSign = isWin ? '+' : '';
+  const plClass = isWin ? 'positive' : 'negative';
+  const holdDays = formatHoldDays(t);
+
+  // Find entry reasoning from transactions
+  let entryReasoning = '';
+  if (data.transactions) {
+    const buyTx = data.transactions.find(tx => tx.type === 'BUY' && tx.symbol === t.symbol && tx.timestamp === t.buyDate);
+    if (buyTx) entryReasoning = buyTx.reasoning || buyTx.reason || '';
+  }
+
+  let html = '';
+
+  // ── Header ──
+  html += `<div class="td-header">
+    <div class="td-header-top">
+      <span class="td-symbol">${escapeHtml(t.symbol)}</span>
+      <span class="td-sector">${escapeHtml(t.sector || '')}</span>
+      <span class="td-badge ${exitBadgeClass(t.exitReason)}">${exitBadgeLabel(t.exitReason)}</span>
+    </div>
+    <div class="td-header-metrics">
+      <span class="td-header-metric">${formatDate(t.buyDate)} &rarr; ${formatDate(t.sellDate)} <strong>(${holdDays})</strong></span>
+      <span class="td-header-metric">$${t.buyPrice?.toFixed(2) || '—'} &rarr; $${t.sellPrice?.toFixed(2) || '—'}</span>
+      <span class="td-header-metric ${plClass}"><strong>${plSign}$${(t.profitLoss || 0).toFixed(2)}</strong> (${plSign}${(t.returnPercent || 0).toFixed(1)}%)</span>
+      ${t.positionSizePercent ? `<span class="td-header-metric">${t.positionSizePercent.toFixed(1)}% of portfolio</span>` : ''}
+    </div>
+  </div>`;
+
+  // ── Entry Conditions ──
+  html += `<div class="td-section">
+    <div class="td-section-title">Entry Conditions</div>
+    <div class="td-grid">
+      ${metricHTML('Composite', et.compositeScore, { decimals: 1 })}
+      ${metricHTML('Momentum', et.momentumScore, { decimals: 1 })}
+      ${metricHTML('RS', et.rsScore, { decimals: 0 })}
+      ${metricHTML('RSI', et.rsi, { decimals: 0 })}
+      ${metricHTML('MACD', et.macdCrossover)}
+      ${metricHTML('Structure', et.structure)}
+      ${metricHTML('DTC', et.daysToCover, { decimals: 1 })}
+      ${metricHTML('Volume', et.volumeTrend)}
+      ${metricHTML('VIX', et.vixLevel, { decimals: 1 })}
+      ${metricHTML('Regime', t.entryMarketRegime)}
+      ${metricHTML('Sector Flow', et.sectorRotation?.direction || et.sectorRotation)}
+      ${metricHTML('Entry Signal', et.entrySignal?.label || et.entrySignal)}
+    </div>
+  </div>`;
+
+  // ── Exit Conditions ──
+  const hasExitData = xt.rsi != null || xt.macdCrossover || xt.structure;
+  html += `<div class="td-section">
+    <div class="td-section-title">Exit Conditions</div>
+    ${hasExitData ? `<div class="td-grid">
+      ${metricHTML('RSI', xt.rsi, { decimals: 0 })}
+      ${metricHTML('MACD', xt.macdCrossover)}
+      ${metricHTML('Structure', xt.structure)}
+      ${metricHTML('VIX', xt.vixLevel, { decimals: 1 })}
+      ${metricHTML('Regime', t.exitMarketRegime)}
+    </div>` : '<div class="td-empty">No exit technical data recorded</div>'}
+  </div>`;
+
+  // ── Health Over Time ──
+  const hh = xt.healthHistory || [];
+  html += `<div class="td-section">
+    <div class="td-section-title">Health Over Time</div>
+    ${hh.length >= 2
+      ? '<div class="td-chart-container"><canvas id="healthDetailChart"></canvas></div>'
+      : '<div class="td-empty">Health tracking started after this trade was closed</div>'}
+  </div>`;
+
+  // ── Notes & Context ──
+  if (entryReasoning || t.exitReasoning) {
+    html += `<div class="td-section">
+      <div class="td-section-title">Notes</div>
+      ${entryReasoning ? `<div class="td-notes" style="margin-bottom:8px"><div class="td-notes-label">Entry Reasoning</div>${escapeHtml(entryReasoning)}</div>` : ''}
+      ${t.exitReasoning ? `<div class="td-notes"><div class="td-notes-label">Exit Reasoning</div>${escapeHtml(t.exitReasoning)}</div>` : ''}
+    </div>`;
+  }
+
+  // ── Post-Exit Tracking ──
+  const trk = t.tracking || {};
+  if (trk.priceAfter3d != null || trk.priceAfter5d != null || trk.priceAfter1Week != null) {
+    html += `<div class="td-section">
+      <div class="td-section-title">Post-Exit</div>
+      <div class="td-grid">
+        ${trk.priceAfter3d != null ? metricHTML('After 3 Days', '$' + trk.priceAfter3d.toFixed(2)) : ''}
+        ${trk.priceAfter5d != null ? metricHTML('After 5 Days', '$' + trk.priceAfter5d.toFixed(2)) : ''}
+        ${trk.priceAfter1Week != null ? metricHTML('After 1 Week', '$' + trk.priceAfter1Week.toFixed(2)) : ''}
+      </div>
+    </div>`;
+  }
+
+  return html;
+}
+
+function renderHealthChart(t) {
+  const hh = (t.exitTechnicals || {}).healthHistory || [];
+  if (hh.length < 2) return;
+
+  const canvas = document.getElementById('healthDetailChart');
+  if (!canvas) return;
+
+  const labels = hh.map(h => h.date);
+  const rsData = hh.map(h => h.rs);
+  const momData = hh.map(h => h.momentum != null ? h.momentum * 10 : null);
+  const rsiData = hh.map(h => h.rsi);
+
+  healthChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'RS', data: rsData, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', tension: 0.3, pointRadius: 2, borderWidth: 2 },
+        { label: 'Momentum (×10)', data: momData, borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.1)', tension: 0.3, pointRadius: 2, borderWidth: 2 },
+        { label: 'RSI', data: rsiData, borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.1)', tension: 0.3, pointRadius: 2, borderWidth: 2 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'top', labels: { color: '#78786e', font: { size: 11, family: 'Inter' }, boxWidth: 12, padding: 12 } },
+        tooltip: {
+          backgroundColor: '#22222b', borderColor: 'rgba(255,200,100,0.12)', borderWidth: 1,
+          titleColor: '#f5f5f0', bodyColor: '#a8a8a0', cornerRadius: 8, padding: 10,
+          callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—') }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,200,100,0.06)' }, ticks: { color: '#78786e', font: { size: 10 }, maxTicksLimit: 10 } },
+        y: { min: 0, max: 100, grid: { color: 'rgba(255,200,100,0.06)' }, ticks: { color: '#78786e', font: { size: 10 }, stepSize: 20 } }
+      }
+    }
+  });
 }
 
 // Filter input listener
