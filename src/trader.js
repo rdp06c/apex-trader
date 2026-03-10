@@ -10076,9 +10076,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         exitConviction: null,
                         exitMarketRegime: portfolio.lastMarketRegime?.regime || null,
                         exitHoldingsCount: Object.keys(portfolio.holdings).length,
-                        exitTechnicals: {
-                            healthHistory: portfolio.holdingTheses?.[symbol]?.healthHistory || []
-                        },
+                        exitTechnicals: (() => {
+                            const c = (portfolio.lastCandidateScores?.candidates || []).find(cs => cs.symbol === symbol);
+                            return {
+                                rsi: c?.rsi ?? c?.serverRsi ?? null,
+                                macdCrossover: c?.macdCrossover || null,
+                                macdHistogram: c?.macdHistogram ?? null,
+                                structure: c?.structure || null,
+                                structureScore: c?.structureScore ?? null,
+                                compositeScore: c?.compositeScore ?? null,
+                                momentum: c?.momentum ?? null,
+                                rs: c?.rs ?? null,
+                                volumeTrend: c?.volumeTrend || null,
+                                sectorFlow: c?.sectorFlow || null,
+                                vixLevel: portfolio.lastVIX?.level ?? null,
+                                healthHistory: portfolio.holdingTheses?.[symbol]?.healthHistory || []
+                            };
+                        })(),
                         positionSizePercent: originalBuyTx.positionSizePercent || null,
                         tracking: { priceAfter3d: null, priceAfter5d: null, tracked: false },
                         manual: true

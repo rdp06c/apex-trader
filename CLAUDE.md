@@ -29,6 +29,8 @@ server/
     backups/        ← Last 5 portfolio saves (gitignored)
     scanner-state.json ← Scanner readings and alert history (gitignored)
     scan-state.json ← Full scan results and top scorers (gitignored)
+analytics.html        ← Analytics page (standalone, 20+ charts with global filters)
+journal.html          ← Trade journal page (standalone, trade detail modal)
 build.cmd / build.sh  ← Build scripts
 index.html            ← Generated output (DO NOT EDIT DIRECTLY)
 package.json          ← Express, node-cron dependencies
@@ -98,7 +100,9 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 - Gets `getCurrentPositionBuys()` BEFORE pushing sell transaction (critical ordering)
 - Computes P&L, return%, hold time from matched buy transactions
 - Auto-classifies exit reason (profit_target, stop_loss, catalyst_failure, manual)
-- Pushes to `closedTrades` for Trade Insights analytics
+- Captures `exitTechnicals` from `lastCandidateScores`: RSI, MACD, structure, composite score, momentum, RS, volume trend, sector flow, VIX
+- Preserves `healthHistory` from `holdingTheses` into `closedTrade.exitTechnicals.healthHistory` before thesis deletion
+- Pushes to `closedTrades` for Trade Insights and Journal analytics
 
 **Undo Last Trade** (`undoLastTrade`):
 - Appears after any manual buy/sell, disappears on page reload or Scan Market
@@ -118,7 +122,9 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 - `SIGNAL_COMBO_DEFS` + `evaluateComboHeat()` — tests each stock's current signals against 18 combos, cross-references calibration results to show green dots (hot combos) and red dots (cold combos) in the Heat column. Requires calibration data to function.
 - Score driver badge (S/M) indicates whether a stock's score is signal-driven or momentum-driven.
 
-**Holdings Health**: Holdings cards show a compact inline stat line (MOM, RS with entry→current arrows, RSI, MACD, Structure, DTC, CHoCH, Vol, Stop/Target levels) and a footer row (Cost, Now, Entry, News count with tooltip). Sell/profit signals display as a centered badge in the card header. Cards are sortable by Date Added, Total P&L%, Daily Change%, Position Size, or Health (with ascending/descending toggle). Custom themed dropdown replaces native `<select>` for dark mode compatibility.
+**Holdings Health**: Holdings cards show a compact inline stat line (MOM, RS, RSI with mini SVG sparklines showing trajectory, plus MACD, Structure, DTC, CHoCH, Vol, Stop/Target levels) and a footer row (Cost, Now, Entry, News count with tooltip). Sell/profit signals display as a centered badge in the card header. Cards are sortable by Date Added, Total P&L%, Daily Change%, Position Size, or Health (with ascending/descending toggle). Custom themed dropdown replaces native `<select>` for dark mode compatibility.
+
+**Health History Tracking**: Daily health snapshots per holding stored in `holdingTheses[symbol].healthHistory[]`. Seeded at buy time from entry data + caches. Updated daily by server full scan (RS, momentum, RSI, MACD, structure, compositeScore, price). Deduped by date, capped at 120 entries. Powers sparklines on holdings cards and health-over-time charts in journal detail view. Preserved into `closedTrade.exitTechnicals.healthHistory` on sell.
 
 **Trade Insights** (`updateLearningInsightsDisplay`): Renders in the Trade Insights section (expanded by default). Shows:
 - Trading rules derived from `deriveTradingRules()` — patterns that work/don't work
@@ -132,6 +138,14 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 **Chat Interface** (`sendMessage`): Conversational with portfolio context. Gated behind activation button. Special commands: `calibrate`, `backtest YYYY-MM-DD`. Uses Cloudflare Worker proxy to Claude API.
 
 **Google Drive**: OAuth 2.0 backup/restore. Optional — Pi server is the primary storage now.
+
+## Analytics Page (`analytics.html`)
+
+Standalone page with 20+ Chart.js visualizations of closed trade data. Global filter bar: date presets (All/30D/90D/YTD), custom date range, outcome (All/Wins/Losses), sector dropdown, symbol search. Filters work by swapping `data.closedTrades` with a filtered subset before `renderAll()` — zero changes needed in individual render functions. Key sections: return distribution, cumulative P&L, drawdown, streaks, win rate by sector/month/hold time, entry signal accuracy, "Did I Sell Too Early?" (5D post-exit tracking with bar chart, detail table, pattern detection).
+
+## Journal Page (`journal.html`)
+
+Standalone trade journal with transaction log and closed trades table. Filters: symbol search, outcome (win/loss), sector. Trade detail modal opens on row click — shows trade header (symbol, dates, P&L, exit badge), entry conditions grid, exit conditions grid, health-over-time Chart.js line chart (RS, Momentum×10, RSI from healthHistory), entry/exit reasoning notes, and post-exit price tracking.
 
 ## Background Scanner
 

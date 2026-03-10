@@ -849,13 +849,18 @@ function renderTradeDetailHTML(t) {
   </div>`;
 
   // ── Exit Conditions ──
-  const hasExitData = xt.rsi != null || xt.macdCrossover || xt.structure;
+  const hasExitData = xt.rsi != null || xt.macdCrossover || xt.structure || xt.compositeScore != null;
   html += `<div class="td-section">
     <div class="td-section-title">Exit Conditions</div>
     ${hasExitData ? `<div class="td-grid">
+      ${metricHTML('Composite', xt.compositeScore, { decimals: 1 })}
+      ${metricHTML('Momentum', xt.momentum, { decimals: 1 })}
+      ${metricHTML('RS', xt.rs, { decimals: 0 })}
       ${metricHTML('RSI', xt.rsi, { decimals: 0 })}
       ${metricHTML('MACD', xt.macdCrossover)}
       ${metricHTML('Structure', xt.structure)}
+      ${metricHTML('Volume', xt.volumeTrend)}
+      ${metricHTML('Sector Flow', xt.sectorFlow)}
       ${metricHTML('VIX', xt.vixLevel, { decimals: 1 })}
       ${metricHTML('Regime', t.exitMarketRegime)}
     </div>` : '<div class="td-empty">No exit technical data recorded</div>'}
