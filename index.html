@@ -13626,10 +13626,36 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 if (!portfolio.holdingTheses[symbol]) {
                     portfolio.holdingTheses[symbol] = newThesis;
                 } else {
-                    // Backfill null fields on existing thesis
+                    // Adding to existing position — backfill null fields
                     const existing = portfolio.holdingTheses[symbol];
                     for (const [k, v] of Object.entries(newThesis)) {
                         if (existing[k] == null && v != null) existing[k] = v;
+                    }
+
+                    // Recalculate blended entry price from all buys in current position
+                    const allBuys = getCurrentPositionBuys(symbol);
+                    if (allBuys.length > 1) {
+                        const totalCost = allBuys.reduce((sum, t) => sum + (t.cost || t.price * t.shares), 0);
+                        const totalShares = allBuys.reduce((sum, t) => sum + t.shares, 0);
+                        const blendedPrice = totalCost / totalShares;
+                        existing.entryPrice = Math.round(blendedPrice * 100) / 100;
+
+                        // Recalculate stop and target from blended price
+                        const atr = entryBars ? calculateATR(entryBars) : null;
+                        if (atr) {
+                            existing.stopPrice = Math.round((blendedPrice - 2 * atr) * 100) / 100;
+                        }
+                        const fib = entryBars ? calculateFibTargets(entryBars) : null;
+                        if (fib?.type === 'bullish') existing.targetPrice = fib.fib100;
+                        else if (fib?.type === 'bearish') existing.targetPrice = fib.swingHigh;
+
+                        existing.entryATR = atr;
+                    }
+
+                    // Update peak price if add-on price exceeds it
+                    if (price > (existing.peakPrice || 0)) {
+                        existing.peakPrice = price;
+                        existing.peakDate = timestamp;
                     }
                 }
 
@@ -13727,7 +13753,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         returnPercent,
                         buyDate: buyTransactions[0].timestamp,
                         sellDate: timestamp,
-                        holdTime: new Date(timestamp).getTime() - new Date(buyTransactions[0].timestamp).getTime(),
+                        holdTime: (() => {
+                            // Weighted average hold time across all buy lots
+                            const sellMs = new Date(timestamp).getTime();
+                            let weightedSum = 0, totalShrs = 0;
+                            for (const bt of buyTransactions) {
+                                const held = sellMs - new Date(bt.timestamp).getTime();
+                                weightedSum += held * bt.shares;
+                                totalShrs += bt.shares;
+                            }
+                            return totalShrs > 0 ? weightedSum / totalShrs : sellMs - new Date(buyTransactions[0].timestamp).getTime();
+                        })(),
                         entryConviction: originalBuyTx.conviction || null,
                         entryTechnicals: originalBuyTx.entryTechnicals || {},
                         entryMarketRegime: originalBuyTx.entryMarketRegime || null,
