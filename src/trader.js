@@ -12593,14 +12593,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 // Entry technicals (from thesis)
                 let entryLine = '';
                 if (thesis) {
+                    const fmt1 = v => typeof v === 'number' ? v.toFixed(1) : String(v);
+                    const fmtR = v => typeof v === 'number' ? Math.round(v) : String(v);
                     const parts = [];
-                    if (thesis.entryMomentum != null) parts.push(`MOM=${typeof thesis.entryMomentum === 'number' ? thesis.entryMomentum.toFixed(1) : thesis.entryMomentum}`);
-                    if (thesis.entryRS != null) parts.push(`RS=${Math.round(thesis.entryRS)}`);
-                    if (thesis.entryRSI != null) parts.push(`RSI=${Math.round(thesis.entryRSI)}`);
+                    if (thesis.entryMomentum != null) parts.push(`MOM=${fmt1(thesis.entryMomentum)}`);
+                    if (thesis.entryRS != null) parts.push(`RS=${fmtR(thesis.entryRS)}`);
+                    if (thesis.entryRSI != null) parts.push(`RSI=${fmtR(thesis.entryRSI)}`);
                     if (thesis.entryMACDCrossover) parts.push(`MACD=${thesis.entryMACDCrossover}`);
                     if (thesis.entryStructure) parts.push(`Struct=${thesis.entryStructure}`);
-                    if (thesis.entryCompositeScore != null) parts.push(`Score=${thesis.entryCompositeScore.toFixed(1)}`);
-                    if (thesis.entryVIX != null) parts.push(`VIX=${thesis.entryVIX.toFixed(1)}`);
+                    if (thesis.entryCompositeScore != null) parts.push(`Score=${fmt1(thesis.entryCompositeScore)}`);
+                    if (thesis.entryVIX != null) parts.push(`VIX=${fmt1(thesis.entryVIX)}`);
                     if (parts.length) entryLine = `  Entry: ${parts.join(' ')}`;
                 }
 
