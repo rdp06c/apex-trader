@@ -8735,17 +8735,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             container.innerHTML = html;
         }
 
-        // Health trend indicator from daily snapshots
-        function getHealthTrend(healthHistory, metric, currentValue) {
-            if (!healthHistory || healthHistory.length < 2 || currentValue == null) return '';
-            const lookback = healthHistory.length >= 5 ? healthHistory[healthHistory.length - 5] : healthHistory[0];
-            const oldVal = lookback[metric];
-            if (oldVal == null) return '';
-            const delta = currentValue - oldVal;
-            const threshold = metric === 'rs' ? 5 : metric === 'momentum' ? 1 : 5;
-            if (delta > threshold) return '<span class="hc-trend up">\u25B2</span>';
-            if (delta < -threshold) return '<span class="hc-trend down">\u25BC</span>';
-            return '<span class="hc-trend flat">\u25B8</span>';
+        // Mini sparkline SVG from health history snapshots
+        function renderHealthSparkline(healthHistory, metric) {
+            if (!healthHistory || healthHistory.length < 2) return '';
+            const values = healthHistory.map(h => h[metric]).filter(v => v != null);
+            if (values.length < 2) return '';
+            const w = 48, ht = 14;
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const range = max - min || 1;
+            const pts = values.map((v, i) => {
+                const x = (i / (values.length - 1)) * w;
+                const y = ht - 1 - ((v - min) / range) * (ht - 2);
+                return x.toFixed(1) + ',' + y.toFixed(1);
+            }).join(' ');
+            const trend = values[values.length - 1] - values[0];
+            const color = trend > 0 ? 'var(--green)' : trend < 0 ? 'var(--red)' : 'var(--text-faint)';
+            return '<svg class="hc-sparkline" width="' + w + '" height="' + ht + '" viewBox="0 0 ' + w + ' ' + ht + '"><polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         }
 
         // Update UI
@@ -8830,7 +8836,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 if (now != null) {
                                     const delta = now - entry;
                                     const cls = delta <= -3 ? 'negative' : delta >= 3 ? 'positive' : '';
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">MOM</span><span class="hc-stat-val">' + entry.toFixed(1) + '<span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span>' + getHealthTrend(h._thesis?.healthHistory, 'momentum', now) + '</span></span>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">MOM</span><span class="hc-stat-val">' + entry.toFixed(1) + '<span class="health-arrow ' + cls + '">\u2192' + now.toFixed(1) + '</span>' + renderHealthSparkline(h._thesis?.healthHistory, 'momentum') + '</span></span>';
                                 }
                                 return '<span class="hc-stat"><span class="hc-stat-lbl">MOM</span><span class="hc-stat-val">' + entry.toFixed(1) + '</span></span>';
                             })()}
@@ -8841,7 +8847,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 if (now != null) {
                                     const delta = now - entry;
                                     const cls = delta <= -15 ? 'negative' : delta >= 15 ? 'positive' : '';
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RS</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span>' + getHealthTrend(h._thesis?.healthHistory, 'rs', now) + '</span></span>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RS</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span>' + renderHealthSparkline(h._thesis?.healthHistory, 'rs') + '</span></span>';
                                 }
                                 return '<span class="hc-stat"><span class="hc-stat-lbl">RS</span><span class="hc-stat-val">' + Math.round(entry) + '</span></span>';
                             })()}
@@ -8851,7 +8857,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 if (entry != null && now != null) {
                                     const delta = now - entry;
                                     const cls = delta <= -20 ? 'negative' : delta >= 20 ? 'positive' : '';
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span>' + getHealthTrend(h._thesis?.healthHistory, 'rsi', now) + '</span></span>';
+                                    return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(entry) + '<span class="health-arrow ' + cls + '">\u2192' + Math.round(now) + '</span>' + renderHealthSparkline(h._thesis?.healthHistory, 'rsi') + '</span></span>';
                                 }
                                 if (now != null) {
                                     return '<span class="hc-stat"><span class="hc-stat-lbl">RSI</span><span class="hc-stat-val">' + Math.round(now) + '</span></span>';
@@ -9964,6 +9970,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     for (const [k, v] of Object.entries(newThesis)) {
                         if (existing[k] == null && v != null) existing[k] = v;
                     }
+                }
+
+                // Seed health history with entry data
+                const thesis = portfolio.holdingTheses[symbol];
+                if (!thesis.healthHistory) thesis.healthHistory = [];
+                const todayDate = new Date().toISOString().slice(0, 10);
+                if (thesis.healthHistory.length === 0 || thesis.healthHistory[thesis.healthHistory.length - 1].date !== todayDate) {
+                    thesis.healthHistory.push({
+                        date: todayDate,
+                        price: price,
+                        rs: cachedScores?.rs ?? null,
+                        momentum: signals?.momentumScore ?? cachedScores?.momentum ?? null,
+                        rsi: signals?.rsi ?? null,
+                        macd: signals?.macd?.crossover || null,
+                        structure: signals?.structure?.structure || null,
+                        compositeScore: cachedScores?.compositeScore ?? null
+                    });
                 }
 
                 savePortfolio();
