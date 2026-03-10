@@ -1211,13 +1211,13 @@ function renderRSScatter() {
     type: 'bubble',
     data: {
       datasets: [
-        { label: 'Wins', data: points.filter(p => p.win), backgroundColor: COLORS.win + '88', borderWidth: 0 },
-        { label: 'Losses', data: points.filter(p => !p.win), backgroundColor: COLORS.loss + '88', borderWidth: 0 }
+        { label: 'Wins', data: points.filter(p => p.win), backgroundColor: COLORS.win + '88', borderWidth: 0, clip: false },
+        { label: 'Losses', data: points.filter(p => !p.win), backgroundColor: COLORS.loss + '88', borderWidth: 0, clip: false }
       ]
     },
     options: {
       responsive: true,
-      layout: { padding: { right: 10 } },
+      layout: { padding: { right: 15 } },
       plugins: {
         legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
         tooltip: {
@@ -1310,13 +1310,13 @@ function renderRSvsRSI() {
     type: 'bubble',
     data: {
       datasets: [
-        { label: 'Wins', data: points.filter(p => p.win), backgroundColor: COLORS.win + '88', borderWidth: 0 },
-        { label: 'Losses', data: points.filter(p => !p.win), backgroundColor: COLORS.loss + '88', borderWidth: 0 }
+        { label: 'Wins', data: points.filter(p => p.win), backgroundColor: COLORS.win + '88', borderWidth: 0, clip: false },
+        { label: 'Losses', data: points.filter(p => !p.win), backgroundColor: COLORS.loss + '88', borderWidth: 0, clip: false }
       ]
     },
     options: {
       responsive: true,
-      layout: { padding: { right: 10, top: 10 } },
+      layout: { padding: { right: 15, top: 15 } },
       plugins: {
         legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
         tooltip: {
