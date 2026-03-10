@@ -12296,10 +12296,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     targetDist = ((targetPrice - price) / price * 100).toFixed(1);
                 }
                 const structLabel = h._struct?.structure || '—';
+                const mom = h._candidateNow?.momentum != null ? +h._candidateNow.momentum.toFixed(1) : null;
+                const momEntry = h.entryMomentum != null ? +h.entryMomentum.toFixed(1) : null;
+                const rs = h._candidateNow?.rs != null ? Math.round(h._candidateNow.rs) : null;
+                const rsEntry = h.entryRS != null ? Math.round(h.entryRS) : null;
                 const rsi = h._rsiVal != null ? Math.round(h._rsiVal) : '—';
                 const rsiEntry = h.entryRSI != null ? Math.round(h.entryRSI) : null;
                 const macd = h._macdResult?.crossover || '—';
-                return { ...h, signals, level, price, stopPrice, stopDist, targetPrice, targetDist, structLabel, rsi, rsiEntry, macd };
+                return { ...h, signals, level, price, stopPrice, stopDist, targetPrice, targetDist, structLabel, mom, momEntry, rs, rsEntry, rsi, rsiEntry, macd };
             });
 
             // Sort: danger first, then caution, then healthy
@@ -12318,7 +12322,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             html += '<div class="risk-table-wrap"><table class="risk-table">';
             html += '<thead><tr>';
             html += '<th>Symbol</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>Thesis</th>';
-            html += '<th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
+            html += '<th>MOM</th><th>RS</th><th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
             html += '</tr></thead><tbody>';
 
             for (const r of rows) {
@@ -12362,6 +12366,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const thesisLabel = thesisStatus.type ? ` ${thesisStatus.type[0].toUpperCase()}` : '';
                 const thesisTooltip = thesisStatus.reasons.length > 0 ? thesisStatus.reasons.join('\n') : '';
                 html += `<td><span class="risk-thesis-badge ${thesisStatus.status}" title="${escapeHtml(thesisTooltip)}">${thesisIcon}${thesisLabel}</span></td>`;
+                const momDeltaColor = r.momEntry != null && r.mom != null
+                    ? (r.mom - r.momEntry <= -3 ? 'color:#ef4444' : r.mom - r.momEntry >= 3 ? 'color:#22c55e' : '')
+                    : '';
+                const momDisplay = r.momEntry != null && r.mom != null
+                    ? `${r.momEntry}<span style="opacity:0.5">\u2192</span><span style="${momDeltaColor}">${r.mom}</span>`
+                    : r.mom != null ? `${r.mom}` : r.momEntry != null ? `${r.momEntry}` : '\u2014';
+                html += `<td>${momDisplay}</td>`;
+                const rsDeltaColor = r.rsEntry != null && r.rs != null
+                    ? (r.rs - r.rsEntry <= -15 ? 'color:#ef4444' : r.rs - r.rsEntry >= 15 ? 'color:#22c55e' : '')
+                    : '';
+                const rsDisplay = r.rsEntry != null && r.rs != null
+                    ? `${r.rsEntry}<span style="opacity:0.5">\u2192</span><span style="${rsDeltaColor}">${r.rs}</span>`
+                    : r.rs != null ? `${r.rs}` : r.rsEntry != null ? `${r.rsEntry}` : '\u2014';
+                html += `<td>${rsDisplay}</td>`;
                 html += `<td><span class="risk-struct-badge ${structClass}">${r.structLabel}</span></td>`;
                 html += `<td>${rsiDisplay}</td>`;
                 html += `<td style="${macdColor}">${r.macd}</td>`;
