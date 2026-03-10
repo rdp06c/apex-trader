@@ -235,7 +235,7 @@ const DEFAULT_WEIGHTS = {
     smaProxNear: 2.0, smaProxBelow: 1.0, smaProxFar15: -1.5, smaProxFar10: -0.5,
     smaCrossoverBullish: 2.0, smaCrossoverBearish: -2.0,
     fvgBullish: 0.5, fvgBearish: -0.5,
-    entryMultExtreme: 0.3, entryMultExtended: 0.6, entryMultPullback: 1.3
+    entryMultExtreme: 0.3, entryMultExtended: 0.6, entryMultPullback: 1.15
 };
 
 function getActiveWeights(calibratedWeights, vixLevel) {
@@ -661,6 +661,7 @@ const ENTRY_SIGNAL_PATTERNS = [
     {
         id: 'reversal',
         label: 'Reversal Entry',
+        badge: 'REV',
         criteria: [
             { id: 'macd', label: 'MACD Bull', test: c => c.macdCrossover === 'bullish' },
             { id: 'rsi', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
@@ -669,6 +670,75 @@ const ENTRY_SIGNAL_PATTERNS = [
         ],
         minMatch: 2,
         requireAny: ['macd', 'structure']
+    },
+    {
+        id: 'momentum_cont',
+        label: 'Momentum Continuation',
+        badge: 'MOM',
+        calibrationKey: 'momentum_trend_confirm',
+        criteria: [
+            { id: 'momentum', label: 'Mom 5-8', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 5 && (c.momentum ?? c.momentumScore ?? 0) <= 8 },
+            { id: 'rs', label: 'RS>60', test: c => (c.rs ?? 0) > 60 },
+            { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 },
+            { id: 'volume', label: 'Vol Confirm', test: c => (c.volumeTrend ?? c.volumeRatio ?? 1) > 1.1 }
+        ],
+        minMatch: 3,
+        requireAny: ['structure', 'momentum']
+    },
+    {
+        id: 'breakout',
+        label: 'Breakout',
+        badge: 'BRK',
+        calibrationKey: 'breakout_sma_vol',
+        criteria: [
+            { id: 'sma_cross', label: 'SMA Bull Cross', test: c => (c.smaCrossover === 'bullish' || c.smaCrossover?.crossover === 'bullish') },
+            { id: 'accel', label: 'Accelerating', test: c => c.isAccelerating === true },
+            { id: 'volume', label: 'Vol>1.3x', test: c => (c.volumeRatio ?? 0) > 1.3 },
+            { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 1 }
+        ],
+        minMatch: 3,
+        requireAny: ['sma_cross', 'accel']
+    },
+    {
+        id: 'squeeze',
+        label: 'Squeeze Setup',
+        badge: 'SQZ',
+        calibrationKey: 'vol_ratio_high_struct',
+        criteria: [
+            { id: 'dtc', label: 'DTC>5', test: c => (c.daysToCover ?? c.dtc ?? 0) > 5 },
+            { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 1 },
+            { id: 'sector', label: 'Sector Inflow', test: c => { const f = c.sectorFlow || c.sectorRotation || ''; return f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow'; } }
+        ],
+        minMatch: 2,
+        requireAny: ['dtc', 'structure']
+    },
+    {
+        id: 'sector_leader',
+        label: 'Sector Leader',
+        badge: 'LDR',
+        calibrationKey: 'sector_leader_mom',
+        criteria: [
+            { id: 'rs', label: 'RS>70', test: c => (c.rs ?? 0) > 70 },
+            { id: 'sector', label: 'Sector Inflow', test: c => { const f = c.sectorFlow || c.sectorRotation || ''; return f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow'; } },
+            { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 },
+            { id: 'momentum', label: 'Mom 3-7', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 3 && (c.momentum ?? c.momentumScore ?? 0) <= 7 }
+        ],
+        minMatch: 3,
+        requireAny: ['rs', 'sector']
+    },
+    {
+        id: 'exhausted',
+        label: 'Exhausted Runner',
+        badge: 'AVOID',
+        antiPattern: true,
+        criteria: [
+            { id: 'rsi_high', label: 'RSI>70', test: c => c.rsi != null && c.rsi > 70 },
+            { id: 'runner', label: 'Day +5%', test: c => (c.dayChange ?? c.todayChange ?? 0) >= 5 },
+            { id: 'mom_high', label: 'Mom 9+', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 9 },
+            { id: 'vol_decline', label: 'Vol Declining', test: c => (c.volumeTrend ?? c.volumeRatio ?? 1) < 0.85 }
+        ],
+        minMatch: 2,
+        requireAny: ['rsi_high', 'runner', 'mom_high']
     }
 ];
 
@@ -676,6 +746,8 @@ function evaluateEntrySignals(candidate) {
     const results = [];
     let bestMatch = null;
     let bestMatchCount = 0;
+    let bestPatternId = null;
+    let antiPatternMatch = null;
 
     for (const pattern of ENTRY_SIGNAL_PATTERNS) {
         const criteriaResults = {};
@@ -697,16 +769,19 @@ function evaluateEntrySignals(candidate) {
             if (hasRequired) match = 'partial';
         }
 
-        const result = { id: pattern.id, label: pattern.label, match, matchCount, totalCriteria: total, criteria: criteriaResults };
+        const result = { id: pattern.id, label: pattern.label, badge: pattern.badge, match, matchCount, totalCriteria: total, criteria: criteriaResults, calibrationKey: pattern.calibrationKey, antiPattern: pattern.antiPattern };
         results.push(result);
 
-        if (matchCount > bestMatchCount) {
+        if (pattern.antiPattern && match) {
+            antiPatternMatch = result;
+        } else if (match && matchCount > bestMatchCount) {
             bestMatchCount = matchCount;
             bestMatch = match;
+            bestPatternId = pattern.id;
         }
     }
 
-    return { patterns: results, bestMatch, bestMatchCount };
+    return { patterns: results, bestMatch, bestMatchCount, bestPatternId, antiPatternMatch };
 }
 
 module.exports = {

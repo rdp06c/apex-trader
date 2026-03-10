@@ -246,7 +246,7 @@ async function runFullScan({ force = false } = {}) {
                 serverRsi: si.serverRsi ?? null,
                 serverMacd: si.serverMacd ?? null,
                 serverSma50: si.serverSma50 ?? null,
-                entrySignal: evaluateEntrySignals({ macdCrossover: macd?.crossover || 'none', rsi, structure: structure.structure, structureScore: structure.structureScore, return5d: momentum.totalReturn5d ?? null })
+                entrySignal: evaluateEntrySignals({ macdCrossover: macd?.crossover || 'none', rsi, structure: structure.structure, structureScore: structure.structureScore, return5d: momentum.totalReturn5d ?? null, momentum: momentum.score, momentumScore: momentum.score, rs: rs.rsScore, volumeTrend: momentum.volumeTrend, volumeRatio: volRatio?.ratio ?? null, dayChange: priceData.changePercent, isAccelerating: momentum.isAccelerating, daysToCover, sectorFlow, smaCrossover: smaCrossover?.crossover || 'none' })
             });
             scored++;
         }
