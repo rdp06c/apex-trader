@@ -16198,13 +16198,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const unrealizedPL = totalValue - costBasis;
             const totalReturnPct = costBasis > 0 ? ((realizedPL + unrealizedPL) / costBasis * 100).toFixed(2) : '0.00';
             let spyLine = '';
-            if (portfolio.spyBaseline) {
-                const spySnap = snapshotCache?.['SPY'];
-                const spyPrice = spySnap?.lastTrade?.p || spySnap?.day?.c;
-                if (spyPrice) {
-                    const spyReturn = ((spyPrice - portfolio.spyBaseline.price) / portfolio.spyBaseline.price * 100).toFixed(2);
-                    spyLine = ` | SPY: ${spyReturn}% | Alpha: ${(parseFloat(totalReturnPct) - parseFloat(spyReturn)).toFixed(2)}%`;
-                }
+            if (portfolio.spyBaseline && portfolio.spyCurrent?.price) {
+                const spyReturn = ((portfolio.spyCurrent.price - portfolio.spyBaseline.price) / portfolio.spyBaseline.price * 100).toFixed(2);
+                spyLine = ` | SPY: ${spyReturn}% | Alpha: ${(parseFloat(totalReturnPct) - parseFloat(spyReturn)).toFixed(2)}%`;
             }
 
             let sections = [];
