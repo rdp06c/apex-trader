@@ -307,6 +307,12 @@
     <canvas id="rsScatter"></canvas>
   </div>
 
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Entry RS vs. RSI</div>
+    <div class="section-sub">Are you buying the ideal setup? High RS + Low RSI = strong stock on a pullback</div>
+    <canvas id="rsRsiScatter"></canvas>
+  </div>
+
   <!-- ═══ MARKET CONTEXT ═══ -->
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Performance by Market Regime</div>
@@ -639,6 +645,7 @@ function renderAll() {
   renderCompositeScatter();
   renderRSIScatter();
   renderRSScatter();
+  renderRSvsRSI();
   renderRegimePerformance();
   renderSectorFlowChart();
   renderSectorChart();
@@ -1275,6 +1282,121 @@ function renderRSScatter() {
           ctx.font = "10px 'Inter', sans-serif";
           ctx.fillText('Midpoint', x50 + 4, area.top + 12);
         }
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+/* ── Entry RS vs RSI ─────────────────────────────────── */
+function renderRSvsRSI() {
+  const points = (data.closedTrades || [])
+    .filter(t => t.entryTechnicals && t.entryTechnicals.rsScore != null && t.entryTechnicals.rsi != null)
+    .map(t => ({
+      x: t.entryTechnicals.rsScore,
+      y: t.entryTechnicals.rsi,
+      r: 6,
+      symbol: t.symbol,
+      rs: t.entryTechnicals.rsScore,
+      rsi: t.entryTechnicals.rsi,
+      ret: t.returnPercent,
+      win: t.profitLoss > 0
+    }));
+
+  if (!points.length) {
+    const ctx = document.getElementById('rsRsiScatter').getContext('2d');
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "13px 'Inter', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('No trades with both RS and RSI data yet.', ctx.canvas.width / 2, 80);
+    return;
+  }
+
+  new Chart(document.getElementById('rsRsiScatter'), {
+    type: 'bubble',
+    data: {
+      datasets: [
+        { label: 'Wins', data: points.filter(p => p.win), backgroundColor: COLORS.win + '88', borderWidth: 0 },
+        { label: 'Losses', data: points.filter(p => !p.win), backgroundColor: COLORS.loss + '88', borderWidth: 0 }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          boxPadding: 6,
+          callbacks: {
+            label: ctx => {
+              const p = ctx.raw;
+              return [
+                `${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`,
+                `RS: ${p.rs.toFixed(0)} · RSI: ${p.rsi.toFixed(1)}`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'RS at Entry', color: COLORS.muted }, grid: { color: COLORS.gridLine }, min: 0, max: 100 },
+        y: { title: { display: true, text: 'RSI at Entry', color: COLORS.muted }, grid: { color: COLORS.gridLine }, min: 0, max: 100 }
+      }
+    },
+    plugins: [{
+      id: 'rsRsiQuadrants',
+      beforeDraw(chart) {
+        const xScale = chart.scales.x;
+        const yScale = chart.scales.y;
+        const ctx = chart.ctx;
+        const area = chart.chartArea;
+
+        ctx.save();
+
+        // Sweet spot quadrant: RS > 50, RSI < 40 (high RS, low RSI)
+        const xMid = xScale.getPixelForValue(50);
+        const yEntry = yScale.getPixelForValue(40);
+        if (xMid >= area.left && xMid <= area.right) {
+          ctx.fillStyle = 'rgba(52, 211, 153, 0.04)';
+          ctx.fillRect(xMid, yEntry, area.right - xMid, area.bottom - yEntry);
+          ctx.fillStyle = 'rgba(52, 211, 153, 0.40)';
+          ctx.font = "10px 'Inter', sans-serif";
+          ctx.fillText('Sweet spot', area.right - 58, area.bottom - 8);
+        }
+
+        // Danger zone: RS < 50, RSI > 70 (weak stock, overbought)
+        const yOB = yScale.getPixelForValue(70);
+        if (xMid >= area.left && yOB >= area.top) {
+          ctx.fillStyle = 'rgba(248, 113, 113, 0.04)';
+          ctx.fillRect(area.left, area.top, xMid - area.left, yOB - area.top);
+          ctx.fillStyle = 'rgba(248, 113, 113, 0.40)';
+          ctx.font = "10px 'Inter', sans-serif";
+          ctx.fillText('Danger zone', area.left + 4, area.top + 12);
+        }
+
+        // Grid lines
+        ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+
+        // Vertical at RS=50
+        ctx.beginPath();
+        ctx.moveTo(xMid, area.top);
+        ctx.lineTo(xMid, area.bottom);
+        ctx.stroke();
+
+        // Horizontal at RSI=40
+        ctx.beginPath();
+        ctx.moveTo(area.left, yEntry);
+        ctx.lineTo(area.right, yEntry);
+        ctx.stroke();
+
+        // Horizontal at RSI=70
+        ctx.strokeStyle = 'rgba(248, 113, 113, 0.20)';
+        ctx.beginPath();
+        ctx.moveTo(area.left, yOB);
+        ctx.lineTo(area.right, yOB);
+        ctx.stroke();
+
         ctx.restore();
       }
     }]
