@@ -3721,7 +3721,7 @@
 
         // Calibration weight system — data-driven scoring via runCalibrationSweep
         const DEFAULT_WEIGHTS = {
-            momentumMultiplier: 0.6, rsMultiplier: 0.6, structureMultiplier: 1.25,
+            momentumMultiplier: 0.3, rsMultiplier: 0.6, structureMultiplier: 1.25, // momentum halved: anti-predictive per calibration (r=-0.025)
             accelBonus: 1.5, consistencyBonus: 1.0,
             sectorInflow: 2.0, sectorModestInflow: 1.0, sectorOutflow: -1.0,
             rsiOversold30: 2.5, rsiOversold40: 1.5, rsiOversold50: 0.5,
@@ -17145,16 +17145,33 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             html += '</tbody></table></div>';
             html += `<div style="font-size:10px;color:var(--text-faint);margin-top:8px">Last scored: ${new Date(data.timestamp).toLocaleString()} — ${totalCount} stocks scored</div>`;
-            // Build legend with live calibration strength data
+            // Build legend with live calibration strength data, auto-sorted by edge
             const calCombos = portfolio.calibratedWeights?.signalCombos?.combos;
-            const calEdge = (key) => {
+            const getEdge = (key) => {
                 const c = calCombos?.[key];
-                if (!c || c.insufficient || (c.n ?? 0) < 100) return '';
-                return ` <span style="color:${c.vsBaselineReturn > 0 ? 'var(--green)' : 'var(--red)'}">(${c.vsBaselineReturn >= 0 ? '+' : ''}${c.vsBaselineReturn.toFixed(1)}%)</span>`;
+                if (!c || c.insufficient || (c.n ?? 0) < 100) return null;
+                return c.vsBaselineReturn;
             };
-            // REV uses RSI<40 + Bull Structure as representative combo
-            const revEdge = calCombos?.['rsi_low_structure_bull'] ? calEdge('rsi_low_structure_bull') : '';
-            const setupRankings = `REV reversal${revEdge} · QMO quiet momentum${calEdge('vol_ratio_low_mom')} · MOM momentum${calEdge('momentum_trend_confirm')} · LDR sector leader${calEdge('sector_leader_mom')} · SQZ squeeze${calEdge('vol_ratio_high_struct')}`;
+            const fmtEdge = (val) => {
+                if (val == null) return '';
+                return ` <span style="color:${val > 0 ? 'var(--green)' : 'var(--red)'}">(${val >= 0 ? '+' : ''}${val.toFixed(1)}%)</span>`;
+            };
+            const setups = [
+                { badge: 'REV', label: 'reversal', key: 'rsi_low_structure_bull' },
+                { badge: 'QMO', label: 'quiet momentum', key: 'vol_ratio_low_mom' },
+                { badge: 'MOM', label: 'momentum', key: 'momentum_trend_confirm' },
+                { badge: 'LDR', label: 'sector leader', key: 'sector_leader_mom' },
+                { badge: 'SQZ', label: 'squeeze', key: 'vol_ratio_high_struct' },
+            ];
+            // Sort by edge descending; nulls (no calibration data) go to the end
+            setups.sort((a, b) => {
+                const ea = getEdge(a.key), eb = getEdge(b.key);
+                if (ea == null && eb == null) return 0;
+                if (ea == null) return 1;
+                if (eb == null) return -1;
+                return eb - ea;
+            });
+            const setupRankings = setups.map(s => `${s.badge} ${s.label}${fmtEdge(getEdge(s.key))}`).join(' · ');
             html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum</span></div>`;
             container.innerHTML = html;
         }
