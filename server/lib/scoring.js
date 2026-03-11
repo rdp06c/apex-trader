@@ -686,18 +686,18 @@ const ENTRY_SIGNAL_PATTERNS = [
         requireAny: ['structure', 'momentum']
     },
     {
-        id: 'breakout',
-        label: 'Breakout',
-        badge: 'BRK',
-        calibrationKey: 'breakout_sma_vol',
+        id: 'quiet_momentum',
+        label: 'Quiet Momentum',
+        badge: 'QMO',
+        calibrationKey: 'vol_ratio_low_mom',
         criteria: [
-            { id: 'sma_cross', label: 'SMA Bull Cross', test: c => (c.smaCrossover === 'bullish' || c.smaCrossover?.crossover === 'bullish') },
-            { id: 'rsi', label: 'RSI<55', test: c => c.rsi != null && c.rsi < 55 },
+            { id: 'vol_low', label: 'Vol<0.5x', test: c => c.volumeRatio != null && c.volumeRatio < 0.5 },
+            { id: 'momentum', label: 'Mom 7+', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 7 },
             { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 1 },
-            { id: 'accel', label: 'Accelerating', test: c => c.isAccelerating === true }
+            { id: 'not_overbought', label: 'RSI<70', test: c => c.rsi == null || c.rsi < 70 }
         ],
         minMatch: 3,
-        requireAny: ['sma_cross', 'structure']
+        requireAny: ['vol_low', 'momentum']
     },
     {
         id: 'squeeze',

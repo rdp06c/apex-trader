@@ -6141,18 +6141,18 @@
                 requireAny: ['structure', 'momentum']
             },
             {
-                id: 'breakout',
-                label: 'Breakout',
-                badge: 'BRK',
-                calibrationKey: 'breakout_sma_vol',
+                id: 'quiet_momentum',
+                label: 'Quiet Momentum',
+                badge: 'QMO',
+                calibrationKey: 'vol_ratio_low_mom',
                 criteria: [
-                    { id: 'sma_cross', label: 'SMA Bull Cross', test: c => (c.smaCrossover === 'bullish' || c.smaCrossover?.crossover === 'bullish') },
-                    { id: 'rsi', label: 'RSI<55', test: c => c.rsi != null && c.rsi < 55 },
+                    { id: 'vol_low', label: 'Vol<0.5x', test: c => c.volumeRatio != null && c.volumeRatio < 0.5 },
+                    { id: 'momentum', label: 'Mom 7+', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 7 },
                     { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 1 },
-                    { id: 'accel', label: 'Accelerating', test: c => c.isAccelerating === true }
+                    { id: 'not_overbought', label: 'RSI<70', test: c => c.rsi == null || c.rsi < 70 }
                 ],
                 minMatch: 3,
-                requireAny: ['sma_cross', 'structure']
+                requireAny: ['vol_low', 'momentum']
             },
             {
                 id: 'squeeze',
@@ -6368,12 +6368,10 @@
             { id: 'sma_cross_bull_rsi', label: 'SMA Bull Cross + RSI<40', tier: 1, filter: s => s.smaCrossover?.crossover === 'bullish' && s.rsi != null && s.rsi < 40 },
             { id: 'sma_cross_bear_struct', label: 'SMA Bear Cross + Bear Structure', tier: 3, filter: s => s.smaCrossover?.crossover === 'bearish' && (s.structureScore ?? 0) <= -2 },
             { id: 'vol_ratio_high_struct', label: 'Vol>1.5x + Bull Structure', tier: 1, filter: s => (s.volumeRatio ?? 0) > 1.5 && (s.structureScore ?? 0) >= 2 },
-            { id: 'vol_ratio_low_mom', label: 'Vol<0.5x + High Mom', tier: 3, filter: s => s.volumeRatio != null && s.volumeRatio < 0.5 && (s.momentumScore ?? 0) >= 7 },
+            { id: 'vol_ratio_low_mom', label: 'Vol<0.5x + High Mom', tier: 1, filter: s => s.volumeRatio != null && s.volumeRatio < 0.5 && (s.momentumScore ?? 0) >= 7 },
             // Setup-type discovery combos — tweaked with RSI filters based on calibration hot list insights
             { id: 'momentum_trend_confirm', label: 'Mom 5-8 + Structure + RSI<50', tier: 2, filter: s => (s.momentumScore ?? 0) >= 5 && (s.momentumScore ?? 0) <= 8 && (s.structureScore ?? 0) >= 2 && s.rsi != null && s.rsi < 50 },
-            { id: 'breakout_sma_vol', label: 'SMA Bull Cross + Structure + RSI<55', tier: 2, filter: s => s.smaCrossover?.crossover === 'bullish' && (s.structureScore ?? 0) >= 1 && s.rsi != null && s.rsi < 55 },
             { id: 'sector_leader_mom', label: 'RS>60 + Inflow + Bull Structure', tier: 2, filter: s => (s.rsNormalized ?? 0) > 6 && sectorFlowIsInflow(s.sectorFlow) && (s.structureScore ?? 0) >= 2 },
-            { id: 'mean_revert_vol', label: 'Ret5d -2/-5% + Bull Struct + Not Outflow', tier: 1, filter: s => (s.totalReturn5d ?? 0) >= -5 && (s.totalReturn5d ?? 0) <= -2 && (s.structureScore ?? 0) >= 2 && s.sectorFlow !== 'outflow' && s.sectorFlow !== 'avoid' },
         ];
 
         // Evaluate which signal combos a candidate currently matches,
@@ -6412,7 +6410,7 @@
                 } catch { continue; }
 
                 const result = comboResults[def.id];
-                if (!result || result.insufficient) continue;
+                if (!result || result.insufficient || (result.n ?? 0) < 100) continue;
 
                 if (result.vsBaselineReturn > 0.5) {
                     hotCombos.push({ label: result.label, avgReturn10d: result.avgReturn10d, winRate10d: result.winRate10d, vsBaseline: result.vsBaselineReturn, n: result.n });
@@ -16864,7 +16862,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             if (!p.match || p.antiPattern) return false;
                             if (p.calibrationKey) {
                                 const cal = comboResults?.[p.calibrationKey];
-                                return cal && !cal.insufficient && cal.vsBaselineReturn > 0.5;
+                                return cal && !cal.insufficient && (cal.n ?? 0) >= 100 && cal.vsBaselineReturn > 0.5;
                             }
                             return true;
                         });
@@ -17064,7 +17062,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         // Non-reversal patterns require calibration validation
                         if (pat.calibrationKey) {
                             const calData = comboResults?.[pat.calibrationKey];
-                            if (!calData || calData.insufficient || calData.vsBaselineReturn <= 0.5) continue;
+                            if (!calData || calData.insufficient || (calData.n ?? 0) < 100 || calData.vsBaselineReturn <= 0.5) continue;
                         }
                         if (!displayPat || pat.matchCount > displayPat.matchCount) displayPat = pat;
                     }
