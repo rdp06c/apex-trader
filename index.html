@@ -6133,9 +6133,9 @@
                 calibrationKey: 'momentum_trend_confirm',
                 criteria: [
                     { id: 'momentum', label: 'Mom 5-8', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 5 && (c.momentum ?? c.momentumScore ?? 0) <= 8 },
-                    { id: 'rs', label: 'RS>60', test: c => (c.rs ?? 0) > 60 },
+                    { id: 'rsi', label: 'RSI<50', test: c => c.rsi != null && c.rsi < 50 },
                     { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 },
-                    { id: 'volume', label: 'Vol Confirm', test: c => (c.volumeTrend ?? c.volumeRatio ?? 1) > 1.1 }
+                    { id: 'rs', label: 'RS>50', test: c => (c.rs ?? 0) > 50 }
                 ],
                 minMatch: 3,
                 requireAny: ['structure', 'momentum']
@@ -6147,12 +6147,12 @@
                 calibrationKey: 'breakout_sma_vol',
                 criteria: [
                     { id: 'sma_cross', label: 'SMA Bull Cross', test: c => (c.smaCrossover === 'bullish' || c.smaCrossover?.crossover === 'bullish') },
-                    { id: 'accel', label: 'Accelerating', test: c => c.isAccelerating === true },
-                    { id: 'volume', label: 'Vol>1.3x', test: c => (c.volumeRatio ?? 0) > 1.3 },
-                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 1 }
+                    { id: 'rsi', label: 'RSI<55', test: c => c.rsi != null && c.rsi < 55 },
+                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 1 },
+                    { id: 'accel', label: 'Accelerating', test: c => c.isAccelerating === true }
                 ],
                 minMatch: 3,
-                requireAny: ['sma_cross', 'accel']
+                requireAny: ['sma_cross', 'structure']
             },
             {
                 id: 'squeeze',
@@ -6173,12 +6173,11 @@
                 badge: 'LDR',
                 calibrationKey: 'sector_leader_mom',
                 criteria: [
-                    { id: 'rs', label: 'RS>70', test: c => (c.rs ?? 0) > 70 },
+                    { id: 'rs', label: 'RS>60', test: c => (c.rs ?? 0) > 60 },
                     { id: 'sector', label: 'Sector Inflow', test: c => { const f = c.sectorFlow || c.sectorRotation || ''; return f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow'; } },
-                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 },
-                    { id: 'momentum', label: 'Mom 3-7', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 3 && (c.momentum ?? c.momentumScore ?? 0) <= 7 }
+                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 }
                 ],
-                minMatch: 3,
+                minMatch: 2,
                 requireAny: ['rs', 'sector']
             },
             {
@@ -6370,11 +6369,11 @@
             { id: 'sma_cross_bear_struct', label: 'SMA Bear Cross + Bear Structure', tier: 3, filter: s => s.smaCrossover?.crossover === 'bearish' && (s.structureScore ?? 0) <= -2 },
             { id: 'vol_ratio_high_struct', label: 'Vol>1.5x + Bull Structure', tier: 1, filter: s => (s.volumeRatio ?? 0) > 1.5 && (s.structureScore ?? 0) >= 2 },
             { id: 'vol_ratio_low_mom', label: 'Vol<0.5x + High Mom', tier: 3, filter: s => s.volumeRatio != null && s.volumeRatio < 0.5 && (s.momentumScore ?? 0) >= 7 },
-            // Setup-type discovery combos — tested via calibration to validate non-reversal patterns
-            { id: 'momentum_trend_confirm', label: 'Mom 5-8 + Structure + Volume', tier: 2, filter: s => (s.momentumScore ?? 0) >= 5 && (s.momentumScore ?? 0) <= 8 && (s.structureScore ?? 0) >= 2 && (s.volumeTrend ?? 1) > 1.1 },
-            { id: 'breakout_sma_vol', label: 'SMA Bull Cross + Vol>1.3x + Accel', tier: 2, filter: s => s.smaCrossover?.crossover === 'bullish' && (s.volumeRatio ?? 0) > 1.3 && s.isAccelerating },
-            { id: 'sector_leader_mom', label: 'RS>70 + Inflow + Mom 3-7', tier: 2, filter: s => (s.rsNormalized ?? 0) > 7 && sectorFlowIsInflow(s.sectorFlow) && (s.momentumScore ?? 0) >= 3 && (s.momentumScore ?? 0) <= 7 },
-            { id: 'mean_revert_vol', label: 'Ret5d<-5% + Vol>1.5x + Not Bearish', tier: 1, filter: s => (s.totalReturn5d ?? 0) < -5 && (s.volumeRatio ?? 0) > 1.5 && (s.structureScore ?? 0) >= 0 },
+            // Setup-type discovery combos — tweaked with RSI filters based on calibration hot list insights
+            { id: 'momentum_trend_confirm', label: 'Mom 5-8 + Structure + RSI<50', tier: 2, filter: s => (s.momentumScore ?? 0) >= 5 && (s.momentumScore ?? 0) <= 8 && (s.structureScore ?? 0) >= 2 && s.rsi != null && s.rsi < 50 },
+            { id: 'breakout_sma_vol', label: 'SMA Bull Cross + Structure + RSI<55', tier: 2, filter: s => s.smaCrossover?.crossover === 'bullish' && (s.structureScore ?? 0) >= 1 && s.rsi != null && s.rsi < 55 },
+            { id: 'sector_leader_mom', label: 'RS>60 + Inflow + Bull Structure', tier: 2, filter: s => (s.rsNormalized ?? 0) > 6 && sectorFlowIsInflow(s.sectorFlow) && (s.structureScore ?? 0) >= 2 },
+            { id: 'mean_revert_vol', label: 'Ret5d -2/-5% + Bull Struct + Not Outflow', tier: 1, filter: s => (s.totalReturn5d ?? 0) >= -5 && (s.totalReturn5d ?? 0) <= -2 && (s.structureScore ?? 0) >= 2 && s.sectorFlow !== 'outflow' && s.sectorFlow !== 'avoid' },
         ];
 
         // Evaluate which signal combos a candidate currently matches,
@@ -15581,7 +15580,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             let forwardBuffer = 0;
             while (forwardBuffer < 22) { endDefault.setDate(endDefault.getDate() - 1); if (endDefault.getDay() !== 0 && endDefault.getDay() !== 6) forwardBuffer++; }
             const startDefault = new Date(endDefault);
-            startDefault.setMonth(startDefault.getMonth() - 12);
+            startDefault.setMonth(startDefault.getMonth() - 24);
 
             const rangeStart = startDateStr ? new Date(startDateStr) : startDefault;
             const rangeEnd = endDateStr ? new Date(endDateStr) : endDefault;
@@ -15591,7 +15590,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Select 40 evenly-spaced calibration dates
             const allWeekdays = generateWeekdays(rangeStart, rangeEnd);
-            const NUM_DATES = Math.min(40, allWeekdays.length);
+            const NUM_DATES = Math.min(80, allWeekdays.length);
             if (NUM_DATES < 5) throw new Error(`Only ${allWeekdays.length} trading days in range. Need at least 5.`);
             const calibrationDates = [];
             for (let i = 0; i < NUM_DATES; i++) {

@@ -678,9 +678,9 @@ const ENTRY_SIGNAL_PATTERNS = [
         calibrationKey: 'momentum_trend_confirm',
         criteria: [
             { id: 'momentum', label: 'Mom 5-8', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 5 && (c.momentum ?? c.momentumScore ?? 0) <= 8 },
-            { id: 'rs', label: 'RS>60', test: c => (c.rs ?? 0) > 60 },
+            { id: 'rsi', label: 'RSI<50', test: c => c.rsi != null && c.rsi < 50 },
             { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 },
-            { id: 'volume', label: 'Vol Confirm', test: c => (c.volumeTrend ?? c.volumeRatio ?? 1) > 1.1 }
+            { id: 'rs', label: 'RS>50', test: c => (c.rs ?? 0) > 50 }
         ],
         minMatch: 3,
         requireAny: ['structure', 'momentum']
@@ -692,12 +692,12 @@ const ENTRY_SIGNAL_PATTERNS = [
         calibrationKey: 'breakout_sma_vol',
         criteria: [
             { id: 'sma_cross', label: 'SMA Bull Cross', test: c => (c.smaCrossover === 'bullish' || c.smaCrossover?.crossover === 'bullish') },
-            { id: 'accel', label: 'Accelerating', test: c => c.isAccelerating === true },
-            { id: 'volume', label: 'Vol>1.3x', test: c => (c.volumeRatio ?? 0) > 1.3 },
-            { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 1 }
+            { id: 'rsi', label: 'RSI<55', test: c => c.rsi != null && c.rsi < 55 },
+            { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 1 },
+            { id: 'accel', label: 'Accelerating', test: c => c.isAccelerating === true }
         ],
         minMatch: 3,
-        requireAny: ['sma_cross', 'accel']
+        requireAny: ['sma_cross', 'structure']
     },
     {
         id: 'squeeze',
@@ -718,12 +718,11 @@ const ENTRY_SIGNAL_PATTERNS = [
         badge: 'LDR',
         calibrationKey: 'sector_leader_mom',
         criteria: [
-            { id: 'rs', label: 'RS>70', test: c => (c.rs ?? 0) > 70 },
+            { id: 'rs', label: 'RS>60', test: c => (c.rs ?? 0) > 60 },
             { id: 'sector', label: 'Sector Inflow', test: c => { const f = c.sectorFlow || c.sectorRotation || ''; return f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow'; } },
-            { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 },
-            { id: 'momentum', label: 'Mom 3-7', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 3 && (c.momentum ?? c.momentumScore ?? 0) <= 7 }
+            { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 }
         ],
-        minMatch: 3,
+        minMatch: 2,
         requireAny: ['rs', 'sector']
     },
     {
