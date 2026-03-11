@@ -806,8 +806,8 @@ function computeSignalBonus(entrySignal, calibratedWeights) {
 
         if (edge == null || edge <= 0) continue;
 
-        const rawBonus = Math.min(edge * 0.25, 5.0);
-        const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.6 : 0;
+        const rawBonus = Math.min(edge * 0.5, 8.0);
+        const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.3 : 0;
         const bonus = rawBonus * matchMult;
 
         if (bonus > bestBonus) bestBonus = bonus;

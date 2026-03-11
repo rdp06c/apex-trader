@@ -6238,7 +6238,7 @@
         }
 
         // Compute a score bonus for stocks matching calibrated entry signal patterns.
-        // Full (GREEN) match gets the full bonus, strong (YELLOW) gets 60%.
+        // Full (GREEN) match gets the full bonus, strong (YELLOW) gets 30%.
         // Bonus scales with the pattern's calibration edge (vsBaselineReturn).
         function computeSignalBonus(entrySignal, calibratedWeights) {
             if (!entrySignal || !entrySignal.bestMatch) return 0;
@@ -6261,9 +6261,10 @@
 
                 if (edge == null || edge <= 0) continue;
 
-                // Scale by edge (0.25 per % point, capped at 5.0) and match quality
-                const rawBonus = Math.min(edge * 0.25, 5.0);
-                const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.6 : 0;
+                // Scale by edge (0.5 per % point, capped at 8.0) and match quality
+                // GREEN (full) gets 100%, YELLOW (strong) gets 30%
+                const rawBonus = Math.min(edge * 0.5, 8.0);
+                const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.3 : 0;
                 const bonus = rawBonus * matchMult;
 
                 if (bonus > bestBonus) bestBonus = bonus;
