@@ -2445,7 +2445,7 @@
                 criteria: [
                     { id: 'macd', label: 'MACD Bull', test: c => c.macdCrossover === 'bullish' },
                     { id: 'rsi', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
-                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 },
+                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' },
                     { id: 'pullback', label: 'Pullback', test: c => c.return5d != null && c.return5d >= -8 && c.return5d <= -2 }
                 ],
                 minMatch: 2,
@@ -2459,7 +2459,7 @@
                 criteria: [
                     { id: 'momentum', label: 'Mom 5-8', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 5 && (c.momentum ?? c.momentumScore ?? 0) <= 8 },
                     { id: 'rsi', label: 'RSI<50', test: c => c.rsi != null && c.rsi < 50 },
-                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 },
+                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' },
                     { id: 'rs', label: 'RS>50', test: c => (c.rs ?? 0) > 50 }
                 ],
                 minMatch: 3,
@@ -2473,7 +2473,7 @@
                 criteria: [
                     { id: 'vol_low', label: 'Vol<0.5x', test: c => c.volumeRatio != null && c.volumeRatio < 0.5 },
                     { id: 'momentum', label: 'Mom 7+', test: c => (c.momentum ?? c.momentumScore ?? 0) >= 7 },
-                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 1 },
+                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' },
                     { id: 'not_overbought', label: 'RSI<70', test: c => c.rsi == null || c.rsi < 70 }
                 ],
                 minMatch: 3,
@@ -2486,7 +2486,7 @@
                 calibrationKey: 'vol_ratio_high_struct',
                 criteria: [
                     { id: 'dtc', label: 'DTC>5', test: c => (c.daysToCover ?? c.dtc ?? 0) > 5 },
-                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 1 },
+                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' },
                     { id: 'sector', label: 'Sector Inflow', test: c => { const f = c.sectorFlow || c.sectorRotation || ''; return f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow'; } }
                 ],
                 minMatch: 2,
@@ -2500,7 +2500,7 @@
                 criteria: [
                     { id: 'rs', label: 'RS>60', test: c => (c.rs ?? 0) > 60 },
                     { id: 'sector', label: 'Sector Inflow', test: c => { const f = c.sectorFlow || c.sectorRotation || ''; return f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow'; } },
-                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' || (c.structureScore ?? 0) >= 2 }
+                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' }
                 ],
                 minMatch: 2,
                 requireAny: ['rs', 'sector']
