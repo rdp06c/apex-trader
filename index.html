@@ -3515,13 +3515,13 @@
                 </div>
             </div>
 
-            <!-- Candidate Scorecard (collapsible, collapsed by default) -->
+            <!-- Candidate Scorecard (collapsible, expanded by default) -->
             <div class="card collapsible-section" id="candidateScorecardSection">
-                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="candidateScorecardBody" onclick="toggleSection('candidateScorecard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('candidateScorecard')}">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="candidateScorecardBody" onclick="toggleSection('candidateScorecard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('candidateScorecard')}">
                     <h2 class="chart-title">Candidate Scorecard</h2>
-                    <span class="toggle-icon collapsed" id="candidateScorecardToggle">&#9662;</span>
+                    <span class="toggle-icon" id="candidateScorecardToggle">&#9662;</span>
                 </div>
-                <div class="section-body collapsed" id="candidateScorecardBody">
+                <div class="section-body" id="candidateScorecardBody">
                     <div id="candidateScorecardContent">
                         <div class="empty-state">Run Scan Market to see scored candidates</div>
                     </div>
@@ -3541,13 +3541,13 @@
                 </div>
             </div>
 
-            <!-- Trade Insights Section (collapsible) -->
+            <!-- Trade Insights Section (collapsible, collapsed by default) -->
             <div class="card collapsible-section" id="learningInsightsSection">
-                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="learningInsightsBody" onclick="toggleSection('learningInsights')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('learningInsights')}">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="learningInsightsBody" onclick="toggleSection('learningInsights')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('learningInsights')}">
                     <h2 class="chart-title">Trade Insights</h2>
-                    <span class="toggle-icon" id="learningInsightsToggle">&#9662;</span>
+                    <span class="toggle-icon collapsed" id="learningInsightsToggle">&#9662;</span>
                 </div>
-                <div class="section-body" id="learningInsightsBody">
+                <div class="section-body collapsed" id="learningInsightsBody">
                     <div class="learning-tag">Rules derived from trade history</div>
                     <div id="learningInsights">
                         <div class="empty-state">
@@ -6235,6 +6235,41 @@
             }
 
             return { patterns: results, bestMatch, bestMatchCount, bestPatternId, antiPatternMatch };
+        }
+
+        // Compute a score bonus for stocks matching calibrated entry signal patterns.
+        // Full (GREEN) match gets the full bonus, strong (YELLOW) gets 60%.
+        // Bonus scales with the pattern's calibration edge (vsBaselineReturn).
+        function computeSignalBonus(entrySignal, calibratedWeights) {
+            if (!entrySignal || !entrySignal.bestMatch) return 0;
+
+            const combos = calibratedWeights?.signalCombos?.combos;
+            let bestBonus = 0;
+
+            for (const pat of entrySignal.patterns) {
+                if (!pat.match || pat.antiPattern) continue;
+
+                // Look up calibration edge for this pattern
+                let edge = null;
+                const key = pat.calibrationKey || (pat.id === 'reversal' ? 'rsi_low_structure_bull' : null);
+                if (key && combos) {
+                    const cal = combos[key];
+                    if (cal && !cal.insufficient && (cal.n ?? 0) >= 100) {
+                        edge = cal.vsBaselineReturn;
+                    }
+                }
+
+                if (edge == null || edge <= 0) continue;
+
+                // Scale by edge (0.25 per % point, capped at 5.0) and match quality
+                const rawBonus = Math.min(edge * 0.25, 5.0);
+                const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.6 : 0;
+                const bonus = rawBonus * matchMult;
+
+                if (bonus > bestBonus) bestBonus = bonus;
+            }
+
+            return Math.round(bestBonus * 10) / 10; // Round to 1 decimal
         }
 
         // Thesis status evaluation — compares entry technicals to current state
@@ -16840,10 +16875,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const sectorCounts = {};
             candidates.forEach(c => { sectorCounts[c.sector] = (sectorCounts[c.sector] || 0) + 1; });
 
-            // Compute entry signals and combo heat for all candidates
+            // Compute entry signals, combo heat, and signal bonus for all candidates
             candidates.forEach(c => {
                 c._entrySignal = evaluateEntrySignals(c);
                 c._comboHeat = evaluateComboHeat(c);
+                const sigBonus = computeSignalBonus(c._entrySignal, portfolio.calibratedWeights);
+                if (sigBonus > 0) {
+                    c.compositeScore += sigBonus;
+                    if (c.scoreBreakdown) c.scoreBreakdown.signalBonus = sigBonus;
+                }
             });
 
             if (scorecardState.filterHeld) {
@@ -16965,7 +17005,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
                 sh('5d', "5-day cumulative return. Sweet spot is -2% to -8% with Bullish structure: triggers pullback bonus (up to +5) and 1.3x entry multiplier on the entire score. The biggest hidden score amplifier.", '5D') +
-                sh('mom', "Momentum (0-10). Sweet spot is 3-7: strong trend without penalties. 9+ triggers extension penalty (-3.5) and reduces entry multiplier to 0.6x.", 'Mom') +
+                sh('mom', "Momentum (0-10). Sweet spot is 5-7: strong trend without penalties. Weight halved (0.3x) — calibration shows momentum is anti-predictive. 9+ triggers extension penalty (-3.5) and 0.6x entry multiplier.", 'Mom') +
                 sh('vol', "Volume ratio vs 20-day avg. Read with Mom: high Mom + low Vol (-2.0 penalty, fake rally). Low Mom + high Vol (+1.5, accumulation). Hard gate: breakouts need ≥1.5x, pullbacks need ≤0.7x or trade is vetoed.", 'Vol') +
                 sh('rs', "Relative Strength vs market (0-100). Mid-range is ideal. RS 85+ triggers mean-reversion penalties up to -6.0. When both Mom ≥9 and RS ≥85, extension penalty jumps to -5.0.", 'RS') +
                 sh('rsi', "RSI oscillator (0-100). Below 40 is a strong buy signal (+1.5 to +2.5). Above 70 is danger (-3.0). Above 80 is severe (-5.0 and entry multiplier drops to 0.3x). Biggest single unconditional bonus in the system.", 'RSI') +
@@ -17024,13 +17064,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (bd.squeezeBonus) parts.push(`Squeeze: +${bd.squeezeBonus.toFixed(1)}`);
                     if (bd.accelBonus) parts.push(`Accel: +${bd.accelBonus.toFixed(1)}`);
                     if (bd.learnedAdj) parts.push(`Learned: ${bd.learnedAdj >= 0 ? '+' : ''}${bd.learnedAdj.toFixed(1)}`);
+                    if (bd.signalBonus) parts.push(`Signal: +${bd.signalBonus.toFixed(1)}`);
                     if (bd.entryMultiplier !== 1.0) parts.push(`EntryMult: ×${bd.entryMultiplier.toFixed(1)}`);
                     scoreTooltip = parts.join(' | ');
                 }
 
                 const priceStr = c.price != null ? '$' + c.price.toFixed(2) : '--';
                 const mom = c.momentum || 0;
-                const momClass = mom >= 9 ? 'sig-red' : mom >= 7.5 ? 'sig-warn' : mom >= 3 ? 'sig-green' : '';
+                const momClass = mom >= 9 ? 'sig-red' : mom >= 7.5 ? 'sig-warn' : mom >= 5 ? 'sig-green' : '';
 
                 const vr = c.volumeRatio;
                 let volClass = '';
@@ -17042,7 +17083,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 const rsVal = c.rs || 0;
-                const rsClass = rsVal >= 95 ? 'sig-red' : rsVal >= 85 ? 'sig-warn' : '';
+                const rsClass = rsVal >= 95 ? 'sig-red' : rsVal >= 85 ? 'sig-warn' : rsVal >= 60 ? 'sig-green' : '';
                 const ret5d = c.return5d;
                 const ret5dClass = ret5d != null ? (ret5d <= -2 && ret5d >= -8 ? 'sig-green' : ret5d < -8 ? 'sig-red' : ret5d > 8 ? 'sig-warn' : '') : '';
                 const structClass = (c.structure === 'bullish' || c.structure === 'bullish_continuation') ? 'sig-green'

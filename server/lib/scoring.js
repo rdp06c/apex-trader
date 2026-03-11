@@ -224,7 +224,7 @@ function detectStructure(bars) {
 // === FULL SCAN SCORING FUNCTIONS ===
 
 const DEFAULT_WEIGHTS = {
-    momentumMultiplier: 0.6, rsMultiplier: 0.6, structureMultiplier: 1.25,
+    momentumMultiplier: 0.3, rsMultiplier: 0.6, structureMultiplier: 1.25,
     accelBonus: 1.5, consistencyBonus: 1.0,
     sectorInflow: 2.0, sectorModestInflow: 1.0, sectorOutflow: -1.0,
     rsiOversold30: 2.5, rsiOversold40: 1.5, rsiOversold50: 0.5,
@@ -783,6 +783,39 @@ function evaluateEntrySignals(candidate) {
     return { patterns: results, bestMatch, bestMatchCount, bestPatternId, antiPatternMatch };
 }
 
+// Compute a score bonus for stocks matching calibrated entry signal patterns.
+// Full (GREEN) match gets the full bonus, strong (YELLOW) gets 60%.
+// Bonus scales with the pattern's calibration edge (vsBaselineReturn).
+function computeSignalBonus(entrySignal, calibratedWeights) {
+    if (!entrySignal || !entrySignal.bestMatch) return 0;
+
+    const combos = calibratedWeights?.signalCombos?.combos;
+    let bestBonus = 0;
+
+    for (const pat of entrySignal.patterns) {
+        if (!pat.match || pat.antiPattern) continue;
+
+        let edge = null;
+        const key = pat.calibrationKey || (pat.id === 'reversal' ? 'rsi_low_structure_bull' : null);
+        if (key && combos) {
+            const cal = combos[key];
+            if (cal && !cal.insufficient && (cal.n ?? 0) >= 100) {
+                edge = cal.vsBaselineReturn;
+            }
+        }
+
+        if (edge == null || edge <= 0) continue;
+
+        const rawBonus = Math.min(edge * 0.25, 5.0);
+        const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.6 : 0;
+        const bonus = rawBonus * matchMult;
+
+        if (bonus > bestBonus) bestBonus = bonus;
+    }
+
+    return Math.round(bestBonus * 10) / 10;
+}
+
 module.exports = {
     isMarketOpen,
     calculateRSI,
@@ -802,5 +835,6 @@ module.exports = {
     detectVolumeDivergence,
     calculateFibTargets,
     detectMarketRegime,
-    evaluateEntrySignals
+    evaluateEntrySignals,
+    computeSignalBonus
 };

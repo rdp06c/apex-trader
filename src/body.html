@@ -321,13 +321,13 @@
                 </div>
             </div>
 
-            <!-- Candidate Scorecard (collapsible, collapsed by default) -->
+            <!-- Candidate Scorecard (collapsible, expanded by default) -->
             <div class="card collapsible-section" id="candidateScorecardSection">
-                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="candidateScorecardBody" onclick="toggleSection('candidateScorecard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('candidateScorecard')}">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="candidateScorecardBody" onclick="toggleSection('candidateScorecard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('candidateScorecard')}">
                     <h2 class="chart-title">Candidate Scorecard</h2>
-                    <span class="toggle-icon collapsed" id="candidateScorecardToggle">&#9662;</span>
+                    <span class="toggle-icon" id="candidateScorecardToggle">&#9662;</span>
                 </div>
-                <div class="section-body collapsed" id="candidateScorecardBody">
+                <div class="section-body" id="candidateScorecardBody">
                     <div id="candidateScorecardContent">
                         <div class="empty-state">Run Scan Market to see scored candidates</div>
                     </div>
@@ -347,13 +347,13 @@
                 </div>
             </div>
 
-            <!-- Trade Insights Section (collapsible) -->
+            <!-- Trade Insights Section (collapsible, collapsed by default) -->
             <div class="card collapsible-section" id="learningInsightsSection">
-                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="learningInsightsBody" onclick="toggleSection('learningInsights')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('learningInsights')}">
+                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="learningInsightsBody" onclick="toggleSection('learningInsights')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('learningInsights')}">
                     <h2 class="chart-title">Trade Insights</h2>
-                    <span class="toggle-icon" id="learningInsightsToggle">&#9662;</span>
+                    <span class="toggle-icon collapsed" id="learningInsightsToggle">&#9662;</span>
                 </div>
-                <div class="section-body" id="learningInsightsBody">
+                <div class="section-body collapsed" id="learningInsightsBody">
                     <div class="learning-tag">Rules derived from trade history</div>
                     <div id="learningInsights">
                         <div class="empty-state">
