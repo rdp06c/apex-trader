@@ -80,7 +80,7 @@ Browser (index.html)
 ## Core Workflow
 
 1. **Scan Market** — fetches prices, ~65-day OHLCV bars, ticker details, short interest, server indicators (RSI, MACD, SMA50), VIX for ~540 stocks across 14 sectors. Populates all caches. Server indicators fetched for ALL stocks (no cap). Auto-refreshes UI (holding cards, portfolio metrics) on completion — no manual "Refresh Prices" needed.
-2. **Score** — `calculateCompositeScore` produces weighted sum of ~15 components (momentum, RS, structure, RSI, MACD, pullback, extension, etc.) with entry quality multiplier. Then `computeSignalBonus` adds a calibration-driven bonus for stocks matching entry signal patterns (GREEN full match gets full bonus, YELLOW strong match gets 60%, scaled by the pattern's calibration edge × 0.25, capped at 5.0).
+2. **Score** — `calculateCompositeScore` produces weighted sum of core components (momentum ×0.3, RS ×0.6, structure ×1.25, RSI, MACD, sector flow, SMA, volume) + calibration combo heat bonus (±6.0 max, from hot/cold combos). Noise components zeroed (accel, consistency, FVG). Pullback mega-bonus removed (was +5 and 1.15× multiplier). Then `computeSignalBonus` adds a calibration-driven bonus for stocks matching entry signal patterns (GREEN full match gets full bonus scaled by edge ×1.5, capped at 10.0; YELLOW gets 35%). Calibration-backed sources (heat + signal) contribute ~43% of max score.
 3. **Candidate Scorecard** — expanded by default. Full universe displayed with sortable, color-coded columns: Sig (entry signal badge), Heat (combo heat dots), Score, Price, Day%, 5D, MOM, VOL, RS, RSI, MACD, Structure, DTC, Sector, MCap. All columns sortable (click header to toggle asc/desc). Setup filter dropdown (All Setups / Any Signal / REV / MOM / QMO / SQZ / LDR / AVOID). Sector filter dropdown. Paginated (40 per page).
 4. **Manual Trade** — user enters buy/sell via modal. Same-day trades auto-capture all live signals from caches (run Scan Market first for richest data).
 5. **Trade Insights** — derived rules, performance summary, signal accuracy table, signal combinations (from calibration), regime history — all computed from `closedTrades` and calibration data
@@ -111,7 +111,7 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 
 ## Key Subsystems
 
-**Composite Scoring** (`calculateCompositeScore`): ~15 weighted components. Weights in `DEFAULT_WEIGHTS`, calibratable. `getActiveWeights()` selects regime-aware weights (VIX < 20 vs ≥ 20). Returns `{total, breakdown}` for tooltip decomposition. Momentum weight halved to 0.3x (calibration shows it's anti-predictive, r=-0.025). RS is the dominant component at 0.6x. After scoring, `computeSignalBonus()` adds a bonus for stocks matching calibrated entry signal patterns, scaling by calibration edge (e.g., QMO +18% edge → ~3.6 bonus for GREEN match).
+**Composite Scoring** (`calculateCompositeScore`): Core components (momentum ×0.3, RS ×0.6, structure ×1.25, RSI, MACD, sector flow, SMA, volume, extension/runner penalties) plus calibration combo heat bonus (`comboHeatBonus` param, ±6.0 max). Noise components zeroed (accel, consistency, FVG — uncorrelated per calibration). Pullback bonus removed (was +5 AND 1.15× multiplier — the biggest score distorter). Weights in `DEFAULT_WEIGHTS`, calibratable. `getActiveWeights()` selects regime-aware weights (VIX < 20 vs ≥ 20). Returns `{total, breakdown}` for tooltip decomposition. After scoring, `computeSignalBonus()` adds a bonus for stocks matching calibrated entry signal patterns (GREEN = edge × 1.5 capped at 10.0, YELLOW = 35%). `computeComboHeatBonus()` converts hot/cold combos into the heat bonus (0.5 pts per % edge, ±2.0 per combo). Calibration-backed sources (heat + signal) are ~43% of max score.
 
 **Market Structure** (`detectStructure`): ICT/SMC analysis — swing highs/lows, CHoCH, BOS, liquidity sweeps, FVGs on ~65-day bars. Only takes `symbol` param, reads from `multiDayCache[symbol]`.
 
@@ -119,7 +119,7 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 
 **Entry Signals & Combo Heat**: Two complementary scorecard systems:
 - `ENTRY_SIGNAL_PATTERNS` + `evaluateEntrySignals()` — 6 data-driven patterns: REV (reversal), MOM (momentum continuation), QMO (quiet momentum — highest calibrated edge at +18%), SQZ (squeeze), LDR (sector leader), AVOID (exhausted runner anti-pattern). Non-REV patterns are gated by calibration (n≥100, positive edge). GREEN = all criteria met, YELLOW = one miss, GRAY = minimum met, RED = avoid. `computeSignalBonus()` bridges signals into the score — GREEN/YELLOW matches boost composite score scaled by calibration edge.
-- `SIGNAL_COMBO_DEFS` + `evaluateComboHeat()` — tests each stock's current signals against 18 combos, cross-references calibration results to show green dots (hot combos) and red dots (cold combos) in the Heat column. Heat dots filtered by setup type via `SETUP_HEAT_GROUPS` — only shows combos relevant to the stock's matched setup badge. Anti-patterns always shown. Requires calibration data to function.
+- `SIGNAL_COMBO_DEFS` + `evaluateComboHeat()` — tests each stock's current signals against 18 combos, cross-references calibration results to show green dots (hot combos) and red dots (cold combos) in the Heat column. **Heat now directly affects the composite score** via `computeComboHeatBonus()` — hot combos add up to +2.0 each, cold combos subtract up to -2.0 each, net capped at ±6.0. Heat dots filtered by setup type via `SETUP_HEAT_GROUPS`. Requires calibration data to function.
 - Score driver badge (S/M) indicates whether a stock's score is signal-driven or momentum-driven.
 
 **Holdings Health**: Holdings cards show a compact inline stat line (MOM, RS, RSI with mini SVG sparklines showing trajectory, plus MACD, Structure, DTC, CHoCH, Vol, Stop/Target levels) and a footer row (Cost, Now, Entry, News count with tooltip). Sell/profit signals display as a centered badge in the card header. Cards are sortable by Date Added, Total P&L%, Daily Change%, Position Size, or Health (with ascending/descending toggle). Custom themed dropdown replaces native `<select>` for dark mode compatibility.
@@ -255,7 +255,7 @@ Coverage includes: AI/software, semiconductors, cybersecurity, biotech/genomics,
 - Extensive console logging
 - Push to `main` → Pi auto-pulls within 5 min, or use admin panel "Pull & Restart"
 - Server files in `server/` — these run on the Pi only, not in the browser
-- Scoring functions duplicated between `src/trader.js` (browser) and `server/lib/scoring.js` (Node.js) — keep in sync. Includes `evaluateEntrySignals`, `ENTRY_SIGNAL_PATTERNS`, and `computeSignalBonus`.
+- Scoring functions duplicated between `src/trader.js` (browser) and `server/lib/scoring.js` (Node.js) — keep in sync. Includes `evaluateEntrySignals`, `ENTRY_SIGNAL_PATTERNS`, `computeSignalBonus`, and `computeComboHeatBonus`.
 - Stock lists duplicated between `src/trader.js` and `server/lib/stocks.js` — keep in sync
 
 ## Scorecard Column Highlighting

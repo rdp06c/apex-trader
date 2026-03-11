@@ -223,19 +223,22 @@ function detectStructure(bars) {
 
 // === FULL SCAN SCORING FUNCTIONS ===
 
+// Noise components zeroed: accel, consistency, FVG (uncorrelated per calibration).
+// Pullback bonus removed: biggest score distorter; calibration captures via combo heat.
+// SMA proximity and squeeze halved: real but oversized.
 const DEFAULT_WEIGHTS = {
     momentumMultiplier: 0.3, rsMultiplier: 0.6, structureMultiplier: 1.25,
-    accelBonus: 1.5, consistencyBonus: 1.0,
+    accelBonus: 0, consistencyBonus: 0,
     sectorInflow: 2.0, sectorModestInflow: 1.0, sectorOutflow: -1.0,
     rsiOversold30: 2.5, rsiOversold40: 1.5, rsiOversold50: 0.5,
     rsiOverbought70: -3.0, rsiOverbought80: -5.0,
     macdBullish: 2.5, macdBearish: -2.0, macdNone: -0.5,
     rsMeanRev95: -3.0, rsMeanRev90: -2.0, rsMeanRev85: -1.0,
-    squeezeBonusHigh: 1.5, squeezeBonusMod: 0.75,
-    smaProxNear: 2.0, smaProxBelow: 1.0, smaProxFar15: -1.5, smaProxFar10: -0.5,
+    squeezeBonusHigh: 0.75, squeezeBonusMod: 0.4,
+    smaProxNear: 1.0, smaProxBelow: 0.5, smaProxFar15: -0.75, smaProxFar10: -0.25,
     smaCrossoverBullish: 2.0, smaCrossoverBearish: -2.0,
-    fvgBullish: 0.5, fvgBearish: -0.5,
-    entryMultExtreme: 0.3, entryMultExtended: 0.6, entryMultPullback: 1.15
+    fvgBullish: 0, fvgBearish: 0,
+    entryMultExtreme: 0.3, entryMultExtended: 0.6
 };
 
 function getActiveWeights(calibratedWeights, vixLevel) {
@@ -379,7 +382,7 @@ function detectSectorRotation(marketData, stockSectors, multiDayCache) {
     return sectorAnalysis;
 }
 
-function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, sma20, currentPrice, smaCrossover }, weights) {
+function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, sma20, currentPrice, smaCrossover, comboHeatBonus }, weights) {
     const w = weights || DEFAULT_WEIGHTS;
 
     const momentumContrib = momentumScore * w.momentumMultiplier;
@@ -405,13 +408,8 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
         : 0;
 
     const ret5d = totalReturn5d ?? 0;
-    const pullbackBonus =
-        (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 2 && sectorFlow !== 'outflow') ? 5
-        : (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow' && sectorFlow !== 'modest-outflow') ? 4
-        : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? 3
-        : (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 0) ? 2
-        : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 0 && sectorFlow !== 'outflow') ? 1
-        : 0;
+    // Pullback bonus removed: biggest score distorter; calibration captures via combo heat.
+    const pullbackBonus = 0;
 
     const rsiBonusPenalty = rsi != null
         ? (rsi < 30 ? w.rsiOversold30 : rsi < 40 ? w.rsiOversold40 : rsi < 50 ? w.rsiOversold50
@@ -452,16 +450,17 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
     // No learned adjustments on server (requires portfolio.closedTrades analysis)
     const learnedAdj = 0;
 
+    const heatBonus = comboHeatBonus ?? 0;
+
     const additiveScore = momentumContrib + rsContrib + sectorBonus + accelBonus + consistencyBonus
         + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + declinePenalty
         + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus
-        + smaProximityBonus + smaCrossoverBonus + learnedAdj;
+        + smaProximityBonus + smaCrossoverBonus + learnedAdj + heatBonus;
 
     let entryMultiplier = 1.0;
     if (additiveScore > 0) {
         if (rsi != null && rsi > 80 && momentumScore >= 9) entryMultiplier = w.entryMultExtreme;
         else if ((rsi != null && rsi > 70) || momentumScore >= 9 || rsNormalized >= 9) entryMultiplier = w.entryMultExtended;
-        else if (ret5d >= -8 && ret5d <= -1 && (structureScore ?? 0) >= 1) entryMultiplier = w.entryMultPullback;
     }
 
     const compositeScore = additiveScore * entryMultiplier;
@@ -472,7 +471,7 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
             momentumContrib, rsContrib, sectorBonus, accelBonus, consistencyBonus,
             structureBonus, extensionPenalty, pullbackBonus, runnerPenalty, declinePenalty,
             rsiBonusPenalty, macdBonus, rsMeanRevPenalty, squeezeBonus, volumeBonus, fvgBonus,
-            smaProximityBonus, smaCrossoverBonus, learnedAdj, entryMultiplier
+            smaProximityBonus, smaCrossoverBonus, learnedAdj, heatBonus, entryMultiplier
         }
     };
 }
@@ -806,14 +805,28 @@ function computeSignalBonus(entrySignal, calibratedWeights) {
 
         if (edge == null || edge <= 0) continue;
 
-        const rawBonus = Math.min(edge * 1.0, 8.0);
-        const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.25 : 0;
+        const rawBonus = Math.min(edge * 1.5, 10.0);
+        const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.35 : 0;
         const bonus = rawBonus * matchMult;
 
         if (bonus > bestBonus) bestBonus = bonus;
     }
 
     return Math.round(bestBonus * 10) / 10;
+}
+
+// Compute a score bonus from combo heat analysis — integrates calibration
+// data directly into the composite score. Hot combos boost, cold combos penalize.
+function computeComboHeatBonus(comboHeatResult) {
+    if (!comboHeatResult) return 0;
+    let bonus = 0;
+    for (const combo of (comboHeatResult.hotCombos || [])) {
+        bonus += Math.min(combo.vsBaseline * 0.5, 2.0);
+    }
+    for (const combo of (comboHeatResult.coldCombos || [])) {
+        bonus += Math.max(combo.vsBaseline * 0.5, -2.0);
+    }
+    return Math.max(-6.0, Math.min(6.0, Math.round(bonus * 10) / 10));
 }
 
 module.exports = {
@@ -836,5 +849,6 @@ module.exports = {
     calculateFibTargets,
     detectMarketRegime,
     evaluateEntrySignals,
-    computeSignalBonus
+    computeSignalBonus,
+    computeComboHeatBonus
 };

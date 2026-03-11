@@ -56,19 +56,24 @@
         };
 
         // Calibration weight system — data-driven scoring via runCalibrationSweep
+        // Calibration weight system — data-driven scoring via runCalibrationSweep
+        // Noise components zeroed: accel, consistency, FVG (uncorrelated per calibration).
+        // Pullback bonus removed: biggest score distorter; if pullback is predictive, calibration
+        // captures it via combo heat (rsi_low_structure_bull, pullback_structure_bull, etc.).
+        // SMA proximity and squeeze halved: real but oversized.
         const DEFAULT_WEIGHTS = {
             momentumMultiplier: 0.3, rsMultiplier: 0.6, structureMultiplier: 1.25, // momentum halved: anti-predictive per calibration (r=-0.025)
-            accelBonus: 1.5, consistencyBonus: 1.0,
+            accelBonus: 0, consistencyBonus: 0,
             sectorInflow: 2.0, sectorModestInflow: 1.0, sectorOutflow: -1.0,
             rsiOversold30: 2.5, rsiOversold40: 1.5, rsiOversold50: 0.5,
             rsiOverbought70: -3.0, rsiOverbought80: -5.0,
             macdBullish: 2.5, macdBearish: -2.0, macdNone: -0.5,
             rsMeanRev95: -3.0, rsMeanRev90: -2.0, rsMeanRev85: -1.0,
-            squeezeBonusHigh: 1.5, squeezeBonusMod: 0.75,
-            smaProxNear: 2.0, smaProxBelow: 1.0, smaProxFar15: -1.5, smaProxFar10: -0.5,
+            squeezeBonusHigh: 0.75, squeezeBonusMod: 0.4,
+            smaProxNear: 1.0, smaProxBelow: 0.5, smaProxFar15: -0.75, smaProxFar10: -0.25,
             smaCrossoverBullish: 2.0, smaCrossoverBearish: -2.0,
-            fvgBullish: 0.5, fvgBearish: -0.5,
-            entryMultExtreme: 0.3, entryMultExtended: 0.6, entryMultPullback: 1.15
+            fvgBullish: 0, fvgBearish: 0,
+            entryMultExtreme: 0.3, entryMultExtended: 0.6
         };
         function getActiveWeights() {
             if (!portfolio.calibratedWeights) return DEFAULT_WEIGHTS;
@@ -2324,7 +2329,7 @@
 
         // Shared scoring function — used by both runAIAnalysis and testDataFetch
         // rsNormalized: 0-10 scale (RS percentile / 10). Multiplied by 0.6 internally for 0-6 contribution.
-        function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, signalAdjustments, sma20, currentPrice, smaCrossover }) {
+        function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, signalAdjustments, sma20, currentPrice, smaCrossover, comboHeatBonus }) {
             const w = getActiveWeights();
 
             const momentumContrib = momentumScore * w.momentumMultiplier;
@@ -2353,13 +2358,9 @@
                 : 0;
 
             const ret5d = totalReturn5d ?? 0;
-            const pullbackBonus =
-                (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 2 && sectorFlow !== 'outflow') ? 5
-                : (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow' && sectorFlow !== 'modest-outflow') ? 4
-                : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? 3
-                : (ret5d >= -8 && ret5d <= -2 && (structureScore ?? 0) >= 0) ? 2
-                : (ret5d >= -5 && ret5d < 0 && (structureScore ?? 0) >= 0 && sectorFlow !== 'outflow') ? 1
-                : 0;
+            // Pullback bonus removed: was the single biggest score distorter (+5 AND 1.15x multiplier).
+            // If pullback is predictive, calibration captures it via combo heat.
+            const pullbackBonus = 0;
 
             const rsiBonusPenalty = rsi != null
                 ? (rsi < 30 ? w.rsiOversold30 : rsi < 40 ? w.rsiOversold40 : rsi < 50 ? w.rsiOversold50
@@ -2410,16 +2411,17 @@
                 if ((todayChange || 0) >= 5 && signalAdjustments.runnerExtraPenalty) learnedAdj += signalAdjustments.runnerExtraPenalty;
             }
 
+            const heatBonus = comboHeatBonus ?? 0;
+
             const additiveScore = momentumContrib + rsContrib + sectorBonus + accelBonus + consistencyBonus
                 + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + declinePenalty
                 + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus
-                + smaProximityBonus + smaCrossoverBonus + learnedAdj;
+                + smaProximityBonus + smaCrossoverBonus + learnedAdj + heatBonus;
 
             let entryMultiplier = 1.0;
             if (additiveScore > 0) {
                 if (rsi != null && rsi > 80 && momentumScore >= 9) entryMultiplier = w.entryMultExtreme;
                 else if ((rsi != null && rsi > 70) || momentumScore >= 9 || rsNormalized >= 9) entryMultiplier = w.entryMultExtended;
-                else if (ret5d >= -8 && ret5d <= -1 && (structureScore ?? 0) >= 1) entryMultiplier = w.entryMultPullback;
             }
 
             const compositeScore = additiveScore * entryMultiplier;
@@ -2430,7 +2432,7 @@
                     momentumContrib, rsContrib, sectorBonus, accelBonus, consistencyBonus,
                     structureBonus, extensionPenalty, pullbackBonus, runnerPenalty, declinePenalty,
                     rsiBonusPenalty, macdBonus, rsMeanRevPenalty, squeezeBonus, volumeBonus, fvgBonus,
-                    smaProximityBonus, smaCrossoverBonus, learnedAdj, entryMultiplier
+                    smaProximityBonus, smaCrossoverBonus, learnedAdj, heatBonus, entryMultiplier
                 }
             };
         }
@@ -2597,16 +2599,31 @@
 
                 if (edge == null || edge <= 0) continue;
 
-                // Scale by edge (1.0 per % point, capped at 8.0) and match quality
-                // GREEN (full) gets 100%, YELLOW (strong) gets 25%
-                const rawBonus = Math.min(edge * 1.0, 8.0);
-                const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.25 : 0;
+                // Scale by edge (1.5 per % point, capped at 10.0) and match quality
+                // GREEN (full) gets 100%, YELLOW (strong) gets 35%
+                const rawBonus = Math.min(edge * 1.5, 10.0);
+                const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.35 : 0;
                 const bonus = rawBonus * matchMult;
 
                 if (bonus > bestBonus) bestBonus = bonus;
             }
 
             return Math.round(bestBonus * 10) / 10; // Round to 1 decimal
+        }
+
+        // Compute a score bonus from combo heat analysis — integrates calibration
+        // data directly into the composite score. Hot combos boost, cold combos penalize.
+        // Scale: 0.5 pts per % edge, capped ±2.0 per combo, net cap ±6.0.
+        function computeComboHeatBonus(comboHeatResult) {
+            if (!comboHeatResult) return 0;
+            let bonus = 0;
+            for (const combo of (comboHeatResult.hotCombos || [])) {
+                bonus += Math.min(combo.vsBaseline * 0.5, 2.0);
+            }
+            for (const combo of (comboHeatResult.coldCombos || [])) {
+                bonus += Math.max(combo.vsBaseline * 0.5, -2.0);
+            }
+            return Math.max(-6.0, Math.min(6.0, Math.round(bonus * 10) / 10));
         }
 
         // Thesis status evaluation — compares entry technicals to current state
@@ -12349,11 +12366,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     weights.sectorOutflow = parseFloat((weights.sectorInflow * ratios.sectorOutflow).toFixed(4));
                 }
 
-                // Entry multiplier: calibrate via pullback correlation
-                const pullbackCorr = componentCorrelations.pullbackBonus?.corr10d || 0;
-                if (pullbackCorr > 0.05) {
-                    weights.entryMultPullback = parseFloat(Math.min(1.5, DEFAULT_WEIGHTS.entryMultPullback * (1 + pullbackCorr)).toFixed(4));
-                }
+                // Entry multiplier: calibrate via extension correlation (pullback multiplier removed)
                 const extensionCorr = componentCorrelations.extensionPenalty?.corr10d || 0;
                 if (extensionCorr < -0.05) {
                     weights.entryMultExtreme = parseFloat(Math.max(0.15, DEFAULT_WEIGHTS.entryMultExtreme * (1 + extensionCorr)).toFixed(4));
@@ -13180,6 +13193,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (!data?.candidates?.length) return;
             const signalAdj = getSignalAccuracyAdjustments();
             data.candidates.forEach(c => {
+                // Compute combo heat bonus from calibration data
+                const heat = evaluateComboHeat(c);
+                c._comboHeat = heat;
+                const heatBonus = computeComboHeatBonus(heat);
                 const scoreResult = calculateCompositeScore({
                     momentumScore: c.momentum || 0,
                     rsNormalized: ((c.rs || 50) / 100) * 10,
@@ -13198,7 +13215,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     signalAdjustments: signalAdj,
                     sma20: null, // Not persisted — SMA proximity bonus will be 0
                     currentPrice: c.price,
-                    smaCrossover: c.smaCrossover ? { crossover: c.smaCrossover } : null
+                    smaCrossover: c.smaCrossover ? { crossover: c.smaCrossover } : null,
+                    comboHeatBonus: heatBonus
                 });
                 c.compositeScore = scoreResult.total;
                 c.scoreBreakdown = scoreResult.breakdown;
@@ -13377,16 +13395,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 '<th class="watchlist-col" title="Click star to add/remove from watchlist">★</th><th>#</th><th>Symbol</th>' +
                 sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Non-REV gated by calibration.", 'Sig') +
                 sh('heat', "Combo heat from calibration backtesting. Green dots = hot combos, red dots = cold combos. Number = weighted net edge vs baseline. Positive = historically outperforms, negative = underperforms.", 'Heat') +
-                sh('score', "Composite score from ~15 weighted signals. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
+                sh('score', "Composite score from weighted signals + calibration heat bonus + entry signal bonus. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
-                sh('5d', "5-day cumulative return. Sweet spot is -2% to -8% with Bullish structure: triggers pullback bonus (up to +5) and 1.3x entry multiplier on the entire score. The biggest hidden score amplifier.", '5D') +
+                sh('5d', "5-day cumulative return. Pullbacks with bullish structure are captured by calibration combo heat, not a fixed bonus.", '5D') +
                 sh('mom', "Momentum (0-10). Sweet spot is 5-7: strong trend without penalties. Weight halved (0.3x) — calibration shows momentum is anti-predictive. 9+ triggers extension penalty (-3.5) and 0.6x entry multiplier.", 'Mom') +
                 sh('vol', "Volume ratio vs 20-day avg. Read with Mom: high Mom + low Vol (-2.0 penalty, fake rally). Low Mom + high Vol (+1.5, accumulation). Hard gate: breakouts need ≥1.5x, pullbacks need ≤0.7x or trade is vetoed.", 'Vol') +
                 sh('rs', "Relative Strength vs market (0-100). Mid-range is ideal. RS 85+ triggers mean-reversion penalties up to -6.0. When both Mom ≥9 and RS ≥85, extension penalty jumps to -5.0.", 'RS') +
                 sh('rsi', "RSI oscillator (0-100). Below 40 is a strong buy signal (+1.5 to +2.5). Above 70 is danger (-3.0). Above 80 is severe (-5.0 and entry multiplier drops to 0.3x). Biggest single unconditional bonus in the system.", 'RSI') +
                 sh('macd', "MACD crossover state. Bullish ▲ = +2.5, Bearish ▼ Cross = -2.0, Bearish ▼ = -0.5. A 4.5-point swing between bullish and bearish crossover — one of the largest score differentiators.", 'MACD') +
-                sh('structure', "Market structure (ICT/SMC). Bullish is best: adds +2.5 to +3.75 AND unlocks pullback bonus (up to +5), squeeze bonus, SMA bonus, and 1.3x entry multiplier. Ranging misses most conditional bonuses.", 'Structure') +
+                sh('structure', "Market structure (ICT/SMC). Bullish is best: adds +2.5 to +3.75. Also gates squeeze bonus and SMA bonus. Ranging misses most conditional bonuses.", 'Structure') +
                 sh('dtc', "Days to Cover (short interest). DTC >5 with Bullish structure = +1.5 squeeze bonus. DTC >3 with structure = +0.75. High DTC without Bullish structure gets nothing — structure is the gatekeeper.", 'DTC') +
                 '<th title="Sector classification. Sector rotation (inflow/outflow) affects score: inflow +2.0, modest inflow +1.0, outflow -1.0. 35% sector concentration cap enforced.">Sector</th>' +
                 sh('mcap', "Market capitalization.", 'MCap') +
@@ -13394,7 +13412,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             pageCandidates.forEach((c, i) => {
                 const score = (c.compositeScore || 0) + (c._signalBonus || 0);
-                const scoreClass = score >= 12 ? 'score-high' : score >= 8 ? 'score-mid' : score >= 4 ? 'score-low' : 'score-poor';
+                const scoreClass = score >= 10 ? 'score-high' : score >= 6 ? 'score-mid' : score >= 2 ? 'score-low' : 'score-poor';
                 const pct = Math.max(0, Math.min(100, (score / maxScore) * 100));
                 const held = holdingSymbols.has(c.symbol);
                 const structLabel = (c.structure || 'unknown').replace(/_/g, ' ');
@@ -13439,6 +13457,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (bd.declinePenalty) parts.push(`Decline: ${bd.declinePenalty.toFixed(1)}`);
                     if (bd.squeezeBonus) parts.push(`Squeeze: +${bd.squeezeBonus.toFixed(1)}`);
                     if (bd.accelBonus) parts.push(`Accel: +${bd.accelBonus.toFixed(1)}`);
+                    if (bd.heatBonus) parts.push(`Heat: ${bd.heatBonus >= 0 ? '+' : ''}${bd.heatBonus.toFixed(1)}`);
                     if (bd.learnedAdj) parts.push(`Learned: ${bd.learnedAdj >= 0 ? '+' : ''}${bd.learnedAdj.toFixed(1)}`);
                     if (c._signalBonus) parts.push(`Signal: +${c._signalBonus.toFixed(1)}`);
                     if (bd.entryMultiplier !== 1.0) parts.push(`EntryMult: ×${bd.entryMultiplier.toFixed(1)}`);
