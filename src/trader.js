@@ -12496,6 +12496,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             savePortfolio(true);
 
+            // Re-score candidates with new weights and refresh UI
+            rescoreCandidates();
+            savePortfolio(true); // Save again with updated scores
+            updateCandidateScorecard();
+            updateLearningInsightsDisplay();
+
             report('✅ Calibration complete!');
 
             return {
@@ -13163,6 +13169,41 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
             scorecardState.page = 1;
             updateCandidateScorecard();
+        }
+
+        // Re-score all candidates in lastCandidateScores using current weights.
+        // Called after calibration so scores reflect new calibrated weights immediately
+        // without requiring a full Scan Market.
+        function rescoreCandidates() {
+            const data = portfolio.lastCandidateScores;
+            if (!data?.candidates?.length) return;
+            const signalAdj = getSignalAccuracyAdjustments();
+            data.candidates.forEach(c => {
+                const scoreResult = calculateCompositeScore({
+                    momentumScore: c.momentum || 0,
+                    rsNormalized: ((c.rs || 50) / 100) * 10,
+                    sectorFlow: c.sectorFlow,
+                    structureScore: c.structureScore ?? 0,
+                    isAccelerating: c.isAccelerating ?? false,
+                    upDays: c.upDays ?? 0,
+                    totalDays: c.totalDays ?? 0,
+                    todayChange: c.dayChange || 0,
+                    totalReturn5d: c.return5d ?? 0,
+                    rsi: c.rsi,
+                    macdCrossover: c.macdCrossover,
+                    daysToCover: c.daysToCover || 0,
+                    volumeTrend: c.volumeTrend ?? 1,
+                    fvg: c.fvg,
+                    signalAdjustments: signalAdj,
+                    sma20: null, // Not persisted — SMA proximity bonus will be 0
+                    currentPrice: c.price,
+                    smaCrossover: c.smaCrossover ? { crossover: c.smaCrossover } : null
+                });
+                c.compositeScore = scoreResult.total;
+                c.scoreBreakdown = scoreResult.breakdown;
+            });
+            data.candidates.sort((a, b) => b.compositeScore - a.compositeScore);
+            console.log('📊 Re-scored candidates with new calibrated weights');
         }
 
         function updateCandidateScorecard() {
