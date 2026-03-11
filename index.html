@@ -17015,7 +17015,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     return -1;
                 },
                 sig: c => c._entrySignal?.bestMatchCount ?? 0,
-                heat: c => c._comboHeat?.netHeat ?? 0,
+                heat: c => computeComboHeatBonus(c._comboHeat),
             };
             const accessor = sortAccessors[scorecardState.sortField] || sortAccessors.score;
             const dir = scorecardState.sortDir === 'asc' ? 1 : -1;
@@ -17229,17 +17229,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         const dots = [];
                         for (let h = 0; h < filteredHot.length; h++) dots.push('<span class="heat-dot hot"></span>');
                         for (let h = 0; h < filteredCold.length; h++) dots.push('<span class="heat-dot cold"></span>');
-                        // Recalculate net heat from filtered combos
-                        const allFiltered = [...filteredHot, ...filteredCold];
-                        let wSum = 0, wTotal = 0;
-                        for (const combo of allFiltered) { const w = combo.n || 1; wSum += combo.vsBaseline * w; wTotal += w; }
-                        const filteredNet = wTotal > 0 ? parseFloat((wSum / wTotal).toFixed(2)) : 0;
+                        // Show the actual score bonus from these combos (matches what goes into compositeScore)
+                        const filteredHeatResult = { hotCombos: filteredHot, coldCombos: filteredCold };
+                        const filteredBonus = computeComboHeatBonus(filteredHeatResult);
                         const tipParts = [];
-                        tipParts.push(`Net: ${filteredNet >= 0 ? '+' : ''}${filteredNet.toFixed(2)}% vs baseline (weighted by sample size)`);
-                        filteredHot.forEach(h => tipParts.push(`🟢 ${h.label}: ${h.vsBaseline != null ? (h.vsBaseline >= 0 ? '+' : '') + h.vsBaseline.toFixed(1) + '% vs baseline' : '+' + h.avgReturn10d.toFixed(1) + '% avg'}, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
-                        filteredCold.forEach(h => tipParts.push(`🔴 ${h.label}: ${h.vsBaseline != null ? (h.vsBaseline >= 0 ? '+' : '') + h.vsBaseline.toFixed(1) + '% vs baseline' : h.avgReturn10d.toFixed(1) + '% avg'}, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
-                        const netColor = filteredNet > 0 ? 'var(--green)' : filteredNet < 0 ? 'var(--red)' : 'var(--text-muted)';
-                        const netLabel = (filteredNet >= 0 ? '+' : '') + filteredNet.toFixed(1);
+                        tipParts.push(`Score impact: ${filteredBonus >= 0 ? '+' : ''}${filteredBonus.toFixed(1)} pts from ${filteredHot.length + filteredCold.length} combo(s)`);
+                        filteredHot.forEach(h => tipParts.push(`🟢 ${h.label}: +${h.vsBaseline.toFixed(1)}% edge, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
+                        filteredCold.forEach(h => tipParts.push(`🔴 ${h.label}: ${h.vsBaseline.toFixed(1)}% edge, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
+                        const netColor = filteredBonus > 0 ? 'var(--green)' : filteredBonus < 0 ? 'var(--red)' : 'var(--text-muted)';
+                        const netLabel = (filteredBonus >= 0 ? '+' : '') + filteredBonus.toFixed(1);
                         heatCell = `<span class="heat-dots" title="${tipParts.join('\n')}">${dots.join('')}<span class="heat-net" style="color:${netColor}">${netLabel}</span></span>`;
                     }
                 }
