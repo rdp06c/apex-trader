@@ -8,7 +8,8 @@ const {
     calculateRSI, calculateSMA, calculateMACD, calculateSMACrossover,
     detectStructure, calculate5DayMomentum, calculateVolumeRatio,
     calculateRelativeStrength, detectSectorRotation, calculateCompositeScore,
-    getActiveWeights, isMarketOpen, detectMarketRegime, evaluateEntrySignals
+    getActiveWeights, isMarketOpen, detectMarketRegime, evaluateEntrySignals,
+    evaluateComboHeat, computeComboHeatBonus
 } = require('../lib/scoring');
 const {
     fetchBulkSnapshot, fetchGroupedDailyBars, fetchServerIndicators,
@@ -142,6 +143,7 @@ async function runFullScan({ force = false } = {}) {
         // Load portfolio for calibrated weights
         const portfolio = loadPortfolio();
         const calibratedWeights = portfolio?.calibratedWeights;
+        const comboResults = calibratedWeights?.signalCombos?.combos || null;
         const vixLevel = vixData?.level;
         const weights = getActiveWeights(calibratedWeights, vixLevel);
 
@@ -185,6 +187,29 @@ async function runFullScan({ force = false } = {}) {
             const sectorInfo = sectorRotation[sector];
             const sectorFlow = sectorInfo?.moneyFlow || 'neutral';
 
+            // Combo heat bonus from calibration data
+            const heatCandidate = {
+                rsi,
+                macdCrossover: macd?.crossover || 'none',
+                structureScore: structure.structureScore,
+                return5d: momentum.totalReturn5d,
+                momentum: momentum.score,
+                rs: rs.rsScore,
+                dayChange: priceData.changePercent,
+                sectorFlow,
+                sma20,
+                price: priceData.price,
+                isAccelerating: momentum.isAccelerating,
+                upDays: momentum.upDays,
+                totalDays: momentum.totalDays,
+                fvg: structure.fvg,
+                smaCrossover: smaCrossover?.crossover || 'none',
+                volumeRatio: volRatio?.ratio ?? null,
+                volumeTrend: momentum.volumeTrend
+            };
+            const comboHeat = evaluateComboHeat(heatCandidate, comboResults);
+            const heatBonus = computeComboHeatBonus(comboHeat);
+
             // Composite score
             const score = calculateCompositeScore({
                 momentumScore: momentum.score,
@@ -203,7 +228,8 @@ async function runFullScan({ force = false } = {}) {
                 fvg: structure.fvg,
                 sma20,
                 currentPrice: priceData.price,
-                smaCrossover
+                smaCrossover,
+                comboHeatBonus: heatBonus
             }, weights);
 
             // Market cap formatting
@@ -253,7 +279,8 @@ async function runFullScan({ force = false } = {}) {
 
         console.log(`Full scan: scored ${scored} stocks`);
 
-        // Signal bonus is applied at display time in the browser (computeSignalBonus),
+        // Combo heat bonus is included in compositeScore (via comboHeatBonus param).
+        // Signal bonus (computeSignalBonus) is applied at display time in the browser,
         // not persisted into scores, to avoid cumulative inflation across re-renders.
 
         // Sort by composite score descending (matches browser behavior)

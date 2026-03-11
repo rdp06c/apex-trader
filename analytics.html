@@ -374,9 +374,21 @@
 
   <!-- ═══ ENTRY QUALITY ═══ -->
   <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Entry Signal Match vs Outcome</div>
-    <div class="section-sub">Win rate by how many reversal criteria were met at entry: MACD Bull + RSI&lt;40 + Bull Structure + 5D Pullback</div>
+    <div class="chart-title">Entry Setup Type vs Outcome</div>
+    <div class="section-sub">Win rate and avg return by entry setup type (REV, MOM, QMO, SQZ, LDR) and match quality</div>
     <div id="entrySignalContent"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Position Adds vs Outcome</div>
+    <div class="section-sub">Do trades where you added to the position perform better than single entries?</div>
+    <div id="positionAddsContent"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Combo Heat vs Outcome</div>
+    <div class="section-sub">Do trades entered with hot calibration combos outperform cold ones?</div>
+    <div id="comboHeatContent"></div>
   </div>
 
   <div class="card" style="margin-bottom:24px">
@@ -824,6 +836,8 @@ function renderAll() {
   renderReturnDistChart();
   renderDrawdownChart();
   renderEntrySignalOutcome();
+  renderPositionAdds();
+  renderComboHeatOutcome();
   renderCompositeScatter();
   renderRSIScatter();
   renderRSScatter();
@@ -1088,7 +1102,7 @@ function renderRollingWinRate() {
   });
 }
 
-/* ── NEW: Entry Signal Match vs Outcome ────────────────── */
+/* ── Entry Setup Type vs Outcome ───────────────────────── */
 function renderEntrySignalOutcome() {
   const container = document.getElementById('entrySignalContent');
   const ct = (data.closedTrades || []).filter(t => t.entryTechnicals);
@@ -1098,53 +1112,231 @@ function renderEntrySignalOutcome() {
     return;
   }
 
-  // Count how many of 4 reversal criteria each trade met
-  const buckets = [0, 1, 2, 3, 4].map(n => ({ count: n, wins: 0, losses: 0, totalReturn: 0 }));
+  // Group by entry setup type (REV/MOM/QMO/SQZ/LDR/AVOID/None)
+  const setupOrder = ['REV', 'MOM', 'QMO', 'SQZ', 'LDR', 'AVOID', 'None'];
+  const buckets = {};
+  for (const key of setupOrder) buckets[key] = { wins: 0, losses: 0, totalReturn: 0 };
+
+  // Also track match quality: full vs strong vs partial
+  const qualityBuckets = { full: { wins: 0, losses: 0, totalReturn: 0 }, strong: { wins: 0, losses: 0, totalReturn: 0 }, partial: { wins: 0, losses: 0, totalReturn: 0 }, none: { wins: 0, losses: 0, totalReturn: 0 } };
 
   ct.forEach(t => {
-    const et = t.entryTechnicals;
-    let criteria = 0;
-    if (et.macdCrossover === 'bullish') criteria++;
-    if (et.rsi != null && et.rsi < 40) criteria++;
-    if (et.structure === 'bullish' || et.structure === 'bullish_continuation') criteria++;
-    if (et.totalReturn5d != null && et.totalReturn5d >= -8 && et.totalReturn5d <= -2) criteria++;
+    const sig = t.entryTechnicals.entrySignal;
+    let setupKey = 'None';
+    let matchQuality = 'none';
 
-    const b = buckets[criteria];
+    if (sig?.patterns?.length) {
+      // Find best non-anti pattern
+      const anti = sig.antiPatternMatch;
+      if (anti) {
+        setupKey = 'AVOID';
+        matchQuality = 'full';
+      } else {
+        const best = sig.patterns.filter(p => p.match && !p.antiPattern).sort((a, b) => (b.matchCount || 0) - (a.matchCount || 0))[0];
+        if (best) {
+          setupKey = best.badge || best.id.toUpperCase().slice(0, 3);
+          matchQuality = best.match || 'partial';
+        }
+      }
+    }
+
+    if (!buckets[setupKey]) buckets[setupKey] = { wins: 0, losses: 0, totalReturn: 0 };
+    const b = buckets[setupKey];
     if (t.profitLoss > 0) b.wins++;
     else b.losses++;
     b.totalReturn += t.returnPercent;
+
+    const q = qualityBuckets[matchQuality];
+    if (t.profitLoss > 0) q.wins++;
+    else q.losses++;
+    q.totalReturn += t.returnPercent;
   });
 
-  const active = buckets.filter(b => (b.wins + b.losses) > 0);
+  // Setup type cards
+  const activeSetups = setupOrder.filter(k => (buckets[k].wins + buckets[k].losses) > 0);
+  // Add any unexpected keys
+  for (const k of Object.keys(buckets)) {
+    if (!activeSetups.includes(k) && (buckets[k].wins + buckets[k].losses) > 0) activeSetups.push(k);
+  }
 
-  // Render as cards + bar chart
   let html = '<div class="signal-match-grid">';
-  for (const b of active) {
+  for (const key of activeSetups) {
+    const b = buckets[key];
     const total = b.wins + b.losses;
     const wr = (b.wins / total * 100);
     const avgRet = b.totalReturn / total;
     const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
-    const label = b.count === 4 ? 'ENTRY (4/4)' : b.count === 0 ? 'None (0/4)' : `${b.count}/4 Match`;
     html += `<div class="signal-match-card">
-      <div class="signal-match-label">${label}</div>
+      <div class="signal-match-label">${key}</div>
       <div class="signal-match-value" style="color:${wrColor}">${wr.toFixed(0)}%</div>
       <div class="signal-match-sub">${b.wins}W/${b.losses}L &middot; avg ${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>
     </div>`;
   }
   html += '</div>';
 
-  // Bar chart below
+  // Match quality cards (full/strong/partial/none)
+  const activeQualities = ['full', 'strong', 'partial', 'none'].filter(k => (qualityBuckets[k].wins + qualityBuckets[k].losses) > 0);
+  if (activeQualities.length > 1) {
+    const qualityLabels = { full: 'GREEN (full)', strong: 'YELLOW (strong)', partial: 'GRAY (partial)', none: 'No Signal' };
+    html += '<div style="margin-top:12px;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">By Match Quality</div>';
+    html += '<div class="signal-match-grid" style="margin-top:6px">';
+    for (const key of activeQualities) {
+      const b = qualityBuckets[key];
+      const total = b.wins + b.losses;
+      const wr = (b.wins / total * 100);
+      const avgRet = b.totalReturn / total;
+      const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
+      html += `<div class="signal-match-card">
+        <div class="signal-match-label">${qualityLabels[key]}</div>
+        <div class="signal-match-value" style="color:${wrColor}">${wr.toFixed(0)}%</div>
+        <div class="signal-match-sub">${b.wins}W/${b.losses}L &middot; avg ${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>
+      </div>`;
+    }
+    html += '</div>';
+  }
+
+  // Bar chart — setup type win rate + avg return
   html += '<canvas id="entrySignalChart" style="max-height:220px"></canvas>';
   container.innerHTML = html;
 
-  const labels = active.map(b => b.count === 4 ? '4/4 (ENTRY)' : b.count + '/4');
-  const wrData = active.map(b => b.wins / (b.wins + b.losses) * 100);
-  const retData = active.map(b => b.totalReturn / (b.wins + b.losses));
+  if (activeSetups.length === 0) return;
+
+  const wrData = activeSetups.map(k => buckets[k].wins / (buckets[k].wins + buckets[k].losses) * 100);
+  const retData = activeSetups.map(k => buckets[k].totalReturn / (buckets[k].wins + buckets[k].losses));
 
   new Chart(document.getElementById('entrySignalChart'), {
     type: 'bar',
     data: {
-      labels,
+      labels: activeSetups,
+      datasets: [
+        {
+          label: 'Win Rate %',
+          data: wrData,
+          backgroundColor: wrData.map(v => v >= 50 ? COLORS.win + '99' : COLORS.loss + '99'),
+          borderColor: wrData.map(v => v >= 50 ? COLORS.win : COLORS.loss),
+          borderWidth: 1,
+          borderRadius: 4,
+          yAxisID: 'y'
+        },
+        {
+          label: 'Avg Return %',
+          data: retData,
+          type: 'line',
+          borderColor: COLORS.accent,
+          backgroundColor: COLORS.accent + '44',
+          pointBackgroundColor: COLORS.accent,
+          pointRadius: 5,
+          borderWidth: 2,
+          tension: 0.3,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const k = activeSetups[ctx.dataIndex];
+              const b = buckets[k];
+              const total = b.wins + b.losses;
+              if (ctx.datasetIndex === 0) return `Win rate: ${ctx.parsed.y.toFixed(0)}% (${total} trades)`;
+              return `Avg return: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(1)}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true, max: 100,
+          ticks: { callback: v => v + '%' },
+          grid: { color: COLORS.gridLine },
+          title: { display: true, text: 'Win Rate %', color: COLORS.muted }
+        },
+        y1: {
+          position: 'right',
+          ticks: { callback: v => (v >= 0 ? '+' : '') + v + '%' },
+          grid: { display: false },
+          title: { display: true, text: 'Avg Return %', color: COLORS.muted }
+        },
+        x: { grid: { display: false } }
+      }
+    },
+    plugins: [fiftyLinePlugin]
+  });
+}
+
+/* ── Position Adds vs Outcome ─────────────────────────── */
+function renderPositionAdds() {
+  const container = document.getElementById('positionAddsContent');
+  const ct = data.closedTrades || [];
+  const tx = data.transactions || [];
+
+  if (ct.length < 3) {
+    container.innerHTML = '<div class="empty-chart">Need at least 3 closed trades</div>';
+    return;
+  }
+
+  // For each closed trade, count how many BUY transactions fall within its date range
+  const tradesWithAdds = ct.map(t => {
+    const buyDate = new Date(t.buyDate).getTime();
+    const sellDate = new Date(t.sellDate).getTime();
+    const buys = tx.filter(x =>
+      x.type === 'BUY' && x.symbol === t.symbol &&
+      new Date(x.timestamp).getTime() >= buyDate - 86400000 && // 1 day tolerance
+      new Date(x.timestamp).getTime() <= sellDate + 86400000
+    );
+    return { ...t, addCount: Math.max(buys.length, 1) };
+  });
+
+  // Bucket: 1 buy, 2 buys, 3+ buys
+  const bucketDefs = [
+    { label: 'Single Entry', min: 1, max: 1 },
+    { label: '1 Add (2 buys)', min: 2, max: 2 },
+    { label: '2+ Adds (3+ buys)', min: 3, max: Infinity }
+  ];
+  const buckets = bucketDefs.map(d => ({ ...d, wins: 0, losses: 0, totalReturn: 0 }));
+
+  for (const t of tradesWithAdds) {
+    const b = buckets.find(b => t.addCount >= b.min && t.addCount <= b.max);
+    if (!b) continue;
+    if (t.profitLoss > 0) b.wins++;
+    else b.losses++;
+    b.totalReturn += t.returnPercent;
+  }
+
+  const active = buckets.filter(b => (b.wins + b.losses) > 0);
+
+  // Cards
+  let html = '<div class="signal-match-grid">';
+  for (const b of active) {
+    const total = b.wins + b.losses;
+    const wr = (b.wins / total * 100);
+    const avgRet = b.totalReturn / total;
+    const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
+    html += `<div class="signal-match-card">
+      <div class="signal-match-label">${b.label}</div>
+      <div class="signal-match-value" style="color:${wrColor}">${wr.toFixed(0)}%</div>
+      <div class="signal-match-sub">${b.wins}W/${b.losses}L &middot; avg ${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>
+    </div>`;
+  }
+  html += '</div>';
+
+  // Bar chart
+  html += '<canvas id="positionAddsChart" style="max-height:220px"></canvas>';
+  container.innerHTML = html;
+
+  if (!active.length) return;
+
+  const wrData = active.map(b => b.wins / (b.wins + b.losses) * 100);
+  const retData = active.map(b => b.totalReturn / (b.wins + b.losses));
+
+  new Chart(document.getElementById('positionAddsChart'), {
+    type: 'bar',
+    data: {
+      labels: active.map(b => b.label),
       datasets: [
         {
           label: 'Win Rate %',
@@ -1204,9 +1396,133 @@ function renderEntrySignalOutcome() {
   });
 }
 
+/* ── Combo Heat vs Outcome ───────────────────────────── */
+function renderComboHeatOutcome() {
+  const container = document.getElementById('comboHeatContent');
+  const ct = (data.closedTrades || []).filter(t => t.entryTechnicals);
+
+  if (ct.length < 3) {
+    container.innerHTML = '<div class="empty-chart">Need at least 3 trades with entry technical data</div>';
+    return;
+  }
+
+  // Group by heat direction
+  const groups = {
+    hot: { label: 'Hot Combos', wins: 0, losses: 0, totalReturn: 0 },
+    cold: { label: 'Cold Combos', wins: 0, losses: 0, totalReturn: 0 },
+    neutral: { label: 'Neutral / No Data', wins: 0, losses: 0, totalReturn: 0 }
+  };
+
+  // Also collect scatter points for trades that have netHeat
+  const scatterPoints = [];
+
+  for (const t of ct) {
+    const heat = t.entryTechnicals.comboHeat;
+    let group;
+    if (heat && heat.netHeat > 0) group = groups.hot;
+    else if (heat && heat.netHeat < 0) group = groups.cold;
+    else group = groups.neutral;
+
+    if (t.profitLoss > 0) group.wins++;
+    else group.losses++;
+    group.totalReturn += t.returnPercent;
+
+    if (heat && heat.netHeat != null && heat.netHeat !== 0) {
+      scatterPoints.push({
+        x: heat.netHeat,
+        y: t.returnPercent,
+        r: 6,
+        symbol: t.symbol,
+        netHeat: heat.netHeat,
+        hotCount: heat.hotCount || 0,
+        coldCount: heat.coldCount || 0,
+        ret: t.returnPercent,
+        win: t.profitLoss > 0
+      });
+    }
+  }
+
+  const active = Object.values(groups).filter(g => (g.wins + g.losses) > 0);
+
+  // Cards
+  let html = '<div class="signal-match-grid">';
+  for (const g of active) {
+    const total = g.wins + g.losses;
+    const wr = (g.wins / total * 100);
+    const avgRet = g.totalReturn / total;
+    const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
+    html += `<div class="signal-match-card">
+      <div class="signal-match-label">${g.label}</div>
+      <div class="signal-match-value" style="color:${wrColor}">${wr.toFixed(0)}%</div>
+      <div class="signal-match-sub">${g.wins}W/${g.losses}L &middot; avg ${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>
+    </div>`;
+  }
+  html += '</div>';
+
+  // Scatter chart if we have heat data points
+  if (scatterPoints.length >= 2) {
+    html += '<canvas id="comboHeatScatter" style="max-height:220px"></canvas>';
+    container.innerHTML = html;
+
+    new Chart(document.getElementById('comboHeatScatter'), {
+      type: 'bubble',
+      data: {
+        datasets: [
+          {
+            label: 'Wins',
+            data: scatterPoints.filter(p => p.win),
+            backgroundColor: COLORS.win + '88',
+            borderWidth: 0
+          },
+          {
+            label: 'Losses',
+            data: scatterPoints.filter(p => !p.win),
+            backgroundColor: COLORS.loss + '88',
+            borderWidth: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            boxPadding: 6,
+            callbacks: {
+              label: ctx => {
+                const p = ctx.raw;
+                return [
+                  `${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`,
+                  `Net heat: ${p.netHeat > 0 ? '+' : ''}${p.netHeat.toFixed(2)}`,
+                  `${p.hotCount} hot, ${p.coldCount} cold combos`
+                ];
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Net Combo Heat', color: COLORS.muted },
+            grid: { color: COLORS.gridLine }
+          },
+          y: {
+            title: { display: true, text: 'Return %', color: COLORS.muted },
+            grid: { color: COLORS.gridLine },
+            ticks: { callback: v => v + '%' }
+          }
+        }
+      },
+      plugins: [zeroLinePlugin]
+    });
+  } else {
+    html += '<div class="empty-chart" style="margin-top:12px">Scatter chart will appear once more trades with combo heat data are closed</div>';
+    container.innerHTML = html;
+  }
+}
+
 /* ── Composite Score vs Outcome ───────────────────────── */
 function renderCompositeScatter() {
-  const points = (data.closedTrades || [])
+  const allPoints = (data.closedTrades || [])
     .filter(t => t.entryTechnicals?.compositeScore != null)
     .map(t => ({
       x: t.entryTechnicals.compositeScore,
@@ -1218,10 +1534,11 @@ function renderCompositeScatter() {
       exitReason: t.exitReason,
       buyDate: t.buyDate,
       sellDate: t.sellDate,
-      win: t.profitLoss > 0
+      win: t.profitLoss > 0,
+      v2: t.entryTechnicals.scoringVersion >= 2
     }));
 
-  if (!points.length) {
+  if (!allPoints.length) {
     const ctx = document.getElementById('compositeScatter').getContext('2d');
     ctx.fillStyle = COLORS.muted;
     ctx.font = "13px 'Inter', sans-serif";
@@ -1230,24 +1547,59 @@ function renderCompositeScatter() {
     return;
   }
 
+  const v2Points = allPoints.filter(p => p.v2);
+  const v1Points = allPoints.filter(p => !p.v2);
+
+  // Build datasets — v2 (current scoring) prominent, v1 (old scoring) faded
+  const datasets = [];
+  if (v2Points.length) {
+    datasets.push({
+      label: 'Wins (current)',
+      data: v2Points.filter(p => p.win),
+      backgroundColor: COLORS.win + '88',
+      borderWidth: 0
+    });
+    datasets.push({
+      label: 'Losses (current)',
+      data: v2Points.filter(p => !p.win),
+      backgroundColor: COLORS.loss + '88',
+      borderWidth: 0
+    });
+  }
+  if (v1Points.length) {
+    datasets.push({
+      label: 'Wins (old scoring)',
+      data: v1Points.filter(p => p.win),
+      backgroundColor: COLORS.win + '33',
+      borderColor: COLORS.win + '55',
+      borderWidth: 1
+    });
+    datasets.push({
+      label: 'Losses (old scoring)',
+      data: v1Points.filter(p => !p.win),
+      backgroundColor: COLORS.loss + '33',
+      borderColor: COLORS.loss + '55',
+      borderWidth: 1
+    });
+  }
+
+  // Show notice if mixing scoring versions
+  const container = document.getElementById('compositeScatter').parentElement;
+  if (v1Points.length && v2Points.length) {
+    const notice = document.createElement('div');
+    notice.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:6px;font-style:italic';
+    notice.textContent = `${v1Points.length} trades scored under old system (faded). ${v2Points.length} under current scoring.`;
+    container.insertBefore(notice, document.getElementById('compositeScatter'));
+  } else if (v1Points.length && !v2Points.length) {
+    const notice = document.createElement('div');
+    notice.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:6px;font-style:italic';
+    notice.textContent = 'All trades scored under old system — scores not comparable to current scorecard values.';
+    container.insertBefore(notice, document.getElementById('compositeScatter'));
+  }
+
   new Chart(document.getElementById('compositeScatter'), {
     type: 'bubble',
-    data: {
-      datasets: [
-        {
-          label: 'Wins',
-          data: points.filter(p => p.win),
-          backgroundColor: COLORS.win + '88',
-          borderWidth: 0
-        },
-        {
-          label: 'Losses',
-          data: points.filter(p => !p.win),
-          backgroundColor: COLORS.loss + '88',
-          borderWidth: 0
-        }
-      ]
-    },
+    data: { datasets },
     options: {
       responsive: true,
       plugins: {
@@ -1259,7 +1611,7 @@ function renderCompositeScatter() {
               const p = ctx.raw;
               return [
                 `${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`,
-                `Score: ${p.score.toFixed(1)}`,
+                `Score: ${p.score.toFixed(1)}${p.v2 ? '' : ' (old)'}`,
                 `Exit: ${(p.exitReason || '').replace(/_/g, ' ')}`,
                 `${new Date(p.buyDate).toLocaleDateString()} → ${new Date(p.sellDate).toLocaleDateString()}`
               ];

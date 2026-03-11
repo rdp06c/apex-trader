@@ -8945,7 +8945,22 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     <div class="holding-item holding-card ${h.gainLoss >= 0 ? 'card-positive' : 'card-negative'}">
                         <div class="holding-card-header">
                             <div>
-                                <div class="holding-card-symbol">${h.symbol}</div>
+                                <div class="holding-card-symbol">${h.symbol}${(() => {
+                                    const sig = h._entrySignal;
+                                    if (!sig?.patterns?.length) return '';
+                                    // Find best non-anti pattern that matched
+                                    let best = null;
+                                    for (const pat of sig.patterns) {
+                                        if (!pat.match || pat.antiPattern) continue;
+                                        if (!best || pat.matchCount > best.matchCount) best = pat;
+                                    }
+                                    const anti = sig.antiPatternMatch;
+                                    if (anti) return ' <span class="entry-badge avoid" style="font-size:0.6em;vertical-align:middle">AVOID</span>';
+                                    if (!best) return '';
+                                    const badge = best.badge || best.id.toUpperCase().slice(0, 3);
+                                    const matchClass = best.match === 'full' ? 'full' : best.match === 'strong' ? 'strong' : 'partial';
+                                    return ` <span class="entry-badge ${matchClass} setup-${best.id}" style="font-size:0.6em;vertical-align:middle">${badge}</span>`;
+                                })()}</div>
                                 <div class="holding-card-name"><a href="https://www.tradingview.com/symbols/${encodeURIComponent(h.symbol)}" target="_blank" rel="noopener" class="holding-card-link">${h.stockName}</a> <span class="holding-card-sector">· ${h.stockSector}</span></div>
                                 <div class="holding-card-shares">${h.shares} shares · ${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'}${h.isPastTimeframe ? ' <span class="negative">OVERDUE</span>' : ''} · ${h.positionSizePercent.toFixed(1)}% of portfolio</div>
                             </div>
@@ -9341,13 +9356,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         daysHeld
                     );
 
+                    // Entry signal captured at buy time
+                    const _entrySignal = _et?.entrySignal || null;
+
                     holdingDataArray.push({
                         symbol, shares, stockPrice, currentValue, changeClass, avgPurchasePrice,
                         earliestDate, conviction, daysHeld, gainLoss, gainLossPercent, gainLossClass,
                         positionSizePercent, isPastTimeframe, stockName, stockSector, entryMomentum,
                         entryRS, entryRSI, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
                         _struct, _profitSignals, _lossSignals, _thesis, _candidateNow, _intraday,
-                        _thesisStatus, insertionOrder: insertionOrder++
+                        _thesisStatus, _entrySignal, insertionOrder: insertionOrder++
                     });
                 }
 
@@ -10016,7 +10034,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     newsSentiment: news?.length > 0 ? (news.filter(n => n.sentiment === 'positive').length > news.filter(n => n.sentiment === 'negative').length ? 'positive' : news.filter(n => n.sentiment === 'negative').length > 0 ? 'negative' : 'neutral') : null,
                     priceVsVwap: liveData?.vwap ? ((price - liveData.vwap) / liveData.vwap * 100) : null,
                     sma50: signals.smaCrossover?.sma50 ?? null,
-                    smaCrossover: signals.smaCrossover?.crossover || null
+                    smaCrossover: signals.smaCrossover?.crossover || null,
+                    scoringVersion: 2
                 } : {};
 
                 // Evaluate entry signals and combo heat at time of purchase
@@ -12745,6 +12764,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const fmt1 = v => typeof v === 'number' ? v.toFixed(1) : String(v);
                     const fmtR = v => typeof v === 'number' ? Math.round(v) : String(v);
                     const parts = [];
+                    // Entry signal setup type
+                    const et = thesis.entryTechnicals || buys?.[0]?.entryTechnicals;
+                    const entrySig = et?.entrySignal;
+                    if (entrySig?.patterns?.length) {
+                        const best = entrySig.patterns.filter(p => p.match && !p.antiPattern).sort((a, b) => (b.matchCount || 0) - (a.matchCount || 0))[0];
+                        const anti = entrySig.antiPatternMatch;
+                        if (anti) parts.push('Setup=AVOID');
+                        else if (best) parts.push(`Setup=${best.badge || best.id.toUpperCase()}(${best.match})`);
+                    }
                     if (thesis.entryMomentum != null) parts.push(`MOM=${fmt1(thesis.entryMomentum)}`);
                     if (thesis.entryRS != null) parts.push(`RS=${fmtR(thesis.entryRS)}`);
                     if (thesis.entryRSI != null) parts.push(`RSI=${fmtR(thesis.entryRSI)}`);
@@ -12841,7 +12869,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
 
             // Assemble system prompt
-            const personality = `You are APEX, an AI trading assistant for ARC Investments. You have full visibility into Ryan's holdings (entry vs current technicals, loss signals, stop/target levels), market environment (VIX, regime, sector rotation), and trading history (closed trades, performance patterns, derived rules). Use this data to give specific, actionable answers. Reference specific numbers — don't be vague. If scan data is stale or missing, note that. Confident but honest. Keep responses focused and scannable with **bold headers** and short paragraphs.`;
+            const personality = `You are APEX, an AI trading assistant for ARC Investments. You have full visibility into Ryan's holdings (entry vs current technicals, loss signals, stop/target levels), market environment (VIX, regime, sector rotation), and trading history (closed trades, performance patterns, derived rules). Use this data to give specific, actionable answers. Reference specific numbers — don't be vague. If scan data is stale or missing, note that. Confident but honest. Keep responses focused and scannable with **bold headers** and short paragraphs.
+
+Each holding has a Setup type indicating how it was entered. Evaluate health through the lens of that setup:
+- **REV (Reversal)**: Entered on weakness expecting a bounce. CONFIRM: RSI rising from oversold, MACD flipping bullish, structure improving. WARN: RSI making new lows, structure still bearish after 3+ days, no MACD cross. These need patience — early weakness is expected.
+- **MOM (Momentum)**: Entered on strength expecting continuation. CONFIRM: momentum holding, RS stable, structure bullish. WARN: momentum fading >3pts, RS collapsing >30pts, volume divergence (rising price + falling volume). These should work quickly — stale capital is a red flag.
+- **QMO (Quiet Momentum)**: Moderate momentum with structure — the highest calibrated edge. CONFIRM: steady grind higher, structure holding bullish, low volatility. WARN: sudden volume spike with reversal, structure flip. Don't expect fireworks — slow and steady is the thesis.
+- **SQZ (Squeeze)**: High short interest + bullish structure. CONFIRM: price rising on volume, DTC still elevated. WARN: short interest dropping without price move, structure breaking down. Time-sensitive — if squeeze doesn't trigger, exit.
+- **LDR (Sector Leader)**: High RS + sector inflow + structure. CONFIRM: sector still in inflow, RS holding. WARN: sector rotating to outflow, RS dropping while sector peers hold up. Tied to sector health.
+- **AVOID**: Anti-pattern — should not have been entered. Flag for immediate review.`;
 
             return personality + '\n\n' + sections.join('\n\n');
         }
