@@ -2705,19 +2705,6 @@
         .entry-badge.strong { background: var(--yellow); color: #000; }
         .entry-badge.partial { background: rgba(255,255,255,0.1); color: var(--text-muted); }
         .entry-badge.avoid { background: var(--red); color: #fff; }
-        .entry-badge.setup-reversal.full { background: var(--green); color: #000; }
-        .entry-badge.setup-momentum_cont.full { background: #3b82f6; color: #fff; }
-        .entry-badge.setup-momentum_cont.strong { background: #60a5fa; color: #000; }
-        .entry-badge.setup-momentum_cont.partial { background: rgba(59,130,246,0.2); color: #60a5fa; }
-        .entry-badge.setup-breakout.full { background: #06b6d4; color: #000; }
-        .entry-badge.setup-breakout.strong { background: #22d3ee; color: #000; }
-        .entry-badge.setup-breakout.partial { background: rgba(6,182,212,0.2); color: #22d3ee; }
-        .entry-badge.setup-squeeze.full { background: #f59e0b; color: #000; }
-        .entry-badge.setup-squeeze.strong { background: #fbbf24; color: #000; }
-        .entry-badge.setup-squeeze.partial { background: rgba(245,158,11,0.2); color: #fbbf24; }
-        .entry-badge.setup-sector_leader.full { background: #a855f7; color: #fff; }
-        .entry-badge.setup-sector_leader.strong { background: #c084fc; color: #000; }
-        .entry-badge.setup-sector_leader.partial { background: rgba(168,85,247,0.2); color: #c084fc; }
 
         .heat-dots { display: inline-flex; gap: 3px; align-items: center; cursor: help; }
         .heat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
@@ -2794,10 +2781,9 @@
         /* ── Scorecard Pagination ──────────────────────────── */
         .scorecard-controls {
             display: flex;
-            justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
-            gap: 12px;
+            gap: 8px;
             flex-wrap: wrap;
         }
 
@@ -2825,6 +2811,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            margin-left: auto;
         }
 
         .scorecard-pagination button {
@@ -16930,9 +16917,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Controls: holdings filter + sector filter + pagination
             let html = '<div class="scorecard-controls">';
-            html += `<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8rem;color:#888;cursor:pointer;margin-right:12px;"><input type="checkbox" onchange="scorecardToggleHeld()"${scorecardState.filterHeld ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> Holdings only</label>`;
-            html += `<select onchange="scorecardSetSignalFilter(this.value)" class="scorecard-sector-filter" style="min-width:100px;margin-right:12px;"><option value="">All Setups</option><option value="any"${scorecardState.filterSignal === 'any' ? ' selected' : ''}>Any Signal</option><option value="reversal"${scorecardState.filterSignal === 'reversal' ? ' selected' : ''}>REV</option><option value="momentum_cont"${scorecardState.filterSignal === 'momentum_cont' ? ' selected' : ''}>MOM</option><option value="breakout"${scorecardState.filterSignal === 'breakout' ? ' selected' : ''}>BRK</option><option value="squeeze"${scorecardState.filterSignal === 'squeeze' ? ' selected' : ''}>SQZ</option><option value="sector_leader"${scorecardState.filterSignal === 'sector_leader' ? ' selected' : ''}>LDR</option><option value="avoid"${scorecardState.filterSignal === 'avoid' ? ' selected' : ''}>AVOID</option></select>`;
-            html += `<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8rem;color:#888;cursor:pointer;margin-right:12px;"><input type="checkbox" onchange="scorecardToggleWatchlist()"${scorecardState.filterWatchlist ? ' checked' : ''} style="accent-color:#f59e0b;cursor:pointer;"> ★ Watchlist${watchlistSet.size > 0 ? ' (' + watchlistSet.size + ')' : ''}</label>`;
+            html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;"><input type="checkbox" onchange="scorecardToggleHeld()"${scorecardState.filterHeld ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> Holdings only</label>`;
+            html += `<select onchange="scorecardSetSignalFilter(this.value)" class="scorecard-sector-filter" style="min-width:100px;margin-right:4px;"><option value="">All Setups</option><option value="any"${scorecardState.filterSignal === 'any' ? ' selected' : ''}>Any Signal</option><option value="reversal"${scorecardState.filterSignal === 'reversal' ? ' selected' : ''}>REV</option><option value="momentum_cont"${scorecardState.filterSignal === 'momentum_cont' ? ' selected' : ''}>MOM</option><option value="quiet_momentum"${scorecardState.filterSignal === 'quiet_momentum' ? ' selected' : ''}>QMO</option><option value="squeeze"${scorecardState.filterSignal === 'squeeze' ? ' selected' : ''}>SQZ</option><option value="sector_leader"${scorecardState.filterSignal === 'sector_leader' ? ' selected' : ''}>LDR</option><option value="avoid"${scorecardState.filterSignal === 'avoid' ? ' selected' : ''}>AVOID</option></select>`;
+            html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;"><input type="checkbox" onchange="scorecardToggleWatchlist()"${scorecardState.filterWatchlist ? ' checked' : ''} style="accent-color:#f59e0b;cursor:pointer;"> ★ Watchlist${watchlistSet.size > 0 ? ' (' + watchlistSet.size + ')' : ''}</label>`;
             html += `<select onchange="scorecardSetSector(this.value)" class="scorecard-sector-filter">`;
             html += `<option value="">All Sectors (${totalCount})</option>`;
             sectors.forEach(s => {
@@ -16960,7 +16947,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             html += '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
                 '<th class="watchlist-col" title="Click star to add/remove from watchlist">★</th><th>#</th><th>Symbol</th>' +
-                sh('sig', "Setup type signal. REV=reversal, MOM=momentum continuation, BRK=breakout, SQZ=squeeze, LDR=sector leader, AVOID=exhausted runner. Non-reversal patterns gated by calibration.", 'Sig') +
+                sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Non-REV gated by calibration.", 'Sig') +
                 sh('heat', "Combo heat from calibration backtesting. Green dots = hot combos, red dots = cold combos. Number = weighted net edge vs baseline. Positive = historically outperforms, negative = underperforms.", 'Heat') +
                 sh('score', "Composite score from ~15 weighted signals. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
@@ -17049,7 +17036,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const structClass = (c.structure === 'bullish' || c.structure === 'bullish_continuation') ? 'sig-green'
                     : (c.structure === 'bearish' || c.structure === 'bearish_continuation') ? 'sig-red' : '';
 
-                // Entry signal badge — shows setup type (REV/MOM/BRK/SQZ/LDR/AVOID)
+                // Entry signal badge — shows setup type (REV/MOM/QMO/SQZ/LDR/AVOID)
                 const sig = c._entrySignal;
                 let sigBadge = '';
                 if (sig) {
@@ -17147,7 +17134,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             html += '</tbody></table></div>';
             html += `<div style="font-size:10px;color:var(--text-faint);margin-top:8px">Last scored: ${new Date(data.timestamp).toLocaleString()} — ${totalCount} stocks scored</div>`;
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent)">Sig: <span class="entry-badge full setup-reversal" style="display:inline">REV</span> reversal, <span class="entry-badge full setup-momentum_cont" style="display:inline">MOM</span> momentum, <span class="entry-badge full setup-breakout" style="display:inline">BRK</span> breakout, <span class="entry-badge full setup-squeeze" style="display:inline">SQZ</span> squeeze, <span class="entry-badge full setup-sector_leader" style="display:inline">LDR</span> sector leader, <span class="entry-badge avoid" style="display:inline">AVOID</span> exhausted. Non-REV patterns require calibration validation. Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold combo, <span style="color:var(--green)">+1.2</span> net edge. Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum driven.</div>`;
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig quality: <span class="entry-badge full" style="display:inline">GREEN</span> all criteria met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> anti-pattern</span><span>Types: REV=reversal · MOM=momentum · QMO=quiet momentum · SQZ=squeeze · LDR=sector leader · Non-REV gated by calibration</span><span>Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold combo, <span style="color:var(--green)">+1.2</span> net edge · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum driven</span></div>`;
             container.innerHTML = html;
         }
 
