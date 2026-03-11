@@ -6261,10 +6261,10 @@
 
                 if (edge == null || edge <= 0) continue;
 
-                // Scale by edge (0.5 per % point, capped at 8.0) and match quality
-                // GREEN (full) gets 100%, YELLOW (strong) gets 30%
-                const rawBonus = Math.min(edge * 0.5, 8.0);
-                const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.3 : 0;
+                // Scale by edge (1.0 per % point, capped at 8.0) and match quality
+                // GREEN (full) gets 100%, YELLOW (strong) gets 25%
+                const rawBonus = Math.min(edge * 1.0, 8.0);
+                const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.25 : 0;
                 const bonus = rawBonus * matchMult;
 
                 if (bonus > bestBonus) bestBonus = bonus;
