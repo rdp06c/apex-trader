@@ -8,8 +8,7 @@ const {
     calculateRSI, calculateSMA, calculateMACD, calculateSMACrossover,
     detectStructure, calculate5DayMomentum, calculateVolumeRatio,
     calculateRelativeStrength, detectSectorRotation, calculateCompositeScore,
-    getActiveWeights, isMarketOpen, detectMarketRegime, evaluateEntrySignals,
-    computeSignalBonus
+    getActiveWeights, isMarketOpen, detectMarketRegime, evaluateEntrySignals
 } = require('../lib/scoring');
 const {
     fetchBulkSnapshot, fetchGroupedDailyBars, fetchServerIndicators,
@@ -254,20 +253,8 @@ async function runFullScan({ force = false } = {}) {
 
         console.log(`Full scan: scored ${scored} stocks`);
 
-        // Apply signal bonus from calibrated entry patterns
-        const calWeights = portfolio.calibratedWeights;
-        let bonusApplied = 0;
-        candidateScores.forEach(c => {
-            if (c.entrySignal) {
-                const bonus = computeSignalBonus(c.entrySignal, calWeights);
-                if (bonus > 0) {
-                    c.compositeScore += bonus;
-                    if (c.scoreBreakdown) c.scoreBreakdown.signalBonus = bonus;
-                    bonusApplied++;
-                }
-            }
-        });
-        if (bonusApplied > 0) console.log(`Full scan: signal bonus applied to ${bonusApplied} stocks`);
+        // Signal bonus is applied at display time in the browser (computeSignalBonus),
+        // not persisted into scores, to avoid cumulative inflation across re-renders.
 
         // Sort by composite score descending (matches browser behavior)
         candidateScores.sort((a, b) => b.compositeScore - a.compositeScore);

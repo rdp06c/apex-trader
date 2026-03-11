@@ -13211,15 +13211,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const sectorCounts = {};
             candidates.forEach(c => { sectorCounts[c.sector] = (sectorCounts[c.sector] || 0) + 1; });
 
-            // Compute entry signals, combo heat, and signal bonus for all candidates
+            // Compute entry signals, combo heat, and signal bonus for all candidates.
+            // Signal bonus stored as ephemeral _signalBonus — never mutate compositeScore
+            // to avoid cumulative inflation across re-renders.
             candidates.forEach(c => {
                 c._entrySignal = evaluateEntrySignals(c);
                 c._comboHeat = evaluateComboHeat(c);
-                const sigBonus = computeSignalBonus(c._entrySignal, portfolio.calibratedWeights);
-                if (sigBonus > 0) {
-                    c.compositeScore += sigBonus;
-                    if (c.scoreBreakdown) c.scoreBreakdown.signalBonus = sigBonus;
-                }
+                c._signalBonus = computeSignalBonus(c._entrySignal, portfolio.calibratedWeights);
             });
 
             if (scorecardState.filterHeld) {
@@ -13261,7 +13259,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Sort
             const sortAccessors = {
-                score: c => c.compositeScore || 0,
+                score: c => (c.compositeScore || 0) + (c._signalBonus || 0),
                 price: c => c.price || 0,
                 day: c => c.dayChange || 0,
                 '5d': c => c.return5d != null ? c.return5d : -999,
@@ -13301,7 +13299,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const start = (scorecardState.page - 1) * SCORECARD_PAGE_SIZE;
             const pageCandidates = candidates.slice(start, start + SCORECARD_PAGE_SIZE);
 
-            const maxScore = Math.max(...data.candidates.map(c => c.compositeScore), 1);
+            const maxScore = Math.max(...data.candidates.map(c => (c.compositeScore || 0) + (c._signalBonus || 0)), 1);
 
             // Controls: holdings filter + sector filter + pagination
             let html = '<div class="scorecard-controls">';
@@ -13353,7 +13351,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 '</tr></thead><tbody>';
 
             pageCandidates.forEach((c, i) => {
-                const score = c.compositeScore;
+                const score = (c.compositeScore || 0) + (c._signalBonus || 0);
                 const scoreClass = score >= 12 ? 'score-high' : score >= 8 ? 'score-mid' : score >= 4 ? 'score-low' : 'score-poor';
                 const pct = Math.max(0, Math.min(100, (score / maxScore) * 100));
                 const held = holdingSymbols.has(c.symbol);
@@ -13400,7 +13398,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (bd.squeezeBonus) parts.push(`Squeeze: +${bd.squeezeBonus.toFixed(1)}`);
                     if (bd.accelBonus) parts.push(`Accel: +${bd.accelBonus.toFixed(1)}`);
                     if (bd.learnedAdj) parts.push(`Learned: ${bd.learnedAdj >= 0 ? '+' : ''}${bd.learnedAdj.toFixed(1)}`);
-                    if (bd.signalBonus) parts.push(`Signal: +${bd.signalBonus.toFixed(1)}`);
+                    if (c._signalBonus) parts.push(`Signal: +${c._signalBonus.toFixed(1)}`);
                     if (bd.entryMultiplier !== 1.0) parts.push(`EntryMult: ×${bd.entryMultiplier.toFixed(1)}`);
                     scoreTooltip = parts.join(' | ');
                 }
