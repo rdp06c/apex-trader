@@ -502,6 +502,34 @@ function calculateATR(bars, period = 14) {
     return Math.round(atr * 100) / 100;
 }
 
+// ATR multiplier — widens stops when VIX is elevated to avoid shakeouts
+function getATRMultiplier(vixLevel) {
+    if (vixLevel != null && vixLevel > 30) return 3.0;
+    if (vixLevel != null && vixLevel > 20) return 2.5;
+    return 2.0;
+}
+
+// Classify a loss signal as 'actionable' or 'informational' based on VIX and setup type.
+// Structure-based signals are dampened during high VIX (noise) and for certain setups.
+const STRUCTURE_SIGNALS = ['Bearish CHoCH', 'Bearish structure', 'Structure flipped', 'Vol divergence'];
+function classifyLossSignal(signalName, vixLevel, setupType) {
+    if (!STRUCTURE_SIGNALS.includes(signalName)) return 'actionable';
+    if (setupType === 'reversal' && (signalName === 'Bearish CHoCH' || signalName === 'Bearish structure')) {
+        return 'informational';
+    }
+    if (setupType === 'squeeze' && signalName === 'Vol divergence') {
+        return 'informational';
+    }
+    if (vixLevel != null && vixLevel > 30) return 'informational';
+    if (vixLevel != null && vixLevel > 20) {
+        if (setupType === 'momentum_continuation' || setupType === 'quiet_momentum') {
+            return 'actionable';
+        }
+        return 'informational';
+    }
+    return 'actionable';
+}
+
 // Volume divergence — detects price rising with declining volume.
 // Returns { divergence: bool, direction, priceTrend, volumeTrend, days }
 function detectVolumeDivergence(bars, lookback = 15) {
@@ -941,6 +969,8 @@ module.exports = {
     detectSectorRotation,
     calculateCompositeScore,
     calculateATR,
+    getATRMultiplier,
+    classifyLossSignal,
     detectVolumeDivergence,
     calculateFibTargets,
     detectMarketRegime,

@@ -6,7 +6,7 @@
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
-const { isMarketOpen, detectStructure, calculateRSI, calculateMACD, calculateATR, detectVolumeDivergence, calculateFibTargets } = require('../lib/scoring');
+const { isMarketOpen, detectStructure, calculateRSI, calculateMACD, calculateATR, getATRMultiplier, classifyLossSignal, detectVolumeDivergence, calculateFibTargets } = require('../lib/scoring');
 const { fetchBulkSnapshot, fetchGroupedDailyBars, fetchIntradayBars } = require('../lib/fetchers');
 const { sendAlert } = require('./alerts');
 const { runFullScan, getScanStatus, isScanRunning, getScanRunningInfo } = require('./full-scan');
@@ -106,24 +106,27 @@ async function runStructureCheck({ force = false } = {}) {
             const price = prices[symbol]?.price;
             const thesis = portfolio.holdingTheses && portfolio.holdingTheses[symbol];
 
-            // ATR-based stop: entry price - 2×ATR (use thesis entry price if available)
+            // ATR-based stop: VIX-aware multiplier (widens during elevated VIX)
             const entryPrice = thesis?.entryPrice || price;
-            const atrStop = atr && entryPrice ? Math.round((entryPrice - 2 * atr) * 100) / 100 : null;
+            const vixLevel = portfolio.lastVIX?.level;
+            const atrMult = getATRMultiplier(vixLevel);
+            const atrStop = atr && entryPrice ? Math.round((entryPrice - atrMult * atr) * 100) / 100 : null;
 
-            // Compute loss signals for health summary
-            const lossSignals = [];
+            // Compute loss signals with VIX-aware classification
+            const setupType = thesis?.entrySetupType || null;
+            const allSignals = [];
             const candidateNow = (portfolio.lastCandidateScores?.candidates || []).find(c => c.symbol === symbol);
-            if (atrStop && price && price <= atrStop) lossSignals.push('ATR stop');
-            if (current.choch && current.chochType === 'bearish') lossSignals.push('Bearish CHoCH');
-            if (current.structure === 'bearish') lossSignals.push('Bearish structure');
-            if (thesis?.stopPrice && price && price <= thesis.stopPrice) lossSignals.push('Stop breached');
+            if (atrStop && price && price <= atrStop) allSignals.push('ATR stop');
+            if (current.choch && current.chochType === 'bearish') allSignals.push('Bearish CHoCH');
+            if (current.structure === 'bearish') allSignals.push('Bearish structure');
+            if (thesis?.stopPrice && price && price <= thesis.stopPrice) allSignals.push('Stop breached');
             if (thesis?.entryRS != null && candidateNow?.rs != null && (candidateNow.rs - thesis.entryRS) <= -30)
-                lossSignals.push('RS collapse');
+                allSignals.push('RS collapse');
             if (thesis?.entryMomentum >= 7 && candidateNow?.momentum != null && candidateNow.momentum < 3)
-                lossSignals.push('Mom collapse');
+                allSignals.push('Mom collapse');
             if (thesis?.entryStructure === 'bullish' && current.structure === 'bearish')
-                lossSignals.push('Structure flipped');
-            if (volDiv.divergence && volDiv.direction === 'bearish') lossSignals.push('Vol divergence');
+                allSignals.push('Structure flipped');
+            if (volDiv.divergence && volDiv.direction === 'bearish') allSignals.push('Vol divergence');
             let holdDays = 0;
             if (thesis?.entryDate) {
                 const start = new Date(thesis.entryDate);
@@ -137,7 +140,18 @@ async function runStructureCheck({ force = false } = {}) {
                 }
             }
             const holdReturn = thesis?.entryPrice && price ? ((price - thesis.entryPrice) / thesis.entryPrice) * 100 : null;
-            if (holdDays >= 5 && holdReturn != null && Math.abs(holdReturn) <= 3) lossSignals.push('Stale capital');
+            if (holdDays >= 5 && holdReturn != null && Math.abs(holdReturn) <= 3) allSignals.push('Stale capital');
+
+            // Split into actionable vs informational
+            const lossSignals = [];
+            const infoSignals = [];
+            for (const sig of allSignals) {
+                if (classifyLossSignal(sig, vixLevel, setupType) === 'actionable') {
+                    lossSignals.push(sig);
+                } else {
+                    infoSignals.push(sig);
+                }
+            }
 
             // Store current readings in state
             if (!state.readings) state.readings = {};
@@ -151,18 +165,23 @@ async function runStructureCheck({ force = false } = {}) {
                 macdCrossover: macd?.crossover || 'none',
                 atr,
                 atrStop,
+                atrMultiplier: atrMult,
                 volumeDivergence: volDiv,
                 fibTargets,
                 price,
                 lossSignals,
+                infoSignals,
+                vixLevel: vixLevel ?? null,
+                setupType: setupType ?? null,
                 timestamp: new Date().toISOString()
             };
 
+            // Alert conditions — only fire for actionable signals (skip dampened/informational)
             // Alert condition 1: Structure breakdown
-            // Entry was bullish, current is bearish
             const entryStructure = thesis?.entryTechnicals?.structure || thesis?.entryStructure;
             if (entryStructure === 'bullish' && current.structure === 'bearish') {
-                if (shouldAlert(state, symbol, 'structure-breakdown')) {
+                const isActionable = classifyLossSignal('Structure flipped', vixLevel, setupType) === 'actionable';
+                if (isActionable && shouldAlert(state, symbol, 'structure-breakdown')) {
                     alerts.push({
                         symbol,
                         condition: 'structure-breakdown',
@@ -176,7 +195,8 @@ async function runStructureCheck({ force = false } = {}) {
 
             // Alert condition 2: Bearish CHoCH
             if (current.choch && current.chochType === 'bearish') {
-                if (shouldAlert(state, symbol, 'bearish-choch')) {
+                const isActionable = classifyLossSignal('Bearish CHoCH', vixLevel, setupType) === 'actionable';
+                if (isActionable && shouldAlert(state, symbol, 'bearish-choch')) {
                     alerts.push({
                         symbol,
                         condition: 'bearish-choch',
@@ -188,7 +208,7 @@ async function runStructureCheck({ force = false } = {}) {
                 }
             }
 
-            // Alert condition 3: Stop loss breached (manual or ATR-based)
+            // Alert condition 3: Stop loss breached (manual or ATR-based) — always actionable
             const stopPrice = thesis?.stopPrice || thesis?.targets?.stop;
             const effectiveStop = stopPrice || atrStop;
             if (effectiveStop && price && price <= effectiveStop) {
@@ -198,7 +218,7 @@ async function runStructureCheck({ force = false } = {}) {
                         symbol,
                         condition: 'stop-breached',
                         title: `APEX: ${symbol} ${stopType} Stop Breached`,
-                        body: `${symbol} at $${price} is below ${stopType} stop of $${effectiveStop}.${atr ? `\nATR: $${atr}` : ''}`,
+                        body: `${symbol} at $${price} is below ${stopType} stop of $${effectiveStop}.${atr ? `\nATR: $${atr} (${atrMult}×)` : ''}`,
                         tags: ['octagonal_sign']
                     });
                     recordAlert(state, symbol, 'stop-breached');
@@ -207,7 +227,8 @@ async function runStructureCheck({ force = false } = {}) {
 
             // Alert condition 4: Bearish volume divergence
             if (volDiv.divergence && volDiv.direction === 'bearish') {
-                if (shouldAlert(state, symbol, 'volume-divergence')) {
+                const isActionable = classifyLossSignal('Vol divergence', vixLevel, setupType) === 'actionable';
+                if (isActionable && shouldAlert(state, symbol, 'volume-divergence')) {
                     alerts.push({
                         symbol,
                         condition: 'volume-divergence',

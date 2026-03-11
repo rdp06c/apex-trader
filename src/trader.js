@@ -1976,6 +1976,44 @@
             return Math.round(atr * 100) / 100;
         }
 
+        // ATR multiplier — widens stops when VIX is elevated to avoid shakeouts
+        function getATRMultiplier(vixLevel) {
+            if (vixLevel != null && vixLevel > 30) return 3.0;
+            if (vixLevel != null && vixLevel > 20) return 2.5;
+            return 2.0;
+        }
+
+        // Classify a loss signal as 'actionable' or 'informational' based on VIX and setup type.
+        // Structure-based signals are dampened during high VIX (noise) and for certain setups.
+        // Thesis-breakers (RS/momentum collapse) are always actionable.
+        const STRUCTURE_SIGNALS = ['Bearish CHoCH', 'Bearish structure', 'Structure flipped', 'Vol divergence'];
+        function classifyLossSignal(signalName, vixLevel, setupType) {
+            // Always actionable regardless of context
+            if (!STRUCTURE_SIGNALS.includes(signalName)) return 'actionable';
+
+            // Setup-specific dampening (any VIX level)
+            if (setupType === 'reversal' && (signalName === 'Bearish CHoCH' || signalName === 'Bearish structure')) {
+                return 'informational';
+            }
+            if (setupType === 'squeeze' && signalName === 'Vol divergence') {
+                return 'informational';
+            }
+
+            // VIX panic — all structure signals informational
+            if (vixLevel != null && vixLevel > 30) return 'informational';
+
+            // VIX elevated — structure signals informational unless MOM/QMO setup
+            if (vixLevel != null && vixLevel > 20) {
+                if (setupType === 'momentum_continuation' || setupType === 'quiet_momentum') {
+                    return 'actionable';
+                }
+                return 'informational';
+            }
+
+            // VIX normal/low — actionable
+            return 'actionable';
+        }
+
         // Volume divergence — price rising with declining volume signals weakness
         function detectVolumeDivergence(bars, lookback = 15) {
             if (!bars || bars.length < lookback + 1) return { divergence: false };
@@ -8767,9 +8805,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 return;
             }
 
-            // Classify each holding
+            // Classify each holding (only actionable signals drive risk level)
             const rows = dataArray.map(h => {
                 const signals = (h._lossSignals || []).length;
+                const infoSignals = (h._infoSignals || []).length;
                 const level = signals >= 2 ? 'danger' : signals === 1 ? 'caution' : 'healthy';
                 const price = h.stockPrice?.price;
                 const stopPrice = h._thesis?.stopPrice || h._atrStop;
@@ -8792,25 +8831,29 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const rsi = h._rsiVal != null ? Math.round(h._rsiVal) : '—';
                 const rsiEntry = h.entryRSI != null ? Math.round(h.entryRSI) : null;
                 const macd = h._macdResult?.crossover || '—';
-                return { ...h, signals, level, price, stopPrice, stopDist, targetPrice, effectiveTarget, fibTarget, targetDist, structLabel, mom, momEntry, rs, rsEntry, rsi, rsiEntry, macd };
+                return { ...h, signals, infoSignals, level, price, stopPrice, stopDist, targetPrice, effectiveTarget, fibTarget, targetDist, structLabel, mom, momEntry, rs, rsEntry, rsi, rsiEntry, macd };
             });
 
             // Sort: danger first, then caution, then healthy
             const levelOrder = { danger: 0, caution: 1, healthy: 2 };
             rows.sort((a, b) => (levelOrder[a.level] - levelOrder[b.level]) || (b.signals - a.signals));
 
-            const counts = { healthy: 0, caution: 0, danger: 0 };
-            rows.forEach(r => counts[r.level]++);
+            const counts = { healthy: 0, caution: 0, danger: 0, info: 0 };
+            rows.forEach(r => {
+                counts[r.level]++;
+                if (r.infoSignals > 0 && r.signals === 0) counts.info++;
+            });
 
             let html = '<div class="risk-summary">';
             html += `<span class="risk-pill risk-pill-healthy">${counts.healthy} Healthy</span>`;
             html += `<span class="risk-pill risk-pill-caution">${counts.caution} Caution</span>`;
             html += `<span class="risk-pill risk-pill-danger">${counts.danger} At Risk</span>`;
+            if (counts.info > 0) html += `<span class="risk-pill risk-pill-info">${counts.info} Dampened</span>`;
             html += '</div>';
 
             html += '<div class="risk-table-wrap"><table class="risk-table">';
             html += '<thead><tr>';
-            html += '<th>Symbol</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>Thesis</th>';
+            html += '<th>Symbol</th><th>Sig</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>Thesis</th>';
             html += '<th>MOM</th><th>RS</th><th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
             html += '</tr></thead><tbody>';
 
@@ -8841,6 +8884,21 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                 html += `<tr class="risk-row-${r.level}">`;
                 html += `<td style="font-weight:600">${escapeHtml(r.symbol)}</td>`;
+                html += '<td>' + (() => {
+                    const sig = r._entrySignal;
+                    if (!sig?.patterns?.length) return '—';
+                    let best = null;
+                    for (const pat of sig.patterns) {
+                        if (!pat.match || pat.antiPattern) continue;
+                        if (!best || pat.matchCount > best.matchCount) best = pat;
+                    }
+                    const anti = sig.antiPatternMatch;
+                    if (anti) return '<span class="entry-badge avoid">AVOID</span>';
+                    if (!best) return '—';
+                    const badge = best.badge || best.id.toUpperCase().slice(0, 3);
+                    const matchClass = best.match === 'full' ? 'full' : best.match === 'strong' ? 'strong' : 'partial';
+                    return `<span class="entry-badge ${matchClass} setup-${best.id}">${badge}</span>`;
+                })() + '</td>';
                 html += `<td>$${r.price ? r.price.toFixed(2) : '—'}</td>`;
                 html += `<td style="${plColor}">${r.gainLossPercent != null ? (r.gainLossPercent > 0 ? '+' : '') + r.gainLossPercent.toFixed(1) + '%' : '—'}</td>`;
                 html += `<td>${stopDistDisplay}</td>`;
@@ -8914,7 +8972,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     sorted.sort((a, b) => b.currentValue - a.currentValue);
                     break;
                 case 'health':
-                    sorted.sort((a, b) => (b._lossSignals?.length || 0) - (a._lossSignals?.length || 0));
+                    sorted.sort((a, b) => {
+                        const aLoss = a._lossSignals?.length || 0;
+                        const bLoss = b._lossSignals?.length || 0;
+                        if (aLoss !== bLoss) return bLoss - aLoss;
+                        return (b._infoSignals?.length || 0) - (a._infoSignals?.length || 0);
+                    });
                     break;
                 case 'dateAdded':
                 default:
@@ -8945,22 +9008,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     <div class="holding-item holding-card ${h.gainLoss >= 0 ? 'card-positive' : 'card-negative'}">
                         <div class="holding-card-header">
                             <div>
-                                <div class="holding-card-symbol">${h.symbol}${(() => {
-                                    const sig = h._entrySignal;
-                                    if (!sig?.patterns?.length) return '';
-                                    // Find best non-anti pattern that matched
-                                    let best = null;
-                                    for (const pat of sig.patterns) {
-                                        if (!pat.match || pat.antiPattern) continue;
-                                        if (!best || pat.matchCount > best.matchCount) best = pat;
-                                    }
-                                    const anti = sig.antiPatternMatch;
-                                    if (anti) return ' <span class="entry-badge avoid" style="font-size:0.6em;vertical-align:middle">AVOID</span>';
-                                    if (!best) return '';
-                                    const badge = best.badge || best.id.toUpperCase().slice(0, 3);
-                                    const matchClass = best.match === 'full' ? 'full' : best.match === 'strong' ? 'strong' : 'partial';
-                                    return ` <span class="entry-badge ${matchClass} setup-${best.id}" style="font-size:0.6em;vertical-align:middle">${badge}</span>`;
-                                })()}</div>
+                                <div class="holding-card-symbol">${h.symbol}</div>
                                 <div class="holding-card-name"><a href="https://www.tradingview.com/symbols/${encodeURIComponent(h.symbol)}" target="_blank" rel="noopener" class="holding-card-link">${h.stockName}</a> <span class="holding-card-sector">· ${h.stockSector}</span></div>
                                 <div class="holding-card-shares">${h.shares} shares · ${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'}${h.isPastTimeframe ? ' <span class="negative">OVERDUE</span>' : ''} · ${h.positionSizePercent.toFixed(1)}% of portfolio</div>
                             </div>
@@ -8977,9 +9025,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             ${(() => {
                                 if (h._lossSignals.length >= 1) {
                                     const cls = h._lossSignals.length >= 2 ? 'sell' : 'warn';
-                                    const tip = escapeHtml(h._lossSignals.join(', '));
+                                    const infoSuffix = h._infoSignals.length ? ' | Dampened: ' + h._infoSignals.join(', ') : '';
+                                    const tip = escapeHtml(h._lossSignals.join(', ') + infoSuffix);
                                     const total = h._lossSignals.length + (h._profitSignals.length || 0) || 1;
                                     return '<span class="hc-signal-badge ' + cls + '" title="' + tip + '">\u26A0 SELL ' + h._lossSignals.length + '/' + total + '</span>';
+                                }
+                                if (h._infoSignals.length >= 1) {
+                                    const tip = escapeHtml(h._infoSignals.map(s => '(dampened) ' + s).join(', '));
+                                    return '<span class="hc-signal-badge info" title="' + tip + '">\u2139 INFO ' + h._infoSignals.length + '</span>';
                                 }
                                 if (h._profitSignals.length >= 2) {
                                     const tip = escapeHtml(h._profitSignals.join(', '));
@@ -9305,7 +9358,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const _sr = scannerReadings[symbol];
                     const _bars = multiDayCache[symbol];
                     const _atr = _sr?.atr ?? calculateATR(_bars);
-                    const _atrStop = _sr?.atrStop ?? (_atr && avgPurchasePrice > 0 ? Math.round((avgPurchasePrice - 2 * _atr) * 100) / 100 : null);
+                    const _vixLevel = portfolio.lastVIX?.level;
+                    const _atrMult = getATRMultiplier(_vixLevel);
+                    const _atrStop = _sr?.atrStop ?? (_atr && avgPurchasePrice > 0 ? Math.round((avgPurchasePrice - _atrMult * _atr) * 100) / 100 : null);
                     const _volDiv = _sr?.volumeDivergence ?? detectVolumeDivergence(_bars);
                     const _fib = _sr?.fibTargets ?? calculateFibTargets(_bars);
                     const _rsiVal = _bars && _bars.length >= 14 ? calculateRSI(_bars) : null;
@@ -9320,24 +9375,37 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (_volDiv?.divergence && _volDiv.direction === 'bearish') _profitSignals.push('Vol divergence');
                     if (isPastTimeframe) _profitSignals.push('Past timeframe');
 
-                    const _lossSignals = [];
-                    if (_atrStop && stockPrice.price <= _atrStop) _lossSignals.push('ATR stop breached');
-                    if (_struct?.choch && _struct.chochType === 'bearish') _lossSignals.push('Bearish CHoCH');
-                    if (_struct?.structure === 'bearish') _lossSignals.push('Bearish structure');
-                    if (gainLossPercent <= -10) _lossSignals.push('Down 10%+');
-
                     // Thesis-based sell/profit signals (Phase 2)
                     const _thesis = (portfolio.holdingTheses || {})[symbol];
                     const _candidateNow = (portfolio.lastCandidateScores?.candidates || []).find(c => c.symbol === symbol);
+                    const _setupType = _thesis?.entrySetupType || _et?.entrySignal?.bestPatternId || null;
 
-                    if (_thesis?.stopPrice && stockPrice.price <= _thesis.stopPrice) _lossSignals.push('Stop breached');
+                    // VIX-aware loss signal classification — structure signals dampened during high VIX / certain setups
+                    const _allLossSignals = [];
+                    if (_atrStop && stockPrice.price <= _atrStop) _allLossSignals.push('ATR stop breached');
+                    if (_struct?.choch && _struct.chochType === 'bearish') _allLossSignals.push('Bearish CHoCH');
+                    if (_struct?.structure === 'bearish') _allLossSignals.push('Bearish structure');
+                    if (gainLossPercent <= -10) _allLossSignals.push('Down 10%+');
+                    if (_thesis?.stopPrice && stockPrice.price <= _thesis.stopPrice) _allLossSignals.push('Stop breached');
                     if (_thesis?.entryRS != null && _candidateNow?.rs != null && (_candidateNow.rs - _thesis.entryRS) <= -30)
-                        _lossSignals.push(`RS ${Math.round(_thesis.entryRS)}\u2192${Math.round(_candidateNow.rs)}`);
+                        _allLossSignals.push(`RS ${Math.round(_thesis.entryRS)}\u2192${Math.round(_candidateNow.rs)}`);
                     if (_thesis?.entryMomentum >= 7 && _candidateNow?.momentum != null && _candidateNow.momentum < 3)
-                        _lossSignals.push(`Mom ${_thesis.entryMomentum.toFixed(1)}\u2192${_candidateNow.momentum.toFixed(1)}`);
+                        _allLossSignals.push(`Mom ${_thesis.entryMomentum.toFixed(1)}\u2192${_candidateNow.momentum.toFixed(1)}`);
                     if (_thesis?.entryStructure === 'bullish' && _struct?.structure === 'bearish')
-                        _lossSignals.push('Structure flipped');
-                    if (daysHeld >= 5 && Math.abs(gainLossPercent) <= 3) _lossSignals.push('Stale capital');
+                        _allLossSignals.push('Structure flipped');
+                    if (daysHeld >= 5 && Math.abs(gainLossPercent) <= 3) _allLossSignals.push('Stale capital');
+
+                    const _lossSignals = [];
+                    const _infoSignals = [];
+                    for (const sig of _allLossSignals) {
+                        // RS/Mom signals have dynamic text — classify by prefix
+                        const sigKey = sig.startsWith('RS ') ? 'RS collapse' : sig.startsWith('Mom ') ? 'Mom collapse' : sig;
+                        if (classifyLossSignal(sigKey, _vixLevel, _setupType) === 'actionable') {
+                            _lossSignals.push(sig);
+                        } else {
+                            _infoSignals.push(sig);
+                        }
+                    }
                     const _intraday = _sr?.intraday;
 
                     if (_thesis?.targetPrice && stockPrice.price >= _thesis.targetPrice) _profitSignals.push('Target reached');
@@ -9364,7 +9432,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         earliestDate, conviction, daysHeld, gainLoss, gainLossPercent, gainLossClass,
                         positionSizePercent, isPastTimeframe, stockName, stockSector, entryMomentum,
                         entryRS, entryRSI, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
-                        _struct, _profitSignals, _lossSignals, _thesis, _candidateNow, _intraday,
+                        _struct, _profitSignals, _lossSignals, _infoSignals, _thesis, _candidateNow, _intraday,
                         _thesisStatus, _entrySignal, insertionOrder: insertionOrder++
                     });
                 }
@@ -10112,6 +10180,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     entryVIX: vix,
                     entryVIXInterpretation: vixInterp,
                     entrySMA20: signals?.sma20 ?? null,
+                    entrySetupType: entryTechnicals?.entrySignal?.bestPatternId || null,
                     peakPrice: price,
                     peakDate: timestamp,
                     entryATR: entryBars ? calculateATR(entryBars) : null,

@@ -190,6 +190,14 @@ router.get('/', (req, res) => {
         border-radius: 12px;
         font-weight: 600;
     }
+    .info-badge {
+        font-size: 11px;
+        background: rgba(100, 149, 237, 0.2);
+        color: #6495ed;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-weight: 600;
+    }
     .time-ago { font-size: 11px; color: var(--text-faint); }
     .scorer-rank { color: var(--text-faint); width: 24px; font-size: 13px; }
     .scorer-score { font-size: 14px; color: var(--accent); font-weight: 600; }
@@ -272,6 +280,7 @@ ${status.fullScan?.topScorers?.length > 0 ? `
                 <span class="reading-meta">MACD: ${r.macdCrossover === 'bullish' ? '<span class="macd-bull">▲</span>' : r.macdCrossover === 'bearish' ? '<span class="macd-bear">▼</span>' : '—'}</span>
                 ${r.choch ? `<span class="reading-choch">⚠ CHoCH ${r.chochType}</span>` : ''}
                 ${r.lossSignals && r.lossSignals.length > 0 ? `<span class="warning-badge" title="${r.lossSignals.join(', ')}">${r.lossSignals.length} warning${r.lossSignals.length > 1 ? 's' : ''}</span>` : ''}
+                ${r.infoSignals && r.infoSignals.length > 0 ? `<span class="info-badge" title="${r.infoSignals.join(', ')}">${r.infoSignals.length} dampened</span>` : ''}
                 ${r.intraday ? `<span class="reading-meta">5m: RSI ${r.intraday.rsi != null ? Math.round(r.intraday.rsi) : '—'} | MACD ${r.intraday.macd === 'bullish' ? '<span class="macd-bull">▲</span>' : r.intraday.macd === 'bearish' ? '<span class="macd-bear">▼</span>' : '—'} | ${r.intraday.structure || '—'}${r.intraday.choch ? ' ⚠CHoCH' + r.intraday.chochType : ''}</span>` : ''}
                 <span class="time-ago">${r.timestamp ? timeAgo(r.timestamp) : ''}</span>
             </div>

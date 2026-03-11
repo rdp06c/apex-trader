@@ -753,6 +753,7 @@
         }
         .hc-signal-badge.sell { background: var(--red-dim); color: var(--red); }
         .hc-signal-badge.warn { background: rgba(255, 193, 7, 0.1); color: var(--yellow); }
+        .hc-signal-badge.info { background: rgba(100, 149, 237, 0.1); color: #6495ed; }
         .hc-signal-badge.profit { background: var(--green-dim); color: var(--green); }
 
         /* ── Holding Card Stat Line ─────────────────────── */
@@ -2456,6 +2457,12 @@
             background: rgba(239, 68, 68, 0.12);
             color: #ef4444;
             border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+
+        .risk-pill-info {
+            background: rgba(100, 149, 237, 0.12);
+            color: #6495ed;
+            border: 1px solid rgba(100, 149, 237, 0.25);
         }
 
         .risk-table-wrap {
