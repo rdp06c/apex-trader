@@ -7051,9 +7051,9 @@
 
             // Analyze composite score calibration
             const withScore = tradesWithTechnicals.filter(t => t.entryTechnicals.compositeScore != null);
-            const scoreHigh = withScore.filter(t => t.entryTechnicals.compositeScore >= 12);
-            const scoreMedium = withScore.filter(t => t.entryTechnicals.compositeScore >= 7 && t.entryTechnicals.compositeScore < 12);
-            const scoreLow = withScore.filter(t => t.entryTechnicals.compositeScore < 7);
+            const scoreHigh = withScore.filter(t => t.entryTechnicals.compositeScore >= 10);
+            const scoreMedium = withScore.filter(t => t.entryTechnicals.compositeScore >= 6 && t.entryTechnicals.compositeScore < 10);
+            const scoreLow = withScore.filter(t => t.entryTechnicals.compositeScore < 6);
 
             // Analyze VIX level at entry
             const withVIX = tradesWithTechnicals.filter(t => t.entryTechnicals.vixLevel != null);
@@ -7320,10 +7320,10 @@
                 },
                 {
                     id: 'low_composite',
-                    label: 'Low Composite Score (<7)',
-                    losingFilter: t => t.entryTechnicals && t.entryTechnicals.compositeScore != null && t.entryTechnicals.compositeScore < 7,
-                    winningFilter: t => t.entryTechnicals && t.entryTechnicals.compositeScore != null && t.entryTechnicals.compositeScore >= 12,
-                    descTemplate: (ls, ws) => `Low composite score (<7): ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for high scores (12+)`
+                    label: 'Low Composite Score (<6)',
+                    losingFilter: t => t.entryTechnicals && t.entryTechnicals.compositeScore != null && t.entryTechnicals.compositeScore < 6,
+                    winningFilter: t => t.entryTechnicals && t.entryTechnicals.compositeScore != null && t.entryTechnicals.compositeScore >= 10,
+                    descTemplate: (ls, ws) => `Low composite score (<6): ${ls.winRate.toFixed(0)}% win rate vs ${ws.winRate.toFixed(0)}% for high scores (10+)`
                 },
                 {
                     id: 'overconfident_conviction',
