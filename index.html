@@ -2797,6 +2797,8 @@
             cursor: pointer;
             appearance: none;
             -webkit-appearance: none;
+            width: auto !important;
+            flex: 0 0 auto;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 8px center;
@@ -16917,9 +16919,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Controls: holdings filter + sector filter + pagination
             let html = '<div class="scorecard-controls">';
-            html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;"><input type="checkbox" onchange="scorecardToggleHeld()"${scorecardState.filterHeld ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> Holdings only</label>`;
-            html += `<select onchange="scorecardSetSignalFilter(this.value)" class="scorecard-sector-filter" style="min-width:100px;margin-right:4px;"><option value="">All Setups</option><option value="any"${scorecardState.filterSignal === 'any' ? ' selected' : ''}>Any Signal</option><option value="reversal"${scorecardState.filterSignal === 'reversal' ? ' selected' : ''}>REV</option><option value="momentum_cont"${scorecardState.filterSignal === 'momentum_cont' ? ' selected' : ''}>MOM</option><option value="quiet_momentum"${scorecardState.filterSignal === 'quiet_momentum' ? ' selected' : ''}>QMO</option><option value="squeeze"${scorecardState.filterSignal === 'squeeze' ? ' selected' : ''}>SQZ</option><option value="sector_leader"${scorecardState.filterSignal === 'sector_leader' ? ' selected' : ''}>LDR</option><option value="avoid"${scorecardState.filterSignal === 'avoid' ? ' selected' : ''}>AVOID</option></select>`;
-            html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;"><input type="checkbox" onchange="scorecardToggleWatchlist()"${scorecardState.filterWatchlist ? ' checked' : ''} style="accent-color:#f59e0b;cursor:pointer;"> ★ Watchlist${watchlistSet.size > 0 ? ' (' + watchlistSet.size + ')' : ''}</label>`;
+            html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;flex:0 0 auto;white-space:nowrap;"><input type="checkbox" onchange="scorecardToggleHeld()"${scorecardState.filterHeld ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> Holdings only</label>`;
+            html += `<select onchange="scorecardSetSignalFilter(this.value)" class="scorecard-sector-filter"><option value="">All Setups</option><option value="any"${scorecardState.filterSignal === 'any' ? ' selected' : ''}>Any Signal</option><option value="reversal"${scorecardState.filterSignal === 'reversal' ? ' selected' : ''}>REV</option><option value="momentum_cont"${scorecardState.filterSignal === 'momentum_cont' ? ' selected' : ''}>MOM</option><option value="quiet_momentum"${scorecardState.filterSignal === 'quiet_momentum' ? ' selected' : ''}>QMO</option><option value="squeeze"${scorecardState.filterSignal === 'squeeze' ? ' selected' : ''}>SQZ</option><option value="sector_leader"${scorecardState.filterSignal === 'sector_leader' ? ' selected' : ''}>LDR</option><option value="avoid"${scorecardState.filterSignal === 'avoid' ? ' selected' : ''}>AVOID</option></select>`;
+            html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;flex:0 0 auto;white-space:nowrap;"><input type="checkbox" onchange="scorecardToggleWatchlist()"${scorecardState.filterWatchlist ? ' checked' : ''} style="accent-color:#f59e0b;cursor:pointer;"> ★ Watchlist${watchlistSet.size > 0 ? ' (' + watchlistSet.size + ')' : ''}</label>`;
             html += `<select onchange="scorecardSetSector(this.value)" class="scorecard-sector-filter">`;
             html += `<option value="">All Sectors (${totalCount})</option>`;
             sectors.forEach(s => {
@@ -16929,7 +16931,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             if (data.timestamp) {
                 const scanAge = Math.floor((Date.now() - new Date(data.timestamp).getTime()) / 1000);
                 const ageStr = scanAge < 60 ? 'just now' : scanAge < 3600 ? `${Math.floor(scanAge / 60)}m ago` : scanAge < 86400 ? `${Math.floor(scanAge / 3600)}h ago` : `${Math.floor(scanAge / 86400)}d ago`;
-                html += `<span style="font-size:0.75rem;color:#666;margin-left:8px;" title="${new Date(data.timestamp).toLocaleString()}">Scanned ${ageStr}</span>`;
+                html += `<span style="font-size:0.75rem;color:#666;flex:0 0 auto;white-space:nowrap;" title="${new Date(data.timestamp).toLocaleString()}">Scanned ${ageStr}</span>`;
             }
             if (totalPages > 1) {
                 html += `<div class="scorecard-pagination">`;
@@ -17042,16 +17044,25 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 if (sig) {
                     const comboResults = portfolio.calibratedWeights?.signalCombos?.combos;
 
-                    // Find the best valid (calibration-gated) pattern match
+                    // Find the pattern to display in the badge
                     let displayPat = null;
-                    for (const pat of sig.patterns) {
-                        if (!pat.match || pat.antiPattern) continue;
-                        // Non-reversal patterns require calibration validation
-                        if (pat.calibrationKey) {
-                            const calData = comboResults?.[pat.calibrationKey];
-                            if (!calData || calData.insufficient || (calData.n ?? 0) < 100 || calData.vsBaselineReturn <= 0.5) continue;
+                    const specificFilter = scorecardState.filterSignal
+                        && scorecardState.filterSignal !== 'any'
+                        && scorecardState.filterSignal !== 'avoid';
+
+                    if (specificFilter) {
+                        // Show the filtered pattern's badge, not the best overall
+                        displayPat = sig.patterns.find(p => p.id === scorecardState.filterSignal && p.match && !p.antiPattern);
+                    } else {
+                        // Default: show best calibration-gated pattern
+                        for (const pat of sig.patterns) {
+                            if (!pat.match || pat.antiPattern) continue;
+                            if (pat.calibrationKey) {
+                                const calData = comboResults?.[pat.calibrationKey];
+                                if (!calData || calData.insufficient || (calData.n ?? 0) < 100 || calData.vsBaselineReturn <= 0.5) continue;
+                            }
+                            if (!displayPat || pat.matchCount > displayPat.matchCount) displayPat = pat;
                         }
-                        if (!displayPat || pat.matchCount > displayPat.matchCount) displayPat = pat;
                     }
 
                     // Anti-pattern always shows if matched (no calibration gate)
@@ -17134,7 +17145,17 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             html += '</tbody></table></div>';
             html += `<div style="font-size:10px;color:var(--text-faint);margin-top:8px">Last scored: ${new Date(data.timestamp).toLocaleString()} — ${totalCount} stocks scored</div>`;
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig quality: <span class="entry-badge full" style="display:inline">GREEN</span> all criteria met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> anti-pattern</span><span>Types: REV=reversal · MOM=momentum · QMO=quiet momentum · SQZ=squeeze · LDR=sector leader · Non-REV gated by calibration</span><span>Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold combo, <span style="color:var(--green)">+1.2</span> net edge · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum driven</span></div>`;
+            // Build legend with live calibration strength data
+            const calCombos = portfolio.calibratedWeights?.signalCombos?.combos;
+            const calEdge = (key) => {
+                const c = calCombos?.[key];
+                if (!c || c.insufficient || (c.n ?? 0) < 100) return '';
+                return ` <span style="color:${c.vsBaselineReturn > 0 ? 'var(--green)' : 'var(--red)'}">(${c.vsBaselineReturn >= 0 ? '+' : ''}${c.vsBaselineReturn.toFixed(1)}%)</span>`;
+            };
+            // REV uses RSI<40 + Bull Structure as representative combo
+            const revEdge = calCombos?.['rsi_low_structure_bull'] ? calEdge('rsi_low_structure_bull') : '';
+            const setupRankings = `REV reversal${revEdge} · QMO quiet momentum${calEdge('vol_ratio_low_mom')} · MOM momentum${calEdge('momentum_trend_confirm')} · LDR sector leader${calEdge('sector_leader_mom')} · SQZ squeeze${calEdge('vol_ratio_high_struct')}`;
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum</span></div>`;
             container.innerHTML = html;
         }
 
