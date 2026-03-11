@@ -2664,6 +2664,14 @@
             font-weight: 600;
             width: 30px;
         }
+        .scorecard-rank.convergence-teal {
+            color: #00d4aa;
+            text-shadow: 0 0 6px rgba(0, 212, 170, 0.4);
+        }
+        .scorecard-rank.convergence-gold {
+            color: #f59e0b;
+            text-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+        }
 
         .scorecard-symbol {
             font-weight: 700;

@@ -2677,6 +2677,14 @@
             font-weight: 600;
             width: 30px;
         }
+        .scorecard-rank.convergence-teal {
+            color: #00d4aa;
+            text-shadow: 0 0 6px rgba(0, 212, 170, 0.4);
+        }
+        .scorecard-rank.convergence-gold {
+            color: #f59e0b;
+            text-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+        }
 
         .scorecard-symbol {
             font-weight: 700;
@@ -17251,11 +17259,21 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         : '<span class="score-driver sig" title="Score driven by reversal signals">S</span>';
                 }
 
+                // Convergence: count independent confirming signals
+                const convergence = (
+                    (c._entrySignal?.bestMatch === 'full' || c._entrySignal?.bestMatch === 'strong' ? 1 : 0) + // Entry signal (GREEN or YELLOW)
+                    (computeComboHeatBonus(c._comboHeat) > 0 ? 1 : 0) + // Positive heat (calibration confirms)
+                    (bd && score > 0 && ((bd.momentumContrib || 0) + (bd.rsContrib || 0)) <= score * 0.5 ? 1 : 0) + // S-driven score
+                    (c.sectorFlow === 'inflow' || c.sectorFlow === 'modest-inflow' ? 1 : 0) // Sector tailwind
+                );
+                const convergenceClass = convergence >= 4 ? 'convergence-gold' : convergence >= 3 ? 'convergence-teal' : '';
+                const convergenceTitle = convergence >= 3 ? `${convergence}/4 signals converging: ${c._entrySignal?.bestMatch === 'full' || c._entrySignal?.bestMatch === 'strong' ? '✓' : '✗'} Signal, ${computeComboHeatBonus(c._comboHeat) > 0 ? '✓' : '✗'} Heat, ${bd && score > 0 && ((bd.momentumContrib || 0) + (bd.rsContrib || 0)) <= score * 0.5 ? '✓' : '✗'} S-driven, ${c.sectorFlow === 'inflow' || c.sectorFlow === 'modest-inflow' ? '✓' : '✗'} Sector` : '';
+
                 const globalRank = start + i + 1;
                 const watched = watchlistSet.has(c.symbol);
                 html += `<tr>
                     <td class="watchlist-star ${watched ? 'watched' : ''}" onclick="toggleWatchlistSymbol('${c.symbol}')" title="${watched ? 'Remove from watchlist' : 'Add to watchlist'}">${watched ? '★' : '☆'}</td>
-                    <td class="scorecard-rank">${globalRank}</td>
+                    <td class="scorecard-rank ${convergenceClass}"${convergenceTitle ? ` title="${convergenceTitle}"` : ''}>${globalRank}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
                     <td>${sigBadge}</td>
                     <td>${heatCell}</td>
@@ -17304,7 +17322,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 return eb - ea;
             });
             const setupRankings = setups.map(s => `${s.badge} ${s.label}${fmtEdge(getEdge(s.key))}`).join(' · ');
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum</span></div>`;
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Rank: <span style="color:#00d4aa;font-weight:700">3</span> = 3 converging / <span style="color:#f59e0b;font-weight:700">4</span> = 4 converging</span></div>`;
             container.innerHTML = html;
         }
 
