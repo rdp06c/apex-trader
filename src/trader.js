@@ -5075,6 +5075,11 @@
                 try { await updatePostExitTracking(); } catch (e) { console.warn('Post-exit tracking failed (non-fatal):', e.message); }
 
                 savePortfolio();
+
+                // Re-score with calibration heat bonus baked in (scan scores without it)
+                rescoreCandidates();
+                savePortfolio();
+
                 updatePerformanceAnalytics();
 
                 const endTime = performance.now();
