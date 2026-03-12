@@ -15933,7 +15933,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         const mae20d = futureBars20.length > 0 ? ((Math.min(...futureBars20.map(b => b.l)) - entryPrice) / entryPrice) * 100 : null;
                         const mfe20d = futureBars20.length > 0 ? ((Math.max(...futureBars20.map(b => b.h)) - entryPrice) / entryPrice) * 100 : null;
 
-                        if (return5d != null) {
+                        if (return10d != null) {
                             allObservations.push({
                                 symbol: sym,
                                 date: calDate,
@@ -15988,8 +15988,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const corr15d = returns15d ? pearsonCorrelation(values, returns15d) : null;
                 const corr20d = returns20d ? pearsonCorrelation(values, returns20d) : null;
 
-                // Quintile analysis (against 5d returns — matches typical hold time)
-                const sorted = trainingObs.map((o, i) => ({ val: values[i], ret: o.return5d ?? 0 })).sort((a, b) => a.val - b.val);
+                // Quintile analysis
+                const sorted = trainingObs.map((o, i) => ({ val: values[i], ret: o.return10d })).sort((a, b) => a.val - b.val);
                 const qSize = Math.floor(sorted.length / 5);
                 const quintiles = [];
                 for (let q = 0; q < 5; q++) {
@@ -16074,11 +16074,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             function calibrateWeightSet(observations) {
                 const weights = { ...DEFAULT_WEIGHTS };
-                const ret5dArr = observations.map(o => o.return5d ?? 0);
+                const ret10dArr = observations.map(o => o.return10d);
 
                 for (const [compKey, weightKey] of Object.entries(componentToWeight)) {
                     const vals = observations.map(o => o.breakdown[compKey] || 0);
-                    const corr = pearsonCorrelation(vals, ret5dArr);
+                    const corr = pearsonCorrelation(vals, ret10dArr);
                     const adjustment = Math.max(-MAX_CHANGE, Math.min(MAX_CHANGE, corr * SCALE_FACTOR));
                     const calibrated = DEFAULT_WEIGHTS[weightKey] * (1 + adjustment);
                     weights[weightKey] = parseFloat((shrinkage * calibrated + (1 - shrinkage) * DEFAULT_WEIGHTS[weightKey]).toFixed(4));
@@ -16139,7 +16139,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
 
                 // Entry multiplier: calibrate via extension correlation (pullback multiplier removed)
-                const extensionCorr = componentCorrelations.extensionPenalty?.corr5d || 0;
+                const extensionCorr = componentCorrelations.extensionPenalty?.corr10d || 0;
                 if (extensionCorr < -0.05) {
                     weights.entryMultExtreme = parseFloat(Math.max(0.15, DEFAULT_WEIGHTS.entryMultExtreme * (1 + extensionCorr)).toFixed(4));
                     weights.entryMultExtended = parseFloat(Math.max(0.3, DEFAULT_WEIGHTS.entryMultExtended * (1 + extensionCorr)).toFixed(4));
@@ -16174,20 +16174,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 for (const obs of Object.values(dateGroups)) {
                     // Re-score each observation with the given weights
                     const rescored = obs.map(o => ({
-                        return5d: o.return5d ?? 0,
+                        return10d: o.return10d,
                         newScore: calculateCompositeScore(o.scoreInputs).total
                     }));
                     rescored.sort((a, b) => b.newScore - a.newScore);
-                    rescored.slice(0, 25).forEach(o => { totalReturn += o.return5d; count++; });
+                    rescored.slice(0, 25).forEach(o => { totalReturn += o.return10d; count++; });
                 }
                 portfolio.calibratedWeights = savedCalibration;
                 return count > 0 ? totalReturn / count : 0;
             }
 
-            const defaultAvg5d = evaluateWithWeights(DEFAULT_WEIGHTS, validationObs);
-            const calibratedAvg5d = evaluateWithWeights(calibratedWeights, validationObs);
+            const defaultAvg10d = evaluateWithWeights(DEFAULT_WEIGHTS, validationObs);
+            const calibratedAvg10d = evaluateWithWeights(calibratedWeights, validationObs);
 
-            const improvement = calibratedAvg5d - defaultAvg5d;
+            const improvement = calibratedAvg10d - defaultAvg10d;
             const overfitWarning = improvement < -0.5;
 
             // If overfitting detected, increase shrinkage toward defaults
@@ -16215,7 +16215,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Sort correlations by absolute value for reporting
             const sortedCorr = Object.entries(componentCorrelations)
-                .sort((a, b) => Math.abs(b[1].corr5d) - Math.abs(a[1].corr5d));
+                .sort((a, b) => Math.abs(b[1].corr10d) - Math.abs(a[1].corr10d));
 
             // Build key weight changes for reporting
             const weightChanges = {};
@@ -16271,8 +16271,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 excursionStats: excursionStats,
                 extendedCorrelations: true,
                 validation: {
-                    calibratedAvg5d: parseFloat(calibratedAvg5d.toFixed(2)),
-                    defaultAvg5d: parseFloat(defaultAvg5d.toFixed(2)),
+                    calibratedAvg10d: parseFloat(calibratedAvg10d.toFixed(2)),
+                    defaultAvg10d: parseFloat(defaultAvg10d.toFixed(2)),
                     improvement: parseFloat(improvement.toFixed(2)),
                     overfitWarning: overfitWarning,
                     trainingObs: trainingObs.length,
@@ -16681,11 +16681,11 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
                     let response = `**Calibration Results**\n`;
                     response += `Data: ${result.sampledDates} dates, ${result.dataPoints} observations (${result.dateRange.start} to ${result.dateRange.end})\n`;
-                    response += `Validation: top-25 avg 5d return ${result.validation.calibratedAvg5d}% (calibrated) vs ${result.validation.defaultAvg5d}% (default)\n`;
+                    response += `Validation: top-25 avg 10d return ${result.validation.calibratedAvg10d}% (calibrated) vs ${result.validation.defaultAvg10d}% (default)\n`;
                     if (result.validation.overfitWarning) response += `**WARNING: Overfitting detected — extra shrinkage applied**\n`;
-                    response += `\n**Most predictive (5d):**\n`;
+                    response += `\n**Most predictive (10d):**\n`;
                     result.sortedCorr.slice(0, 5).forEach(([key, data]) => {
-                        response += `  ${key}: r=${data.corr5d} (top quintile: ${data.topQuintileAvg}%, bottom: ${data.bottomQuintileAvg}%)\n`;
+                        response += `  ${key}: r=${data.corr10d} (top quintile: ${data.topQuintileAvg}%, bottom: ${data.bottomQuintileAvg}%)\n`;
                     });
                     const changes = Object.entries(result.weightChanges);
                     if (changes.length > 0) {
