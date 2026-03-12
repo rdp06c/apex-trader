@@ -339,7 +339,7 @@
             'STLD': 'Steel Dynamics', 'RS': 'Reliance Steel', 'CLF': 'Cleveland-Cliffs', 'MT': 'ArcelorMittal',
             'TX': 'Ternium', 'CMC': 'Commercial Metals', 'ATI': 'ATI Inc.',
             'LYB': 'LyondellBasell', 'EMN': 'Eastman Chemical', 'CE': 'Celanese', 'DD': 'DuPont',
-            'APD': 'Air Products', 'LIN': 'Linde', 'ECL': 'Ecolab',
+            'APD': 'Air Products', 'LIN': 'Linde', 'GTLS': 'Chart Industries', 'NUAI': 'New Era Helium', 'ASPI': 'ASP Isotopes', 'ECL': 'Ecolab',
             'SHW': 'Sherwin-Williams', 'PPG': 'PPG Industries', 'RPM': 'RPM International', 'AXTA': 'Axalta Coating',
             'ALB': 'Albemarle', 'SQM': 'SQM', 'LAC': 'Lithium Americas', 'AA': 'Alcoa',
             'FUL': 'H.B. Fuller', 'NEU': 'NewMarket', 'B': 'Barrick Mining',
@@ -529,7 +529,7 @@
             'RS': 'Materials', 'CLF': 'Materials', 'MT': 'Materials',
             'TX': 'Materials', 'CMC': 'Materials', 'NB': 'Materials', 'ATI': 'Materials',
             'DOW': 'Materials', 'LYB': 'Materials', 'EMN': 'Materials', 'CE': 'Materials',
-            'APD': 'Materials', 'LIN': 'Materials', 'ECL': 'Materials', 
+            'APD': 'Materials', 'LIN': 'Materials', 'GTLS': 'Materials', 'NUAI': 'Materials', 'ASPI': 'Materials', 'ECL': 'Materials',
             'SHW': 'Materials', 'PPG': 'Materials', 'RPM': 'Materials', 'AXTA': 'Materials',
             'ALB': 'Materials', 'SQM': 'Materials', 'LAC': 'Materials', 'AA': 'Materials',
             'MP': 'Materials', 'DD': 'Materials', 'USAR': 'Materials',
@@ -4756,7 +4756,7 @@
                 
                 materials: ['NEM', 'FCX', 'GOLD', 'AU', 'AEM', 'WPM', 'FNV', 'RGLD', 'KGC', 'HL',
                             'NUE', 'STLD', 'RS', 'CLF', 'AA', 'MT', 'TX', 'CMC', 'NB', 'ATI',
-                            'DOW', 'LYB', 'EMN', 'CE', 'APD', 'LIN', 'ECL', 'ALB', 'SQM', 'LAC',
+                            'DOW', 'LYB', 'EMN', 'CE', 'APD', 'LIN', 'GTLS', 'NUAI', 'ASPI', 'ECL', 'ALB', 'SQM', 'LAC',
                             'MP', 'DD', 'PPG', 'SHW', 'RPM', 'AXTA', 'FUL', 'NEU', 'USAR', 'UUUU',
                             'B'],
 
