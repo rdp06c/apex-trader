@@ -9201,11 +9201,11 @@
                 thinkingDetail.textContent = 'Checking post-exit price tracking...';
                 try { await updatePostExitTracking(); } catch (e) { console.warn('Post-exit tracking failed (non-fatal):', e.message); }
 
-                savePortfolio();
+                await savePortfolio();
 
                 // Re-score with calibration heat bonus baked in (scan scores without it)
                 rescoreCandidates();
-                savePortfolio();
+                await savePortfolio();
 
                 updatePerformanceAnalytics();
 
@@ -16752,11 +16752,11 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 }
             };
 
-            savePortfolio(true);
+            await savePortfolio(true);
 
             // Re-score candidates with new weights and refresh UI
             rescoreCandidates();
-            savePortfolio(true); // Save again with updated scores
+            await savePortfolio(true); // Save again with updated scores
             updateCandidateScorecard();
             updateLearningInsightsDisplay();
 
