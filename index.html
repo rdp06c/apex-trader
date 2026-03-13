@@ -9461,11 +9461,21 @@
                         fetchIndexSnapshot(['I:SPX', 'I:DJI', 'I:COMP'])
                     ]);
                     const spyPrice = spyData && spyData.price ? spyData.price : 0;
-                    // Store index daily changes for display (actual indices, not ETF proxies)
+                    // Use actual indices when available, fall back to ETF proxies (DIA, QQQ)
+                    let djiChange = indexData['I:DJI']?.changePercent ?? null;
+                    let compChange = indexData['I:COMP']?.changePercent ?? null;
+                    if (djiChange == null || compChange == null) {
+                        const [diaFallback, qqqFallback] = await Promise.all([
+                            djiChange == null ? getStockPrice('DIA').catch(() => null) : Promise.resolve(null),
+                            compChange == null ? getStockPrice('QQQ').catch(() => null) : Promise.resolve(null)
+                        ]);
+                        if (djiChange == null) djiChange = diaFallback?.changePercent ?? null;
+                        if (compChange == null) compChange = qqqFallback?.changePercent ?? null;
+                    }
                     portfolio.indexBenchmarks = {
                         SPX: indexData['I:SPX']?.changePercent ?? spyData?.changePercent ?? null,
-                        DJI: indexData['I:DJI']?.changePercent ?? null,
-                        COMP: indexData['I:COMP']?.changePercent ?? null,
+                        DJI: djiChange,
+                        COMP: compChange,
                         timestamp: new Date().toISOString()
                     };
                     if (spyPrice > 0) {
@@ -10017,11 +10027,21 @@
                         fetchIndexSnapshot(['I:SPX', 'I:DJI', 'I:COMP'])
                     ]);
                     const spyPrice = spyData && spyData.price ? spyData.price : 0;
-                    // Store index daily changes for display (actual indices, not ETF proxies)
+                    // Use actual indices when available, fall back to ETF proxies (DIA, QQQ)
+                    let djiChange = indexData['I:DJI']?.changePercent ?? null;
+                    let compChange = indexData['I:COMP']?.changePercent ?? null;
+                    if (djiChange == null || compChange == null) {
+                        const [diaFallback, qqqFallback] = await Promise.all([
+                            djiChange == null ? getStockPrice('DIA').catch(() => null) : Promise.resolve(null),
+                            compChange == null ? getStockPrice('QQQ').catch(() => null) : Promise.resolve(null)
+                        ]);
+                        if (djiChange == null) djiChange = diaFallback?.changePercent ?? null;
+                        if (compChange == null) compChange = qqqFallback?.changePercent ?? null;
+                    }
                     portfolio.indexBenchmarks = {
                         SPX: indexData['I:SPX']?.changePercent ?? spyData?.changePercent ?? null,
-                        DJI: indexData['I:DJI']?.changePercent ?? null,
-                        COMP: indexData['I:COMP']?.changePercent ?? null,
+                        DJI: djiChange,
+                        COMP: compChange,
                         timestamp: new Date().toISOString()
                     };
                     if (spyPrice > 0) {
