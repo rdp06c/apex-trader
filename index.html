@@ -3749,40 +3749,83 @@
             _serverAvailable: null, // null = untested, true/false after first probe
 
             async load() {
+                let serverData = null;
                 try {
                     const res = await fetch('/api/portfolio');
                     if (res.ok) {
                         this._etag = res.headers.get('ETag');
                         this._serverAvailable = true;
-                        return await res.json();
+                        serverData = await res.json();
                     }
-                } catch (e) { /* server unreachable — fall through to localStorage */ }
-                this._serverAvailable = false;
-                const saved = localStorage.getItem('aiTradingPortfolio');
-                return saved ? JSON.parse(saved) : null;
+                } catch (e) { /* server unreachable */ }
+
+                // Check localStorage for newer data (covers failed server saves)
+                let localData = null;
+                try {
+                    const saved = localStorage.getItem('aiTradingPortfolio');
+                    if (saved) localData = JSON.parse(saved);
+                } catch (e) { /* corrupt localStorage */ }
+
+                if (!serverData) {
+                    this._serverAvailable = false;
+                    return localData;
+                }
+
+                // Reconcile: if localStorage has more transactions, it has unsaved trades
+                if (localData) {
+                    const serverTxCount = (serverData.transactions || []).length;
+                    const localTxCount = (localData.transactions || []).length;
+                    const serverClosedCount = (serverData.closedTrades || []).length;
+                    const localClosedCount = (localData.closedTrades || []).length;
+                    if (localTxCount > serverTxCount || localClosedCount > serverClosedCount) {
+                        console.warn(`⚠️ localStorage has newer data (txns: ${localTxCount} vs server ${serverTxCount}, closed: ${localClosedCount} vs ${serverClosedCount}) — using localStorage and syncing to server`);
+                        // Push localStorage version to server to reconcile
+                        try {
+                            const headers = { 'Content-Type': 'application/json' };
+                            const res = await fetch('/api/portfolio', {
+                                method: 'POST', headers,
+                                body: JSON.stringify(localData)
+                            });
+                            if (res.ok) {
+                                this._etag = res.headers.get('ETag');
+                                console.log('✅ Server synced with localStorage data');
+                            }
+                        } catch (e) { console.warn('Failed to sync localStorage to server:', e.message); }
+                        return localData;
+                    }
+                }
+
+                return serverData;
             },
 
             async save(data) {
                 const json = JSON.stringify(data);
                 let serverOk = false;
 
-                // Server save first — it's the primary storage and has no size limit
+                // Server save with retry — Pi restarts can cause brief unavailability
                 if (this._serverAvailable !== false) {
-                    try {
-                        const headers = { 'Content-Type': 'application/json' };
-                        if (this._etag) headers['If-Match'] = this._etag;
-                        const res = await fetch('/api/portfolio', {
-                            method: 'POST', headers, body: json
-                        });
-                        if (res.ok) {
-                            this._etag = res.headers.get('ETag');
-                            this._serverAvailable = true;
-                            serverOk = true;
-                        } else {
-                            console.error(`Portfolio server save failed: ${res.status} ${res.statusText}`);
+                    const MAX_RETRIES = 3;
+                    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                        try {
+                            const headers = { 'Content-Type': 'application/json' };
+                            if (this._etag) headers['If-Match'] = this._etag;
+                            const res = await fetch('/api/portfolio', {
+                                method: 'POST', headers, body: json
+                            });
+                            if (res.ok) {
+                                this._etag = res.headers.get('ETag');
+                                this._serverAvailable = true;
+                                serverOk = true;
+                                break;
+                            } else {
+                                console.error(`Portfolio server save failed (attempt ${attempt}/${MAX_RETRIES}): ${res.status} ${res.statusText}`);
+                            }
+                        } catch (e) {
+                            console.error(`Portfolio server save error (attempt ${attempt}/${MAX_RETRIES}):`, e.message);
                         }
-                    } catch (e) {
-                        console.error('Portfolio server save error:', e.message);
+                        if (attempt < MAX_RETRIES) {
+                            await new Promise(r => setTimeout(r, 1000 * attempt));
+                        }
                     }
                 }
 
