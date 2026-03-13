@@ -3229,7 +3229,7 @@
             }
 
             // Zone-aware badges (when buy zone data available)
-            if (zone && score >= 8 && structOk) {
+            if (zone && score >= 6 && structOk) {
                 if (zone.inZone && regimeAllowed) {
                     return held ? 'add' : 'buy';
                 }
