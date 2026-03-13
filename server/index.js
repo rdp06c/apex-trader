@@ -31,7 +31,7 @@ if (AUTH_USER && AUTH_PASS) {
     console.log('Basic auth disabled — set AUTH_USER and AUTH_PASS in .env to enable');
 }
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use('/api', portfolioRoutes);
 
 // Serve API keys to authenticated browsers (no more manual Settings entry)

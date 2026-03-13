@@ -76,6 +76,7 @@
             async save(data) {
                 const json = JSON.stringify(data);
                 let serverOk = false;
+                let serverError = '';
 
                 // Server save with retry — Pi restarts can cause brief unavailability
                 if (this._serverAvailable !== false) {
@@ -93,9 +94,11 @@
                                 serverOk = true;
                                 break;
                             } else {
-                                console.error(`Portfolio server save failed (attempt ${attempt}/${MAX_RETRIES}): ${res.status} ${res.statusText}`);
+                                serverError = `${res.status} ${res.statusText}`;
+                                console.error(`Portfolio server save failed (attempt ${attempt}/${MAX_RETRIES}): ${serverError} (payload ${(json.length / 1024 / 1024).toFixed(2)}MB)`);
                             }
                         } catch (e) {
+                            serverError = e.message;
                             console.error(`Portfolio server save error (attempt ${attempt}/${MAX_RETRIES}):`, e.message);
                         }
                         if (attempt < MAX_RETRIES) {
@@ -121,7 +124,7 @@
                     } catch (e2) { /* truly out of space — server has the full data */ }
                 }
 
-                return { serverOk, localOk };
+                return { serverOk, localOk, serverError, payloadMB: (json.length / 1024 / 1024).toFixed(2) };
             }
         };
 
@@ -10815,7 +10818,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     statusEl.textContent = `BUY recorded in memory but save FAILED — do not refresh! Try again.`;
                     statusEl.style.color = 'var(--red, red)';
                 } else if (saveResult && !saveResult.serverOk) {
-                    statusEl.textContent = `BUY ${shares} ${symbol} @ $${price.toFixed(2)} saved locally only — server save failed.`;
+                    statusEl.textContent = `BUY ${shares} ${symbol} @ $${price.toFixed(2)} saved locally — server failed: ${saveResult.serverError} (${saveResult.payloadMB}MB)`;
                     statusEl.style.color = 'var(--orange, orange)';
                     setTimeout(closeManualTradeModal, 3000);
                 } else {
@@ -10961,7 +10964,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     statusEl.textContent = `SELL recorded in memory but save FAILED — do not refresh! Try again.`;
                     statusEl.style.color = 'var(--red, red)';
                 } else if (saveResult && !saveResult.serverOk) {
-                    statusEl.textContent = `SELL ${shares} ${symbol} @ $${price.toFixed(2)}${plStr} saved locally only — server save failed.`;
+                    statusEl.textContent = `SELL ${shares} ${symbol} @ $${price.toFixed(2)}${plStr} saved locally — server failed: ${saveResult.serverError} (${saveResult.payloadMB}MB)`;
                     statusEl.style.color = 'var(--orange, orange)';
                     setTimeout(closeManualTradeModal, 3000);
                 } else {
