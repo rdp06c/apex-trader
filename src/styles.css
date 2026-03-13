@@ -2929,9 +2929,9 @@
 
         /* ── Trade Plan columns ──────────────────────────── */
         .plan-cell { white-space: nowrap; }
-        .rr-strong { color: var(--green); }
-        .rr-good { color: var(--yellow); }
-        .rr-weak { color: var(--red); }
+        .scorecard-table td.rr-strong { color: var(--green); }
+        .scorecard-table td.rr-good { color: var(--yellow); }
+        .scorecard-table td.rr-weak { color: var(--red); }
 
         /* ── Row expansion (trade plan detail) ───────────── */
         .scorecard-table tr.expandable { cursor: pointer; }
