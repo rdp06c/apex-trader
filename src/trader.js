@@ -129,24 +129,25 @@
         };
 
         // Calibration weight system — data-driven scoring via runCalibrationSweep
-        // Calibration weight system — data-driven scoring via runCalibrationSweep
+        // Aligned with REV signal edge: RSI<40 (+19pp), MOM<3 (+15pp), pullback -2 to -5% (+19pp).
         // Noise components zeroed: accel, consistency, FVG (uncorrelated per calibration).
-        // Pullback bonus removed: biggest score distorter; if pullback is predictive, calibration
-        // captures it via combo heat (rsi_low_structure_bull, pullback_structure_bull, etc.).
         // SMA proximity and squeeze halved: real but oversized.
         const DEFAULT_WEIGHTS = {
-            momentumMultiplier: 0.3, rsMultiplier: 0.6, structureMultiplier: 1.25, // momentum halved: anti-predictive per calibration (r=-0.025)
+            momentumMultiplier: 0.3, rsMultiplier: 0.6, structureMultiplier: 1.25,
             accelBonus: 0, consistencyBonus: 0,
             sectorInflow: 2.0, sectorModestInflow: 1.0, sectorOutflow: -1.0,
-            rsiOversold30: 2.5, rsiOversold40: 1.5, rsiOversold50: 0.5,
-            rsiOverbought70: -3.0, rsiOverbought80: -5.0,
+            rsiOversold30: 4.0, rsiOversold40: 2.5, rsiOversold50: 0.8,        // amplified: RSI<40 is +19pp edge
+            rsiOverbought70: -4.5, rsiOverbought80: -7.0,                       // amplified: RSI>70 is -21pp edge
             macdBullish: 2.5, macdBearish: -2.0, macdNone: -0.5,
-            rsMeanRev95: -3.0, rsMeanRev90: -2.0, rsMeanRev85: -1.0,
+            rsMeanRev95: -4.0, rsMeanRev90: -3.0, rsMeanRev85: -2.0, rsMeanRev80: -0.5, // expanded: RS>90 wins 14%
             squeezeBonusHigh: 0.75, squeezeBonusMod: 0.4,
             smaProxNear: 1.0, smaProxBelow: 0.5, smaProxFar15: -0.75, smaProxFar10: -0.25,
             smaCrossoverBullish: 2.0, smaCrossoverBearish: -2.0,
             fvgBullish: 0, fvgBearish: 0,
-            entryMultExtreme: 0.3, entryMultExtended: 0.6
+            entryMultExtreme: 0.3, entryMultExtended: 0.6,
+            momSweetSpotBonus: 2.5,                                              // MOM 2-5 with bull structure
+            momHighPenalty8: -1.5, momHighPenalty9: -3.0,                        // MOM 8+ loses
+            pullbackStructureBonus: 3.0, pullbackDeepBonus: 2.0, pullbackShallowBonus: 1.0 // 5D pullback reward
         };
         function getActiveWeights() {
             if (!portfolio.calibratedWeights) return DEFAULT_WEIGHTS;
@@ -2701,6 +2702,15 @@
             const w = getActiveWeights();
 
             const momentumContrib = momentumScore * w.momentumMultiplier;
+            // Momentum sweet spot: MOM 2-5 with bullish structure is the winning zone per entry data
+            const momSweetSpotBonus = (momentumScore >= 2 && momentumScore <= 5 && (structureScore ?? 0) >= 1)
+                ? (w.momSweetSpotBonus ?? 0)
+                : (momentumScore >= 2 && momentumScore <= 5) ? (w.momSweetSpotBonus ?? 0) * 0.4
+                : 0;
+            // High-momentum penalty: MOM 8+ is anti-predictive (30% WR at MOM>=8)
+            const momHighPenalty = momentumScore >= 9 ? (w.momHighPenalty9 ?? 0)
+                : momentumScore >= 8 ? (w.momHighPenalty8 ?? 0)
+                : 0;
             const rsContrib = rsNormalized * w.rsMultiplier;
 
             let sectorBonus = 0;
@@ -2726,9 +2736,11 @@
                 : 0;
 
             const ret5d = totalReturn5d ?? 0;
-            // Pullback bonus removed: was the single biggest score distorter (+5 AND 1.15x multiplier).
-            // If pullback is predictive, calibration captures it via combo heat.
-            const pullbackBonus = 0;
+            // Pullback bonus: 5D return in sweet spot with bullish structure is the #1 edge
+            const pullbackBonus = (ret5d >= -5 && ret5d <= -2 && (structureScore ?? 0) >= 1) ? (w.pullbackStructureBonus ?? 0)
+                : (ret5d >= -8 && ret5d < -5 && (structureScore ?? 0) >= 1) ? (w.pullbackDeepBonus ?? 0)
+                : (ret5d >= -5 && ret5d <= -2) ? (w.pullbackShallowBonus ?? 0)
+                : 0;
 
             const rsiBonusPenalty = rsi != null
                 ? (rsi < 30 ? w.rsiOversold30 : rsi < 40 ? w.rsiOversold40 : rsi < 50 ? w.rsiOversold50
@@ -2736,7 +2748,7 @@
                 : 0;
             const macdBonus = macdCrossover === 'bullish' ? w.macdBullish : macdCrossover === 'bearish' ? w.macdBearish : w.macdNone;
 
-            const rsMeanRevPenalty = rsNormalized >= 9.5 ? w.rsMeanRev95 : rsNormalized >= 9 ? w.rsMeanRev90 : rsNormalized >= 8.5 ? w.rsMeanRev85 : 0;
+            const rsMeanRevPenalty = rsNormalized >= 9.5 ? w.rsMeanRev95 : rsNormalized >= 9 ? w.rsMeanRev90 : rsNormalized >= 8.5 ? w.rsMeanRev85 : rsNormalized >= 8 ? (w.rsMeanRev80 ?? 0) : 0;
 
             const dtc = daysToCover || 0;
             const squeezeBonus = (dtc > 5 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? w.squeezeBonusHigh
@@ -2797,7 +2809,8 @@
             const additiveScore = momentumContrib + rsContrib + sectorBonus + accelBonus + consistencyBonus
                 + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + declinePenalty
                 + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus
-                + smaProximityBonus + smaCrossoverBonus + rangePositionBonus + higherLowBonus + learnedAdj + heatBonus;
+                + smaProximityBonus + smaCrossoverBonus + rangePositionBonus + higherLowBonus
+                + momSweetSpotBonus + momHighPenalty + learnedAdj + heatBonus;
 
             let entryMultiplier = 1.0;
             if (additiveScore > 0) {
@@ -2813,7 +2826,8 @@
                     momentumContrib, rsContrib, sectorBonus, accelBonus, consistencyBonus,
                     structureBonus, extensionPenalty, pullbackBonus, runnerPenalty, declinePenalty,
                     rsiBonusPenalty, macdBonus, rsMeanRevPenalty, squeezeBonus, volumeBonus, fvgBonus,
-                    smaProximityBonus, smaCrossoverBonus, rangePositionBonus, higherLowBonus, learnedAdj, heatBonus, entryMultiplier
+                    smaProximityBonus, smaCrossoverBonus, rangePositionBonus, higherLowBonus,
+                    momSweetSpotBonus, momHighPenalty, learnedAdj, heatBonus, entryMultiplier
                 }
             };
         }
@@ -3189,7 +3203,7 @@
                 // Scale by edge (1.5 per % point, capped at 10.0) and match quality
                 // GREEN (full) gets 100%, YELLOW (strong) gets 35%
                 const rawBonus = Math.min(edge * 1.5, 10.0);
-                const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.35 : 0;
+                const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.50 : 0;
                 const bonus = rawBonus * matchMult;
 
                 if (bonus > bestBonus) bestBonus = bonus;
@@ -3250,7 +3264,8 @@
                 if (zone.inZone && regimeAllowed) {
                     return held ? 'add' : 'buy';
                 }
-                if (zone.distancePct <= 1 && score >= 7 && regimeAllowed) return 'near';
+                const nearScoreBar = held ? 5 : 7; // held stocks already validated — lower bar for adds
+                if (zone.distancePct <= 1 && score >= nearScoreBar && regimeAllowed) return 'near';
                 return 'wait';
             }
 
@@ -13170,7 +13185,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 'momentumContrib', 'rsContrib', 'structureBonus', 'accelBonus', 'consistencyBonus',
                 'rsiBonusPenalty', 'macdBonus', 'rsMeanRevPenalty', 'squeezeBonus', 'volumeBonus',
                 'fvgBonus', 'smaProximityBonus', 'smaCrossoverBonus', 'extensionPenalty',
-                'pullbackBonus', 'runnerPenalty', 'declinePenalty'
+                'pullbackBonus', 'runnerPenalty', 'declinePenalty',
+                'momSweetSpotBonus', 'momHighPenalty'
             ];
 
             const componentCorrelations = {};
@@ -13306,7 +13322,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 macdBonus: 'macdBullish',
                 rsMeanRevPenalty: 'rsMeanRev95',
                 squeezeBonus: 'squeezeBonusHigh',
-                fvgBonus: 'fvgBullish'
+                fvgBonus: 'fvgBullish',
+                momSweetSpotBonus: 'momSweetSpotBonus',
+                momHighPenalty: 'momHighPenalty9',
+                pullbackBonus: 'pullbackStructureBonus'
             };
 
             function calibrateWeightSet(observations) {
@@ -13335,6 +13354,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     macdNone: DEFAULT_WEIGHTS.macdNone / DEFAULT_WEIGHTS.macdBullish,
                     rsMeanRev90: DEFAULT_WEIGHTS.rsMeanRev90 / DEFAULT_WEIGHTS.rsMeanRev95,
                     rsMeanRev85: DEFAULT_WEIGHTS.rsMeanRev85 / DEFAULT_WEIGHTS.rsMeanRev95,
+                    rsMeanRev80: DEFAULT_WEIGHTS.rsMeanRev80 / DEFAULT_WEIGHTS.rsMeanRev95,
+                    momHighPenalty8: DEFAULT_WEIGHTS.momHighPenalty8 / DEFAULT_WEIGHTS.momHighPenalty9,
+                    pullbackDeepBonus: DEFAULT_WEIGHTS.pullbackDeepBonus / DEFAULT_WEIGHTS.pullbackStructureBonus,
+                    pullbackShallowBonus: DEFAULT_WEIGHTS.pullbackShallowBonus / DEFAULT_WEIGHTS.pullbackStructureBonus,
                     squeezeBonusMod: DEFAULT_WEIGHTS.squeezeBonusMod / DEFAULT_WEIGHTS.squeezeBonusHigh,
                     fvgBearish: DEFAULT_WEIGHTS.fvgBearish / DEFAULT_WEIGHTS.fvgBullish,
                     sectorModestInflow: DEFAULT_WEIGHTS.sectorModestInflow / DEFAULT_WEIGHTS.sectorInflow,
@@ -13363,6 +13386,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 if (weights.rsMeanRev95 !== DEFAULT_WEIGHTS.rsMeanRev95) {
                     weights.rsMeanRev90 = parseFloat((weights.rsMeanRev95 * ratios.rsMeanRev90).toFixed(4));
                     weights.rsMeanRev85 = parseFloat((weights.rsMeanRev95 * ratios.rsMeanRev85).toFixed(4));
+                    weights.rsMeanRev80 = parseFloat((weights.rsMeanRev95 * ratios.rsMeanRev80).toFixed(4));
+                }
+                if (weights.momHighPenalty9 !== DEFAULT_WEIGHTS.momHighPenalty9) {
+                    weights.momHighPenalty8 = parseFloat((weights.momHighPenalty9 * ratios.momHighPenalty8).toFixed(4));
+                }
+                if (weights.pullbackStructureBonus !== DEFAULT_WEIGHTS.pullbackStructureBonus) {
+                    weights.pullbackDeepBonus = parseFloat((weights.pullbackStructureBonus * ratios.pullbackDeepBonus).toFixed(4));
+                    weights.pullbackShallowBonus = parseFloat((weights.pullbackStructureBonus * ratios.pullbackShallowBonus).toFixed(4));
                 }
                 if (weights.squeezeBonusHigh !== DEFAULT_WEIGHTS.squeezeBonusHigh) {
                     weights.squeezeBonusMod = parseFloat((weights.squeezeBonusHigh * ratios.squeezeBonusMod).toFixed(4));
@@ -14576,6 +14607,8 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     if (bd.squeezeBonus) parts.push(`Squeeze: +${bd.squeezeBonus.toFixed(1)}`);
                     if (bd.rangePositionBonus) parts.push(`Range: ${bd.rangePositionBonus >= 0 ? '+' : ''}${bd.rangePositionBonus.toFixed(1)}`);
                     if (bd.higherLowBonus) parts.push(`HL Accum: +${bd.higherLowBonus.toFixed(1)}`);
+                    if (bd.momSweetSpotBonus) parts.push(`MomSweet: +${bd.momSweetSpotBonus.toFixed(1)}`);
+                    if (bd.momHighPenalty) parts.push(`MomHigh: ${bd.momHighPenalty.toFixed(1)}`);
                     if (bd.accelBonus) parts.push(`Accel: +${bd.accelBonus.toFixed(1)}`);
                     if (bd.heatBonus) parts.push(`Heat: ${bd.heatBonus >= 0 ? '+' : ''}${bd.heatBonus.toFixed(1)}`);
                     if (bd.learnedAdj) parts.push(`Learned: ${bd.learnedAdj >= 0 ? '+' : ''}${bd.learnedAdj.toFixed(1)}`);

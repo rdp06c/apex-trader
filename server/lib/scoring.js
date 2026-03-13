@@ -223,22 +223,25 @@ function detectStructure(bars) {
 
 // === FULL SCAN SCORING FUNCTIONS ===
 
+// Aligned with REV signal edge: RSI<40 (+19pp), MOM<3 (+15pp), pullback -2 to -5% (+19pp).
 // Noise components zeroed: accel, consistency, FVG (uncorrelated per calibration).
-// Pullback bonus removed: biggest score distorter; calibration captures via combo heat.
 // SMA proximity and squeeze halved: real but oversized.
 const DEFAULT_WEIGHTS = {
     momentumMultiplier: 0.3, rsMultiplier: 0.6, structureMultiplier: 1.25,
     accelBonus: 0, consistencyBonus: 0,
     sectorInflow: 2.0, sectorModestInflow: 1.0, sectorOutflow: -1.0,
-    rsiOversold30: 2.5, rsiOversold40: 1.5, rsiOversold50: 0.5,
-    rsiOverbought70: -3.0, rsiOverbought80: -5.0,
+    rsiOversold30: 4.0, rsiOversold40: 2.5, rsiOversold50: 0.8,        // amplified: RSI<40 is +19pp edge
+    rsiOverbought70: -4.5, rsiOverbought80: -7.0,                       // amplified: RSI>70 is -21pp edge
     macdBullish: 2.5, macdBearish: -2.0, macdNone: -0.5,
-    rsMeanRev95: -3.0, rsMeanRev90: -2.0, rsMeanRev85: -1.0,
+    rsMeanRev95: -4.0, rsMeanRev90: -3.0, rsMeanRev85: -2.0, rsMeanRev80: -0.5, // expanded: RS>90 wins 14%
     squeezeBonusHigh: 0.75, squeezeBonusMod: 0.4,
     smaProxNear: 1.0, smaProxBelow: 0.5, smaProxFar15: -0.75, smaProxFar10: -0.25,
     smaCrossoverBullish: 2.0, smaCrossoverBearish: -2.0,
     fvgBullish: 0, fvgBearish: 0,
-    entryMultExtreme: 0.3, entryMultExtended: 0.6
+    entryMultExtreme: 0.3, entryMultExtended: 0.6,
+    momSweetSpotBonus: 2.5,                                              // MOM 2-5 with bull structure
+    momHighPenalty8: -1.5, momHighPenalty9: -3.0,                        // MOM 8+ loses
+    pullbackStructureBonus: 3.0, pullbackDeepBonus: 2.0, pullbackShallowBonus: 1.0 // 5D pullback reward
 };
 
 function getActiveWeights(calibratedWeights, vixLevel) {
@@ -386,6 +389,15 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
     const w = weights || DEFAULT_WEIGHTS;
 
     const momentumContrib = momentumScore * w.momentumMultiplier;
+    // Momentum sweet spot: MOM 2-5 with bullish structure is the winning zone per entry data
+    const momSweetSpotBonus = (momentumScore >= 2 && momentumScore <= 5 && (structureScore ?? 0) >= 1)
+        ? (w.momSweetSpotBonus ?? 0)
+        : (momentumScore >= 2 && momentumScore <= 5) ? (w.momSweetSpotBonus ?? 0) * 0.4
+        : 0;
+    // High-momentum penalty: MOM 8+ is anti-predictive (30% WR at MOM>=8)
+    const momHighPenalty = momentumScore >= 9 ? (w.momHighPenalty9 ?? 0)
+        : momentumScore >= 8 ? (w.momHighPenalty8 ?? 0)
+        : 0;
     const rsContrib = rsNormalized * w.rsMultiplier;
 
     let sectorBonus = 0;
@@ -408,8 +420,11 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
         : 0;
 
     const ret5d = totalReturn5d ?? 0;
-    // Pullback bonus removed: biggest score distorter; calibration captures via combo heat.
-    const pullbackBonus = 0;
+    // Pullback bonus: 5D return in sweet spot with bullish structure is the #1 edge
+    const pullbackBonus = (ret5d >= -5 && ret5d <= -2 && (structureScore ?? 0) >= 1) ? (w.pullbackStructureBonus ?? 0)
+        : (ret5d >= -8 && ret5d < -5 && (structureScore ?? 0) >= 1) ? (w.pullbackDeepBonus ?? 0)
+        : (ret5d >= -5 && ret5d <= -2) ? (w.pullbackShallowBonus ?? 0)
+        : 0;
 
     const rsiBonusPenalty = rsi != null
         ? (rsi < 30 ? w.rsiOversold30 : rsi < 40 ? w.rsiOversold40 : rsi < 50 ? w.rsiOversold50
@@ -417,7 +432,7 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
         : 0;
     const macdBonus = macdCrossover === 'bullish' ? w.macdBullish : macdCrossover === 'bearish' ? w.macdBearish : w.macdNone;
 
-    const rsMeanRevPenalty = rsNormalized >= 9.5 ? w.rsMeanRev95 : rsNormalized >= 9 ? w.rsMeanRev90 : rsNormalized >= 8.5 ? w.rsMeanRev85 : 0;
+    const rsMeanRevPenalty = rsNormalized >= 9.5 ? w.rsMeanRev95 : rsNormalized >= 9 ? w.rsMeanRev90 : rsNormalized >= 8.5 ? w.rsMeanRev85 : rsNormalized >= 8 ? (w.rsMeanRev80 ?? 0) : 0;
 
     const dtc = daysToCover || 0;
     const squeezeBonus = (dtc > 5 && (structureScore ?? 0) >= 1 && sectorFlow !== 'outflow') ? w.squeezeBonusHigh
@@ -466,7 +481,8 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
     const additiveScore = momentumContrib + rsContrib + sectorBonus + accelBonus + consistencyBonus
         + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + declinePenalty
         + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus
-        + smaProximityBonus + smaCrossoverBonus + rangePositionBonus + higherLowBonus + learnedAdj + heatBonus;
+        + smaProximityBonus + smaCrossoverBonus + rangePositionBonus + higherLowBonus
+        + momSweetSpotBonus + momHighPenalty + learnedAdj + heatBonus;
 
     let entryMultiplier = 1.0;
     if (additiveScore > 0) {
@@ -482,7 +498,8 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
             momentumContrib, rsContrib, sectorBonus, accelBonus, consistencyBonus,
             structureBonus, extensionPenalty, pullbackBonus, runnerPenalty, declinePenalty,
             rsiBonusPenalty, macdBonus, rsMeanRevPenalty, squeezeBonus, volumeBonus, fvgBonus,
-            smaProximityBonus, smaCrossoverBonus, rangePositionBonus, higherLowBonus, learnedAdj, heatBonus, entryMultiplier
+            smaProximityBonus, smaCrossoverBonus, rangePositionBonus, higherLowBonus,
+            momSweetSpotBonus, momHighPenalty, learnedAdj, heatBonus, entryMultiplier
         }
     };
 }
@@ -916,7 +933,7 @@ function computeSignalBonus(entrySignal, calibratedWeights) {
         if (edge == null || edge <= 0) continue;
 
         const rawBonus = Math.min(edge * 1.5, 10.0);
-        const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.35 : 0;
+        const matchMult = pat.match === 'full' ? 1.0 : pat.match === 'strong' ? 0.50 : 0;
         const bonus = rawBonus * matchMult;
 
         if (bonus > bestBonus) bestBonus = bonus;
