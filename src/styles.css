@@ -2709,8 +2709,14 @@
             white-space: nowrap;
         }
         .action-badge.action-buy { background: var(--green); color: #000; }
+        .action-badge.action-add { background: #2ecc71; color: #000; }
+        .action-badge.action-near { background: #f39c12; color: #000; }
+        .action-badge.action-wait { background: rgba(255,255,255,0.08); color: #aaa; border: 1px solid rgba(255,255,255,0.15); }
         .action-badge.action-setup { background: var(--yellow); color: #000; }
         .action-badge.action-watch { background: rgba(255,255,255,0.1); color: var(--text-muted); }
+        .dist-in-zone { color: var(--green); font-weight: 700; }
+        .dist-near { color: #f39c12; }
+        .tp-separator { grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 8px; padding-top: 8px; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; }
 
         .heat-dots { display: inline-flex; gap: 3px; align-items: center; cursor: help; }
         .heat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }

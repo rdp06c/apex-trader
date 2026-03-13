@@ -9,7 +9,7 @@ const {
     detectStructure, calculate5DayMomentum, calculateVolumeRatio,
     calculateRelativeStrength, detectSectorRotation, calculateCompositeScore,
     getActiveWeights, isMarketOpen, detectMarketRegime, evaluateEntrySignals,
-    evaluateComboHeat, computeComboHeatBonus,
+    evaluateComboHeat, computeComboHeatBonus, computeBuyZone, generateTradePlan,
     calculateVCR, calculateRangePosition, calculateADX, calculateROC,
     countHigherLows, calculateOBVSlope, calculateGapAnalysis
 } = require('../lib/scoring');
@@ -225,6 +225,7 @@ async function runFullScan({ force = false } = {}) {
             // Compute entry signal first — needed to scale heat bonus
             const entrySignal = evaluateEntrySignals({
                 macdCrossover: macd?.crossover || 'none', rsi,
+                macdHistogram: macd?.histogram ?? null,
                 structure: structure.structure, structureScore: structure.structureScore,
                 return5d: momentum.totalReturn5d ?? null,
                 momentum: momentum.score, momentumScore: momentum.score,
@@ -315,8 +316,30 @@ async function runFullScan({ force = false } = {}) {
                 higherLowCount: hlResult?.count ?? 0,
                 obvSlope: obvResult?.normalized ?? null,
                 obvDivergence: obvResult?.bullishDivergence ? 'bullish' : obvResult?.bearishDivergence ? 'bearish' : 'none',
-                gapPct: gapResult?.gapPct ?? 0
+                gapPct: gapResult?.gapPct ?? 0,
+                sma20: sma20 ?? null
             });
+
+            // Compute buy zone for this candidate (uses same data already fetched)
+            const tradePlan = generateTradePlan({
+                price: priceData.price, bars, structure, vixLevel,
+                entrySignalPatterns: null, comboResults, comboHeat
+            });
+            const buyZone = computeBuyZone({
+                price: priceData.price,
+                support: tradePlan?.support ?? null,
+                sma20,
+                bars,
+                vixLevel
+            });
+            const lastCandidate = candidateScores[candidateScores.length - 1];
+            if (buyZone) {
+                lastCandidate.buyZonePrice = buyZone.buyZonePrice;
+                lastCandidate.buyZoneDistance = buyZone.distancePct;
+                lastCandidate.buyZoneInZone = buyZone.inZone;
+                lastCandidate.buyZoneSource = buyZone.zoneSource;
+            }
+
             scored++;
         }
 

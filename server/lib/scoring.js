@@ -766,7 +766,7 @@ const ENTRY_SIGNAL_PATTERNS = [
         label: 'Reversal Entry',
         badge: 'REV',
         criteria: [
-            { id: 'macd', label: 'MACD Bull', test: c => c.macdCrossover === 'bullish' },
+            { id: 'macd', label: 'MACD Bull/Hist≤0', test: c => c.macdCrossover === 'bullish' || (c.macdHistogram != null && c.macdHistogram <= 0) },
             { id: 'rsi', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
             { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' },
             { id: 'pullback', label: 'Pullback', test: c => c.return5d != null && c.return5d >= -8 && c.return5d <= -2 }
@@ -1024,18 +1024,59 @@ function evaluateComboHeat(candidate, comboResults) {
     return { hotCount: hotCombos.length, coldCount: coldCombos.length, hotCombos, coldCombos, netHeat };
 }
 
+// Compute buy zone limit price: highest of structure support, SMA20, VIX-aware pullback target.
+// Server version accepts all data as params (no globals).
+function computeBuyZone({ price, support, sma20, bars, vixLevel }) {
+    if (!price) return null;
+
+    // SMA20 from param or computed from bars
+    let sma = sma20;
+    if (sma == null && bars && bars.length >= 20) {
+        sma = calculateSMA(bars, 20);
+    }
+
+    // VIX-aware pullback target from 20-bar high
+    let pullbackTarget = null, recentHigh = null, pullbackPct = null;
+    if (bars && bars.length >= 5) {
+        const lookback = bars.slice(-20);
+        recentHigh = Math.max(...lookback.map(b => b.h));
+        pullbackPct = (vixLevel == null || vixLevel < 20) ? 3 : vixLevel <= 30 ? 5 : 7;
+        pullbackTarget = +(recentHigh * (1 - pullbackPct / 100)).toFixed(2);
+    }
+
+    // Collect valid references (must be below current price)
+    const refs = [];
+    if (support != null && support < price) refs.push({ price: support, source: 'support' });
+    if (sma != null && sma < price) refs.push({ price: sma, source: 'sma20' });
+    if (pullbackTarget != null && pullbackTarget < price) refs.push({ price: pullbackTarget, source: 'pullback' });
+
+    if (refs.length === 0) return null;
+
+    // Highest valid ref = closest to current price = most likely to fill
+    refs.sort((a, b) => b.price - a.price);
+    const best = refs[0];
+    const buyZonePrice = +best.price.toFixed(2);
+    const distancePct = +((price - buyZonePrice) / price * 100).toFixed(1);
+    const inZone = price <= buyZonePrice;
+
+    return {
+        buyZonePrice,
+        inZone,
+        distancePct,
+        zoneSource: best.source,
+        support: support != null ? +support.toFixed(2) : null,
+        sma20: sma != null ? +sma.toFixed(2) : null,
+        pullbackTarget,
+        recentHigh: recentHigh != null ? +recentHigh.toFixed(2) : null,
+        pullbackPct
+    };
+}
+
 // Compute a score bonus from combo heat analysis — integrates calibration
 // data directly into the composite score. Hot combos boost, cold combos penalize.
 function computeComboHeatBonus(comboHeatResult) {
-    if (!comboHeatResult) return 0;
-    let bonus = 0;
-    for (const combo of (comboHeatResult.hotCombos || [])) {
-        bonus += Math.min(combo.vsBaseline * 0.5, 2.0);
-    }
-    for (const combo of (comboHeatResult.coldCombos || [])) {
-        bonus += Math.max(combo.vsBaseline * 0.5, -2.0);
-    }
-    return Math.max(-6.0, Math.min(6.0, Math.round(bonus * 10) / 10));
+    // Disabled: heat dots are informational only. Re-enable when more buy zone data validates heat signal.
+    return 0;
 }
 
 // ========== New Technical Indicators ==========
@@ -1354,5 +1395,6 @@ module.exports = {
     countHigherLows,
     calculateOBVSlope,
     calculateGapAnalysis,
-    generateTradePlan
+    generateTradePlan,
+    computeBuyZone
 };

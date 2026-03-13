@@ -2935,6 +2935,78 @@
             };
         }
 
+        // Compute buy zone limit price: highest of structure support, SMA20, VIX-aware pullback target.
+        // Returns null if no valid references exist below current price.
+        function computeBuyZone(candidate, tradePlan, bars, vixLevel) {
+            const price = candidate.price;
+            if (!price) return null;
+
+            // 1. Support from trade plan
+            const support = tradePlan?.support ?? null;
+
+            // 2. SMA20 from persisted candidate or computed from bars
+            let sma20 = candidate.sma20;
+            if (sma20 == null && bars && bars.length >= 20) {
+                sma20 = calculateSMA(bars, 20);
+            }
+
+            // 3. VIX-aware pullback target from 20-bar high
+            let pullbackTarget = null, recentHigh = null, pullbackPct = null;
+            if (bars && bars.length >= 5) {
+                const lookback = bars.slice(-20);
+                recentHigh = Math.max(...lookback.map(b => b.h));
+                pullbackPct = (vixLevel == null || vixLevel < 20) ? 3 : vixLevel <= 30 ? 5 : 7;
+                pullbackTarget = +(recentHigh * (1 - pullbackPct / 100)).toFixed(2);
+            }
+
+            // 4. Collect valid references (must be below current price)
+            const refs = [];
+            if (support != null && support < price) refs.push({ price: support, source: 'support' });
+            if (sma20 != null && sma20 < price) refs.push({ price: sma20, source: 'sma20' });
+            if (pullbackTarget != null && pullbackTarget < price) refs.push({ price: pullbackTarget, source: 'pullback' });
+
+            if (refs.length === 0) {
+                // Check if price is already below all references (deep pullback)
+                const allAbove = [support, sma20, pullbackTarget].filter(v => v != null);
+                if (allAbove.length > 0 && allAbove.every(v => v >= price)) {
+                    // Price below everything — strong signal but structure may be broken
+                    return null;
+                }
+                return null;
+            }
+
+            // 5. Highest valid ref = closest to current price = most likely to fill
+            refs.sort((a, b) => b.price - a.price);
+            const best = refs[0];
+            const buyZonePrice = +best.price.toFixed(2);
+            const distancePct = +((price - buyZonePrice) / price * 100).toFixed(1);
+            const inZone = price <= buyZonePrice;
+
+            return {
+                buyZonePrice,
+                inZone,
+                distancePct,
+                zoneSource: best.source,
+                support: support != null ? +support.toFixed(2) : null,
+                sma20: sma20 != null ? +sma20.toFixed(2) : null,
+                pullbackTarget,
+                recentHigh: recentHigh != null ? +recentHigh.toFixed(2) : null,
+                pullbackPct
+            };
+        }
+
+        // R:R at buy zone limit entry: same target/stop as trade plan, but entry = buyZonePrice.
+        function computeBuyZoneRR(tradePlan, buyZonePrice) {
+            if (!tradePlan || !buyZonePrice) return null;
+            const reward = tradePlan.target - buyZonePrice;
+            const risk = buyZonePrice - tradePlan.stop;
+            if (risk <= 0 || reward <= 0) return null;
+            const riskReward = +(reward / risk).toFixed(1);
+            const currentRR = tradePlan.riskReward;
+            const improvementVsCurrent = currentRR ? +((riskReward / currentRR - 1) * 100).toFixed(0) : null;
+            return { riskReward, improvementVsCurrent };
+        }
+
         // Entry signal pattern definitions — data-driven for extensibility.
         // Non-reversal patterns are gated by calibration data (calibrationKey must be "hot").
         const ENTRY_SIGNAL_PATTERNS = [
@@ -2943,7 +3015,7 @@
                 label: 'Reversal Entry',
                 badge: 'REV',
                 criteria: [
-                    { id: 'macd', label: 'MACD Bull', test: c => c.macdCrossover === 'bullish' },
+                    { id: 'macd', label: 'MACD Bull/Hist≤0', test: c => c.macdCrossover === 'bullish' || (c.macdHistogram != null && c.macdHistogram <= 0) },
                     { id: 'rsi', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
                     { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' },
                     { id: 'pullback', label: 'Pullback', test: c => c.return5d != null && c.return5d >= -8 && c.return5d <= -2 }
@@ -3116,23 +3188,42 @@
             const sig = candidate._entrySignal;
             const plan = candidate._tradePlan;
             const heat = candidate._comboHeat;
-            const rr = plan?.riskReward;
+            const zone = candidate._buyZone;
             const score = (candidate.compositeScore || 0) + (candidate._signalBonus || 0);
             const hasSignal = sig?.bestMatch === 'full' || sig?.bestMatch === 'strong';
             const hasPartial = sig?.bestMatch === 'partial';
-            const hasCalData = plan?.winRate != null;
             const hasHeat = (heat?.hotCount || 0) > 0;
             const isAvoid = !!sig?.antiPatternMatch;
+            const held = portfolio.holdings && !!portfolio.holdings[candidate.symbol];
+            const structOk = candidate.structure !== 'bearish' && candidate.structure !== 'bearish_continuation';
 
-            // AVOID anti-pattern vetoes BUY — downgrade to SETUP at best
+            // Regime-based signal gating: in bear/choppy markets only REV signals qualify for BUY/ADD/NEAR
+            const regime = portfolio.lastMarketRegime || 'choppy';
+            const isBearish = regime === 'bearish' || regime === 'choppy';
+            const signalId = sig?.bestPatternId;
+            const isRevSignal = signalId === 'reversal' || !signalId;
+            const regimeOverride = scorecardState.overrideRegimeGate === true;
+            const regimeAllowed = !isBearish || isRevSignal || regimeOverride;
+
+            // AVOID anti-pattern vetoes BUY/ADD — downgrade to SETUP at best
             if (isAvoid) {
                 if (hasSignal && score >= 5) return 'setup';
                 return 'watch';
             }
-            if (hasSignal && rr != null && rr >= 1.5 && hasCalData && plan.winRate > 50 && score >= 8) return 'buy';
-            if (hasSignal && rr != null && rr >= 1.0 && score >= 5) return 'setup';
+
+            // Zone-aware badges (when buy zone data available)
+            if (zone && score >= 8 && structOk) {
+                if (zone.inZone && regimeAllowed) {
+                    return held ? 'add' : 'buy';
+                }
+                if (zone.distancePct <= 2 && regimeAllowed) return 'near';
+                if (zone.distancePct > 2 || !regimeAllowed) return 'wait';
+            }
+
+            // Fallback: signal-based logic when no buy zone data
+            if (hasSignal && score >= 8 && regimeAllowed) return 'buy';
             if (hasSignal && score >= 5) return 'setup';
-            if (hasPartial && rr != null && rr >= 1.5) return 'watch';
+            if (hasPartial && score >= 5) return 'watch';
             if (hasHeat) return 'watch';
             return null;
         }
@@ -3141,15 +3232,8 @@
         // data directly into the composite score. Hot combos boost, cold combos penalize.
         // Scale: 0.5 pts per % edge, capped ±2.0 per combo, net cap ±6.0.
         function computeComboHeatBonus(comboHeatResult) {
-            if (!comboHeatResult) return 0;
-            let bonus = 0;
-            for (const combo of (comboHeatResult.hotCombos || [])) {
-                bonus += Math.min(combo.vsBaseline * 0.5, 2.0);
-            }
-            for (const combo of (comboHeatResult.coldCombos || [])) {
-                bonus += Math.max(combo.vsBaseline * 0.5, -2.0);
-            }
-            return Math.max(-6.0, Math.min(6.0, Math.round(bonus * 10) / 10));
+            // Disabled: heat dots are informational only. Re-enable when more buy zone data validates heat signal.
+            return 0;
         }
 
         // Thesis status evaluation — compares entry technicals to current state
@@ -6305,7 +6389,8 @@
                             isAccelerating: s.data.momentum?.isAccelerating ?? false,
                             upDays: s.data.momentum?.upDays ?? 0,
                             totalDays: s.data.momentum?.totalDays ?? 0,
-                            fvg: s.data.marketStructure?.fvg || 'none'
+                            fvg: s.data.marketStructure?.fvg || 'none',
+                            sma20: s.data.sma20 ?? null
                         };
                     })
                 };
@@ -13964,7 +14049,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
         }
 
         // Module 2: Candidate Scorecard (paginated, full universe)
-        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: '', filterWatchlist: false, sortField: 'score', sortDir: 'desc' };
+        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: '', filterWatchlist: false, filterZone: false, overrideRegimeGate: false, sortField: 'dist', sortDir: 'asc' };
         const SCORECARD_PAGE_SIZE = 40;
 
         function scorecardSetSector(val) {
@@ -13987,6 +14072,18 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
         function scorecardToggleWatchlist() {
             scorecardState.filterWatchlist = !scorecardState.filterWatchlist;
+            scorecardState.page = 1;
+            updateCandidateScorecard();
+        }
+
+        function scorecardToggleZone() {
+            scorecardState.filterZone = !scorecardState.filterZone;
+            scorecardState.page = 1;
+            updateCandidateScorecard();
+        }
+
+        function scorecardToggleRegimeOverride() {
+            scorecardState.overrideRegimeGate = !scorecardState.overrideRegimeGate;
             scorecardState.page = 1;
             updateCandidateScorecard();
         }
@@ -14059,7 +14156,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     volumeTrend: c.volumeTrend ?? 1,
                     fvg: c.fvg,
                     signalAdjustments: signalAdj,
-                    sma20: null, // Not persisted — SMA proximity bonus will be 0
+                    sma20: c.sma20 ?? null,
                     currentPrice: c.price,
                     smaCrossover: c.smaCrossover ? { crossover: c.smaCrossover } : null,
                     comboHeatBonus: heatBonus,
@@ -14127,6 +14224,19 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 c._comboHeat = evaluateComboHeat(c);
                 c._signalBonus = computeSignalBonus(c._entrySignal, portfolio.calibratedWeights);
                 c._tradePlan = generateTradePlan(c);
+                c._buyZone = computeBuyZone(c, c._tradePlan, multiDayCache[c.symbol], portfolio.lastVIX?.level);
+                // Fall back to server-persisted buy zone when local computation fails (no bars)
+                if (!c._buyZone && c.buyZonePrice) {
+                    c._buyZone = {
+                        buyZonePrice: c.buyZonePrice,
+                        inZone: c.buyZoneInZone || false,
+                        distancePct: c.buyZoneDistance ?? (c.price ? +((c.price - c.buyZonePrice) / c.price * 100).toFixed(1) : 999),
+                        zoneSource: c.buyZoneSource || 'unknown',
+                        support: null, sma20: c.sma20, pullbackTarget: null, recentHigh: null, pullbackPct: null
+                    };
+                }
+                c._buyZoneRR = c._buyZone?.buyZonePrice && c._tradePlan
+                    ? computeBuyZoneRR(c._tradePlan, c._buyZone.buyZonePrice) : null;
                 c._actionBadge = computeActionBadge(c);
             });
 
@@ -14136,7 +14246,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
             if (scorecardState.filterSignal) {
                 if (scorecardState.filterSignal === 'buy_only') {
-                    candidates = candidates.filter(c => c._actionBadge === 'buy');
+                    candidates = candidates.filter(c => c._actionBadge === 'buy' || c._actionBadge === 'add');
                 } else {
                 const comboResults = portfolio.calibratedWeights?.signalCombos?.combos;
                 candidates = candidates.filter(c => {
@@ -14171,9 +14281,15 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 candidates = candidates.filter(c => c.sector === scorecardState.filterSector);
             }
 
+            if (scorecardState.filterZone) {
+                candidates = candidates.filter(c => c._buyZone?.inZone);
+            }
+
             // Sort
             const sortAccessors = {
-                action: c => { const b = c._actionBadge; return b === 'buy' ? 3 : b === 'setup' ? 2 : b === 'watch' ? 1 : 0; },
+                action: c => { const b = c._actionBadge; return b === 'buy' ? 5 : b === 'add' ? 4 : b === 'near' ? 3 : b === 'wait' ? 2 : b === 'setup' ? 1 : b === 'watch' ? 0.5 : 0; },
+                limit: c => c._buyZone?.buyZonePrice ?? 0,
+                dist: c => c._buyZone?.distancePct ?? 999,
                 score: c => (c.compositeScore || 0) + (c._signalBonus || 0),
                 price: c => c.price || 0,
                 day: c => c.dayChange || 0,
@@ -14232,6 +14348,12 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 html += `<option value="${s}"${scorecardState.filterSector === s ? ' selected' : ''}>${s} (${sectorCounts[s] || 0})</option>`;
             });
             html += '</select>';
+            html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;flex:0 0 auto;white-space:nowrap;"><input type="checkbox" onchange="scorecardToggleZone()"${scorecardState.filterZone ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> In Zone</label>`;
+            const regime = portfolio.lastMarketRegime || 'choppy';
+            const regimeBearish = regime === 'bearish' || regime === 'choppy';
+            if (regimeBearish) {
+                html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#f39c12;cursor:pointer;flex:0 0 auto;white-space:nowrap;" title="In ${regime} regime, only REV signals qualify for BUY/ADD/NEAR. Toggle to override."><input type="checkbox" onchange="scorecardToggleRegimeOverride()"${scorecardState.overrideRegimeGate ? ' checked' : ''} style="accent-color:#f39c12;cursor:pointer;"> All Signals (${regime}: REV only)</label>`;
+            }
             if (data.timestamp) {
                 const scanAge = Math.floor((Date.now() - new Date(data.timestamp).getTime()) / 1000);
                 const ageStr = scanAge < 60 ? 'just now' : scanAge < 3600 ? `${Math.floor(scanAge / 60)}m ago` : scanAge < 86400 ? `${Math.floor(scanAge / 3600)}h ago` : `${Math.floor(scanAge / 86400)}d ago`;
@@ -14258,6 +14380,8 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 sh('heat', "Combo heat from calibration backtesting. Green dots = hot combos, red dots = cold combos. Number = weighted net edge vs baseline. Positive = historically outperforms, negative = underperforms.", 'Heat') +
                 sh('score', "Composite score from weighted signals + calibration heat bonus + entry signal bonus. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
+                sh('limit', "Buy zone limit price. Set as single-day limit order. Based on highest of: structure support, SMA20, VIX-aware pullback from 20-day high.", 'Limit') +
+                sh('dist', "Distance from current price to buy zone. Negative/IN ZONE = at or below limit. Lower = closer to entry.", 'Dist') +
                 sh('rr', "Risk/Reward ratio (reward ÷ risk). Green ≥ 2.0 (strong), Yellow ≥ 1.5, Red < 1.5. Click row for target/stop details.", 'R:R') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
                 sh('5d', "5-day cumulative return. Pullbacks with bullish structure are captured by calibration combo heat, not a fixed bonus.", '5D') +
@@ -14473,11 +14597,41 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     }
                 }
 
+                // Buy zone cells
+                const bz = c._buyZone;
+                let limitCell = '--', distCell = '--', limitTip = '', distClass = '';
+                if (bz) {
+                    limitCell = '$' + bz.buyZonePrice.toFixed(2);
+                    const tipParts = [];
+                    if (bz.support != null) tipParts.push('Support: $' + bz.support.toFixed(2));
+                    if (bz.sma20 != null) tipParts.push('SMA20: $' + bz.sma20.toFixed(2));
+                    if (bz.pullbackTarget != null) tipParts.push('Pullback: $' + bz.pullbackTarget.toFixed(2) + ' (' + bz.pullbackPct + '% from $' + bz.recentHigh.toFixed(2) + ')');
+                    tipParts.push('Source: ' + bz.zoneSource);
+                    limitTip = tipParts.join('\n');
+                    if (bz.inZone) {
+                        distCell = '<span class="dist-in-zone">IN ZONE</span>';
+                    } else {
+                        distClass = bz.distancePct <= 2 ? 'dist-near' : '';
+                        distCell = bz.distancePct.toFixed(1) + '%';
+                    }
+                }
+
                 const globalRank = start + i + 1;
                 const watched = watchlistSet.has(c.symbol);
                 const actionBadge = c._actionBadge;
+                let actionTip = '';
+                if (actionBadge === 'wait') {
+                    const regimeNow = portfolio.lastMarketRegime || 'choppy';
+                    const bearNow = regimeNow === 'bearish' || regimeNow === 'choppy';
+                    const sigId = c._entrySignal?.bestPatternId;
+                    if (bearNow && sigId && sigId !== 'reversal') {
+                        actionTip = `${c._entrySignal.patterns.find(p=>p.id===sigId)?.badge||sigId.toUpperCase()} underperforms in ${regimeNow} regime`;
+                    } else if (bz && bz.distancePct > 2) {
+                        actionTip = 'Good stock, above buy zone — wait for pullback';
+                    }
+                }
                 const actionBadgeHtml = actionBadge
-                    ? `<span class="action-badge action-${actionBadge}">${actionBadge.toUpperCase()}</span>`
+                    ? `<span class="action-badge action-${actionBadge}"${actionTip ? ` title="${actionTip}"` : ''}>${actionBadge.toUpperCase()}</span>`
                     : '';
                 html += `<tr data-symbol="${c.symbol}" class="expandable" onclick="scorecardTogglePlan('${c.symbol}')">
                     <td class="watchlist-star ${watched ? 'watched' : ''}" onclick="event.stopPropagation();toggleWatchlistSymbol('${c.symbol}')" title="${watched ? 'Remove from watchlist' : 'Add to watchlist'}">${watched ? '★' : '☆'}</td>
@@ -14488,6 +14642,8 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     <td>${heatCell}</td>
                     <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span>${driverBadge}</div></td>
                     <td style="font-size:11px">${priceStr}</td>
+                    <td style="font-size:11px" title="${limitTip}">${limitCell}</td>
+                    <td class="${distClass}" style="font-size:11px">${distCell}</td>
                     <td class="plan-cell ${rrClass}" title="${targetTip}\n${stopTip}" style="font-size:11px;font-weight:600">${rrCell}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td class="${ret5dClass}" style="font-size:11px">${ret5d != null ? (ret5d >= 0 ? '+' : '') + ret5d.toFixed(2) + '%' : '--'}</td>
@@ -14523,8 +14679,22 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     planHtml += `<div class="tp-item"><span class="tp-label">Cal. Win Rate${confLabel}</span><span class="tp-value ${plan.winRate != null ? (plan.winRate >= 55 ? 'green' : '') : 'muted'}">${plan.winRate != null ? plan.winRate + '%' : '--'}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">Avg 10D Return${confLabel}</span><span class="tp-value ${plan.avgReturn != null ? (plan.avgReturn > 0 ? 'green' : 'red') : 'muted'}">${plan.avgReturn != null ? (plan.avgReturn > 0 ? '+' : '') + plan.avgReturn + '%' : '--'}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">Observations</span><span class="tp-value muted">${plan.observations != null ? plan.observations.toLocaleString() : '--'}</span></div>`;
+                    // Buy zone entry section
+                    if (bz) {
+                        const bzRR = c._buyZoneRR;
+                        planHtml += `<div class="tp-separator">Buy Zone Entry</div>`;
+                        planHtml += `<div class="tp-item"><span class="tp-label">Limit</span><span class="tp-value green">$${bz.buyZonePrice.toFixed(2)} (${bz.distancePct.toFixed(1)}% below)</span></div>`;
+                        planHtml += `<div class="tp-item"><span class="tp-label">Source</span><span class="tp-value muted">${bz.zoneSource === 'support' ? 'Structure Support' : bz.zoneSource === 'sma20' ? 'SMA20' : 'Pullback Target'}</span></div>`;
+                        if (bzRR) {
+                            const bzRRColor = bzRR.riskReward >= 2.0 ? 'green' : bzRR.riskReward >= 1.5 ? 'yellow' : 'red';
+                            planHtml += `<div class="tp-item"><span class="tp-label">Zone R:R</span><span class="tp-value ${bzRRColor}">${bzRR.riskReward.toFixed(1)}:1${bzRR.improvementVsCurrent != null ? ` (+${bzRR.improvementVsCurrent}% vs current)` : ''}</span></div>`;
+                        }
+                        planHtml += `<div class="tp-item"><span class="tp-label">Target</span><span class="tp-value muted">$${plan.target} (same)</span></div>`;
+                        planHtml += `<div class="tp-item"><span class="tp-label">Stop</span><span class="tp-value muted">$${plan.stop} (same)</span></div>`;
+                    }
+
                     planHtml += `</div>`;
-                    html += `<tr class="trade-plan-row hidden" data-plan-for="${c.symbol}"><td colspan="20">${planHtml}</td></tr>`;
+                    html += `<tr class="trade-plan-row hidden" data-plan-for="${c.symbol}"><td colspan="22">${planHtml}</td></tr>`;
                 }
             });
 
