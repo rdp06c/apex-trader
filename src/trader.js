@@ -9549,25 +9549,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 }
                                 return '';
                             })()}
-                            ${(() => {
-                                const price = h.stockPrice?.price;
-                                if (!h._struct || !price) return '';
-                                let sup = h._struct.lastSwingLow;
-                                if (!sup || sup >= price) {
-                                    const bars = multiDayCache[h.symbol];
-                                    if (bars && bars.length >= 20) {
-                                        const low = Math.min(...bars.slice(-20).map(b => b.l));
-                                        if (low < price) sup = low;
-                                        else sup = null;
-                                    } else sup = null;
-                                }
-                                const res = h._struct.lastSwingHigh && h._struct.lastSwingHigh > price ? h._struct.lastSwingHigh : null;
-                                if (!sup && !res) return '';
-                                let html = '';
-                                if (sup && sup < price) html += '<span class="hc-stat"><span class="hc-stat-lbl">S</span><span class="hc-stat-val">$' + sup.toFixed(2) + '</span></span>';
-                                if (res) html += '<span class="hc-stat"><span class="hc-stat-lbl">R</span><span class="hc-stat-val">$' + res.toFixed(2) + '</span></span>';
-                                return html;
-                            })()}
                         </div>
                         ${h._intraday ? `<div class="holding-card-stats hc-intraday">
                             <span class="hc-stat"><span class="hc-stat-lbl">5m RSI</span><span class="hc-stat-val ${h._intraday.rsi != null ? (h._intraday.rsi < 30 ? 'rsi-oversold' : h._intraday.rsi > 70 ? 'rsi-overbought' : '') : ''}">${h._intraday.rsi != null ? Math.round(h._intraday.rsi) : '--'}</span></span>
@@ -9579,6 +9560,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             <div><span class="holding-card-footer-label">Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
                             <div><span class="holding-card-footer-label">Now:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span></div>
                             <div><span class="holding-card-footer-label">Entry:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'N/A'}</span></div>
+                            ${(() => {
+                                const price = h.stockPrice?.price;
+                                if (!h._struct || !price) return '';
+                                let sup = h._struct.lastSwingLow;
+                                if (!sup || sup >= price) {
+                                    const bars = multiDayCache[h.symbol];
+                                    if (bars && bars.length >= 20) {
+                                        const low = Math.min(...bars.slice(-20).map(b => b.l));
+                                        if (low < price) sup = low; else sup = null;
+                                    } else sup = null;
+                                }
+                                const res = h._struct.lastSwingHigh && h._struct.lastSwingHigh > price ? h._struct.lastSwingHigh : null;
+                                let html = '';
+                                if (sup && sup < price) html += '<div><span class="holding-card-footer-label">S:</span> <span class="holding-card-footer-value">$' + sup.toFixed(2) + '</span></div>';
+                                if (res) html += '<div><span class="holding-card-footer-label">R:</span> <span class="holding-card-footer-value">$' + res.toFixed(2) + '</span></div>';
+                                return html;
+                            })()}
                             ${(() => {
                                 const articles = newsCache[h.symbol];
                                 if (!articles || !articles.length) return '';
