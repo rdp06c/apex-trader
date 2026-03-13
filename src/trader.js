@@ -3230,6 +3230,18 @@
 
             // Zone-aware badges (when buy zone data available)
             if (zone && score >= 5 && structOk) {
+                // Quality gates for BUY/ADD/NEAR — downgrade to WAIT with reason
+                const zoneRR = candidate._buyZoneRR?.riskReward;
+                const rs = candidate.rs || 0;
+                let gateReason = null;
+                if (zoneRR != null && zoneRR < 1.0) gateReason = 'Zone R:R ' + zoneRR.toFixed(1) + ' < 1.0 — risk exceeds reward';
+                else if (rs < 20) gateReason = 'RS ' + rs.toFixed(0) + ' < 20 — weakest quintile, no reversal edge';
+
+                if (gateReason) {
+                    candidate._waitReason = gateReason;
+                    return 'wait';
+                }
+
                 if (zone.inZone && regimeAllowed) {
                     return held ? 'add' : 'buy';
                 }
@@ -14643,13 +14655,17 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 const actionBadge = c._actionBadge;
                 let actionTip = '';
                 if (actionBadge === 'wait') {
-                    const regimeNow = portfolio.lastMarketRegime?.regime || 'choppy';
-                    const bearNow = regimeNow === 'bearish' || regimeNow === 'choppy';
-                    const sigId = c._entrySignal?.bestPatternId;
-                    if (bearNow && sigId && sigId !== 'reversal') {
-                        actionTip = `${c._entrySignal.patterns.find(p=>p.id===sigId)?.badge||sigId.toUpperCase()} underperforms in ${regimeNow} regime`;
-                    } else if (bz && bz.distancePct > 2) {
-                        actionTip = 'Good stock, above buy zone — wait for pullback';
+                    if (c._waitReason) {
+                        actionTip = c._waitReason;
+                    } else {
+                        const regimeNow = portfolio.lastMarketRegime?.regime || 'choppy';
+                        const bearNow = regimeNow === 'bearish' || regimeNow === 'choppy';
+                        const sigId = c._entrySignal?.bestPatternId;
+                        if (bearNow && sigId && sigId !== 'reversal') {
+                            actionTip = `${c._entrySignal.patterns.find(p=>p.id===sigId)?.badge||sigId.toUpperCase()} underperforms in ${regimeNow} regime`;
+                        } else if (bz && bz.distancePct > 2) {
+                            actionTip = 'Good stock, above buy zone — wait for pullback';
+                        }
                     }
                 }
                 const actionBadgeHtml = actionBadge
