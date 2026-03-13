@@ -1056,7 +1056,25 @@ function computeBuyZone({ price, support, sma20, bars, vixLevel }) {
     if (sma != null && sma < price) refs.push({ price: sma, source: 'sma20' });
     if (pullbackTarget != null && pullbackTarget < price) refs.push({ price: pullbackTarget, source: 'pullback' });
 
-    if (refs.length === 0) return null;
+    if (refs.length === 0) {
+        // All references are at or above current price — stock is deep in the buy zone
+        const allRefs = [support, sma, pullbackTarget].filter(v => v != null);
+        if (allRefs.length > 0) {
+            const lowest = Math.min(...allRefs);
+            return {
+                buyZonePrice: +lowest.toFixed(2),
+                inZone: true,
+                distancePct: 0,
+                zoneSource: lowest === support ? 'support' : lowest === sma ? 'sma20' : 'pullback',
+                support: support != null ? +support.toFixed(2) : null,
+                sma20: sma != null ? +sma.toFixed(2) : null,
+                pullbackTarget,
+                recentHigh: recentHigh != null ? +recentHigh.toFixed(2) : null,
+                pullbackPct
+            };
+        }
+        return null;
+    }
 
     // Highest valid ref = closest to current price = most likely to fill
     refs.sort((a, b) => b.price - a.price);

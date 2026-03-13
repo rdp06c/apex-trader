@@ -2966,11 +2966,22 @@
             if (pullbackTarget != null && pullbackTarget < price) refs.push({ price: pullbackTarget, source: 'pullback' });
 
             if (refs.length === 0) {
-                // Check if price is already below all references (deep pullback)
-                const allAbove = [support, sma20, pullbackTarget].filter(v => v != null);
-                if (allAbove.length > 0 && allAbove.every(v => v >= price)) {
-                    // Price below everything — strong signal but structure may be broken
-                    return null;
+                // All references are at or above current price — stock is deep in the buy zone
+                const allRefs = [support, sma20, pullbackTarget].filter(v => v != null);
+                if (allRefs.length > 0) {
+                    // Use the lowest reference as the zone price (deepest support)
+                    const lowest = Math.min(...allRefs);
+                    return {
+                        buyZonePrice: +lowest.toFixed(2),
+                        inZone: true,
+                        distancePct: 0,
+                        zoneSource: lowest === support ? 'support' : lowest === sma20 ? 'sma20' : 'pullback',
+                        support: support != null ? +support.toFixed(2) : null,
+                        sma20: sma20 != null ? +sma20.toFixed(2) : null,
+                        pullbackTarget,
+                        recentHigh: recentHigh != null ? +recentHigh.toFixed(2) : null,
+                        pullbackPct
+                    };
                 }
                 return null;
             }
