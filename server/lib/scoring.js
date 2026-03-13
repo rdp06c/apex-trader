@@ -766,7 +766,13 @@ const ENTRY_SIGNAL_PATTERNS = [
         label: 'Reversal Entry',
         badge: 'REV',
         criteria: [
-            { id: 'macd', label: 'MACD Bull/Hist≤0', test: c => c.macdCrossover === 'bullish' || (c.macdHistogram != null && c.macdHistogram <= 0) },
+            { id: 'macd', label: 'MACD Bull/Hist≤0', test: c => {
+                if (c.macdCrossover === 'bullish') return true;
+                // In bear/choppy, require actual crossover — histogram<=0 is default state, not a signal
+                const r = c._regime || 'choppy';
+                if (r === 'bearish' || r === 'choppy') return false;
+                return c.macdHistogram != null && c.macdHistogram <= 0;
+            } },
             { id: 'rsi', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
             { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' },
             { id: 'pullback', label: 'Pullback', test: c => c.return5d != null && c.return5d >= -8 && c.return5d <= -2 }

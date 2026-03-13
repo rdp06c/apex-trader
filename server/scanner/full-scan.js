@@ -147,6 +147,7 @@ async function runFullScan({ force = false } = {}) {
         const calibratedWeights = portfolio?.calibratedWeights;
         const comboResults = calibratedWeights?.signalCombos?.combos || null;
         const vixLevel = vixData?.level;
+        const currentRegime = portfolio?.lastMarketRegime?.regime || 'choppy';
         const weights = getActiveWeights(calibratedWeights, vixLevel);
 
         // Score every stock
@@ -226,6 +227,7 @@ async function runFullScan({ force = false } = {}) {
             const entrySignal = evaluateEntrySignals({
                 macdCrossover: macd?.crossover || 'none', rsi,
                 macdHistogram: macd?.histogram ?? null,
+                _regime: currentRegime,
                 structure: structure.structure, structureScore: structure.structureScore,
                 return5d: momentum.totalReturn5d ?? null,
                 momentum: momentum.score, momentumScore: momentum.score,
