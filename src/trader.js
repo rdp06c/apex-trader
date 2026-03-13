@@ -2804,30 +2804,33 @@
             const heat = candidate._comboHeat;
             const bestHotCombo = heat?.hotCombos?.[0];
 
-            // Match quality determines how applicable calibration data is
-            const matchQuality = signal?.bestMatch || null; // 'full', 'strong', 'partial', or null
-
-            // Raw calibration stats
-            const rawWinRate = comboData?.winRate10d ?? bestHotCombo?.winRate10d ?? null;
-            const rawAvgReturn = comboData?.avgReturn10d ?? bestHotCombo?.avgReturn10d ?? null;
-            const rawObs = comboData?.n ?? bestHotCombo?.n ?? null;
-
-            // Scale calibration stats by match quality:
-            // full (GREEN) = as-is, strong (YELLOW/1 miss) = discounted, partial (GRAY) = not shown
+            // Use real validated stats from calibration's entry pattern analysis
+            // (computed per pattern × match quality tier from actual backtested observations)
+            const matchQuality = signal?.bestMatch || null;
+            const patId = signal?.bestPatternId;
+            const patternStats = portfolio.calibratedWeights?.entryPatternStats;
             let winRate = null, avgReturn = null, observations = null, calConfidence = null;
-            if (rawWinRate != null && matchQuality === 'full') {
-                winRate = +rawWinRate.toFixed(0);
-                avgReturn = rawAvgReturn != null ? +rawAvgReturn.toFixed(1) : null;
-                observations = rawObs;
-                calConfidence = 'high';
-            } else if (rawWinRate != null && matchQuality === 'strong') {
-                // Discount toward 50% baseline: WR = 50 + (raw - 50) * 0.6
-                winRate = +(50 + (rawWinRate - 50) * 0.6).toFixed(0);
-                avgReturn = rawAvgReturn != null ? +(rawAvgReturn * 0.6).toFixed(1) : null;
-                observations = rawObs;
-                calConfidence = 'moderate';
+
+            if (patternStats && patId && matchQuality && matchQuality !== 'partial') {
+                const tierStats = patternStats[patId]?.[matchQuality];
+                if (tierStats && !tierStats.insufficient) {
+                    winRate = +tierStats.winRate10d.toFixed(0);
+                    avgReturn = +tierStats.avgReturn10d.toFixed(1);
+                    observations = tierStats.n;
+                    calConfidence = matchQuality === 'full' ? 'high' : 'moderate';
+                }
             }
-            // partial match: no calibration stats shown (too loose to be meaningful)
+
+            // Fallback to combo data if no pattern stats available (pre-calibration or insufficient)
+            if (winRate == null && matchQuality === 'full') {
+                const rawWinRate = comboData?.winRate10d ?? bestHotCombo?.winRate10d ?? null;
+                if (rawWinRate != null) {
+                    winRate = +rawWinRate.toFixed(0);
+                    avgReturn = comboData?.avgReturn10d ? +comboData.avgReturn10d.toFixed(1) : bestHotCombo?.avgReturn10d ? +bestHotCombo.avgReturn10d.toFixed(1) : null;
+                    observations = comboData?.n ?? bestHotCombo?.n ?? null;
+                    calConfidence = 'high';
+                }
+            }
 
             return {
                 entry: +price.toFixed(2),
@@ -12305,6 +12308,77 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // Signal combo analysis — tests curated signal combinations against forward returns
+        // Compute actual win rates and avg returns for each entry signal pattern
+        // at each match quality tier (full/strong/partial) from calibration observations.
+        // This gives real validated numbers instead of arbitrary discounts.
+        function analyzeEntryPatternStats(observations) {
+            const stats = {};
+            for (const pattern of ENTRY_SIGNAL_PATTERNS) {
+                const fullObs = [], strongObs = [], partialObs = [];
+                for (const obs of observations) {
+                    if (obs.return10d == null) continue;
+                    const si = obs.scoreInputs;
+                    // Map scoreInputs to candidate-like object for entry signal criteria
+                    const candidate = {
+                        macdCrossover: si.macdCrossover,
+                        rsi: si.rsi,
+                        structure: si.structureScore >= 1 ? 'bullish' : si.structureScore <= -1 ? 'bearish' : 'ranging',
+                        structureScore: si.structureScore,
+                        return5d: si.totalReturn5d,
+                        momentum: si.momentumScore,
+                        momentumScore: si.momentumScore,
+                        rs: si.rsNormalized * 10, // 0-10 → 0-100
+                        volumeRatio: si.volumeRatio,
+                        volumeTrend: si.volumeTrend,
+                        daysToCover: si.daysToCover ?? 0,
+                        sectorFlow: si.sectorFlow,
+                        dayChange: si.todayChange,
+                        todayChange: si.todayChange,
+                        isAccelerating: si.isAccelerating
+                    };
+
+                    let matchCount = 0;
+                    const criteriaResults = {};
+                    for (const crit of pattern.criteria) {
+                        const passed = crit.test(candidate);
+                        criteriaResults[crit.id] = passed;
+                        if (passed) matchCount++;
+                    }
+
+                    const total = pattern.criteria.length;
+                    if (matchCount === total) {
+                        fullObs.push(obs);
+                    } else if (matchCount >= total - 1) {
+                        strongObs.push(obs);
+                    } else if (matchCount >= pattern.minMatch) {
+                        const hasRequired = pattern.requireAny.some(id => criteriaResults[id]);
+                        if (hasRequired) partialObs.push(obs);
+                    }
+                }
+
+                const computeStats = (matched) => {
+                    if (matched.length < 30) return { n: matched.length, insufficient: true };
+                    const avgReturn10d = matched.reduce((s, o) => s + o.return10d, 0) / matched.length;
+                    const winRate10d = (matched.filter(o => o.return10d > 0).length / matched.length) * 100;
+                    const m20d = matched.filter(o => o.return20d != null);
+                    const avgReturn20d = m20d.length >= 30 ? m20d.reduce((s, o) => s + o.return20d, 0) / m20d.length : null;
+                    return {
+                        n: matched.length,
+                        winRate10d: +winRate10d.toFixed(1),
+                        avgReturn10d: +avgReturn10d.toFixed(3),
+                        avgReturn20d: avgReturn20d != null ? +avgReturn20d.toFixed(3) : null
+                    };
+                };
+
+                stats[pattern.id] = {
+                    full: computeStats(fullObs),
+                    strong: computeStats(strongObs),
+                    partial: computeStats(partialObs)
+                };
+            }
+            return stats;
+        }
+
         function analyzeSignalCombos(observations, showAll = false) {
             const MIN_N = showAll ? 30 : 50;
             const HOT_THRESHOLD = showAll ? 0.2 : 0.5;
@@ -13010,6 +13084,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             const comboAnalysis = analyzeSignalCombos(allObservations);
             report(`📊 Signal combos: ${comboAnalysis.hot.length} hot, ${comboAnalysis.cold.length} cold, ${comboAnalysis.insufficient.length} insufficient data`);
 
+            // Entry pattern stats by match quality (full/strong/partial)
+            const entryPatternStats = analyzeEntryPatternStats(allObservations);
+            const patternSummary = Object.entries(entryPatternStats).map(([id, tiers]) =>
+                `${id}: full=${tiers.full.n}${tiers.full.insufficient ? '(!)' : ''} strong=${tiers.strong.n}${tiers.strong.insufficient ? '(!)' : ''}`
+            ).join(', ');
+            report(`📊 Entry pattern stats: ${patternSummary}`);
+
             // Sector-segmented combo analysis
             const sectorComboResults = {};
             const sectorGroups = {};
@@ -13043,6 +13124,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 regimeWeights: Object.keys(finalRegimeWeights).length > 0 ? finalRegimeWeights : null,
                 componentCorrelations: componentCorrelations,
                 signalCombos: comboAnalysis,
+                entryPatternStats,
                 sectorCombos: sectorComboResults,
                 excursionAnalysis: excursionAnalysis,
                 excursionStats: excursionStats,
