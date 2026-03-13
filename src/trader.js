@@ -39,6 +39,7 @@
 
             async save(data) {
                 const json = JSON.stringify(data);
+                let serverOk = false;
 
                 // Server save first — it's the primary storage and has no size limit
                 if (this._serverAvailable !== false) {
@@ -51,13 +52,20 @@
                         if (res.ok) {
                             this._etag = res.headers.get('ETag');
                             this._serverAvailable = true;
+                            serverOk = true;
+                        } else {
+                            console.error(`Portfolio server save failed: ${res.status} ${res.statusText}`);
                         }
-                    } catch (e) { /* server unreachable */ }
+                    } catch (e) {
+                        console.error('Portfolio server save error:', e.message);
+                    }
                 }
 
                 // localStorage as backup — may fail on quota, don't let it block anything
+                let localOk = false;
                 try {
                     localStorage.setItem('aiTradingPortfolio', json);
+                    localOk = true;
                 } catch (e) {
                     console.warn('localStorage quota exceeded — server save is primary, this is non-fatal');
                     // Try saving a trimmed version (strip large scan data)
@@ -65,9 +73,12 @@
                         const trimmed = JSON.parse(json);
                         delete trimmed.lastCandidateScores;
                         localStorage.setItem('aiTradingPortfolio', JSON.stringify(trimmed));
+                        localOk = true;
                         console.log('Saved trimmed portfolio to localStorage (without candidate scores)');
                     } catch (e2) { /* truly out of space — server has the full data */ }
                 }
+
+                return { serverOk, localOk };
             }
         };
 
@@ -3065,7 +3076,13 @@
             const hasPartial = sig?.bestMatch === 'partial';
             const hasCalData = plan?.winRate != null;
             const hasHeat = (heat?.hotCount || 0) > 0;
+            const isAvoid = !!sig?.antiPatternMatch;
 
+            // AVOID anti-pattern vetoes BUY — downgrade to SETUP at best
+            if (isAvoid) {
+                if (hasSignal && score >= 5) return 'setup';
+                return 'watch';
+            }
             if (hasSignal && rr != null && rr >= 1.5 && hasCalData && plan.winRate > 50 && score >= 8) return 'buy';
             if (hasSignal && rr != null && rr >= 1.0 && score >= 5) return 'setup';
             if (hasSignal && score >= 5) return 'setup';
@@ -10078,8 +10095,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         }
 
         // Save portfolio to localStorage and server (if available)
+        // Returns { serverOk, localOk } so callers can check save success.
         async function savePortfolio(localOnly = false) {
-            await portfolioStorage.save(portfolio);
+            const result = await portfolioStorage.save(portfolio);
 
             // Also save to Google Drive if authorized (and not in recovery mode or local-only)
             if (gdriveAuthorized && !preventAutoSave && !localOnly) {
@@ -10090,6 +10108,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             } else {
                 console.warn('Google Drive not authorized - portfolio NOT saved to cloud');
             }
+            return result;
         }
 
         // Load portfolio from server (with localStorage fallback)
@@ -10747,20 +10766,30 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     });
                 }
 
-                savePortfolio();
-                statusEl.textContent = `BUY ${shares} ${symbol} @ $${price.toFixed(2)} recorded!`;
-                statusEl.style.color = 'var(--green)';
+                statusEl.textContent = 'Saving...';
+                const saveResult = await savePortfolio();
+                if (saveResult && !saveResult.serverOk && !saveResult.localOk) {
+                    statusEl.textContent = `BUY recorded in memory but save FAILED — do not refresh! Try again.`;
+                    statusEl.style.color = 'var(--red, red)';
+                } else if (saveResult && !saveResult.serverOk) {
+                    statusEl.textContent = `BUY ${shares} ${symbol} @ $${price.toFixed(2)} saved locally only — server save failed.`;
+                    statusEl.style.color = 'var(--orange, orange)';
+                    setTimeout(closeManualTradeModal, 3000);
+                } else {
+                    statusEl.textContent = `BUY ${shares} ${symbol} @ $${price.toFixed(2)} recorded!`;
+                    statusEl.style.color = 'var(--green)';
+                    setTimeout(closeManualTradeModal, 2000);
+                }
                 addActivity(`Manual BUY: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${signals ? ` (MOM:${signals.momentumScore} RSI:${signals.rsi != null ? Math.round(signals.rsi) : '--'} Struct:${signals.structure?.structure || '??'})` : ''}`, 'buy');
                 showUndoButton(`BUY ${shares} ${symbol} @ $${price.toFixed(2)}`);
-                setTimeout(closeManualTradeModal, 2000);
                 // Update display in background (fetches prices, may take a moment)
                 updateUI().then(() => updatePerformanceAnalytics());
                 } catch (buyErr) {
                     console.error('Manual buy execution error:', buyErr);
-                    statusEl.textContent = `Buy saved but display error: ${buyErr.message}`;
+                    statusEl.textContent = `Buy error: ${buyErr.message}. Saving...`;
                     statusEl.style.color = 'var(--orange, orange)';
                     // Holdings already updated, save what we have
-                    savePortfolio();
+                    await savePortfolio();
                     setTimeout(closeManualTradeModal, 3000);
                 }
 
@@ -10878,23 +10907,34 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     portfolio.holdingTheses[symbol].lastTrimReason = reason || 'Manual sell';
                 }
 
-                savePortfolio();
                 const plStr = buyTransactions.length > 0 ? (() => {
                     const avg = buyTransactions.reduce((s, t) => s + (t.cost || t.price * t.shares), 0) / buyTransactions.reduce((s, t) => s + t.shares, 0);
                     const ret = ((price - avg) / avg * 100);
                     return ` (${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%)`;
                 })() : '';
-                statusEl.textContent = `SELL ${shares} ${symbol} @ $${price.toFixed(2)}${plStr} recorded!`;
-                statusEl.style.color = 'var(--green)';
+                statusEl.textContent = 'Saving...';
+                const saveResult = await savePortfolio();
+                if (saveResult && !saveResult.serverOk && !saveResult.localOk) {
+                    statusEl.textContent = `SELL recorded in memory but save FAILED — do not refresh! Try again.`;
+                    statusEl.style.color = 'var(--red, red)';
+                } else if (saveResult && !saveResult.serverOk) {
+                    statusEl.textContent = `SELL ${shares} ${symbol} @ $${price.toFixed(2)}${plStr} saved locally only — server save failed.`;
+                    statusEl.style.color = 'var(--orange, orange)';
+                    setTimeout(closeManualTradeModal, 3000);
+                } else {
+                    statusEl.textContent = `SELL ${shares} ${symbol} @ $${price.toFixed(2)}${plStr} recorded!`;
+                    statusEl.style.color = 'var(--green)';
+                    setTimeout(closeManualTradeModal, 2000);
+                }
                 addActivity(`Manual SELL: ${shares} shares of ${symbol} at $${price.toFixed(2)} on ${dateStr}${plStr}`, 'sell');
                 showUndoButton(`SELL ${shares} ${symbol} @ $${price.toFixed(2)}`);
-                setTimeout(closeManualTradeModal, 2000);
                 // Update display in background (fetches prices, may take a moment)
                 updateUI().then(() => updatePerformanceAnalytics());
                 } catch (sellErr) {
                     console.error('Manual sell execution error:', sellErr);
-                    statusEl.textContent = `Sell error: ${sellErr.message}`;
+                    statusEl.textContent = `Sell error: ${sellErr.message}. Saving...`;
                     statusEl.style.color = 'var(--orange, orange)';
+                    await savePortfolio();
                     setTimeout(closeManualTradeModal, 3000);
                 }
             }
@@ -14273,7 +14313,8 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     let displayPat = null;
                     const specificFilter = scorecardState.filterSignal
                         && scorecardState.filterSignal !== 'any'
-                        && scorecardState.filterSignal !== 'avoid';
+                        && scorecardState.filterSignal !== 'avoid'
+                        && scorecardState.filterSignal !== 'buy_only';
 
                     if (specificFilter) {
                         // Show the filtered pattern's badge, not the best overall
