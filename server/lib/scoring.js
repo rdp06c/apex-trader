@@ -883,6 +883,11 @@ const SIGNAL_COMBO_DEFS = [
     // Setup-type discovery combos
     { id: 'momentum_trend_confirm', label: 'Mom 5-8 + Structure + RSI<50', tier: 2, group: 'momentum', filter: s => (s.momentumScore ?? 0) >= 5 && (s.momentumScore ?? 0) <= 8 && (s.structureScore ?? 0) >= 2 && s.rsi != null && s.rsi < 50 },
     { id: 'sector_leader_mom', label: 'RS>60 + Inflow + Bull Structure', tier: 2, group: 'momentum', filter: s => (s.rsNormalized ?? 0) > 6 && sectorFlowIsInflow(s.sectorFlow) && (s.structureScore ?? 0) >= 2 },
+    // New indicator combos
+    { id: 'vcr_low_structure', label: 'VCR<0.7 + Bull Structure', tier: 2, group: 'structure', filter: s => (s.vcr ?? 1) < 0.7 && (s.structureScore ?? 0) >= 2 },
+    { id: 'range_bottom_bull', label: 'Range<20% + Bull Structure', tier: 2, group: 'reversal', filter: s => (s.rangePosition ?? 50) < 20 && (s.structureScore ?? 0) >= 1 },
+    { id: 'adx_trending_mom', label: 'ADX>25 + Mom 5-8', tier: 2, group: 'momentum', filter: s => (s.adx ?? 0) > 25 && (s.momentumScore ?? 0) >= 5 && (s.momentumScore ?? 0) <= 8 },
+    { id: 'hl_accumulation', label: '4+ Higher Lows + Low Vol', tier: 2, group: 'structure', filter: s => (s.higherLowCount ?? 0) >= 4 && (s.volumeRatio ?? 1) < 0.7 },
 ];
 
 // Evaluate which signal combos a candidate currently matches,
@@ -908,6 +913,10 @@ function evaluateComboHeat(candidate, comboResults) {
         fvg: candidate.fvg || 'none',
         smaCrossover: candidate.smaCrossover ? { crossover: candidate.smaCrossover } : null,
         volumeRatio: candidate.volumeRatio ?? null,
+        vcr: candidate.vcr ?? null,
+        rangePosition: candidate.rangePosition ?? null,
+        adx: candidate.adx ?? null,
+        higherLowCount: candidate.higherLowCount ?? 0,
     };
 
     const hotCombos = [];
@@ -953,6 +962,289 @@ function computeComboHeatBonus(comboHeatResult) {
     return Math.max(-6.0, Math.min(6.0, Math.round(bonus * 10) / 10));
 }
 
+// ========== New Technical Indicators ==========
+
+// Volatility Contraction Ratio — currentATR / avgATR over smaPeriod
+// VCR < 0.7 = volatility contracting (squeeze setup)
+// VCR > 1.3 = volatility expanding
+function calculateVCR(bars, atrPeriod = 14, smaPeriod = 20) {
+    if (!bars || bars.length < atrPeriod + smaPeriod + 1) return null;
+
+    // Compute ATR at each point over the last smaPeriod bars using Wilder's smoothing
+    const atrValues = [];
+    let trSum = 0;
+    for (let i = 1; i <= atrPeriod; i++) {
+        const tr = Math.max(
+            bars[i].h - bars[i].l,
+            Math.abs(bars[i].h - bars[i - 1].c),
+            Math.abs(bars[i].l - bars[i - 1].c)
+        );
+        trSum += tr;
+    }
+    let atr = trSum / atrPeriod;
+    atrValues.push(atr);
+    for (let i = atrPeriod + 1; i < bars.length; i++) {
+        const tr = Math.max(
+            bars[i].h - bars[i].l,
+            Math.abs(bars[i].h - bars[i - 1].c),
+            Math.abs(bars[i].l - bars[i - 1].c)
+        );
+        atr = (atr * (atrPeriod - 1) + tr) / atrPeriod;
+        atrValues.push(atr);
+    }
+
+    const currentAtr = atrValues[atrValues.length - 1];
+    // Average of last smaPeriod ATR values
+    const recentAtrs = atrValues.slice(-smaPeriod);
+    const avgAtr = recentAtrs.reduce((s, v) => s + v, 0) / recentAtrs.length;
+
+    const vcr = avgAtr > 0 ? Math.round((currentAtr / avgAtr) * 100) / 100 : 1;
+
+    return {
+        vcr,
+        atr: Math.round(currentAtr * 100) / 100,
+        avgAtr: Math.round(avgAtr * 100) / 100,
+        contracting: vcr < 0.7,
+        expanding: vcr > 1.3
+    };
+}
+
+// Range Position — where the current price sits within its N-day high-low range (0-100%)
+// 0% = at the 20-day low, 100% = at the 20-day high
+function calculateRangePosition(bars, period = 20) {
+    if (!bars || bars.length < period) return null;
+
+    const recent = bars.slice(-period);
+    const high20 = Math.max(...recent.map(b => b.h));
+    const low20 = Math.min(...recent.map(b => b.l));
+    const currentClose = bars[bars.length - 1].c;
+    const rangeWidth = high20 - low20;
+
+    if (rangeWidth === 0) return { rangePos: 50, high20, low20, atBottom: false, atTop: false };
+
+    const rangePos = Math.round(((currentClose - low20) / rangeWidth) * 1000) / 10;
+    const clamped = Math.max(0, Math.min(100, rangePos));
+
+    return {
+        rangePos: clamped,
+        high20: Math.round(high20 * 100) / 100,
+        low20: Math.round(low20 * 100) / 100,
+        atBottom: clamped < 20,
+        atTop: clamped > 80
+    };
+}
+
+// ADX (Average Directional Index) — trend strength regardless of direction
+// ADX > 25 = trending, ADX < 20 = ranging
+// Uses Wilder's smoothing for DM and TR, then smoothed DX for ADX
+function calculateADX(bars, period = 14) {
+    // Need at least 2*period+1 bars for proper smoothing
+    if (!bars || bars.length < 2 * period + 1) return null;
+
+    // Step 1: Calculate +DM, -DM, and TR for each bar
+    const plusDMs = [];
+    const minusDMs = [];
+    const trs = [];
+
+    for (let i = 1; i < bars.length; i++) {
+        const upMove = bars[i].h - bars[i - 1].h;
+        const downMove = bars[i - 1].l - bars[i].l;
+
+        plusDMs.push(upMove > downMove && upMove > 0 ? upMove : 0);
+        minusDMs.push(downMove > upMove && downMove > 0 ? downMove : 0);
+
+        const tr = Math.max(
+            bars[i].h - bars[i].l,
+            Math.abs(bars[i].h - bars[i - 1].c),
+            Math.abs(bars[i].l - bars[i - 1].c)
+        );
+        trs.push(tr);
+    }
+
+    // Step 2: Smooth with Wilder's method (first value = sum of period, then smoothed)
+    let smoothPlusDM = plusDMs.slice(0, period).reduce((s, v) => s + v, 0);
+    let smoothMinusDM = minusDMs.slice(0, period).reduce((s, v) => s + v, 0);
+    let smoothTR = trs.slice(0, period).reduce((s, v) => s + v, 0);
+
+    const dxValues = [];
+
+    for (let i = period; i < plusDMs.length; i++) {
+        if (i > period) {
+            smoothPlusDM = smoothPlusDM - (smoothPlusDM / period) + plusDMs[i];
+            smoothMinusDM = smoothMinusDM - (smoothMinusDM / period) + minusDMs[i];
+            smoothTR = smoothTR - (smoothTR / period) + trs[i];
+        }
+
+        const plusDI = smoothTR > 0 ? (smoothPlusDM / smoothTR) * 100 : 0;
+        const minusDI = smoothTR > 0 ? (smoothMinusDM / smoothTR) * 100 : 0;
+        const diSum = plusDI + minusDI;
+        const dx = diSum > 0 ? (Math.abs(plusDI - minusDI) / diSum) * 100 : 0;
+        dxValues.push({ dx, plusDI, minusDI });
+    }
+
+    if (dxValues.length < period) return null;
+
+    // Step 3: ADX = smoothed average of DX values
+    let adx = dxValues.slice(0, period).reduce((s, v) => s + v.dx, 0) / period;
+    for (let i = period; i < dxValues.length; i++) {
+        adx = (adx * (period - 1) + dxValues[i].dx) / period;
+    }
+
+    const lastDI = dxValues[dxValues.length - 1];
+
+    return {
+        adx: Math.round(adx * 10) / 10,
+        plusDI: Math.round(lastDI.plusDI * 10) / 10,
+        minusDI: Math.round(lastDI.minusDI * 10) / 10,
+        trending: adx > 25,
+        ranging: adx < 20
+    };
+}
+
+// Multi-timeframe Rate of Change — raw % price change at 5, 10, 20 day lookbacks
+// Divergence: 20d positive + 5d negative = decelerating
+function calculateROC(bars, periods = [5, 10, 20]) {
+    if (!bars || bars.length < Math.max(...periods) + 1) return null;
+
+    const currentClose = bars[bars.length - 1].c;
+    const results = {};
+
+    for (const p of periods) {
+        const pastClose = bars[bars.length - 1 - p].c;
+        results[`roc${p}`] = pastClose > 0 ? Math.round(((currentClose - pastClose) / pastClose) * 10000) / 100 : 0;
+    }
+
+    // Divergence detection
+    const roc5 = results.roc5;
+    const roc20 = results.roc20;
+    let divergence = 'stable';
+    if (roc20 > 1 && roc5 > roc20 * 0.5) divergence = 'accelerating';
+    else if (roc20 > 1 && roc5 < 0) divergence = 'decelerating';
+    else if (roc20 < -1 && roc5 > 0) divergence = 'accelerating'; // recovering from decline
+    else if (roc20 < -1 && roc5 < roc20 * 0.5) divergence = 'decelerating';
+
+    return { ...results, divergence };
+}
+
+// Higher-Low Count — counts consecutive higher daily lows from the most recent bar backward
+// 4+ consecutive higher lows with declining volume = stealth accumulation
+function countHigherLows(bars, lookback = 20) {
+    if (!bars || bars.length < 3) return null;
+
+    const recent = bars.slice(-Math.min(lookback, bars.length));
+    let count = 0;
+    let maxSequence = 0;
+    let currentSequence = 0;
+
+    for (let i = recent.length - 1; i > 0; i--) {
+        if (recent[i].l > recent[i - 1].l) {
+            currentSequence++;
+        } else {
+            if (currentSequence > maxSequence) maxSequence = currentSequence;
+            currentSequence = 0;
+        }
+    }
+    if (currentSequence > maxSequence) maxSequence = currentSequence;
+
+    // Count from most recent bar backward (consecutive)
+    let consecutive = 0;
+    for (let i = recent.length - 1; i > 0; i--) {
+        if (recent[i].l > recent[i - 1].l) {
+            consecutive++;
+        } else {
+            break;
+        }
+    }
+
+    // Total higher lows in the lookback (not just consecutive)
+    let totalHL = 0;
+    for (let i = 1; i < recent.length; i++) {
+        if (recent[i].l > recent[i - 1].l) totalHL++;
+    }
+
+    return {
+        count: consecutive,
+        consecutive: consecutive >= 3,
+        maxSequence
+    };
+}
+
+// OBV Slope — 10-day slope of On-Balance Volume, normalized by average volume
+// Positive slope + price decline = bullish divergence
+function calculateOBVSlope(bars, period = 10) {
+    if (!bars || bars.length < period + 2) return null;
+
+    // Build OBV series
+    const obvValues = [0];
+    for (let i = 1; i < bars.length; i++) {
+        const prev = obvValues[obvValues.length - 1];
+        if (bars[i].c > bars[i - 1].c) {
+            obvValues.push(prev + bars[i].v);
+        } else if (bars[i].c < bars[i - 1].c) {
+            obvValues.push(prev - bars[i].v);
+        } else {
+            obvValues.push(prev);
+        }
+    }
+
+    // Slope of last `period` OBV values using linear regression
+    const recentOBV = obvValues.slice(-period);
+    const n = recentOBV.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    for (let i = 0; i < n; i++) {
+        sumX += i;
+        sumY += recentOBV[i];
+        sumXY += i * recentOBV[i];
+        sumX2 += i * i;
+    }
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+
+    // Normalize by average volume
+    const avgVol = bars.slice(-period).reduce((s, b) => s + b.v, 0) / period;
+    const normalized = avgVol > 0 ? Math.round((slope / avgVol) * 1000) / 1000 : 0;
+
+    // Divergence detection
+    const priceChange = (bars[bars.length - 1].c - bars[bars.length - 1 - period].c) / bars[bars.length - 1 - period].c;
+    const bullishDivergence = normalized > 0.05 && priceChange < -0.02; // OBV rising, price falling
+    const bearishDivergence = normalized < -0.05 && priceChange > 0.02; // OBV falling, price rising
+
+    return {
+        slope: Math.round(slope),
+        normalized,
+        bullishDivergence,
+        bearishDivergence
+    };
+}
+
+// Gap Analysis — measures the overnight gap (today's open vs yesterday's close)
+// Returns gap percentage and classification
+function calculateGapAnalysis(bars) {
+    if (!bars || bars.length < 2) return null;
+
+    const prevBar = bars[bars.length - 2];
+    const currBar = bars[bars.length - 1];
+
+    const gapPct = prevBar.c > 0
+        ? Math.round(((currBar.o - prevBar.c) / prevBar.c) * 10000) / 100
+        : 0;
+
+    let gapType = 'none';
+    if (Math.abs(gapPct) >= 0.5) {
+        gapType = gapPct > 0 ? 'up' : 'down';
+    }
+
+    let gapSize = 'none';
+    const absGap = Math.abs(gapPct);
+    if (absGap >= 3) gapSize = 'large';
+    else if (absGap >= 0.5) gapSize = 'small';
+
+    return {
+        gapPct,
+        gapType,
+        gapSize
+    };
+}
+
 module.exports = {
     isMarketOpen,
     calculateRSI,
@@ -978,5 +1270,12 @@ module.exports = {
     computeSignalBonus,
     computeComboHeatBonus,
     SIGNAL_COMBO_DEFS,
-    evaluateComboHeat
+    evaluateComboHeat,
+    calculateVCR,
+    calculateRangePosition,
+    calculateADX,
+    calculateROC,
+    countHigherLows,
+    calculateOBVSlope,
+    calculateGapAnalysis
 };

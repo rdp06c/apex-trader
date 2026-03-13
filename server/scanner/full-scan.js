@@ -9,7 +9,9 @@ const {
     detectStructure, calculate5DayMomentum, calculateVolumeRatio,
     calculateRelativeStrength, detectSectorRotation, calculateCompositeScore,
     getActiveWeights, isMarketOpen, detectMarketRegime, evaluateEntrySignals,
-    evaluateComboHeat, computeComboHeatBonus
+    evaluateComboHeat, computeComboHeatBonus,
+    calculateVCR, calculateRangePosition, calculateADX, calculateROC,
+    countHigherLows, calculateOBVSlope, calculateGapAnalysis
 } = require('../lib/scoring');
 const {
     fetchBulkSnapshot, fetchGroupedDailyBars, fetchServerIndicators,
@@ -187,6 +189,15 @@ async function runFullScan({ force = false } = {}) {
             const sectorInfo = sectorRotation[sector];
             const sectorFlow = sectorInfo?.moneyFlow || 'neutral';
 
+            // New indicators
+            const vcrResult = calculateVCR(bars);
+            const rangePosResult = calculateRangePosition(bars);
+            const adxResult = calculateADX(bars);
+            const rocResult = calculateROC(bars);
+            const hlResult = countHigherLows(bars);
+            const obvResult = calculateOBVSlope(bars);
+            const gapResult = calculateGapAnalysis(bars);
+
             // Combo heat bonus from calibration data
             const heatCandidate = {
                 rsi,
@@ -205,7 +216,11 @@ async function runFullScan({ force = false } = {}) {
                 fvg: structure.fvg,
                 smaCrossover: smaCrossover?.crossover || 'none',
                 volumeRatio: volRatio?.ratio ?? null,
-                volumeTrend: momentum.volumeTrend
+                volumeTrend: momentum.volumeTrend,
+                vcr: vcrResult?.vcr ?? null,
+                rangePosition: rangePosResult?.rangePos ?? null,
+                adx: adxResult?.adx ?? null,
+                higherLowCount: hlResult?.count ?? 0
             };
             const comboHeat = evaluateComboHeat(heatCandidate, comboResults);
             const heatBonus = computeComboHeatBonus(comboHeat);
@@ -272,7 +287,18 @@ async function runFullScan({ force = false } = {}) {
                 serverRsi: si.serverRsi ?? null,
                 serverMacd: si.serverMacd ?? null,
                 serverSma50: si.serverSma50 ?? null,
-                entrySignal: evaluateEntrySignals({ macdCrossover: macd?.crossover || 'none', rsi, structure: structure.structure, structureScore: structure.structureScore, return5d: momentum.totalReturn5d ?? null, momentum: momentum.score, momentumScore: momentum.score, rs: rs.rsScore, volumeTrend: momentum.volumeTrend, volumeRatio: volRatio?.ratio ?? null, dayChange: priceData.changePercent, isAccelerating: momentum.isAccelerating, daysToCover, sectorFlow, smaCrossover: smaCrossover?.crossover || 'none' })
+                entrySignal: evaluateEntrySignals({ macdCrossover: macd?.crossover || 'none', rsi, structure: structure.structure, structureScore: structure.structureScore, return5d: momentum.totalReturn5d ?? null, momentum: momentum.score, momentumScore: momentum.score, rs: rs.rsScore, volumeTrend: momentum.volumeTrend, volumeRatio: volRatio?.ratio ?? null, dayChange: priceData.changePercent, isAccelerating: momentum.isAccelerating, daysToCover, sectorFlow, smaCrossover: smaCrossover?.crossover || 'none' }),
+                vcr: vcrResult?.vcr ?? null,
+                rangePosition: rangePosResult?.rangePos ?? null,
+                adx: adxResult?.adx ?? null,
+                roc5: rocResult?.roc5 ?? null,
+                roc10: rocResult?.roc10 ?? null,
+                roc20: rocResult?.roc20 ?? null,
+                rocDivergence: rocResult?.divergence ?? null,
+                higherLowCount: hlResult?.count ?? 0,
+                obvSlope: obvResult?.normalized ?? null,
+                obvDivergence: obvResult?.bullishDivergence ? 'bullish' : obvResult?.bearishDivergence ? 'bearish' : 'none',
+                gapPct: gapResult?.gapPct ?? 0
             });
             scored++;
         }
