@@ -18048,9 +18048,21 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     return -1;
                 },
                 sig: c => {
-                    const m = c._entrySignal?.bestMatch;
+                    const sig = c._entrySignal;
+                    // When filtering by a specific pattern, sort by that pattern's match quality
+                    const filterId = scorecardState.filterSignal;
+                    const specificFilter = filterId && filterId !== 'any' && filterId !== 'avoid' && filterId !== 'buy_only';
+                    let m, count;
+                    if (specificFilter && sig) {
+                        const pat = sig.patterns.find(p => p.id === filterId);
+                        m = pat?.match;
+                        count = pat?.matchCount ?? 0;
+                    } else {
+                        m = sig?.bestMatch;
+                        count = sig?.bestMatchCount ?? 0;
+                    }
                     const tier = m === 'full' ? 300 : m === 'strong' ? 200 : m === 'partial' ? 100 : 0;
-                    return tier + (c._entrySignal?.bestMatchCount ?? 0);
+                    return tier + count;
                 },
                 heat: c => { const raw = computeComboHeatBonus(c._comboHeat); return c._entrySignal?.bestMatch ? raw : Math.round(raw * 0.33 * 10) / 10; },
                 rr: c => c._tradePlan?.riskReward ?? 0,
