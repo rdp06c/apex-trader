@@ -10004,23 +10004,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 (dailyGain >= 0 ? '+' : '') + '$' + dailyGain.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('dailyPerformanceDollar').className = 'index-change ' + (dailyGain >= 0 ? 'positive' : 'negative');
 
-            // Index benchmarks (S&P 500, Dow, NASDAQ daily change)
-            const benchEl = document.getElementById('indexBenchmarks');
-            if (benchEl) {
-                const ib = portfolio.indexBenchmarks;
-                if (ib && (ib.SPX != null || ib.DJI != null || ib.COMP != null)) {
-                    const fmt = (label, val) => {
-                        if (val == null) return '';
-                        const color = val >= 0 ? '#34d399' : '#f87171';
-                        const sign = val >= 0 ? '+' : '';
-                        return `<span class="bench-item"><span class="bench-label">${label}</span> <span style="color:${color}">${sign}${val.toFixed(2)}%</span></span>`;
-                    };
-                    benchEl.innerHTML = [fmt('S&P', ib.SPX), fmt('DOW', ib.DJI), fmt('NASDQ', ib.COMP)].filter(Boolean).join('');
-                } else {
-                    benchEl.innerHTML = '';
-                }
-            }
-
             // Calculate cost basis of current holdings (avg buy price × current shares)
             let totalInvested = 0;
             for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
