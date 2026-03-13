@@ -497,17 +497,15 @@ function generateTradePlan({ price, bars, structure, vixLevel, entrySignalPatter
     const vixMult = getATRMultiplier(vixLevel);
     const fibs = calculateFibTargets(bars);
 
-    // Target: conservative of structure resistance, ATR projection, fib extension
+    // Target: ATR projection as primary, Fib 1.272 as cross-check.
+    // Resistance is informational only — not a cap.
     const resistance = structure?.lastSwingHigh;
     const atrTarget = price + (atr * 2.5);
     let target = atrTarget;
-    if (resistance && resistance > price * 1.005) {
-        target = Math.min(resistance, atrTarget);
-    }
     if (fibs?.type === 'bullish' && fibs.fib1272 > price) {
-        target = Math.min(target, fibs.fib1272);
+        target = Math.min(atrTarget, fibs.fib1272);
     }
-    if (target <= price * 1.005) target = atrTarget;
+    if (target <= price * 1.01) target = atrTarget;
 
     // Stop: ATR-based confirmed by structure support
     const support = structure?.lastSwingLow;

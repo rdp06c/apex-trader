@@ -2761,19 +2761,19 @@
             const fibs = calculateFibTargets(bars);
 
             // === TARGET ===
-            // Conservative of: structure resistance, ATR projection, fib 1.272 extension
+            // ATR projection as primary, Fib 1.272 as cross-check.
+            // Resistance is informational only — not a cap. Momentum stocks are expected
+            // to break through the nearest swing high; capping there gives tiny targets
+            // and terrible R:R for exactly the stocks that score best.
             const resistance = struct?.lastSwingHigh;
             const atrTarget = price + (atr * 2.5);
             let target = atrTarget;
-            if (resistance && resistance > price * 1.005) {
-                target = Math.min(resistance, atrTarget);
-            }
-            // If fib targets available and bullish, use fib 1.272 as a cross-check
+            // If fib targets available and bullish, use the more conservative of ATR and fib
             if (fibs?.type === 'bullish' && fibs.fib1272 > price) {
-                target = Math.min(target, fibs.fib1272);
+                target = Math.min(atrTarget, fibs.fib1272);
             }
-            // Target must be above current price by at least 0.5%
-            if (target <= price * 1.005) target = atrTarget;
+            // Target must be above current price by at least 1%
+            if (target <= price * 1.01) target = atrTarget;
 
             // === STOP ===
             // ATR-based confirmed by structure support
@@ -14160,7 +14160,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 if (plan) {
                     targetCell = `$${plan.target} <span style="font-size:9px;opacity:0.7">(+${plan.targetPct}%)</span>`;
                     targetTip = `Target: $${plan.target} (+${plan.targetPct}%)`;
-                    if (plan.resistance) targetTip += `\nResistance: $${plan.resistance}`;
+                    if (plan.resistance) targetTip += `\nWatch resistance: $${plan.resistance}`;
                     if (plan.fib1272) targetTip += `\nFib 1.272: $${plan.fib1272}`;
                     if (plan.winRate) targetTip += `\nWin Rate: ${plan.winRate}% (${plan.observations} obs)`;
                     if (plan.avgReturn) targetTip += `\nAvg 10D Return: +${plan.avgReturn}%`;
@@ -14213,8 +14213,8 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     planHtml += `<div class="tp-item"><span class="tp-label">R:R</span><span class="tp-value ${rrColor}">${plan.riskReward != null ? plan.riskReward.toFixed(1) + ':1' : '--'}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">ATR</span><span class="tp-value muted">$${plan.atr} (${plan.atrPct}%)</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">VIX Stop Width</span><span class="tp-value muted">${plan.vixMult}x ATR</span></div>`;
-                    if (plan.resistance) planHtml += `<div class="tp-item"><span class="tp-label">Resistance</span><span class="tp-value yellow">$${plan.resistance}</span></div>`;
-                    if (plan.support) planHtml += `<div class="tp-item"><span class="tp-label">Support</span><span class="tp-value green">$${plan.support}</span></div>`;
+                    if (plan.resistance) planHtml += `<div class="tp-item"><span class="tp-label">Watch: Resistance</span><span class="tp-value yellow">$${plan.resistance}</span></div>`;
+                    if (plan.support) planHtml += `<div class="tp-item"><span class="tp-label">Support Level</span><span class="tp-value green">$${plan.support}</span></div>`;
                     if (plan.fib1272) planHtml += `<div class="tp-item"><span class="tp-label">Fib 1.272</span><span class="tp-value muted">$${plan.fib1272}</span></div>`;
                     if (plan.fib1618) planHtml += `<div class="tp-item"><span class="tp-label">Fib 1.618</span><span class="tp-value muted">$${plan.fib1618}</span></div>`;
                     if (plan.winRate) planHtml += `<div class="tp-item"><span class="tp-label">Cal. Win Rate</span><span class="tp-value ${plan.winRate >= 55 ? 'green' : 'muted'}">${plan.winRate}%</span></div>`;
