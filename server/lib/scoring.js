@@ -382,7 +382,7 @@ function detectSectorRotation(marketData, stockSectors, multiDayCache) {
     return sectorAnalysis;
 }
 
-function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, sma20, currentPrice, smaCrossover, comboHeatBonus }, weights) {
+function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, sma20, currentPrice, smaCrossover, comboHeatBonus, rangePosition, higherLowCount }, weights) {
     const w = weights || DEFAULT_WEIGHTS;
 
     const momentumContrib = momentumScore * w.momentumMultiplier;
@@ -447,6 +447,17 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
         : smaCrossover?.crossover === 'bearish' ? w.smaCrossoverBearish
         : 0;
 
+    // Range Position bonus: calibration-backed mean-reversion signal
+    const rp = rangePosition ?? 50;
+    const rangePositionBonus = (rp < 20 && (structureScore ?? 0) >= 1) ? 1.5
+        : (rp > 90) ? -1.0
+        : 0;
+
+    // Higher-Low Count bonus: accumulation detection
+    const hlCount = higherLowCount ?? 0;
+    const vt2 = volumeTrend ?? 1;
+    const higherLowBonus = (hlCount >= 4 && vt2 < 0.7) ? 1.0 : 0;
+
     // No learned adjustments on server (requires portfolio.closedTrades analysis)
     const learnedAdj = 0;
 
@@ -455,7 +466,7 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
     const additiveScore = momentumContrib + rsContrib + sectorBonus + accelBonus + consistencyBonus
         + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + declinePenalty
         + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus
-        + smaProximityBonus + smaCrossoverBonus + learnedAdj + heatBonus;
+        + smaProximityBonus + smaCrossoverBonus + rangePositionBonus + higherLowBonus + learnedAdj + heatBonus;
 
     let entryMultiplier = 1.0;
     if (additiveScore > 0) {
@@ -471,8 +482,67 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
             momentumContrib, rsContrib, sectorBonus, accelBonus, consistencyBonus,
             structureBonus, extensionPenalty, pullbackBonus, runnerPenalty, declinePenalty,
             rsiBonusPenalty, macdBonus, rsMeanRevPenalty, squeezeBonus, volumeBonus, fvgBonus,
-            smaProximityBonus, smaCrossoverBonus, learnedAdj, heatBonus, entryMultiplier
+            smaProximityBonus, smaCrossoverBonus, rangePositionBonus, higherLowBonus, learnedAdj, heatBonus, entryMultiplier
         }
+    };
+}
+
+// Generate actionable trade plan: entry, target, stop, R:R, calibration stats.
+// Server version accepts all data as params (no globals).
+function generateTradePlan({ price, bars, structure, vixLevel, entrySignalPatterns, comboResults, comboHeat }) {
+    if (!price || !bars || bars.length < 20) return null;
+
+    const atr = calculateATR(bars);
+    if (!atr || atr <= 0) return null;
+    const vixMult = getATRMultiplier(vixLevel);
+    const fibs = calculateFibTargets(bars);
+
+    // Target: conservative of structure resistance, ATR projection, fib extension
+    const resistance = structure?.lastSwingHigh;
+    const atrTarget = price + (atr * 2.5);
+    let target = atrTarget;
+    if (resistance && resistance > price * 1.005) {
+        target = Math.min(resistance, atrTarget);
+    }
+    if (fibs?.type === 'bullish' && fibs.fib1272 > price) {
+        target = Math.min(target, fibs.fib1272);
+    }
+    if (target <= price * 1.005) target = atrTarget;
+
+    // Stop: ATR-based confirmed by structure support
+    const support = structure?.lastSwingLow;
+    const atrStop = price - (atr * vixMult);
+    let stop = atrStop;
+    if (support && support < price * 0.995 && support > atrStop) {
+        stop = Math.max(support * 0.98, atrStop);
+    }
+    if (stop >= price) stop = atrStop;
+
+    const risk = price - stop;
+    const reward = target - price;
+    const riskReward = risk > 0 ? reward / risk : null;
+
+    // Calibration context
+    const bestHotCombo = comboHeat?.hotCombos?.[0];
+
+    return {
+        entry: +price.toFixed(2),
+        target: +target.toFixed(2),
+        targetPct: +((target / price - 1) * 100).toFixed(1),
+        stop: +stop.toFixed(2),
+        stopPct: +((1 - stop / price) * 100).toFixed(1),
+        riskReward: riskReward != null ? +riskReward.toFixed(1) : null,
+        atr: +atr.toFixed(2),
+        atrPct: +((atr / price) * 100).toFixed(1),
+        resistance: resistance && resistance > price ? +resistance.toFixed(2) : null,
+        support: support && support < price ? +support.toFixed(2) : null,
+        fib1272: fibs?.type === 'bullish' && fibs.fib1272 > price ? +fibs.fib1272.toFixed(2) : null,
+        fib1618: fibs?.type === 'bullish' && fibs.fib1618 > price ? +fibs.fib1618.toFixed(2) : null,
+        vixMult: +vixMult.toFixed(1),
+        winRate: bestHotCombo?.winRate10d ? +bestHotCombo.winRate10d.toFixed(0) : null,
+        avgReturn: bestHotCombo?.avgReturn10d ? +bestHotCombo.avgReturn10d.toFixed(1) : null,
+        observations: bestHotCombo?.n ?? null,
+        calSource: bestHotCombo?.id || null
     };
 }
 
@@ -1277,5 +1347,6 @@ module.exports = {
     calculateROC,
     countHigherLows,
     calculateOBVSlope,
-    calculateGapAnalysis
+    calculateGapAnalysis,
+    generateTradePlan
 };

@@ -2927,6 +2927,47 @@
         .choch-bearish { color: var(--red); }
         .mcap-cell { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
 
+        /* ── Trade Plan columns ──────────────────────────── */
+        .plan-cell { white-space: nowrap; }
+        .rr-strong { color: var(--green); }
+        .rr-good { color: var(--yellow); }
+        .rr-weak { color: var(--red); }
+
+        /* ── Row expansion (trade plan detail) ───────────── */
+        .scorecard-table tr.expandable { cursor: pointer; }
+        .scorecard-table tr.expandable:hover td { background: rgba(255,255,255,0.04); }
+        .trade-plan-row td { padding: 0 !important; border-top: none !important; }
+        .trade-plan-row.hidden { display: none; }
+        .trade-plan-detail {
+            padding: 10px 16px;
+            background: var(--card-bg, rgba(255,255,255,0.03));
+            border-left: 3px solid var(--accent, #00d4aa);
+            margin: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 8px 16px;
+            font-size: 11px;
+        }
+        .trade-plan-detail .tp-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .trade-plan-detail .tp-label {
+            color: var(--text-muted);
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .trade-plan-detail .tp-value {
+            font-weight: 600;
+            font-size: 12px;
+        }
+        .trade-plan-detail .tp-value.green { color: var(--green); }
+        .trade-plan-detail .tp-value.red { color: var(--red); }
+        .trade-plan-detail .tp-value.yellow { color: var(--yellow); }
+        .trade-plan-detail .tp-value.muted { color: var(--text-muted); font-weight: 400; }
+
         /* ── Responsive ────────────────────────────────────── */
         @media (max-width: 1024px) {
             .app-layout {

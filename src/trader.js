@@ -2624,7 +2624,7 @@
 
         // Shared scoring function — used by both runAIAnalysis and testDataFetch
         // rsNormalized: 0-10 scale (RS percentile / 10). Multiplied by 0.6 internally for 0-6 contribution.
-        function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, signalAdjustments, sma20, currentPrice, smaCrossover, comboHeatBonus }) {
+        function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, structureScore, isAccelerating, upDays, totalDays, todayChange, totalReturn5d, rsi, macdCrossover, daysToCover, volumeTrend, fvg, signalAdjustments, sma20, currentPrice, smaCrossover, comboHeatBonus, rangePosition, higherLowCount }) {
             const w = getActiveWeights();
 
             const momentumContrib = momentumScore * w.momentumMultiplier;
@@ -2693,6 +2693,19 @@
                 : smaCrossover?.crossover === 'bearish' ? w.smaCrossoverBearish
                 : 0;
 
+            // Range Position bonus: calibration-backed mean-reversion signal
+            // range_bottom_bull combo: +6.71% vs baseline, 1765 obs, 56% WR
+            const rp = rangePosition ?? 50;
+            const rangePositionBonus = (rp < 20 && (structureScore ?? 0) >= 1) ? 1.5
+                : (rp > 90) ? -1.0
+                : 0;
+
+            // Higher-Low Count bonus: accumulation detection
+            // hl_accumulation combo: +1.16% vs baseline, 874 obs, 59% WR (highest WR in table)
+            const hlCount = higherLowCount ?? 0;
+            const vt2 = volumeTrend ?? 1;
+            const higherLowBonus = (hlCount >= 4 && vt2 < 0.7) ? 1.0 : 0;
+
             // Learning-based score adjustments — suppressed when fresh calibration exists
             // (calibration captures these signals from 17K+ obs; learning has ~30 trades).
             // Still computed for prompt injection via formatPerformanceInsights().
@@ -2711,7 +2724,7 @@
             const additiveScore = momentumContrib + rsContrib + sectorBonus + accelBonus + consistencyBonus
                 + structureBonus + extensionPenalty + pullbackBonus + runnerPenalty + declinePenalty
                 + rsiBonusPenalty + macdBonus + rsMeanRevPenalty + squeezeBonus + volumeBonus + fvgBonus
-                + smaProximityBonus + smaCrossoverBonus + learnedAdj + heatBonus;
+                + smaProximityBonus + smaCrossoverBonus + rangePositionBonus + higherLowBonus + learnedAdj + heatBonus;
 
             let entryMultiplier = 1.0;
             if (additiveScore > 0) {
@@ -2727,8 +2740,88 @@
                     momentumContrib, rsContrib, sectorBonus, accelBonus, consistencyBonus,
                     structureBonus, extensionPenalty, pullbackBonus, runnerPenalty, declinePenalty,
                     rsiBonusPenalty, macdBonus, rsMeanRevPenalty, squeezeBonus, volumeBonus, fvgBonus,
-                    smaProximityBonus, smaCrossoverBonus, learnedAdj, heatBonus, entryMultiplier
+                    smaProximityBonus, smaCrossoverBonus, rangePositionBonus, higherLowBonus, learnedAdj, heatBonus, entryMultiplier
                 }
+            };
+        }
+
+        // Generate actionable trade plan for a candidate: entry, target, stop, R:R, calibration stats.
+        // Uses ATR for volatility-aware levels, structure for S/R, fib extensions for upside, calibration for win rates.
+        function generateTradePlan(candidate) {
+            const price = candidate.price;
+            if (!price) return null;
+            const bars = multiDayCache[candidate.symbol];
+            if (!bars || bars.length < 20) return null;
+
+            const atr = calculateATR(bars);
+            if (!atr || atr <= 0) return null;
+            const vixLevel = portfolio.lastVIX?.level;
+            const vixMult = getATRMultiplier(vixLevel);
+            const struct = detectStructure(candidate.symbol);
+            const fibs = calculateFibTargets(bars);
+
+            // === TARGET ===
+            // Conservative of: structure resistance, ATR projection, fib 1.272 extension
+            const resistance = struct?.lastSwingHigh;
+            const atrTarget = price + (atr * 2.5);
+            let target = atrTarget;
+            if (resistance && resistance > price * 1.005) {
+                target = Math.min(resistance, atrTarget);
+            }
+            // If fib targets available and bullish, use fib 1.272 as a cross-check
+            if (fibs?.type === 'bullish' && fibs.fib1272 > price) {
+                target = Math.min(target, fibs.fib1272);
+            }
+            // Target must be above current price by at least 0.5%
+            if (target <= price * 1.005) target = atrTarget;
+
+            // === STOP ===
+            // ATR-based confirmed by structure support
+            const support = struct?.lastSwingLow;
+            const atrStop = price - (atr * vixMult);
+            let stop = atrStop;
+            if (support && support < price * 0.995 && support > atrStop) {
+                // Use support with a small cushion (2% below) if it's tighter than ATR stop
+                stop = Math.max(support * 0.98, atrStop);
+            }
+            // Stop must be below current price
+            if (stop >= price) stop = atrStop;
+
+            const risk = price - stop;
+            const reward = target - price;
+            const riskReward = risk > 0 ? reward / risk : null;
+
+            // === CALIBRATION CONTEXT ===
+            const signal = candidate._entrySignal;
+            const bestPat = signal?.bestPatternId
+                ? signal.patterns.find(p => p.id === signal.bestPatternId)
+                : null;
+            const calKey = bestPat?.calibrationKey || (bestPat?.id === 'reversal' ? 'rsi_low_structure_bull' : null);
+            const comboResults = portfolio.calibratedWeights?.signalCombos?.combos;
+            const comboData = calKey ? comboResults?.[calKey] : null;
+
+            // Also check combo heat for additional context
+            const heat = candidate._comboHeat;
+            const bestHotCombo = heat?.hotCombos?.[0];
+
+            return {
+                entry: +price.toFixed(2),
+                target: +target.toFixed(2),
+                targetPct: +((target / price - 1) * 100).toFixed(1),
+                stop: +stop.toFixed(2),
+                stopPct: +((1 - stop / price) * 100).toFixed(1),
+                riskReward: riskReward != null ? +riskReward.toFixed(1) : null,
+                atr: +atr.toFixed(2),
+                atrPct: +((atr / price) * 100).toFixed(1),
+                resistance: resistance && resistance > price ? +resistance.toFixed(2) : null,
+                support: support && support < price ? +support.toFixed(2) : null,
+                fib1272: fibs?.type === 'bullish' && fibs.fib1272 > price ? +fibs.fib1272.toFixed(2) : null,
+                fib1618: fibs?.type === 'bullish' && fibs.fib1618 > price ? +fibs.fib1618.toFixed(2) : null,
+                vixMult: +vixMult.toFixed(1),
+                winRate: comboData?.winRate10d ? +comboData.winRate10d.toFixed(0) : bestHotCombo?.winRate10d ? +bestHotCombo.winRate10d.toFixed(0) : null,
+                avgReturn: comboData?.avgReturn10d ? +comboData.avgReturn10d.toFixed(1) : bestHotCombo?.avgReturn10d ? +bestHotCombo.avgReturn10d.toFixed(1) : null,
+                observations: comboData?.n ?? bestHotCombo?.n ?? null,
+                calSource: calKey || bestHotCombo?.id || null
             };
         }
 
@@ -5245,7 +5338,9 @@
                         fvg: struct?.fvg,
                         sma20: drSma20,
                         currentPrice: data.price,
-                        smaCrossover: drSmaCrossover
+                        smaCrossover: drSmaCrossover,
+                        rangePosition: drRangePos?.rangePos ?? null,
+                        higherLowCount: drHL?.count ?? 0
                     });
                     const compositeScore = scoreResult.total;
                     const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
@@ -6016,7 +6111,9 @@
                         signalAdjustments: signalAdj,
                         sma20: data.sma20,
                         currentPrice: data.price,
-                        smaCrossover: data.smaCrossover
+                        smaCrossover: data.smaCrossover,
+                        rangePosition: data.rangePosition ?? null,
+                        higherLowCount: data.higherLowCount ?? 0
                     });
                     const compositeScore = scoreResult.total;
                     return { symbol, compositeScore, data, scoreBreakdown: scoreResult.breakdown };
@@ -13058,7 +13155,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         fvg: struct?.fvg || 'none',
                         sma20: calculateSMA(bars, 20),
                         currentPrice: data.price,
-                        smaCrossover: calculateSMACrossover(bars)
+                        smaCrossover: calculateSMACrossover(bars),
+                        rangePosition: calculateRangePosition(bars)?.rangePos ?? null,
+                        higherLowCount: countHigherLows(bars)?.count ?? 0
                     });
                     scored.push({ symbol: sym, score: scoreResult.total, price: data.price });
                 });
@@ -13629,6 +13728,13 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             updateCandidateScorecard();
         }
 
+        // Toggle trade plan detail row expansion on scorecard row click
+        function scorecardTogglePlan(symbol) {
+            const planRow = document.querySelector(`.trade-plan-row[data-plan-for="${symbol}"]`);
+            if (!planRow) return;
+            planRow.classList.toggle('hidden');
+        }
+
         // Re-score all candidates in lastCandidateScores using current weights.
         // Called after calibration so scores reflect new calibrated weights immediately
         // without requiring a full Scan Market.
@@ -13660,7 +13766,9 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     sma20: null, // Not persisted — SMA proximity bonus will be 0
                     currentPrice: c.price,
                     smaCrossover: c.smaCrossover ? { crossover: c.smaCrossover } : null,
-                    comboHeatBonus: heatBonus
+                    comboHeatBonus: heatBonus,
+                    rangePosition: c.rangePosition ?? null,
+                    higherLowCount: c.higherLowCount ?? 0
                 });
                 c.compositeScore = scoreResult.total;
                 c.scoreBreakdown = scoreResult.breakdown;
@@ -13722,6 +13830,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 c._entrySignal = evaluateEntrySignals(c);
                 c._comboHeat = evaluateComboHeat(c);
                 c._signalBonus = computeSignalBonus(c._entrySignal, portfolio.calibratedWeights);
+                c._tradePlan = generateTradePlan(c);
             });
 
             if (scorecardState.filterHeld) {
@@ -13791,6 +13900,9 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 },
                 sig: c => c._entrySignal?.bestMatchCount ?? 0,
                 heat: c => computeComboHeatBonus(c._comboHeat),
+                target: c => c._tradePlan?.targetPct ?? 0,
+                stop: c => -(c._tradePlan?.stopPct ?? 0),
+                rr: c => c._tradePlan?.riskReward ?? 0,
             };
             const accessor = sortAccessors[scorecardState.sortField] || sortAccessors.score;
             const dir = scorecardState.sortDir === 'asc' ? 1 : -1;
@@ -13840,6 +13952,9 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Non-REV gated by calibration.", 'Sig') +
                 sh('heat', "Combo heat from calibration backtesting. Green dots = hot combos, red dots = cold combos. Number = weighted net edge vs baseline. Positive = historically outperforms, negative = underperforms.", 'Heat') +
                 sh('score', "Composite score from weighted signals + calibration heat bonus + entry signal bonus. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
+                sh('target', "Price target based on ATR projection, structure resistance, and Fibonacci extensions. Shows upside % in parentheses. Click row for full trade plan.", 'Target') +
+                sh('stop', "Stop loss level based on ATR × VIX multiplier, confirmed by structure support. Shows risk % in parentheses.", 'Stop') +
+                sh('rr', "Risk/Reward ratio (reward ÷ risk). Green ≥ 2.0 (strong), Yellow ≥ 1.5, Red < 1.5. Higher is better.", 'R:R') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
                 sh('5d', "5-day cumulative return. Pullbacks with bullish structure are captured by calibration combo heat, not a fixed bonus.", '5D') +
@@ -13900,6 +14015,8 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     if (bd.runnerPenalty) parts.push(`Runner: ${bd.runnerPenalty.toFixed(1)}`);
                     if (bd.declinePenalty) parts.push(`Decline: ${bd.declinePenalty.toFixed(1)}`);
                     if (bd.squeezeBonus) parts.push(`Squeeze: +${bd.squeezeBonus.toFixed(1)}`);
+                    if (bd.rangePositionBonus) parts.push(`Range: ${bd.rangePositionBonus >= 0 ? '+' : ''}${bd.rangePositionBonus.toFixed(1)}`);
+                    if (bd.higherLowBonus) parts.push(`HL Accum: +${bd.higherLowBonus.toFixed(1)}`);
                     if (bd.accelBonus) parts.push(`Accel: +${bd.accelBonus.toFixed(1)}`);
                     if (bd.heatBonus) parts.push(`Heat: ${bd.heatBonus >= 0 ? '+' : ''}${bd.heatBonus.toFixed(1)}`);
                     if (bd.learnedAdj) parts.push(`Learned: ${bd.learnedAdj >= 0 ? '+' : ''}${bd.learnedAdj.toFixed(1)}`);
@@ -14036,15 +14153,42 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 const convergenceClass = convergence >= 4 ? 'convergence-gold' : convergence >= 3 ? 'convergence-teal' : '';
                 const convergenceTitle = convergence >= 3 ? `${convergence}/4 signals converging: ${c._entrySignal?.bestMatch === 'full' || c._entrySignal?.bestMatch === 'strong' ? '✓' : '✗'} Signal, ${computeComboHeatBonus(c._comboHeat) > 0 ? '✓' : '✗'} Heat, ${bd && score > 0 && ((bd.momentumContrib || 0) + (bd.rsContrib || 0)) <= score * 0.5 ? '✓' : '✗'} S-driven, ${c.sectorFlow === 'inflow' || c.sectorFlow === 'modest-inflow' ? '✓' : '✗'} Sector` : '';
 
+                // Trade plan cells
+                const plan = c._tradePlan;
+                let targetCell = '--', stopCell = '--', rrCell = '--';
+                let rrClass = '', targetTip = '', stopTip = '';
+                if (plan) {
+                    targetCell = `$${plan.target} <span style="font-size:9px;opacity:0.7">(+${plan.targetPct}%)</span>`;
+                    targetTip = `Target: $${plan.target} (+${plan.targetPct}%)`;
+                    if (plan.resistance) targetTip += `\nResistance: $${plan.resistance}`;
+                    if (plan.fib1272) targetTip += `\nFib 1.272: $${plan.fib1272}`;
+                    if (plan.winRate) targetTip += `\nWin Rate: ${plan.winRate}% (${plan.observations} obs)`;
+                    if (plan.avgReturn) targetTip += `\nAvg 10D Return: +${plan.avgReturn}%`;
+
+                    stopCell = `$${plan.stop} <span style="font-size:9px;opacity:0.7">(-${plan.stopPct}%)</span>`;
+                    stopTip = `Stop: $${plan.stop} (-${plan.stopPct}%)`;
+                    if (plan.support) stopTip += `\nSupport: $${plan.support}`;
+                    stopTip += `\nATR: $${plan.atr} (${plan.atrPct}%)`;
+                    stopTip += `\nVIX mult: ${plan.vixMult}x`;
+
+                    if (plan.riskReward != null) {
+                        rrClass = plan.riskReward >= 2.0 ? 'rr-strong' : plan.riskReward >= 1.5 ? 'rr-good' : 'rr-weak';
+                        rrCell = plan.riskReward.toFixed(1);
+                    }
+                }
+
                 const globalRank = start + i + 1;
                 const watched = watchlistSet.has(c.symbol);
-                html += `<tr>
-                    <td class="watchlist-star ${watched ? 'watched' : ''}" onclick="toggleWatchlistSymbol('${c.symbol}')" title="${watched ? 'Remove from watchlist' : 'Add to watchlist'}">${watched ? '★' : '☆'}</td>
+                html += `<tr data-symbol="${c.symbol}" class="expandable" onclick="scorecardTogglePlan('${c.symbol}')">
+                    <td class="watchlist-star ${watched ? 'watched' : ''}" onclick="event.stopPropagation();toggleWatchlistSymbol('${c.symbol}')" title="${watched ? 'Remove from watchlist' : 'Add to watchlist'}">${watched ? '★' : '☆'}</td>
                     <td class="scorecard-rank ${convergenceClass}"${convergenceTitle ? ` title="${convergenceTitle}"` : ''}>${globalRank}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
                     <td>${sigBadge}</td>
                     <td>${heatCell}</td>
                     <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span>${driverBadge}</div></td>
+                    <td class="plan-cell" title="${targetTip}" style="font-size:10px">${targetCell}</td>
+                    <td class="plan-cell" title="${stopTip}" style="font-size:10px;color:var(--red)">${stopCell}</td>
+                    <td class="plan-cell ${rrClass}" style="font-size:11px;font-weight:600">${rrCell}</td>
                     <td style="font-size:11px">${priceStr}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td class="${ret5dClass}" style="font-size:11px">${ret5d != null ? (ret5d >= 0 ? '+' : '') + ret5d.toFixed(2) + '%' : '--'}</td>
@@ -14058,6 +14202,27 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     <td>${c.sector || '--'}</td>
                     <td class="mcap-cell">${formatMarketCap(c.marketCap)}</td>
                 </tr>`;
+
+                // Expansion row with full trade plan detail
+                if (plan) {
+                    const rrColor = plan.riskReward >= 2.0 ? 'green' : plan.riskReward >= 1.5 ? 'yellow' : 'red';
+                    let planHtml = `<div class="trade-plan-detail">`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">Entry</span><span class="tp-value">$${plan.entry}</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">Target</span><span class="tp-value green">$${plan.target} (+${plan.targetPct}%)</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">Stop</span><span class="tp-value red">$${plan.stop} (-${plan.stopPct}%)</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">R:R</span><span class="tp-value ${rrColor}">${plan.riskReward != null ? plan.riskReward.toFixed(1) + ':1' : '--'}</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">ATR</span><span class="tp-value muted">$${plan.atr} (${plan.atrPct}%)</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">VIX Stop Width</span><span class="tp-value muted">${plan.vixMult}x ATR</span></div>`;
+                    if (plan.resistance) planHtml += `<div class="tp-item"><span class="tp-label">Resistance</span><span class="tp-value yellow">$${plan.resistance}</span></div>`;
+                    if (plan.support) planHtml += `<div class="tp-item"><span class="tp-label">Support</span><span class="tp-value green">$${plan.support}</span></div>`;
+                    if (plan.fib1272) planHtml += `<div class="tp-item"><span class="tp-label">Fib 1.272</span><span class="tp-value muted">$${plan.fib1272}</span></div>`;
+                    if (plan.fib1618) planHtml += `<div class="tp-item"><span class="tp-label">Fib 1.618</span><span class="tp-value muted">$${plan.fib1618}</span></div>`;
+                    if (plan.winRate) planHtml += `<div class="tp-item"><span class="tp-label">Cal. Win Rate</span><span class="tp-value ${plan.winRate >= 55 ? 'green' : 'muted'}">${plan.winRate}%</span></div>`;
+                    if (plan.avgReturn) planHtml += `<div class="tp-item"><span class="tp-label">Avg 10D Return</span><span class="tp-value ${plan.avgReturn > 0 ? 'green' : 'red'}">${plan.avgReturn > 0 ? '+' : ''}${plan.avgReturn}%</span></div>`;
+                    if (plan.observations) planHtml += `<div class="tp-item"><span class="tp-label">Observations</span><span class="tp-value muted">${plan.observations.toLocaleString()}</span></div>`;
+                    planHtml += `</div>`;
+                    html += `<tr class="trade-plan-row hidden" data-plan-for="${c.symbol}"><td colspan="21">${planHtml}</td></tr>`;
+                }
             });
 
             html += '</tbody></table></div>';

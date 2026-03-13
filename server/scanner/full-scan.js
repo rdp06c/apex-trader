@@ -244,7 +244,9 @@ async function runFullScan({ force = false } = {}) {
                 sma20,
                 currentPrice: priceData.price,
                 smaCrossover,
-                comboHeatBonus: heatBonus
+                comboHeatBonus: heatBonus,
+                rangePosition: rangePosResult?.rangePos ?? null,
+                higherLowCount: hlResult?.count ?? 0
             }, weights);
 
             // Market cap formatting
