@@ -13952,10 +13952,10 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Non-REV gated by calibration.", 'Sig') +
                 sh('heat', "Combo heat from calibration backtesting. Green dots = hot combos, red dots = cold combos. Number = weighted net edge vs baseline. Positive = historically outperforms, negative = underperforms.", 'Heat') +
                 sh('score', "Composite score from weighted signals + calibration heat bonus + entry signal bonus. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
-                sh('target', "Price target based on ATR projection, structure resistance, and Fibonacci extensions. Shows upside % in parentheses. Click row for full trade plan.", 'Target') +
+                sh('price', "Current stock price (last trade or regular session close).", 'Price') +
+                sh('target', "Price target based on ATR projection and Fibonacci extensions. Shows upside % in parentheses. Click row for full trade plan.", 'Target') +
                 sh('stop', "Stop loss level based on ATR × VIX multiplier, confirmed by structure support. Shows risk % in parentheses.", 'Stop') +
                 sh('rr', "Risk/Reward ratio (reward ÷ risk). Green ≥ 2.0 (strong), Yellow ≥ 1.5, Red < 1.5. Higher is better.", 'R:R') +
-                sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
                 sh('5d', "5-day cumulative return. Pullbacks with bullish structure are captured by calibration combo heat, not a fixed bonus.", '5D') +
                 sh('mom', "Momentum (0-10). Sweet spot is 5-7: strong trend without penalties. Weight halved (0.3x) — calibration shows momentum is anti-predictive. 9+ triggers extension penalty (-3.5) and 0.6x entry multiplier.", 'Mom') +
@@ -14186,10 +14186,10 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     <td>${sigBadge}</td>
                     <td>${heatCell}</td>
                     <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span>${driverBadge}</div></td>
+                    <td style="font-size:11px">${priceStr}</td>
                     <td class="plan-cell" title="${targetTip}" style="font-size:10px">${targetCell}</td>
                     <td class="plan-cell" title="${stopTip}" style="font-size:10px;color:var(--red)">${stopCell}</td>
                     <td class="plan-cell ${rrClass}" style="font-size:11px;font-weight:600">${rrCell}</td>
-                    <td style="font-size:11px">${priceStr}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td class="${ret5dClass}" style="font-size:11px">${ret5d != null ? (ret5d >= 0 ? '+' : '') + ret5d.toFixed(2) + '%' : '--'}</td>
                     <td class="${momClass}">${mom.toFixed(1)}${c.isAccelerating ? ' <span class="accel-badge" title="Momentum accelerating">⚡</span>' : ''}</td>

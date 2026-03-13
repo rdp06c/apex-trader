@@ -2962,11 +2962,12 @@
         .trade-plan-detail .tp-value {
             font-weight: 600;
             font-size: 12px;
+            color: #e0e0e0;
         }
         .trade-plan-detail .tp-value.green { color: var(--green); }
         .trade-plan-detail .tp-value.red { color: var(--red); }
         .trade-plan-detail .tp-value.yellow { color: var(--yellow); }
-        .trade-plan-detail .tp-value.muted { color: var(--text-muted); font-weight: 400; }
+        .trade-plan-detail .tp-value.muted { color: #aaa; }
 
         /* ── Responsive ────────────────────────────────────── */
         @media (max-width: 1024px) {
