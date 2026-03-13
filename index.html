@@ -2957,7 +2957,7 @@
             border-left: 3px solid var(--accent, #00d4aa);
             margin: 0;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            grid-template-columns: repeat(6, 1fr);
             gap: 8px 16px;
             font-size: 11px;
         }
@@ -6525,6 +6525,31 @@
             const heat = candidate._comboHeat;
             const bestHotCombo = heat?.hotCombos?.[0];
 
+            // Match quality determines how applicable calibration data is
+            const matchQuality = signal?.bestMatch || null; // 'full', 'strong', 'partial', or null
+
+            // Raw calibration stats
+            const rawWinRate = comboData?.winRate10d ?? bestHotCombo?.winRate10d ?? null;
+            const rawAvgReturn = comboData?.avgReturn10d ?? bestHotCombo?.avgReturn10d ?? null;
+            const rawObs = comboData?.n ?? bestHotCombo?.n ?? null;
+
+            // Scale calibration stats by match quality:
+            // full (GREEN) = as-is, strong (YELLOW/1 miss) = discounted, partial (GRAY) = not shown
+            let winRate = null, avgReturn = null, observations = null, calConfidence = null;
+            if (rawWinRate != null && matchQuality === 'full') {
+                winRate = +rawWinRate.toFixed(0);
+                avgReturn = rawAvgReturn != null ? +rawAvgReturn.toFixed(1) : null;
+                observations = rawObs;
+                calConfidence = 'high';
+            } else if (rawWinRate != null && matchQuality === 'strong') {
+                // Discount toward 50% baseline: WR = 50 + (raw - 50) * 0.6
+                winRate = +(50 + (rawWinRate - 50) * 0.6).toFixed(0);
+                avgReturn = rawAvgReturn != null ? +(rawAvgReturn * 0.6).toFixed(1) : null;
+                observations = rawObs;
+                calConfidence = 'moderate';
+            }
+            // partial match: no calibration stats shown (too loose to be meaningful)
+
             return {
                 entry: +price.toFixed(2),
                 target: +target.toFixed(2),
@@ -6539,9 +6564,10 @@
                 fib1272: fibs?.type === 'bullish' && fibs.fib1272 > price ? +fibs.fib1272.toFixed(2) : null,
                 fib1618: fibs?.type === 'bullish' && fibs.fib1618 > price ? +fibs.fib1618.toFixed(2) : null,
                 vixMult: +vixMult.toFixed(1),
-                winRate: comboData?.winRate10d ? +comboData.winRate10d.toFixed(0) : bestHotCombo?.winRate10d ? +bestHotCombo.winRate10d.toFixed(0) : null,
-                avgReturn: comboData?.avgReturn10d ? +comboData.avgReturn10d.toFixed(1) : bestHotCombo?.avgReturn10d ? +bestHotCombo.avgReturn10d.toFixed(1) : null,
-                observations: comboData?.n ?? bestHotCombo?.n ?? null,
+                winRate,
+                avgReturn,
+                observations,
+                calConfidence,
                 calSource: calKey || bestHotCombo?.id || null
             };
         }
@@ -17924,23 +17950,27 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     <td class="mcap-cell">${formatMarketCap(c.marketCap)}</td>
                 </tr>`;
 
-                // Expansion row with full trade plan detail
+                // Expansion row with full trade plan detail — fixed grid layout for consistency
                 if (plan) {
                     const rrColor = plan.riskReward >= 2.0 ? 'green' : plan.riskReward >= 1.5 ? 'yellow' : 'red';
+                    const confLabel = plan.calConfidence === 'high' ? '' : plan.calConfidence === 'moderate' ? ' (est.)' : '';
                     let planHtml = `<div class="trade-plan-detail">`;
+                    // Row 1: Core trade plan
                     planHtml += `<div class="tp-item"><span class="tp-label">Entry</span><span class="tp-value">$${plan.entry}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">Target</span><span class="tp-value green">$${plan.target} (+${plan.targetPct}%)</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">Stop</span><span class="tp-value red">$${plan.stop} (-${plan.stopPct}%)</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">R:R</span><span class="tp-value ${rrColor}">${plan.riskReward != null ? plan.riskReward.toFixed(1) + ':1' : '--'}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">ATR</span><span class="tp-value muted">$${plan.atr} (${plan.atrPct}%)</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">VIX Stop Width</span><span class="tp-value muted">${plan.vixMult}x ATR</span></div>`;
-                    if (plan.resistance) planHtml += `<div class="tp-item"><span class="tp-label">Watch: Resistance</span><span class="tp-value yellow">$${plan.resistance}</span></div>`;
-                    if (plan.support) planHtml += `<div class="tp-item"><span class="tp-label">Support Level</span><span class="tp-value green">$${plan.support}</span></div>`;
-                    if (plan.fib1272) planHtml += `<div class="tp-item"><span class="tp-label">Fib 1.272</span><span class="tp-value muted">$${plan.fib1272}</span></div>`;
-                    if (plan.fib1618) planHtml += `<div class="tp-item"><span class="tp-label">Fib 1.618</span><span class="tp-value muted">$${plan.fib1618}</span></div>`;
-                    if (plan.winRate) planHtml += `<div class="tp-item"><span class="tp-label">Cal. Win Rate</span><span class="tp-value ${plan.winRate >= 55 ? 'green' : 'muted'}">${plan.winRate}%</span></div>`;
-                    if (plan.avgReturn) planHtml += `<div class="tp-item"><span class="tp-label">Avg 10D Return</span><span class="tp-value ${plan.avgReturn > 0 ? 'green' : 'red'}">${plan.avgReturn > 0 ? '+' : ''}${plan.avgReturn}%</span></div>`;
-                    if (plan.observations) planHtml += `<div class="tp-item"><span class="tp-label">Observations</span><span class="tp-value muted">${plan.observations.toLocaleString()}</span></div>`;
+                    // Row 2: Levels
+                    planHtml += `<div class="tp-item"><span class="tp-label">Watch: Resistance</span><span class="tp-value ${plan.resistance ? 'yellow' : 'muted'}">${plan.resistance ? '$' + plan.resistance : '--'}</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">Support Level</span><span class="tp-value ${plan.support ? 'green' : 'muted'}">${plan.support ? '$' + plan.support : '--'}</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">Fib 1.272</span><span class="tp-value muted">${plan.fib1272 ? '$' + plan.fib1272 : '--'}</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">Fib 1.618</span><span class="tp-value muted">${plan.fib1618 ? '$' + plan.fib1618 : '--'}</span></div>`;
+                    // Row 3: Calibration context (only for full/strong matches)
+                    planHtml += `<div class="tp-item"><span class="tp-label">Cal. Win Rate${confLabel}</span><span class="tp-value ${plan.winRate != null ? (plan.winRate >= 55 ? 'green' : '') : 'muted'}">${plan.winRate != null ? plan.winRate + '%' : '--'}</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">Avg 10D Return${confLabel}</span><span class="tp-value ${plan.avgReturn != null ? (plan.avgReturn > 0 ? 'green' : 'red') : 'muted'}">${plan.avgReturn != null ? (plan.avgReturn > 0 ? '+' : '') + plan.avgReturn + '%' : '--'}</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">Observations</span><span class="tp-value muted">${plan.observations != null ? plan.observations.toLocaleString() : '--'}</span></div>`;
                     planHtml += `</div>`;
                     html += `<tr class="trade-plan-row hidden" data-plan-for="${c.symbol}"><td colspan="21">${planHtml}</td></tr>`;
                 }
