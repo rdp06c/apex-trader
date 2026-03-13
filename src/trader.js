@@ -14657,14 +14657,15 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 if (actionBadge === 'wait') {
                     if (c._waitReason) {
                         actionTip = c._waitReason;
+                    } else if (bz && bz.distancePct > 2) {
+                        actionTip = 'Good stock, above buy zone — wait for pullback';
                     } else {
                         const regimeNow = portfolio.lastMarketRegime?.regime || 'choppy';
                         const bearNow = regimeNow === 'bearish' || regimeNow === 'choppy';
-                        const sigId = c._entrySignal?.bestPatternId;
+                        // Use the displayed pattern (respects filter), not overall bestPatternId
+                        const sigId = matchedSetupId || c._entrySignal?.bestPatternId;
                         if (bearNow && sigId && sigId !== 'reversal') {
                             actionTip = `${c._entrySignal.patterns.find(p=>p.id===sigId)?.badge||sigId.toUpperCase()} underperforms in ${regimeNow} regime`;
-                        } else if (bz && bz.distancePct > 2) {
-                            actionTip = 'Good stock, above buy zone — wait for pullback';
                         }
                     }
                 }
