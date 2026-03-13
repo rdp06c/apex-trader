@@ -3200,7 +3200,7 @@
 
         // Synthesize signal quality, R:R, and calibration into a single action verdict.
         // BUY = strong signal + good R:R + calibrated edge. SETUP = signal present.
-        // WATCH = heat forming or partial signal. null = nothing actionable.
+        // null = nothing actionable.
         function computeActionBadge(candidate) {
             const sig = candidate._entrySignal;
             const plan = candidate._tradePlan;
@@ -3225,7 +3225,7 @@
             // AVOID anti-pattern vetoes BUY/ADD — downgrade to SETUP at best
             if (isAvoid) {
                 if (hasSignal && score >= 5) return 'setup';
-                return 'watch';
+                return null;
             }
 
             // Zone-aware badges (when buy zone data available)
@@ -3240,8 +3240,6 @@
             // Fallback: signal-based logic when no buy zone data
             if (hasSignal && score >= 8 && regimeAllowed) return 'buy';
             if (hasSignal && score >= 5) return 'setup';
-            if (hasPartial && score >= 5) return 'watch';
-            if (hasHeat) return 'watch';
             return null;
         }
 
@@ -14306,7 +14304,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
             // Sort
             const sortAccessors = {
-                action: c => { const b = c._actionBadge; return b === 'buy' ? 5 : b === 'add' ? 4 : b === 'near' ? 3 : b === 'wait' ? 2 : b === 'setup' ? 1 : b === 'watch' ? 0.5 : 0; },
+                action: c => { const b = c._actionBadge; return b === 'buy' ? 5 : b === 'add' ? 4 : b === 'near' ? 3 : b === 'wait' ? 2 : b === 'setup' ? 1 : 0; },
                 limit: c => c._buyZone?.buyZonePrice ?? 0,
                 dist: c => c._buyZone?.distancePct ?? 999,
                 score: c => (c.compositeScore || 0) + (c._signalBonus || 0),
@@ -14406,7 +14404,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
             html += '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
                 '<th class="watchlist-col" title="Click star to add/remove from watchlist">★</th><th>#</th><th>Symbol</th>' +
-                sh('action', "Synthesized action: BUY = signal + good R:R + calibration data. SETUP = signal present. WATCH = heat forming or partial signal, no confirmed entry yet.", 'Action') +
+                sh('action', "Synthesized action: BUY = in zone, not held. ADD = in zone, held. NEAR = within 2% of zone. WAIT = above zone. SETUP = signal present, no zone data.", 'Action') +
                 sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Non-REV gated by calibration.", 'Sig') +
                 sh('heat', "Combo heat from calibration backtesting. Green dots = hot combos, red dots = cold combos. Number = weighted net edge vs baseline. Positive = historically outperforms, negative = underperforms.", 'Heat') +
                 sh('score', "Composite score from weighted signals + calibration heat bonus + entry signal bonus. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
@@ -14751,7 +14749,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 return eb - ea;
             });
             const setupRankings = setups.map(s => `${s.badge} ${s.label}${fmtEdge(getEdge(s.key))}`).join(' · ');
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Action: <span class="action-badge action-buy" style="display:inline">BUY</span> signal+R:R+cal · <span class="action-badge action-setup" style="display:inline">SETUP</span> signal · <span class="action-badge action-watch" style="display:inline">WATCH</span> forming</span></div>`;
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Action: <span class="action-badge action-buy" style="display:inline">BUY</span> in zone · <span class="action-badge action-add" style="display:inline">ADD</span> held+zone · <span class="action-badge action-near" style="display:inline">NEAR</span> &lt;2% · <span class="action-badge action-wait" style="display:inline">WAIT</span> above zone · <span class="action-badge action-setup" style="display:inline">SETUP</span> signal</span></div>`;
             container.innerHTML = html;
         }
 
