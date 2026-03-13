@@ -18280,18 +18280,11 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         const dots = [];
                         for (let h = 0; h < filteredHot.length; h++) dots.push('<span class="heat-dot hot"></span>');
                         for (let h = 0; h < filteredCold.length; h++) dots.push('<span class="heat-dot cold"></span>');
-                        // Show the actual score bonus from these combos (matches what goes into compositeScore)
-                        const filteredHeatResult = { hotCombos: filteredHot, coldCombos: filteredCold };
-                        const filteredBonus = computeComboHeatBonus(filteredHeatResult);
-                        const hasSignalForHeat = c._entrySignal?.bestMatch;
-                        const scaledBonus = hasSignalForHeat ? filteredBonus : Math.round(filteredBonus * 0.33 * 10) / 10;
                         const tipParts = [];
-                        tipParts.push(`Score impact: ${scaledBonus >= 0 ? '+' : ''}${scaledBonus.toFixed(1)} pts from ${filteredHot.length + filteredCold.length} combo(s)${!hasSignalForHeat && filteredBonus !== 0 ? ' (×0.33 no signal)' : ''}`);
+                        tipParts.push(`${filteredHot.length + filteredCold.length} combo(s) — informational only, not affecting score`);
                         filteredHot.forEach(h => tipParts.push(`🟢 ${h.label}: +${h.vsBaseline.toFixed(1)}% edge, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
                         filteredCold.forEach(h => tipParts.push(`🔴 ${h.label}: ${h.vsBaseline.toFixed(1)}% edge, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
-                        const netColor = scaledBonus > 0 ? 'var(--green)' : scaledBonus < 0 ? 'var(--red)' : 'var(--text-muted)';
-                        const netLabel = (scaledBonus >= 0 ? '+' : '') + scaledBonus.toFixed(1);
-                        heatCell = `<span class="heat-dots" title="${tipParts.join('\n')}">${dots.join('')}<span class="heat-net" style="color:${netColor}">${netLabel}</span></span>`;
+                        heatCell = `<span class="heat-dots" title="${tipParts.join('\n')}">${dots.join('')}</span>`;
                     }
                 }
 
