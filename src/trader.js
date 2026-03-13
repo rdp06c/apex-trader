@@ -5672,10 +5672,21 @@
                 recordRegimeTransition(regimeResult.regime);
                 console.log(`📊 Market regime: ${regimeResult.regime.toUpperCase()} (score ${regimeResult.score})`, regimeResult.signals);
 
-                // Benchmark: fetch SPY price and compute portfolio health
+                // Benchmark: fetch SPY, DIA, QQQ prices and compute portfolio health
                 try {
-                    const spyData = await getStockPrice('SPY');
+                    const [spyData, diaData, qqqData] = await Promise.all([
+                        getStockPrice('SPY'),
+                        getStockPrice('DIA').catch(() => null),
+                        getStockPrice('QQQ').catch(() => null)
+                    ]);
                     const spyPrice = spyData && spyData.price ? spyData.price : 0;
+                    // Store index daily changes for display
+                    portfolio.indexBenchmarks = {
+                        SPY: spyData?.changePercent ?? null,
+                        DIA: diaData?.changePercent ?? null,
+                        QQQ: qqqData?.changePercent ?? null,
+                        timestamp: new Date().toISOString()
+                    };
                     if (spyPrice > 0) {
                         if (!portfolio.spyBaseline) {
                             portfolio.spyBaseline = { price: spyPrice, date: new Date().toISOString() };
@@ -6218,10 +6229,21 @@
                 recordRegimeTransition(regimeResult.regime);
                 console.log(`📊 Market regime: ${regimeResult.regime.toUpperCase()} (score ${regimeResult.score})`, regimeResult.signals);
 
-                // Benchmark: fetch SPY price and compute portfolio health
+                // Benchmark: fetch SPY, DIA, QQQ prices and compute portfolio health
                 try {
-                    const spyData = await getStockPrice('SPY');
+                    const [spyData, diaData, qqqData] = await Promise.all([
+                        getStockPrice('SPY'),
+                        getStockPrice('DIA').catch(() => null),
+                        getStockPrice('QQQ').catch(() => null)
+                    ]);
                     const spyPrice = spyData && spyData.price ? spyData.price : 0;
+                    // Store index daily changes for display
+                    portfolio.indexBenchmarks = {
+                        SPY: spyData?.changePercent ?? null,
+                        DIA: diaData?.changePercent ?? null,
+                        QQQ: qqqData?.changePercent ?? null,
+                        timestamp: new Date().toISOString()
+                    };
                     if (spyPrice > 0) {
                         if (!portfolio.spyBaseline) {
                             portfolio.spyBaseline = { price: spyPrice, date: new Date().toISOString() };
@@ -9911,10 +9933,27 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('dailyPerformance').className = 'index-price';
             document.getElementById('dailyPerformance').style.color = dailyGainPercent >= 0 ? '#34d399' : '#f87171';
             
-            document.getElementById('dailyPerformanceDollar').textContent = 
+            document.getElementById('dailyPerformanceDollar').textContent =
                 (dailyGain >= 0 ? '+' : '') + '$' + dailyGain.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('dailyPerformanceDollar').className = 'index-change ' + (dailyGain >= 0 ? 'positive' : 'negative');
-                
+
+            // Index benchmarks (SPY, DIA, QQQ daily change)
+            const benchEl = document.getElementById('indexBenchmarks');
+            if (benchEl) {
+                const ib = portfolio.indexBenchmarks;
+                if (ib && (ib.SPY != null || ib.DIA != null || ib.QQQ != null)) {
+                    const fmt = (label, val) => {
+                        if (val == null) return '';
+                        const color = val >= 0 ? '#34d399' : '#f87171';
+                        const sign = val >= 0 ? '+' : '';
+                        return `<span class="bench-item"><span class="bench-label">${label}</span> <span style="color:${color}">${sign}${val.toFixed(2)}%</span></span>`;
+                    };
+                    benchEl.innerHTML = [fmt('SPY', ib.SPY), fmt('DIA', ib.DIA), fmt('QQQ', ib.QQQ)].filter(Boolean).join('');
+                } else {
+                    benchEl.innerHTML = '';
+                }
+            }
+
             // Calculate cost basis of current holdings (avg buy price × current shares)
             let totalInvested = 0;
             for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
