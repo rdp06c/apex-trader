@@ -6783,14 +6783,15 @@
             const plan = candidate._tradePlan;
             const heat = candidate._comboHeat;
             const rr = plan?.riskReward;
+            const score = (candidate.compositeScore || 0) + (candidate._signalBonus || 0);
             const hasSignal = sig?.bestMatch === 'full' || sig?.bestMatch === 'strong';
             const hasPartial = sig?.bestMatch === 'partial';
             const hasCalData = plan?.winRate != null;
             const hasHeat = (heat?.hotCount || 0) > 0;
 
-            if (hasSignal && rr != null && rr >= 1.5 && hasCalData) return 'buy';
-            if (hasSignal && rr != null && rr >= 1.0) return 'setup';
-            if (hasSignal) return 'setup';
+            if (hasSignal && rr != null && rr >= 1.5 && hasCalData && score >= 8) return 'buy';
+            if (hasSignal && rr != null && rr >= 1.0 && score >= 5) return 'setup';
+            if (hasSignal && score >= 5) return 'setup';
             if (hasPartial && rr != null && rr >= 1.5) return 'watch';
             if (hasHeat) return 'watch';
             return null;
