@@ -3245,8 +3245,8 @@
                 if (zone.inZone && regimeAllowed) {
                     return held ? 'add' : 'buy';
                 }
-                if (zone.distancePct <= 2 && regimeAllowed) return 'near';
-                if (zone.distancePct > 2 || !regimeAllowed) return 'wait';
+                if (zone.distancePct <= 1 && score >= 7 && regimeAllowed) return 'near';
+                return 'wait';
             }
 
             // Fallback: signal-based logic when no buy zone data
@@ -14711,7 +14711,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     if (bz.inZone) {
                         distCell = '<span class="dist-in-zone">IN ZONE</span>';
                     } else {
-                        distClass = bz.distancePct <= 2 ? 'dist-near' : '';
+                        distClass = bz.distancePct <= 1 ? 'dist-near' : '';
                         distCell = bz.distancePct.toFixed(1) + '%';
                     }
                 }
