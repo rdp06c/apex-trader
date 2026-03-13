@@ -9549,6 +9549,25 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 }
                                 return '';
                             })()}
+                            ${(() => {
+                                const price = h.stockPrice?.price;
+                                if (!h._struct || !price) return '';
+                                let sup = h._struct.lastSwingLow;
+                                if (!sup || sup >= price) {
+                                    const bars = multiDayCache[h.symbol];
+                                    if (bars && bars.length >= 20) {
+                                        const low = Math.min(...bars.slice(-20).map(b => b.l));
+                                        if (low < price) sup = low;
+                                        else sup = null;
+                                    } else sup = null;
+                                }
+                                const res = h._struct.lastSwingHigh && h._struct.lastSwingHigh > price ? h._struct.lastSwingHigh : null;
+                                if (!sup && !res) return '';
+                                let html = '';
+                                if (sup && sup < price) html += '<span class="hc-stat"><span class="hc-stat-lbl">S</span><span class="hc-stat-val">$' + sup.toFixed(2) + '</span></span>';
+                                if (res) html += '<span class="hc-stat"><span class="hc-stat-lbl">R</span><span class="hc-stat-val">$' + res.toFixed(2) + '</span></span>';
+                                return html;
+                            })()}
                         </div>
                         ${h._intraday ? `<div class="holding-card-stats hc-intraday">
                             <span class="hc-stat"><span class="hc-stat-lbl">5m RSI</span><span class="hc-stat-val ${h._intraday.rsi != null ? (h._intraday.rsi < 30 ? 'rsi-oversold' : h._intraday.rsi > 70 ? 'rsi-overbought' : '') : ''}">${h._intraday.rsi != null ? Math.round(h._intraday.rsi) : '--'}</span></span>
@@ -13998,6 +14017,9 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             }
 
             if (scorecardState.filterSignal) {
+                if (scorecardState.filterSignal === 'buy_only') {
+                    candidates = candidates.filter(c => c._actionBadge === 'buy');
+                } else {
                 const comboResults = portfolio.calibratedWeights?.signalCombos?.combos;
                 candidates = candidates.filter(c => {
                     const sig = c._entrySignal;
@@ -14019,6 +14041,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     // Filter by specific pattern ID
                     return sig.patterns.some(p => p.id === scorecardState.filterSignal && p.match && !p.antiPattern);
                 });
+                }
             }
 
             const watchlistSet = new Set(portfolio.watchlist || []);
@@ -14083,7 +14106,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             // Controls: holdings filter + sector filter + pagination
             let html = '<div class="scorecard-controls">';
             html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;flex:0 0 auto;white-space:nowrap;"><input type="checkbox" onchange="scorecardToggleHeld()"${scorecardState.filterHeld ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> Holdings only</label>`;
-            html += `<select onchange="scorecardSetSignalFilter(this.value)" class="scorecard-sector-filter"><option value="">All Setups</option><option value="any"${scorecardState.filterSignal === 'any' ? ' selected' : ''}>Any Signal</option><option value="reversal"${scorecardState.filterSignal === 'reversal' ? ' selected' : ''}>REV</option><option value="momentum_cont"${scorecardState.filterSignal === 'momentum_cont' ? ' selected' : ''}>MOM</option><option value="quiet_momentum"${scorecardState.filterSignal === 'quiet_momentum' ? ' selected' : ''}>QMO</option><option value="squeeze"${scorecardState.filterSignal === 'squeeze' ? ' selected' : ''}>SQZ</option><option value="sector_leader"${scorecardState.filterSignal === 'sector_leader' ? ' selected' : ''}>LDR</option><option value="avoid"${scorecardState.filterSignal === 'avoid' ? ' selected' : ''}>AVOID</option></select>`;
+            html += `<select onchange="scorecardSetSignalFilter(this.value)" class="scorecard-sector-filter"><option value="">All Setups</option><option value="buy_only"${scorecardState.filterSignal === 'buy_only' ? ' selected' : ''}>BUY Only</option><option value="any"${scorecardState.filterSignal === 'any' ? ' selected' : ''}>Any Signal</option><option value="reversal"${scorecardState.filterSignal === 'reversal' ? ' selected' : ''}>REV</option><option value="momentum_cont"${scorecardState.filterSignal === 'momentum_cont' ? ' selected' : ''}>MOM</option><option value="quiet_momentum"${scorecardState.filterSignal === 'quiet_momentum' ? ' selected' : ''}>QMO</option><option value="squeeze"${scorecardState.filterSignal === 'squeeze' ? ' selected' : ''}>SQZ</option><option value="sector_leader"${scorecardState.filterSignal === 'sector_leader' ? ' selected' : ''}>LDR</option><option value="avoid"${scorecardState.filterSignal === 'avoid' ? ' selected' : ''}>AVOID</option></select>`;
             html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;flex:0 0 auto;white-space:nowrap;"><input type="checkbox" onchange="scorecardToggleWatchlist()"${scorecardState.filterWatchlist ? ' checked' : ''} style="accent-color:#f59e0b;cursor:pointer;"> ★ Watchlist${watchlistSet.size > 0 ? ' (' + watchlistSet.size + ')' : ''}</label>`;
             html += `<select onchange="scorecardSetSector(this.value)" class="scorecard-sector-filter">`;
             html += `<option value="">All Sectors (${totalCount})</option>`;
