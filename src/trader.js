@@ -14059,7 +14059,11 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     if (s === 'bearish' || s === 'bearish_continuation') return 0;
                     return -1;
                 },
-                sig: c => c._entrySignal?.bestMatchCount ?? 0,
+                sig: c => {
+                    const m = c._entrySignal?.bestMatch;
+                    const tier = m === 'full' ? 300 : m === 'strong' ? 200 : m === 'partial' ? 100 : 0;
+                    return tier + (c._entrySignal?.bestMatchCount ?? 0);
+                },
                 heat: c => { const raw = computeComboHeatBonus(c._comboHeat); return c._entrySignal?.bestMatch ? raw : Math.round(raw * 0.33 * 10) / 10; },
                 target: c => c._tradePlan?.targetPct ?? 0,
                 stop: c => -(c._tradePlan?.stopPct ?? 0),
