@@ -3198,7 +3198,7 @@
             const structOk = candidate.structure !== 'bearish' && candidate.structure !== 'bearish_continuation';
 
             // Regime-based signal gating: in bear/choppy markets only REV signals qualify for BUY/ADD/NEAR
-            const regime = portfolio.lastMarketRegime || 'choppy';
+            const regime = portfolio.lastMarketRegime?.regime || 'choppy';
             const isBearish = regime === 'bearish' || regime === 'choppy';
             const signalId = sig?.bestPatternId;
             const isRevSignal = signalId === 'reversal' || !signalId;
@@ -14349,7 +14349,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             });
             html += '</select>';
             html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;flex:0 0 auto;white-space:nowrap;"><input type="checkbox" onchange="scorecardToggleZone()"${scorecardState.filterZone ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> In Zone</label>`;
-            const regime = portfolio.lastMarketRegime || 'choppy';
+            const regime = portfolio.lastMarketRegime?.regime || 'choppy';
             const regimeBearish = regime === 'bearish' || regime === 'choppy';
             if (regimeBearish) {
                 html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#f39c12;cursor:pointer;flex:0 0 auto;white-space:nowrap;" title="In ${regime} regime, only REV signals qualify for BUY/ADD/NEAR. Toggle to override."><input type="checkbox" onchange="scorecardToggleRegimeOverride()"${scorecardState.overrideRegimeGate ? ' checked' : ''} style="accent-color:#f39c12;cursor:pointer;"> All Signals (${regime}: REV only)</label>`;
@@ -14621,7 +14621,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 const actionBadge = c._actionBadge;
                 let actionTip = '';
                 if (actionBadge === 'wait') {
-                    const regimeNow = portfolio.lastMarketRegime || 'choppy';
+                    const regimeNow = portfolio.lastMarketRegime?.regime || 'choppy';
                     const bearNow = regimeNow === 'bearish' || regimeNow === 'choppy';
                     const sigId = c._entrySignal?.bestPatternId;
                     if (bearNow && sigId && sigId !== 'reversal') {
