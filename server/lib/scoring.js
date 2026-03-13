@@ -778,7 +778,7 @@ const ENTRY_SIGNAL_PATTERNS = [
             { id: 'pullback', label: 'Pullback', test: c => c.return5d != null && c.return5d >= -8 && c.return5d <= -2 }
         ],
         minMatch: 2,
-        requireAny: ['macd', 'structure']
+        requireAny: ['rsi', 'pullback']
     },
     {
         id: 'momentum_cont',
