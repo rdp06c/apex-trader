@@ -122,7 +122,9 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 - `SIGNAL_COMBO_DEFS` + `evaluateComboHeat()` — tests each stock's current signals against 18 combos, cross-references calibration results to show green dots (hot combos) and red dots (cold combos) in the Heat column. **Heat now directly affects the composite score** via `computeComboHeatBonus()` — hot combos add up to +2.0 each, cold combos subtract up to -2.0 each, net capped at ±6.0. Heat dots filtered by setup type via `SETUP_HEAT_GROUPS`. Requires calibration data to function.
 - Score driver badge (S/M) indicates whether a stock's score is signal-driven or momentum-driven.
 
-**Holdings Health**: Holdings cards show a compact inline stat line (MOM, RS, RSI with mini SVG sparklines showing trajectory, plus MACD, Structure, DTC, CHoCH, Vol, Stop/Target levels) and a footer row (Cost, Now, Entry, News count with tooltip). Sell/profit signals display as a centered badge in the card header. Cards are sortable by Date Added, Total P&L%, Daily Change%, Position Size, or Health (with ascending/descending toggle). Custom themed dropdown replaces native `<select>` for dark mode compatibility.
+**Holdings Health**: Holdings cards show a compact inline stat line (MOM, RS, RSI with mini SVG sparklines showing trajectory, plus MACD, Structure, DTC, CHoCH, Vol, Stop/Target levels) and a footer row (Entry, Cost, Now, S/R, News count with tooltip). Sell/profit signals display as a centered badge in the card header. Cards are sortable by Date Added, Total P&L%, Daily Change%, Position Size, or Health (with ascending/descending toggle). Custom themed dropdown replaces native `<select>` for dark mode compatibility.
+
+**Risk Dashboard** (`updateRiskDashboard`): Table view of all holdings sorted by risk level (danger → caution → healthy). Columns: Symbol, Sig (entry signal badge), Price, P&L%, Stop (ATR-based from trade plan, thesis fallback), Target (ATR-based from trade plan, thesis/fib fallback), R:R (color-coded: green ≥2.0, yellow ≥1.5, red <1.5), S/R (support/resistance levels), Thesis status, MOM (entry→current), RS (entry→current), Structure, RSI (entry→current), MACD, Signals (actionable loss signal count). Trade plan values (`generateTradePlan`) preferred over thesis for Stop/Target — thesis shown in tooltip when overridden.
 
 **Health History Tracking**: Daily health snapshots per holding stored in `holdingTheses[symbol].healthHistory[]`. Seeded at buy time from entry data + caches. Updated daily by server full scan (RS, momentum, RSI, MACD, structure, compositeScore, price). Deduped by date, capped at 120 entries. Powers sparklines on holdings cards and health-over-time charts in journal detail view. Preserved into `closedTrade.exitTechnicals.healthHistory` on sell.
 
@@ -159,8 +161,11 @@ Checks structure on all held positions every 15 minutes during market hours. Can
 - Bearish CHoCH detected → "Bearish CHoCH"
 - Price below stop price (if set in holding thesis) → "Stop Loss Breached"
 - Bearish volume divergence detected → "Volume Divergence"
+- R:R drops below 1.0 → "R:R Deteriorated" (trade plan computed per holding, zero extra API calls)
 
-**Loss signals** (computed per holding, displayed on admin panel): ATR stop, bearish CHoCH, bearish structure, thesis stop breached, RS collapse (>30pt drop), momentum collapse (entry 7+ → now <3), structure flip, volume divergence.
+**Trade plan integration**: Scanner computes `generateTradePlan()` per holding using bars and structure already fetched. Stored in `scanner-state.json` readings as `tradePlan` (R:R, stop, target, support, resistance). Client falls back to scanner trade plan when local bars unavailable.
+
+**Loss signals** (computed per holding, displayed on admin panel): ATR stop, bearish CHoCH, bearish structure, thesis stop breached, RS collapse (>30pt drop), momentum collapse (entry 7+ → now <3), structure flip, volume divergence, R:R deteriorated (<1.0).
 
 **Deduplication:** Same condition for same symbol won't re-alert within 4 hours.
 
@@ -185,7 +190,7 @@ Scoring in `server/lib/scoring.js`: all pure scoring functions adapted to accept
 Available at `/admin` (linked from dashboard header nav). Shows:
 - Server uptime, market status, last scanner run, last full scan, total alerts sent, stocks scored
 - Top scorers from last full scan (symbol, score, price)
-- Scanner readings for each holding (price, structure, RSI, MACD, CHoCH, loss signal count with warnings)
+- Scanner readings for each holding (price, structure, RSI, MACD, R:R color-coded, CHoCH, loss signal count with warnings)
 - Action buttons: "Pull & Restart" (triggers auto-pull.sh), "Run Scanner Now" (structure check), "Run Full Scan" (~540 stock scan)
 - Log viewers: server logs (journalctl), auto-pull logs
 
@@ -255,7 +260,7 @@ Coverage includes: AI/software, semiconductors, cybersecurity, biotech/genomics,
 - Extensive console logging
 - Push to `main` → Pi auto-pulls within 5 min, or use admin panel "Pull & Restart"
 - Server files in `server/` — these run on the Pi only, not in the browser
-- Scoring functions duplicated between `src/trader.js` (browser) and `server/lib/scoring.js` (Node.js) — keep in sync. Includes `evaluateEntrySignals`, `ENTRY_SIGNAL_PATTERNS`, `computeSignalBonus`, and `computeComboHeatBonus`.
+- Scoring functions duplicated between `src/trader.js` (browser) and `server/lib/scoring.js` (Node.js) — keep in sync. Includes `evaluateEntrySignals`, `ENTRY_SIGNAL_PATTERNS`, `computeSignalBonus`, `computeComboHeatBonus`, and `generateTradePlan`.
 - Stock lists duplicated between `src/trader.js` and `server/lib/stocks.js` — keep in sync
 
 ## Scorecard Column Highlighting
