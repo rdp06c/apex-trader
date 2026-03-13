@@ -9277,7 +9277,24 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const rsi = h._rsiVal != null ? Math.round(h._rsiVal) : '—';
                 const rsiEntry = h.entryRSI != null ? Math.round(h.entryRSI) : null;
                 const macd = h._macdResult?.crossover || '—';
-                return { ...h, signals, infoSignals, level, price, stopPrice, stopDist, targetPrice, effectiveTarget, fibTarget, targetDist, structLabel, mom, momEntry, rs, rsEntry, rsi, rsiEntry, macd };
+                const tp = h._tradePlan;
+                const rr = tp?.riskReward ?? null;
+                const tpSupport = tp?.support ?? null;
+                const tpResist = tp?.resistance ?? null;
+                // Prefer trade plan stop/target over thesis (trade plan is live ATR-based)
+                const tpStop = tp?.stop ?? null;
+                const tpTarget = tp?.target ?? null;
+                const enhancedStop = tpStop || stopPrice;
+                let enhancedStopDist = null;
+                if (enhancedStop && price && price > 0) {
+                    enhancedStopDist = ((price - enhancedStop) / price * 100).toFixed(1);
+                }
+                const enhancedTarget = tpTarget || effectiveTarget;
+                let enhancedTargetDist = null;
+                if (enhancedTarget && price && price > 0) {
+                    enhancedTargetDist = ((enhancedTarget - price) / price * 100).toFixed(1);
+                }
+                return { ...h, signals, infoSignals, level, price, stopPrice, stopDist, targetPrice, effectiveTarget, fibTarget, targetDist, structLabel, mom, momEntry, rs, rsEntry, rsi, rsiEntry, macd, rr, tpSupport, tpResist, enhancedStop, enhancedStopDist, enhancedTarget, enhancedTargetDist };
             });
 
             // Sort: danger first, then caution, then healthy
@@ -9299,7 +9316,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             html += '<div class="risk-table-wrap"><table class="risk-table">';
             html += '<thead><tr>';
-            html += '<th>Symbol</th><th>Sig</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>Thesis</th>';
+            html += '<th>Symbol</th><th>Sig</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>R:R</th><th>S/R</th><th>Thesis</th>';
             html += '<th>MOM</th><th>RS</th><th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
             html += '</tr></thead><tbody>';
 
@@ -9310,8 +9327,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const plColor = r.gainLossPercent > 0 ? 'color:#22c55e' :
                     r.gainLossPercent < 0 ? 'color:#ef4444' : '';
 
-                const stopDistDisplay = r.stopPrice != null
-                    ? `<span style="${parseFloat(r.stopDist) < 5 ? 'color:#ef4444' : parseFloat(r.stopDist) < 10 ? 'color:#f59e0b' : 'color:#22c55e'}" title="${r.stopDist}% away">$${r.stopPrice.toFixed(2)}</span>`
+                const stopDistDisplay = r.enhancedStop != null
+                    ? `<span style="${parseFloat(r.enhancedStopDist) < 5 ? 'color:#ef4444' : parseFloat(r.enhancedStopDist) < 10 ? 'color:#f59e0b' : 'color:#22c55e'}" title="${r.enhancedStopDist}% away${r.stopPrice && r.enhancedStop !== r.stopPrice ? ' (thesis: $' + r.stopPrice.toFixed(2) + ')' : ''}">$${r.enhancedStop.toFixed(2)}</span>`
                     : '—';
 
                 const rsiDeltaColor = r.rsiEntry != null && r.rsi !== '—'
@@ -9348,10 +9365,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 html += `<td>$${r.price ? r.price.toFixed(2) : '—'}</td>`;
                 html += `<td style="${plColor}">${r.gainLossPercent != null ? (r.gainLossPercent > 0 ? '+' : '') + r.gainLossPercent.toFixed(1) + '%' : '—'}</td>`;
                 html += `<td>${stopDistDisplay}</td>`;
-                const targetDisplay = r.effectiveTarget != null
-                    ? `<span style="${r.targetDist != null && parseFloat(r.targetDist) <= 2 ? 'color:#22c55e' : ''}" title="${r.targetDist}% away${r.fibTarget ? ' (Fib)' : ''}">$${r.effectiveTarget.toFixed(2)}${r.fibTarget ? ' <span style="opacity:0.5;font-size:0.8em">Fib</span>' : ''}</span>`
+                const targetDisplay = r.enhancedTarget != null
+                    ? `<span style="${r.enhancedTargetDist != null && parseFloat(r.enhancedTargetDist) <= 2 ? 'color:#22c55e' : ''}" title="${r.enhancedTargetDist}% away${r.targetPrice && r.enhancedTarget !== r.targetPrice ? ' (thesis: $' + r.targetPrice.toFixed(2) + ')' : ''}${r.fibTarget ? ' (Fib)' : ''}">$${r.enhancedTarget.toFixed(2)}</span>`
                     : '—';
                 html += `<td>${targetDisplay}</td>`;
+                // R:R cell — color-coded: green >=2.0, yellow >=1.5, red <1.5
+                const rrColor = r.rr != null ? (r.rr >= 2.0 ? 'color:#22c55e' : r.rr >= 1.5 ? 'color:#f59e0b' : 'color:#ef4444') : '';
+                const rrDisplay = r.rr != null ? `<span style="${rrColor};font-weight:600">${r.rr.toFixed(1)}</span>` : '\u2014';
+                html += `<td>${rrDisplay}</td>`;
+                // S/R cell — combined support/resistance
+                const srParts = [];
+                if (r.tpSupport != null) srParts.push('$' + Math.round(r.tpSupport));
+                if (r.tpResist != null) srParts.push('$' + Math.round(r.tpResist));
+                const srDisplay = srParts.length > 0 ? `<span style="font-size:0.85em">${srParts.join('/')}</span>` : '\u2014';
+                html += `<td>${srDisplay}</td>`;
                 const thesisStatus = r._thesisStatus || { status: 'unknown', reasons: [] };
                 const thesisIcon = thesisStatus.status === 'confirmed' ? '\u2713' :
                     thesisStatus.status === 'failed' ? '\u2717' :
@@ -9557,9 +9584,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             ${h._intraday.choch ? '<span class="hc-stat"><span class="hc-stat-lbl">5m CHoCH</span><span class="hc-stat-val ' + (h._intraday.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._intraday.chochType === 'bullish' ? '▲' : '▼') + '</span></span>' : ''}
                         </div>` : ''}
                         <div class="holding-card-footer">
+                            <div><span class="holding-card-footer-label">Entry:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'N/A'}</span></div>
                             <div><span class="holding-card-footer-label">Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
                             <div><span class="holding-card-footer-label">Now:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span></div>
-                            <div><span class="holding-card-footer-label">Entry:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'N/A'}</span></div>
                             ${(() => {
                                 const price = h.stockPrice?.price;
                                 if (!h._struct || !price) return '';
@@ -9831,6 +9858,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const _dtcVal = shortInterestCache[symbol]?.daysToCover;
                     const _struct = _bars && _bars.length >= 5 ? detectStructure(symbol) : null;
 
+                    // Trade plan: R:R, S/R levels — local bars preferred, scanner fallback
+                    const _tradePlan = (() => {
+                        if (!_bars || _bars.length < 20) return _sr?.tradePlan || null;
+                        return generateTradePlan({ symbol, price: stockPrice.price });
+                    })() || _sr?.tradePlan || null;
+
                     const _profitSignals = [];
                     if (_fib?.type === 'bullish' && stockPrice.price >= _fib.fib100) _profitSignals.push('Fib target');
                     if (_rsiVal != null && _rsiVal > 70) _profitSignals.push('RSI overbought');
@@ -9857,6 +9890,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (_thesis?.entryStructure === 'bullish' && _struct?.structure === 'bearish')
                         _allLossSignals.push('Structure flipped');
                     if (daysHeld >= 5 && Math.abs(gainLossPercent) <= 3) _allLossSignals.push('Stale capital');
+                    if (_tradePlan?.riskReward != null && _tradePlan.riskReward < 1.0) _allLossSignals.push('R:R deteriorated');
 
                     const _lossSignals = [];
                     const _infoSignals = [];
@@ -9896,7 +9930,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         positionSizePercent, isPastTimeframe, stockName, stockSector, entryMomentum,
                         entryRS, entryRSI, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
                         _struct, _profitSignals, _lossSignals, _infoSignals, _thesis, _candidateNow, _intraday,
-                        _thesisStatus, _entrySignal, insertionOrder: insertionOrder++
+                        _thesisStatus, _entrySignal, _tradePlan, insertionOrder: insertionOrder++
                     });
                 }
 

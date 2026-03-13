@@ -278,6 +278,7 @@ ${status.fullScan?.topScorers?.length > 0 ? `
                 <span class="struct ${r.structure}">${r.structure}</span>
                 <span class="reading-meta">RSI: ${r.rsi != null ? Math.round(r.rsi) : '—'}</span>
                 <span class="reading-meta">MACD: ${r.macdCrossover === 'bullish' ? '<span class="macd-bull">▲</span>' : r.macdCrossover === 'bearish' ? '<span class="macd-bear">▼</span>' : '—'}</span>
+                ${r.tradePlan?.riskReward != null ? `<span class="reading-meta" style="color:${r.tradePlan.riskReward >= 2.0 ? 'var(--green)' : r.tradePlan.riskReward >= 1.5 ? 'var(--yellow)' : 'var(--red)'};font-weight:600">R:R ${r.tradePlan.riskReward.toFixed(1)}</span>` : ''}
                 ${r.choch ? `<span class="reading-choch">⚠ CHoCH ${r.chochType}</span>` : ''}
                 ${r.lossSignals && r.lossSignals.length > 0 ? `<span class="warning-badge" title="${r.lossSignals.join(', ')}">${r.lossSignals.length} warning${r.lossSignals.length > 1 ? 's' : ''}</span>` : ''}
                 ${r.infoSignals && r.infoSignals.length > 0 ? `<span class="info-badge" title="${r.infoSignals.join(', ')}">${r.infoSignals.length} dampened</span>` : ''}

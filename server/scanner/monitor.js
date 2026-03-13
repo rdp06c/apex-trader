@@ -6,7 +6,7 @@
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
-const { isMarketOpen, detectStructure, calculateRSI, calculateMACD, calculateATR, getATRMultiplier, classifyLossSignal, detectVolumeDivergence, calculateFibTargets } = require('../lib/scoring');
+const { isMarketOpen, detectStructure, calculateRSI, calculateMACD, calculateATR, getATRMultiplier, classifyLossSignal, detectVolumeDivergence, calculateFibTargets, generateTradePlan } = require('../lib/scoring');
 const { fetchBulkSnapshot, fetchGroupedDailyBars, fetchIntradayBars } = require('../lib/fetchers');
 const { sendAlert } = require('./alerts');
 const { runFullScan, getScanStatus, isScanRunning, getScanRunningInfo } = require('./full-scan');
@@ -15,6 +15,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const PORTFOLIO_PATH = path.join(DATA_DIR, 'portfolio.json');
 const STATE_PATH = path.join(DATA_DIR, 'scanner-state.json');
 const ALERT_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours between re-alerts for same condition
+const RR_ALERT_THRESHOLD = 1.0;
 
 function loadPortfolio() {
     try {
@@ -112,6 +113,12 @@ async function runStructureCheck({ force = false } = {}) {
             const atrMult = getATRMultiplier(vixLevel);
             const atrStop = atr && entryPrice ? Math.round((entryPrice - atrMult * atr) * 100) / 100 : null;
 
+            // Compute trade plan (R:R, S/R levels) — zero extra API calls, bars already fetched
+            const tradePlan = generateTradePlan({
+                price, bars, structure: current,
+                vixLevel: vixLevel ?? null
+            });
+
             // Compute loss signals with VIX-aware classification
             const setupType = thesis?.entrySetupType || null;
             const allSignals = [];
@@ -141,6 +148,7 @@ async function runStructureCheck({ force = false } = {}) {
             }
             const holdReturn = thesis?.entryPrice && price ? ((price - thesis.entryPrice) / thesis.entryPrice) * 100 : null;
             if (holdDays >= 5 && holdReturn != null && Math.abs(holdReturn) <= 3) allSignals.push('Stale capital');
+            if (tradePlan?.riskReward != null && tradePlan.riskReward < RR_ALERT_THRESHOLD) allSignals.push('R:R deteriorated');
 
             // Split into actionable vs informational
             const lossSignals = [];
@@ -168,6 +176,7 @@ async function runStructureCheck({ force = false } = {}) {
                 atrMultiplier: atrMult,
                 volumeDivergence: volDiv,
                 fibTargets,
+                tradePlan: tradePlan || null,
                 price,
                 lossSignals,
                 infoSignals,
@@ -237,6 +246,20 @@ async function runStructureCheck({ force = false } = {}) {
                         tags: ['chart_with_downwards_trend']
                     });
                     recordAlert(state, symbol, 'volume-divergence');
+                }
+            }
+
+            // Alert condition 5: R:R deteriorated below threshold
+            if (tradePlan?.riskReward != null && tradePlan.riskReward < RR_ALERT_THRESHOLD) {
+                if (shouldAlert(state, symbol, 'rr-deterioration')) {
+                    alerts.push({
+                        symbol,
+                        condition: 'rr-deterioration',
+                        title: `APEX: ${symbol} R:R Below ${RR_ALERT_THRESHOLD}`,
+                        body: `${symbol} R:R at ${tradePlan.riskReward.toFixed(1)}.\nTarget: $${tradePlan.target} (+${tradePlan.targetPct}%)\nStop: $${tradePlan.stop} (-${tradePlan.stopPct}%)`,
+                        tags: ['warning']
+                    });
+                    recordAlert(state, symbol, 'rr-deterioration');
                 }
             }
         }
