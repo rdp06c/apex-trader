@@ -38,20 +38,36 @@
             },
 
             async save(data) {
-                // Always save to localStorage as local backup
-                localStorage.setItem('aiTradingPortfolio', JSON.stringify(data));
-                if (this._serverAvailable === false) return;
+                const json = JSON.stringify(data);
+
+                // Server save first — it's the primary storage and has no size limit
+                if (this._serverAvailable !== false) {
+                    try {
+                        const headers = { 'Content-Type': 'application/json' };
+                        if (this._etag) headers['If-Match'] = this._etag;
+                        const res = await fetch('/api/portfolio', {
+                            method: 'POST', headers, body: json
+                        });
+                        if (res.ok) {
+                            this._etag = res.headers.get('ETag');
+                            this._serverAvailable = true;
+                        }
+                    } catch (e) { /* server unreachable */ }
+                }
+
+                // localStorage as backup — may fail on quota, don't let it block anything
                 try {
-                    const headers = { 'Content-Type': 'application/json' };
-                    if (this._etag) headers['If-Match'] = this._etag;
-                    const res = await fetch('/api/portfolio', {
-                        method: 'POST', headers, body: JSON.stringify(data)
-                    });
-                    if (res.ok) {
-                        this._etag = res.headers.get('ETag');
-                        this._serverAvailable = true;
-                    }
-                } catch (e) { /* server unreachable — localStorage has the save */ }
+                    localStorage.setItem('aiTradingPortfolio', json);
+                } catch (e) {
+                    console.warn('localStorage quota exceeded — server save is primary, this is non-fatal');
+                    // Try saving a trimmed version (strip large scan data)
+                    try {
+                        const trimmed = JSON.parse(json);
+                        delete trimmed.lastCandidateScores;
+                        localStorage.setItem('aiTradingPortfolio', JSON.stringify(trimmed));
+                        console.log('Saved trimmed portfolio to localStorage (without candidate scores)');
+                    } catch (e2) { /* truly out of space — server has the full data */ }
+                }
             }
         };
 
