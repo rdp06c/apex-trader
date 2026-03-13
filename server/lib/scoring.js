@@ -508,12 +508,14 @@ function generateTradePlan({ price, bars, structure, vixLevel, entrySignalPatter
     if (target <= price * 1.01) target = atrTarget;
 
     // Stop: ATR-based confirmed by structure support
-    // Fallback: if no swing low from structure, use lowest low of last 20 bars
+    // Fallback: if no swing low from structure or swing low is above price,
+    // use lowest low of last 20 bars as approximate support
     let support = structure?.lastSwingLow;
-    if (!support) {
+    if (!support || support >= price) {
         const recentBars = bars.slice(-20);
         const lowestLow = Math.min(...recentBars.map(b => b.l));
         if (lowestLow < price) support = lowestLow;
+        else support = null;
     }
     const atrStop = price - (atr * vixMult);
     let stop = atrStop;

@@ -6518,12 +6518,14 @@
 
             // === STOP ===
             // ATR-based confirmed by structure support
-            // Fallback: if no swing low from structure, use lowest low of last 20 bars
+            // Fallback: if no swing low from structure or swing low is above price,
+            // use lowest low of last 20 bars as approximate support
             let support = struct?.lastSwingLow;
-            if (!support) {
+            if (!support || support >= price) {
                 const recentBars = bars.slice(-20);
                 const lowestLow = Math.min(...recentBars.map(b => b.l));
                 if (lowestLow < price) support = lowestLow;
+                else support = null;
             }
             const atrStop = price - (atr * vixMult);
             let stop = atrStop;
@@ -6789,7 +6791,7 @@
             const hasCalData = plan?.winRate != null;
             const hasHeat = (heat?.hotCount || 0) > 0;
 
-            if (hasSignal && rr != null && rr >= 1.5 && hasCalData && score >= 8) return 'buy';
+            if (hasSignal && rr != null && rr >= 1.5 && hasCalData && plan.winRate > 50 && score >= 8) return 'buy';
             if (hasSignal && rr != null && rr >= 1.0 && score >= 5) return 'setup';
             if (hasSignal && score >= 5) return 'setup';
             if (hasPartial && rr != null && rr >= 1.5) return 'watch';
