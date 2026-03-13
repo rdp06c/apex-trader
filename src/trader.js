@@ -2793,7 +2793,13 @@
 
             // === STOP ===
             // ATR-based confirmed by structure support
-            const support = struct?.lastSwingLow;
+            // Fallback: if no swing low from structure, use lowest low of last 20 bars
+            let support = struct?.lastSwingLow;
+            if (!support) {
+                const recentBars = bars.slice(-20);
+                const lowestLow = Math.min(...recentBars.map(b => b.l));
+                if (lowestLow < price) support = lowestLow;
+            }
             const atrStop = price - (atr * vixMult);
             let stop = atrStop;
             if (support && support < price * 0.995 && support > atrStop) {
@@ -2827,18 +2833,18 @@
             const patternStats = portfolio.calibratedWeights?.entryPatternStats;
             let winRate = null, avgReturn = null, observations = null, calConfidence = null;
 
-            if (patternStats && patId && matchQuality && matchQuality !== 'partial') {
+            if (patternStats && patId && matchQuality) {
                 const tierStats = patternStats[patId]?.[matchQuality];
                 if (tierStats && !tierStats.insufficient) {
                     winRate = +tierStats.winRate10d.toFixed(0);
                     avgReturn = +tierStats.avgReturn10d.toFixed(1);
                     observations = tierStats.n;
-                    calConfidence = matchQuality === 'full' ? 'high' : 'moderate';
+                    calConfidence = matchQuality === 'full' ? 'high' : matchQuality === 'strong' ? 'moderate' : 'low';
                 }
             }
 
             // Fallback to combo data if no pattern stats available (pre-calibration or insufficient)
-            if (winRate == null && matchQuality === 'full') {
+            if (winRate == null && (matchQuality === 'full' || matchQuality === 'strong')) {
                 const rawWinRate = comboData?.winRate10d ?? bestHotCombo?.winRate10d ?? null;
                 if (rawWinRate != null) {
                     winRate = +rawWinRate.toFixed(0);
@@ -3042,6 +3048,27 @@
             }
 
             return Math.round(bestBonus * 10) / 10; // Round to 1 decimal
+        }
+
+        // Synthesize signal quality, R:R, and calibration into a single action verdict.
+        // BUY = strong signal + good R:R + calibrated edge. SETUP = signal present.
+        // WATCH = heat forming or partial signal. null = nothing actionable.
+        function computeActionBadge(candidate) {
+            const sig = candidate._entrySignal;
+            const plan = candidate._tradePlan;
+            const heat = candidate._comboHeat;
+            const rr = plan?.riskReward;
+            const hasSignal = sig?.bestMatch === 'full' || sig?.bestMatch === 'strong';
+            const hasPartial = sig?.bestMatch === 'partial';
+            const hasCalData = plan?.winRate != null;
+            const hasHeat = (heat?.hotCount || 0) > 0;
+
+            if (hasSignal && rr != null && rr >= 1.5 && hasCalData) return 'buy';
+            if (hasSignal && rr != null && rr >= 1.0) return 'setup';
+            if (hasSignal) return 'setup';
+            if (hasPartial && rr != null && rr >= 1.5) return 'watch';
+            if (hasHeat) return 'watch';
+            return null;
         }
 
         // Compute a score bonus from combo heat analysis — integrates calibration
@@ -13867,10 +13894,15 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             if (!data?.candidates?.length) return;
             const signalAdj = getSignalAccuracyAdjustments();
             data.candidates.forEach(c => {
+                // Compute entry signal first — needed to scale heat bonus
+                const entrySignal = evaluateEntrySignals(c);
+                c._entrySignal = entrySignal;
                 // Compute combo heat bonus from calibration data
+                // Scale to 33% when no entry signal present (heat without signal = "forming, not confirmed")
                 const heat = evaluateComboHeat(c);
                 c._comboHeat = heat;
-                const heatBonus = computeComboHeatBonus(heat);
+                const rawHeatBonus = computeComboHeatBonus(heat);
+                const heatBonus = entrySignal?.bestMatch ? rawHeatBonus : Math.round(rawHeatBonus * 0.33 * 10) / 10;
                 const scoreResult = calculateCompositeScore({
                     momentumScore: c.momentum || 0,
                     rsNormalized: ((c.rs || 50) / 100) * 10,
@@ -13955,6 +13987,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 c._comboHeat = evaluateComboHeat(c);
                 c._signalBonus = computeSignalBonus(c._entrySignal, portfolio.calibratedWeights);
                 c._tradePlan = generateTradePlan(c);
+                c._actionBadge = computeActionBadge(c);
             });
 
             if (scorecardState.filterHeld) {
@@ -13996,6 +14029,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
             // Sort
             const sortAccessors = {
+                action: c => { const b = c._actionBadge; return b === 'buy' ? 3 : b === 'setup' ? 2 : b === 'watch' ? 1 : 0; },
                 score: c => (c.compositeScore || 0) + (c._signalBonus || 0),
                 price: c => c.price || 0,
                 day: c => c.dayChange || 0,
@@ -14023,7 +14057,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     return -1;
                 },
                 sig: c => c._entrySignal?.bestMatchCount ?? 0,
-                heat: c => computeComboHeatBonus(c._comboHeat),
+                heat: c => { const raw = computeComboHeatBonus(c._comboHeat); return c._entrySignal?.bestMatch ? raw : Math.round(raw * 0.33 * 10) / 10; },
                 target: c => c._tradePlan?.targetPct ?? 0,
                 stop: c => -(c._tradePlan?.stopPct ?? 0),
                 rr: c => c._tradePlan?.riskReward ?? 0,
@@ -14073,6 +14107,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
             html += '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
                 '<th class="watchlist-col" title="Click star to add/remove from watchlist">★</th><th>#</th><th>Symbol</th>' +
+                sh('action', "Synthesized action: BUY = signal + good R:R + calibration data. SETUP = signal present. WATCH = heat forming or partial signal, no confirmed entry yet.", 'Action') +
                 sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Non-REV gated by calibration.", 'Sig') +
                 sh('heat', "Combo heat from calibration backtesting. Green dots = hot combos, red dots = cold combos. Number = weighted net edge vs baseline. Positive = historically outperforms, negative = underperforms.", 'Heat') +
                 sh('score', "Composite score from weighted signals + calibration heat bonus + entry signal bonus. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
@@ -14248,12 +14283,14 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         // Show the actual score bonus from these combos (matches what goes into compositeScore)
                         const filteredHeatResult = { hotCombos: filteredHot, coldCombos: filteredCold };
                         const filteredBonus = computeComboHeatBonus(filteredHeatResult);
+                        const hasSignalForHeat = c._entrySignal?.bestMatch;
+                        const scaledBonus = hasSignalForHeat ? filteredBonus : Math.round(filteredBonus * 0.33 * 10) / 10;
                         const tipParts = [];
-                        tipParts.push(`Score impact: ${filteredBonus >= 0 ? '+' : ''}${filteredBonus.toFixed(1)} pts from ${filteredHot.length + filteredCold.length} combo(s)`);
+                        tipParts.push(`Score impact: ${scaledBonus >= 0 ? '+' : ''}${scaledBonus.toFixed(1)} pts from ${filteredHot.length + filteredCold.length} combo(s)${!hasSignalForHeat && filteredBonus !== 0 ? ' (×0.33 no signal)' : ''}`);
                         filteredHot.forEach(h => tipParts.push(`🟢 ${h.label}: +${h.vsBaseline.toFixed(1)}% edge, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
                         filteredCold.forEach(h => tipParts.push(`🔴 ${h.label}: ${h.vsBaseline.toFixed(1)}% edge, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
-                        const netColor = filteredBonus > 0 ? 'var(--green)' : filteredBonus < 0 ? 'var(--red)' : 'var(--text-muted)';
-                        const netLabel = (filteredBonus >= 0 ? '+' : '') + filteredBonus.toFixed(1);
+                        const netColor = scaledBonus > 0 ? 'var(--green)' : scaledBonus < 0 ? 'var(--red)' : 'var(--text-muted)';
+                        const netLabel = (scaledBonus >= 0 ? '+' : '') + scaledBonus.toFixed(1);
                         heatCell = `<span class="heat-dots" title="${tipParts.join('\n')}">${dots.join('')}<span class="heat-net" style="color:${netColor}">${netLabel}</span></span>`;
                     }
                 }
@@ -14266,16 +14303,6 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         ? '<span class="score-driver mom" title="Score driven by momentum/RS">M</span>'
                         : '<span class="score-driver sig" title="Score driven by reversal signals">S</span>';
                 }
-
-                // Convergence: count independent confirming signals
-                const convergence = (
-                    (c._entrySignal?.bestMatch === 'full' || c._entrySignal?.bestMatch === 'strong' ? 1 : 0) + // Entry signal (GREEN or YELLOW)
-                    (computeComboHeatBonus(c._comboHeat) > 0 ? 1 : 0) + // Positive heat (calibration confirms)
-                    (bd && score > 0 && ((bd.momentumContrib || 0) + (bd.rsContrib || 0)) <= score * 0.5 ? 1 : 0) + // S-driven score
-                    (c.sectorFlow === 'inflow' || c.sectorFlow === 'modest-inflow' ? 1 : 0) // Sector tailwind
-                );
-                const convergenceClass = convergence >= 4 ? 'convergence-gold' : convergence >= 3 ? 'convergence-teal' : '';
-                const convergenceTitle = convergence >= 3 ? `${convergence}/4 signals converging: ${c._entrySignal?.bestMatch === 'full' || c._entrySignal?.bestMatch === 'strong' ? '✓' : '✗'} Signal, ${computeComboHeatBonus(c._comboHeat) > 0 ? '✓' : '✗'} Heat, ${bd && score > 0 && ((bd.momentumContrib || 0) + (bd.rsContrib || 0)) <= score * 0.5 ? '✓' : '✗'} S-driven, ${c.sectorFlow === 'inflow' || c.sectorFlow === 'modest-inflow' ? '✓' : '✗'} Sector` : '';
 
                 // Trade plan cells
                 const plan = c._tradePlan;
@@ -14303,10 +14330,15 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
                 const globalRank = start + i + 1;
                 const watched = watchlistSet.has(c.symbol);
+                const actionBadge = c._actionBadge;
+                const actionBadgeHtml = actionBadge
+                    ? `<span class="action-badge action-${actionBadge}">${actionBadge.toUpperCase()}</span>`
+                    : '';
                 html += `<tr data-symbol="${c.symbol}" class="expandable" onclick="scorecardTogglePlan('${c.symbol}')">
                     <td class="watchlist-star ${watched ? 'watched' : ''}" onclick="event.stopPropagation();toggleWatchlistSymbol('${c.symbol}')" title="${watched ? 'Remove from watchlist' : 'Add to watchlist'}">${watched ? '★' : '☆'}</td>
-                    <td class="scorecard-rank ${convergenceClass}"${convergenceTitle ? ` title="${convergenceTitle}"` : ''}>${globalRank}</td>
+                    <td class="scorecard-rank">${globalRank}</td>
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
+                    <td>${actionBadgeHtml}</td>
                     <td>${sigBadge}</td>
                     <td>${heatCell}</td>
                     <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span>${driverBadge}</div></td>
@@ -14349,7 +14381,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     planHtml += `<div class="tp-item"><span class="tp-label">Avg 10D Return${confLabel}</span><span class="tp-value ${plan.avgReturn != null ? (plan.avgReturn > 0 ? 'green' : 'red') : 'muted'}">${plan.avgReturn != null ? (plan.avgReturn > 0 ? '+' : '') + plan.avgReturn + '%' : '--'}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">Observations</span><span class="tp-value muted">${plan.observations != null ? plan.observations.toLocaleString() : '--'}</span></div>`;
                     planHtml += `</div>`;
-                    html += `<tr class="trade-plan-row hidden" data-plan-for="${c.symbol}"><td colspan="21">${planHtml}</td></tr>`;
+                    html += `<tr class="trade-plan-row hidden" data-plan-for="${c.symbol}"><td colspan="22">${planHtml}</td></tr>`;
                 }
             });
 
@@ -14382,7 +14414,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 return eb - ea;
             });
             const setupRankings = setups.map(s => `${s.badge} ${s.label}${fmtEdge(getEdge(s.key))}`).join(' · ');
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Rank: <span style="color:#00d4aa;font-weight:700">3</span> = 3 converging / <span style="color:#f59e0b;font-weight:700">4</span> = 4 converging</span></div>`;
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Action: <span class="action-badge action-buy" style="display:inline">BUY</span> signal+R:R+cal · <span class="action-badge action-setup" style="display:inline">SETUP</span> signal · <span class="action-badge action-watch" style="display:inline">WATCH</span> forming</span></div>`;
             container.innerHTML = html;
         }
 

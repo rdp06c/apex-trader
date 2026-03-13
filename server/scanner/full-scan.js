@@ -222,8 +222,23 @@ async function runFullScan({ force = false } = {}) {
                 adx: adxResult?.adx ?? null,
                 higherLowCount: hlResult?.count ?? 0
             };
+            // Compute entry signal first — needed to scale heat bonus
+            const entrySignal = evaluateEntrySignals({
+                macdCrossover: macd?.crossover || 'none', rsi,
+                structure: structure.structure, structureScore: structure.structureScore,
+                return5d: momentum.totalReturn5d ?? null,
+                momentum: momentum.score, momentumScore: momentum.score,
+                rs: rs.rsScore, volumeTrend: momentum.volumeTrend,
+                volumeRatio: volRatio?.ratio ?? null,
+                dayChange: priceData.changePercent,
+                isAccelerating: momentum.isAccelerating,
+                daysToCover, sectorFlow,
+                smaCrossover: smaCrossover?.crossover || 'none'
+            });
             const comboHeat = evaluateComboHeat(heatCandidate, comboResults);
-            const heatBonus = computeComboHeatBonus(comboHeat);
+            // Scale heat to 33% when no entry signal (heat without signal = "forming, not confirmed")
+            const rawHeatBonus = computeComboHeatBonus(comboHeat);
+            const heatBonus = entrySignal?.bestMatch ? rawHeatBonus : Math.round(rawHeatBonus * 0.33 * 10) / 10;
 
             // Composite score
             const score = calculateCompositeScore({
@@ -289,7 +304,7 @@ async function runFullScan({ force = false } = {}) {
                 serverRsi: si.serverRsi ?? null,
                 serverMacd: si.serverMacd ?? null,
                 serverSma50: si.serverSma50 ?? null,
-                entrySignal: evaluateEntrySignals({ macdCrossover: macd?.crossover || 'none', rsi, structure: structure.structure, structureScore: structure.structureScore, return5d: momentum.totalReturn5d ?? null, momentum: momentum.score, momentumScore: momentum.score, rs: rs.rsScore, volumeTrend: momentum.volumeTrend, volumeRatio: volRatio?.ratio ?? null, dayChange: priceData.changePercent, isAccelerating: momentum.isAccelerating, daysToCover, sectorFlow, smaCrossover: smaCrossover?.crossover || 'none' }),
+                entrySignal,
                 vcr: vcrResult?.vcr ?? null,
                 rangePosition: rangePosResult?.rangePos ?? null,
                 adx: adxResult?.adx ?? null,

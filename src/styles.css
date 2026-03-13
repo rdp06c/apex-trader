@@ -2671,14 +2671,6 @@
             font-weight: 600;
             width: 30px;
         }
-        .scorecard-rank.convergence-teal {
-            color: #00d4aa;
-            text-shadow: 0 0 6px rgba(0, 212, 170, 0.4);
-        }
-        .scorecard-rank.convergence-gold {
-            color: #f59e0b;
-            text-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
-        }
 
         .scorecard-symbol {
             font-weight: 700;
@@ -2707,6 +2699,18 @@
         .entry-badge.strong { background: var(--yellow); color: #000; }
         .entry-badge.partial { background: rgba(255,255,255,0.1); color: var(--text-muted); }
         .entry-badge.avoid { background: var(--red); color: #fff; }
+
+        .action-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7em;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        .action-badge.action-buy { background: var(--green); color: #000; }
+        .action-badge.action-setup { background: var(--yellow); color: #000; }
+        .action-badge.action-watch { background: rgba(255,255,255,0.1); color: var(--text-muted); }
 
         .heat-dots { display: inline-flex; gap: 3px; align-items: center; cursor: help; }
         .heat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
