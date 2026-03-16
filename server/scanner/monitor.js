@@ -147,7 +147,7 @@ async function runStructureCheck({ force = false } = {}) {
                 }
             }
             const holdReturn = thesis?.entryPrice && price ? ((price - thesis.entryPrice) / thesis.entryPrice) * 100 : null;
-            if (holdDays >= 5 && holdReturn != null && Math.abs(holdReturn) <= 3) allSignals.push('Stale capital');
+            if (holdDays >= 10 && holdReturn != null && Math.abs(holdReturn) <= 3) allSignals.push('Stale capital');
             if (tradePlan?.riskReward != null && tradePlan.riskReward < RR_ALERT_THRESHOLD) allSignals.push('R:R deteriorated');
 
             // Split into actionable vs informational

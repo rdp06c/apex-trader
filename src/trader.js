@@ -10194,7 +10194,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         _allLossSignals.push(`Mom ${_thesis.entryMomentum.toFixed(1)}\u2192${_candidateNow.momentum.toFixed(1)}`);
                     if (_thesis?.entryStructure === 'bullish' && _struct?.structure === 'bearish')
                         _allLossSignals.push('Structure flipped');
-                    if (daysHeld >= 5 && Math.abs(gainLossPercent) <= 3) _allLossSignals.push('Stale capital');
+                    if (daysHeld >= 10 && Math.abs(gainLossPercent) <= 3) _allLossSignals.push('Stale capital');
                     if (_tradePlan?.riskReward != null && _tradePlan.riskReward < 1.0) _allLossSignals.push('R:R deteriorated');
 
                     const _lossSignals = [];
@@ -13859,7 +13859,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     signals.push(`MOM collapse ${thesis.entryMomentum.toFixed(1)}->${candidate.momentum.toFixed(1)}`);
                 if (thesis?.entryStructure === 'bullish' && candidate?.structure === 'bearish')
                     signals.push('Structure flipped bull->bear');
-                if (daysHeld !== '?' && daysHeld >= 5 && pnlPct !== '?' && Math.abs(parseFloat(pnlPct)) <= 3)
+                if (daysHeld !== '?' && daysHeld >= 10 && pnlPct !== '?' && Math.abs(parseFloat(pnlPct)) <= 3)
                     signals.push('Stale capital');
 
                 let line = `${sym}: ${shares}sh @$${avgCost.toFixed(2)} now $${curPrice.toFixed(2)} (${pnlPct}%) day:${dayChg}% ${daysHeld}d`;
