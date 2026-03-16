@@ -2926,6 +2926,8 @@
         .scorecard-table td.sig-green { color: var(--green); }
         .scorecard-table td.sig-red { color: var(--red); }
         .scorecard-table td.sig-warn { color: var(--yellow); }
+        .scorecard-table td.sector-modest-inflow { color: var(--green); opacity: 0.6; }
+        .scorecard-table td.sector-modest-outflow { color: var(--red); opacity: 0.6; }
         .dtc-squeeze { color: var(--accent); font-weight: 700; }
         .dtc-elevated { color: var(--yellow); }
         .scorecard-table td.dtc-squeeze { color: var(--accent); font-weight: 700; }

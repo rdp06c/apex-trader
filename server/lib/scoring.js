@@ -960,6 +960,9 @@ function computeSignalBonus(entrySignal, calibratedWeights) {
     for (const pat of entrySignal.patterns) {
         if (!pat.match || pat.antiPattern) continue;
 
+        // Only REV gets a signal bonus — other patterns show negative calibration edge (as of Mar 2026)
+        if (pat.id !== 'reversal') continue;
+
         let edge = null;
         const key = pat.calibrationKey || (pat.id === 'reversal' ? 'rsi_low_structure_bull' : null);
         if (key && combos) {

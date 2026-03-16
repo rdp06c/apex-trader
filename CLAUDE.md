@@ -1,6 +1,6 @@
 # APEX – Scorecard-Guided Manual Trading Dashboard
 
-APEX is a single-page trading dashboard that screens ~540 stocks across 14 sectors, scores them with a composite scoring engine, and surfaces actionable signals via a candidate scorecard. The user makes all buy/sell decisions manually, guided by the scorecard and trade insights. Uses Massive (formerly Polygon.io) for market data. No framework. No cash/budget concept — portfolio return is based on cost basis of invested capital.
+APEX is a single-page trading dashboard that screens ~1020 stocks across 14 sectors, scores them with a composite scoring engine, and surfaces actionable signals via a candidate scorecard. The user makes all buy/sell decisions manually, guided by the scorecard and trade insights. Uses Massive (formerly Polygon.io) for market data. No framework. No cash/budget concept — portfolio return is based on cost basis of invested capital.
 
 ## Project Structure
 
@@ -22,7 +22,7 @@ server/
     stocks.js       ← Shared stock universe (stockNames, stockSectors, getAllSymbols)
   scanner/
     monitor.js      ← Background scanner + full scan scheduler
-    full-scan.js    ← Full market scan orchestrator (~540 stocks)
+    full-scan.js    ← Full market scan orchestrator (~1020 stocks)
     alerts.js       ← ntfy.sh alert integration
   data/
     portfolio.json  ← Server-side portfolio storage (gitignored)
@@ -49,7 +49,7 @@ Raspberry Pi (Express server, port 4000)
 ├── Static files (index.html)   ← Built dashboard
 ├── Background scanner (cron)   ← Structure monitoring every 15 min
 │   ├── ntfy.sh alerts          ← Push notifications on breakdown
-│   └── Full market scan        ← Scores ~540 stocks at 9:35 AM + 12:30 PM ET
+│   └── Full market scan        ← Scores ~1020 stocks at 9:35 AM + 12:30 PM ET
 ├── Cloudflare Tunnel           ← Remote access (trycloudflare.com URL)
 ├── Auto-pull (cron)            ← Pulls from GitHub main every 5 min
 └── Basic auth                  ← Password protection via .env
@@ -79,7 +79,7 @@ Browser (index.html)
 
 ## Core Workflow
 
-1. **Scan Market** — fetches prices, ~65-day OHLCV bars, ticker details, short interest, server indicators (RSI, MACD, SMA50), VIX for ~540 stocks across 14 sectors. Populates all caches. Server indicators fetched for ALL stocks (no cap). Auto-refreshes UI (holding cards, portfolio metrics) on completion — no manual "Refresh Prices" needed.
+1. **Scan Market** — fetches prices, ~65-day OHLCV bars, ticker details, short interest, server indicators (RSI, MACD, SMA50), VIX for ~1020 stocks across 14 sectors. Populates all caches. Server indicators fetched for ALL stocks (no cap). Auto-refreshes UI (holding cards, portfolio metrics) on completion — no manual "Refresh Prices" needed.
 2. **Score** — `calculateCompositeScore` produces weighted sum of core components (momentum ×0.3, RS ×0.6, structure ×1.25, RSI, MACD, sector flow, SMA, volume) + calibration combo heat bonus (±6.0 max, from hot/cold combos). Noise components zeroed (accel, consistency, FVG). Pullback mega-bonus removed (was +5 and 1.15× multiplier). Then `computeSignalBonus` adds a calibration-driven bonus for stocks matching entry signal patterns (GREEN full match gets full bonus scaled by edge ×1.5, capped at 10.0; YELLOW gets 35%). Calibration-backed sources (heat + signal) contribute ~43% of max score.
 3. **Candidate Scorecard** — expanded by default. Full universe displayed with sortable, color-coded columns: Sig (entry signal badge), Heat (combo heat dots), Score, Price, Day%, 5D, MOM, VOL, RS, RSI, MACD, Structure, DTC, Sector, MCap. All columns sortable (click header to toggle asc/desc). Setup filter dropdown (All Setups / Any Signal / REV / MOM / QMO / SQZ / LDR / AVOID). Sector filter dropdown. Paginated (40 per page).
 4. **Manual Trade** — user enters buy/sell via modal. Same-day trades auto-capture all live signals from caches (run Scan Market first for richest data).
@@ -115,10 +115,10 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 
 **Market Structure** (`detectStructure`): ICT/SMC analysis — swing highs/lows, CHoCH, BOS, liquidity sweeps, FVGs on ~65-day bars. Only takes `symbol` param, reads from `multiDayCache[symbol]`.
 
-**Calibration Engine** (`runCalibrationSweep`): Sweeps 40 historical dates, runs full pipeline, correlates scoring components with forward returns, derives calibrated weights with shrinkage. Regime-segmented. Out-of-sample validated. Chat command: `calibrate`. Also runs signal combo analysis (`analyzeSignalCombos`) — tests 18 curated signal combinations against ~21K observations to discover which combos predict positive/negative 10-day forward returns vs baseline.
+**Calibration Engine** (`runCalibrationSweep`): Sweeps 80 historical dates, runs full pipeline, correlates scoring components with forward returns, derives calibrated weights with shrinkage. Regime-segmented. Out-of-sample validated. Chat command: `calibrate`. Also runs signal combo analysis (`analyzeSignalCombos`) — tests 18 curated signal combinations against historical observations to discover which combos predict positive/negative 10-day forward returns vs baseline.
 
 **Entry Signals & Combo Heat**: Two complementary scorecard systems:
-- `ENTRY_SIGNAL_PATTERNS` + `evaluateEntrySignals()` — 6 data-driven patterns: REV (reversal), MOM (momentum continuation), QMO (quiet momentum — highest calibrated edge at +18%), SQZ (squeeze), LDR (sector leader), AVOID (exhausted runner anti-pattern). Non-REV patterns are gated by calibration (n≥100, positive edge). GREEN = all criteria met, YELLOW = one miss, GRAY = minimum met, RED = avoid. `computeSignalBonus()` bridges signals into the score — GREEN/YELLOW matches boost composite score scaled by calibration edge.
+- `ENTRY_SIGNAL_PATTERNS` + `evaluateEntrySignals()` — 6 data-driven patterns: REV (reversal), MOM (momentum continuation), QMO (quiet momentum), SQZ (squeeze), LDR (sector leader), AVOID (exhausted runner anti-pattern). Non-REV patterns are gated by calibration (n≥100, positive edge). GREEN = all criteria met, YELLOW = one miss, GRAY = minimum met, RED = avoid. `computeSignalBonus()` bridges signals into the score — GREEN/YELLOW matches boost composite score scaled by calibration edge. **As of March 2026 calibration, REV is the only pattern showing positive edge.** Other patterns (MOM, QMO, SQZ, LDR) are currently showing negative or flat calibration results.
 - `SIGNAL_COMBO_DEFS` + `evaluateComboHeat()` — tests each stock's current signals against 18 combos, cross-references calibration results to show green dots (hot combos) and red dots (cold combos) in the Heat column. **Heat now directly affects the composite score** via `computeComboHeatBonus()` — hot combos add up to +2.0 each, cold combos subtract up to -2.0 each, net capped at ±6.0. Heat dots filtered by setup type via `SETUP_HEAT_GROUPS`. Requires calibration data to function.
 - Score driver badge (S/M) indicates whether a stock's score is signal-driven or momentum-driven.
 
@@ -170,13 +170,13 @@ Checks structure on all held positions every 15 minutes during market hours. Can
 **Deduplication:** Same condition for same symbol won't re-alert within 4 hours.
 
 ### Full Market Scan
-Runs the complete scoring pipeline on all ~540 stocks server-side. Scheduled at **9:35 AM ET** (5 min after open) and **12:30 PM ET** (midday update). Can also be triggered from the admin panel via "Run Full Scan" button.
+Runs the complete scoring pipeline on all ~1020 stocks server-side. Scheduled at **9:35 AM ET** (5 min after open) and **12:30 PM ET** (midday update). Can also be triggered from the admin panel via "Run Full Scan" button.
 
 **Pipeline:** Fetches bulk snapshots, ~65-day grouped daily bars (80 API calls), server indicators (RSI/MACD/SMA50), ticker details, short interest, VIX → computes momentum, RS, structure, sector rotation, composite score for every stock → saves results to `portfolio.json` as `lastCandidateScores`.
 
 **Browser integration:** The browser's Candidate Scorecard automatically picks up server scan results on next portfolio load. A "server scan" tag appears in the scorecard header when displaying server-generated data. Manual browser scans still work independently and override the server data.
 
-**Resource impact:** ~80 grouped daily API calls + ~540×3 indicator calls + ~540 ticker detail calls. Takes 2-5 minutes on the Pi. Sends ntfy notification with top 5 scorers on completion.
+**Resource impact:** ~21 grouped daily bar API calls + ~1020×3 indicator calls + ~1020 ticker detail calls. Takes 5-10 minutes on the Pi. Sends ntfy notification with top 5 scorers on completion.
 
 **Alert delivery:** POST to ntfy.sh topic (configured via `NTFY_TOPIC` in `.env`).
 
@@ -244,13 +244,13 @@ The codebase still contains the two-phase AI analysis system (`runAIAnalysis`, P
 
 ## Stock Universe
 
-~540 stocks across 14 sectors: Technology, Automotive, Financial, Healthcare, Consumer, Energy, Industrials, Real Estate, Materials, Defense, Space, Crypto, Index Fund. **Four** lists must stay in sync when adding/removing stocks:
+~1020 stocks across 14 sectors: Technology (183), Consumer (159), Industrials (129), Financial (126), Healthcare (110), Energy (90), Materials (77), Real Estate (71), Defense (32), Automotive (23), Crypto (12), Space (8), Index Fund (4). Full S&P 500 coverage plus quality mid-caps. **Four** lists must stay in sync when adding/removing stocks:
 1. `stockNames` in `src/trader.js` — display names
 2. `stockSectors` in `src/trader.js` — sector classification
 3. `screenStocks()` in `src/trader.js` — scan list (sector-grouped arrays, deduplicated)
 4. `server/lib/stocks.js` — server-side mirror (stockNames, stockSectors, getAllSymbols)
 
-Coverage includes: AI/software, semiconductors, cybersecurity, biotech/genomics, digital health, EV/auto, fintech/payments, crypto-adjacent, space/satellite, drones/eVTOL, infrastructure/data center, materials/mining, defense contractors, REITs, and more.
+Coverage includes: full S&P 500, AI/software, semiconductors, cybersecurity, biotech/genomics, digital health, EV/auto, fintech/payments, crypto-adjacent, space/satellite, drones/eVTOL, infrastructure/data center, materials/mining, defense contractors, REITs, consumer staples, utilities, insurance, asset managers, and quality mid-caps across all sectors.
 
 ## Development Notes
 

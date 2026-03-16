@@ -2939,6 +2939,8 @@
         .scorecard-table td.sig-green { color: var(--green); }
         .scorecard-table td.sig-red { color: var(--red); }
         .scorecard-table td.sig-warn { color: var(--yellow); }
+        .scorecard-table td.sector-modest-inflow { color: var(--green); opacity: 0.6; }
+        .scorecard-table td.sector-modest-outflow { color: var(--red); opacity: 0.6; }
         .dtc-squeeze { color: var(--accent); font-weight: 700; }
         .dtc-elevated { color: var(--yellow); }
         .scorecard-table td.dtc-squeeze { color: var(--accent); font-weight: 700; }
@@ -3991,6 +3993,30 @@
             // Cybersecurity
             'FTNT': 'Fortinet', 'TENB': 'Tenable', 'QLYS': 'Qualys',
             'RPD': 'Rapid7', 'VRNS': 'Varonis Systems',
+            // S&P 500 Technology additions
+            'ACN': 'Accenture', 'ADSK': 'Autodesk', 'ANET': 'Arista Networks', 'CSCO': 'Cisco',
+            'CTSH': 'Cognizant', 'EPAM': 'EPAM Systems', 'FFIV': 'F5 Networks', 'FICO': 'Fair Isaac',
+            'GDDY': 'GoDaddy', 'GEN': 'Gen Digital', 'GLW': 'Corning', 'HPE': 'HP Enterprise',
+            'JBL': 'Jabil', 'KEYS': 'Keysight Technologies', 'MSI': 'Motorola Solutions',
+            'PAYC': 'Paycom', 'PTC': 'PTC Inc.', 'TEL': 'TE Connectivity', 'TER': 'Teradyne',
+            'TRMB': 'Trimble', 'TTD': 'Trade Desk', 'TYL': 'Tyler Technologies',
+            'VRSN': 'VeriSign', 'ZBRA': 'Zebra Technologies', 'CDW': 'CDW Corp.',
+            'AKAM': 'Akamai', 'CIEN': 'Ciena', 'CSGP': 'CoStar Group', 'NDSN': 'Nordson',
+            'TDY': 'Teledyne Technologies',
+            'GRMN': 'Garmin', 'IT': 'Gartner', 'CHTR': 'Charter Communications',
+            // Technology - Gaming/Media
+            'EA': 'Electronic Arts', 'TTWO': 'Take-Two Interactive', 'FOX': 'Fox Corp Class B',
+            'MTCH': 'Match Group',
+            // Mid-cap Technology additions
+            'CRDO': 'Credo Technology', 'RMBS': 'Rambus', 'LSCC': 'Lattice Semiconductor',
+            'MTSI': 'MACOM Technology', 'DIOD': 'Diodes Inc.', 'NTNX': 'Nutanix',
+            'CYBR': 'CyberArk', 'VRNT': 'Verint', 'ASAN': 'Asana', 'SQSP': 'Squarespace',
+            'FIVN': 'Five9', 'RBRK': 'Rubrik', 'ZI': 'ZoomInfo', 'DT': 'Dynatrace',
+            'TWLO': 'Twilio', 'DBX': 'Dropbox', 'BOX': 'Box Inc.', 'JAMF': 'Jamf',
+            'YOU': 'Clear Secure', 'SMTC': 'Semtech', 'CALX': 'Calix', 'PI': 'Impinj',
+            'MANH': 'Manhattan Associates', 'GWRE': 'Guidewire', 'WK': 'Workiva',
+            'ALTR': 'Altair Engineering', 'BSY': 'Bentley Systems', 'AZPN': 'Aspen Technology',
+            'APPF': 'AppFolio', 'PCTY': 'Paylocity',
 
             // Tech - Hardware/Semiconductors
             'AAPL': 'Apple', 'QCOM': 'Qualcomm', 'INTC': 'Intel', 'MU': 'Micron Technology',
@@ -4034,6 +4060,36 @@
             'WRB': 'Berkley', 'CB': 'Chubb', 'TRV': 'Travelers', 'ALL': 'Allstate',
             'PGR': 'Progressive', 'AIG': 'AIG', 'MET': 'MetLife', 'PRU': 'Prudential',
             'RKT': 'Rocket Companies',
+            // S&P 500 Financial additions
+            'SPGI': 'S&P Global', 'ICE': 'Intercontinental Exchange', 'CME': 'CME Group',
+            'MCO': "Moody's", 'MSCI': 'MSCI Inc.', 'NDAQ': 'Nasdaq Inc.',
+            'AON': 'Aon', 'AJG': 'Arthur J. Gallagher', 'ACGL': 'Arch Capital',
+            'AFL': 'Aflac', 'CINF': 'Cincinnati Financial', 'BRO': 'Brown & Brown',
+            'GL': 'Globe Life', 'ERIE': 'Erie Indemnity', 'EG': 'Everest Group',
+            'BRK.B': 'Berkshire Hathaway', 'BX': 'Blackstone', 'KKR': 'KKR & Co.',
+            'APO': 'Apollo Global', 'ARES': 'Ares Management', 'IBKR': 'Interactive Brokers',
+            'PFG': 'Principal Financial', 'L': 'Loews', 'BEN': 'Franklin Templeton',
+            'IVZ': 'Invesco', 'SYF': 'Synchrony Financial', 'CBOE': 'Cboe Global Markets',
+            'RJF': 'Raymond James', 'AMP': 'Ameriprise', 'TROW': 'T. Rowe Price',
+            'FISV': 'Fiserv', 'HIG': 'Hartford Financial', 'CPAY': 'Corpay',
+            'AIZ': 'Assurant', 'JKHY': 'Jack Henry & Associates',
+            'CBRE': 'CBRE Group', 'FDS': 'FactSet Research', 'VRSK': 'Verisk Analytics',
+            'WTW': 'Willis Towers Watson', 'EFX': 'Equifax',
+            // Mid-cap Financial additions
+            'WAL': 'Western Alliance', 'EWBC': 'East West Bancshares', 'CMA': 'Comerica',
+            'FNB': 'F.N.B. Corp.', 'WTFC': 'Wintrust', 'PNFP': 'Pinnacle Financial',
+            'SSB': 'SouthState', 'BOKF': 'BOK Financial', 'GBCI': 'Glacier Bancorp',
+            'NYCB': 'New York Community Bancorp', 'OZK': 'Bank OZK',
+            'SBCF': 'Seacoast Banking', 'UMBF': 'UMB Financial',
+            'FCNCA': 'First Citizens Bancshares', 'FNF': 'Fidelity National Financial',
+            'FAF': 'First American Financial', 'ESNT': 'Essent Group',
+            'RDN': 'Radian Group', 'KNSL': 'Kinsale Capital', 'RLI': 'RLI Corp.',
+            'ORI': 'Old Republic', 'THG': 'Hanover Insurance',
+            'AFG': 'American Financial Group', 'RYAN': 'Ryan Specialty',
+            'JEF': 'Jefferies', 'EVR': 'Evercore', 'PJT': 'PJT Partners',
+            'HLI': 'Houlihan Lokey', 'LPLA': 'LPL Financial', 'PIPR': 'Piper Sandler',
+            'SF': 'Stifel Financial', 'MKTX': 'MarketAxess', 'VIRT': 'Virtu Financial',
+            'TW': 'Tradeweb Markets',
             // Payments/Fintech
             'FOUR': 'Shift4 Payments', 'PAYO': 'Payoneer', 'DLO': 'DLocal',
             'RELY': 'Remitly', 'FLYW': 'Flywire',
@@ -4070,6 +4126,29 @@
             'DNA': 'Ginkgo Bioworks', 'FATE': 'Fate Therapeutics',
             // Digital Health
             'HIMS': 'Hims & Hers', 'DOCS': 'Doximity', 'OSCR': 'Oscar Health',
+            'ZTS': 'Zoetis', 'WAT': 'Waters Corp.',
+            // S&P 500 Healthcare additions
+            'MRK': 'Merck', 'A': 'Agilent Technologies', 'IQV': 'IQVIA',
+            'GEHC': 'GE HealthCare', 'HOLX': 'Hologic', 'DXCM': 'DexCom',
+            'IDXX': 'IDEXX Labs', 'PODD': 'Insulet', 'ALGN': 'Align Technology',
+            'EW': 'Edwards Lifesciences', 'COO': 'CooperCompanies',
+            'MTD': 'Mettler-Toledo', 'WST': 'West Pharma', 'TECH': 'Bio-Techne',
+            'CNC': 'Centene', 'MOH': 'Molina Healthcare', 'COR': 'Cencora',
+            'CAH': 'Cardinal Health', 'MCK': 'McKesson', 'VTRS': 'Viatris',
+            'LH': 'LabCorp', 'DGX': 'Quest Diagnostics', 'RMD': 'ResMed',
+            'ELV': 'Elevance Health', 'STE': 'Steris', 'HSIC': 'Henry Schein',
+            'UHS': 'Universal Health', 'CRL': 'Charles River Labs', 'RVTY': 'Revvity',
+            'SOLV': 'Solventum',
+            // Mid-cap Healthcare additions
+            'NVCR': 'NovoCure', 'GKOS': 'Glaukos', 'NVST': 'Envista',
+            'XRAY': 'Dentsply Sirona', 'TFX': 'Teleflex', 'MMSI': 'Merit Medical',
+            'PEN': 'Penumbra', 'LNTH': 'Lantheus', 'AZTA': 'Azenta',
+            'NEOG': 'Neogen', 'PRCT': 'PROCEPT BioRobotics', 'IRTC': 'iRhythm',
+            'HALO': 'Halozyme', 'INSM': 'Insmed', 'RARE': 'Ultragenyx',
+            'PTCT': 'PTC Therapeutics', 'ARWR': 'Arrowhead Pharma',
+            'FOLD': 'Amicus Therapeutics', 'MYGN': 'Myriad Genetics',
+            'GH': 'Guardant Health', 'NTRA': 'Natera', 'SDGR': 'Schrodinger',
+            'VERA': 'Vera Therapeutics',
 
             // Consumer
             'AMZN': 'Amazon', 'WMT': 'Walmart', 'COST': 'Costco', 'TGT': 'Target',
@@ -4078,6 +4157,7 @@
             'KO': 'Coca-Cola', 'PEP': 'PepsiCo',
             'CMG': 'Chipotle', 'YUM': 'Yum! Brands', 'ETSY': 'Etsy', 'W': 'Wayfair', 'CHWY': 'Chewy',
             'WBD': 'Warner Bros Discovery', 'FOXA': 'Fox Corp', 'CMCSA': 'Comcast',
+            'OMC': 'Omnicom Group',
             'T': 'AT&T', 'VZ': 'Verizon', 'TMUS': 'T-Mobile',
             'PM': 'Philip Morris', 'MO': 'Altria', 'BUD': 'AB InBev', 'TAP': 'Molson Coors',
             'STZ': 'Constellation Brands', 'MNST': 'Monster Beverage', 'CELH': 'Celsius', 'KDP': 'Keurig Dr Pepper',
@@ -4086,6 +4166,40 @@
             'ORLY': "O'Reilly Auto", 'AZO': 'AutoZone', 'AAP': 'Advance Auto Parts',
             'GPC': 'Genuine Parts', 'TSCO': 'Tractor Supply', 'DG': 'Dollar General', 'DLTR': 'Dollar Tree',
             'ROST': 'Ross Stores', 'TJX': 'TJX Companies', 'BBY': 'Best Buy',
+            // S&P 500 Consumer additions
+            'PG': 'Procter & Gamble', 'CL': 'Colgate-Palmolive', 'KHC': 'Kraft Heinz',
+            'MDLZ': 'Mondelez', 'GIS': 'General Mills', 'CLX': 'Clorox',
+            'CHD': 'Church & Dwight', 'SJM': 'J.M. Smucker', 'KMB': 'Kimberly-Clark',
+            'HRL': 'Hormel Foods', 'CAG': 'Conagra', 'CPB': 'Campbell Soup',
+            'MKC': 'McCormick', 'HSY': 'Hershey', 'KR': 'Kroger', 'SYY': 'Sysco',
+            'ADM': 'Archer-Daniels-Midland', 'TSN': 'Tyson Foods', 'BG': 'Bunge',
+            'KVUE': 'Kenvue', 'EL': 'Estee Lauder', 'AMCR': 'Amcor',
+            'DPZ': "Domino's Pizza", 'DRI': 'Darden Restaurants', 'EBAY': 'eBay',
+            'HAS': 'Hasbro', 'HLT': 'Hilton', 'LVS': 'Las Vegas Sands',
+            'MAR': 'Marriott', 'MGM': 'MGM Resorts', 'NCLH': 'Norwegian Cruise Line',
+            'RCL': 'Royal Caribbean', 'RL': 'Ralph Lauren', 'TPR': 'Tapestry',
+            'WYNN': 'Wynn Resorts', 'CCL': 'Carnival', 'WSM': 'Williams-Sonoma',
+            'POOL': 'Pool Corp.', 'LW': 'Lamb Weston', 'NWS': 'News Corp Class B',
+            'NWSA': 'News Corp Class A', 'TKO': 'TKO Group', 'LYV': 'Live Nation',
+            'BF.B': 'Brown-Forman',
+            // Mid-cap Consumer additions
+            'TXRH': 'Texas Roadhouse', 'WING': 'Wingstop', 'SHAK': 'Shake Shack',
+            'SG': 'Sweetgreen', 'LOCO': 'El Pollo Loco', 'DNUT': 'Krispy Kreme',
+            'EAT': 'Brinker International', 'CAKE': 'Cheesecake Factory',
+            'BJRI': "BJ's Restaurants", 'PLAY': "Dave & Buster's", 'DIN': 'Dine Brands',
+            'JACK': 'Jack in the Box', 'ARCO': 'Arcos Dorados',
+            'FIVE': 'Five Below', 'OLLI': "Ollie's Bargain", 'BJ': "BJ's Wholesale",
+            'COLM': 'Columbia Sportswear', 'SKX': 'Skechers', 'VFC': 'VF Corp.',
+            'GIII': 'G-III Apparel', 'OXM': 'Oxford Industries', 'HBI': 'Hanesbrands',
+            'PVH': 'PVH Corp.', 'COTY': 'Coty', 'MNSO': 'Miniso',
+            'AEO': 'American Eagle', 'ANF': 'Abercrombie & Fitch', 'GPS': 'Gap Inc.',
+            'VSCO': "Victoria's Secret", 'BBWI': 'Bath & Body Works', 'RVLV': 'Revolve',
+            'WRBY': 'Warby Parker', 'FL': 'Foot Locker', 'JWN': 'Nordstrom',
+            'M': "Macy's", 'KSS': "Kohl's", 'BURL': 'Burlington',
+            'PENN': 'Penn Entertainment', 'CZR': 'Caesars Entertainment',
+            'BYD': 'Boyd Gaming', 'GDEN': 'Golden Entertainment', 'PLYA': 'Playa Hotels',
+            'VAC': 'Marriott Vacations', 'MTN': 'Vail Resorts', 'SIX': 'Six Flags',
+            'SEAS': 'SeaWorld',
 
             // Energy
             'XOM': 'ExxonMobil', 'CVX': 'Chevron', 'COP': 'ConocoPhillips', 'SLB': 'SLB',
@@ -4101,6 +4215,23 @@
             'EQT': 'EQT Corporation', 'SMR': 'NuScale Power', 'VST': 'Vistra', 'CEG': 'Constellation Energy',
             'CCJ': 'Cameco', 'LNG': 'Cheniere Energy', 'AR': 'Antero Resources',
             'GEV': 'GE Vernova',
+            // S&P 500 Energy/Utilities additions
+            'SRE': 'Sempra', 'AES': 'AES Corp.', 'PCG': 'PG&E',
+            'EIX': 'Edison International', 'XEL': 'Xcel Energy', 'WEC': 'WEC Energy',
+            'ES': 'Eversource Energy', 'ETR': 'Entergy', 'PEG': 'PSEG',
+            'ED': 'Consolidated Edison', 'FE': 'FirstEnergy', 'CNP': 'CenterPoint',
+            'PPL': 'PPL Corp.', 'AEE': 'Ameren', 'ATO': 'Atmos Energy',
+            'DTE': 'DTE Energy', 'CMS': 'CMS Energy', 'EVRG': 'Evergy',
+            'NI': 'NiSource', 'LNT': 'Alliant Energy', 'NRG': 'NRG Energy',
+            'PNW': 'Pinnacle West', 'AWK': 'American Water Works',
+            'KMI': 'Kinder Morgan', 'TPL': 'Texas Pacific Land', 'EXE': 'Expand Energy',
+            // Mid-cap Energy/Clean Energy additions
+            'ARRY': 'Array Technologies', 'MAXN': 'Maxeon Solar', 'BE': 'Bloom Energy',
+            'STEM': 'Stem Inc.', 'NOVA': 'Sunnova', 'SHLS': 'Shoals Technologies',
+            'ORA': 'Ormat Technologies', 'CWEN': 'Clearway Energy', 'TAC': 'TransAlta',
+            'CNX': 'CNX Resources', 'RRC': 'Range Resources', 'WFRD': 'Weatherford',
+            'CHX': 'ChampionX', 'LBRT': 'Liberty Energy', 'PTEN': 'Patterson-UTI',
+            'HP': 'Helmerich & Payne',
 
             // Industrials
             'BA': 'Boeing', 'CAT': 'Caterpillar', 'DE': 'Deere & Co.', 'GE': 'GE Aerospace',
@@ -4122,6 +4253,34 @@
             'GNRC': 'Generac Holdings',
             // Policy-Sensitive
             'GEO': 'GEO Group', 'CXW': 'CoreCivic',
+            // S&P 500 Industrials additions
+            'ADP': 'Automatic Data Processing', 'OTIS': 'Otis Worldwide', 'CTAS': 'Cintas',
+            'WAB': 'Wabtec', 'FAST': 'Fastenal', 'URI': 'United Rentals',
+            'CPRT': 'Copart', 'GWW': 'W.W. Grainger', 'FIX': 'Comfort Systems USA',
+            'ROL': 'Rollins', 'ALLE': 'Allegion', 'SNA': 'Snap-on',
+            'SWK': 'Stanley Black & Decker', 'PNR': 'Pentair', 'PAYX': 'Paychex',
+            'DAL': 'Delta Air Lines', 'UAL': 'United Airlines', 'LUV': 'Southwest Airlines',
+            'EXPD': 'Expeditors', 'LII': 'Lennox', 'PKG': 'Packaging Corp.',
+            'AVY': 'Avery Dennison', 'MAS': 'Masco', 'IP': 'International Paper',
+            'WY': 'Weyerhaeuser', 'BALL': 'Ball Corp.', 'FTV': 'Fortive',
+            'IFF': 'IFF Inc.', 'BR': 'Broadridge Financial', 'J': 'Jacobs Solutions',
+            'VMC': 'Vulcan Materials', 'MLM': 'Martin Marietta', 'CRH': 'CRH plc',
+            'XYL': 'Xylem', 'SW': 'Smurfit Westrock',
+            // Mid-cap Industrials additions
+            'ACM': 'AECOM', 'MTZ': 'MasTec', 'STRL': 'Sterling Construction',
+            'GVA': 'Granite Construction', 'ROAD': 'Construction Partners',
+            'PRIM': 'Primoris', 'TPC': 'Tutor Perini', 'AGX': 'Argan Inc.',
+            'UFPI': 'UFP Industries', 'AZEK': 'AZEK Company',
+            'AWI': 'Armstrong World', 'TREX': 'Trex', 'SITE': 'SiteOne Landscape',
+            'BFAM': 'Bright Horizons', 'HRI': 'Herc Holdings',
+            'WSC': 'WillScot Mobile Mini', 'SKYW': 'SkyWest',
+            'ALK': 'Alaska Air', 'JBLU': 'JetBlue', 'AAL': 'American Airlines',
+            'SNDR': 'Schneider National', 'SAIA': 'Saia Inc.', 'ARCB': 'ArcBest',
+            'WERN': 'Werner', 'HUBG': 'Hub Group', 'R': 'Ryder', 'GATX': 'GATX',
+            'RXO': 'RXO Inc.', 'ATKR': 'Atkore', 'AIT': 'Applied Industrial',
+            'REZI': 'Resideo', 'LECO': 'Lincoln Electric', 'MIDD': 'Middleby',
+            'FELE': 'Franklin Electric', 'WTS': 'Watts Water', 'MWA': 'Mueller Water',
+            'ESE': 'ESCO Technologies', 'IEX': 'IDEX Corp.',
 
             // Real Estate
             'AMT': 'American Tower', 'PLD': 'Prologis', 'EQIX': 'Equinix', 'O': 'Realty Income',
@@ -4134,6 +4293,22 @@
             'NHI': 'National Health Investors', 'CTRE': 'CareTrust REIT', 'IRM': 'Iron Mountain', 'CUBE': 'CubeSmart',
             'NSA': 'National Storage', 'REXR': 'Rexford Industrial',
             'TRNO': 'Terreno Realty', 'SELF': 'Global Self Storage', 'SAFE': 'Safehold',
+            // S&P 500 Real Estate additions
+            'EXR': 'Extra Space Storage', 'ARE': 'Alexandria Real Estate',
+            'KIM': 'Kimco Realty', 'REG': 'Regency Centers', 'INVH': 'Invitation Homes',
+            'FRT': 'Federal Realty', 'HST': 'Host Hotels', 'BXP': 'BXP Inc.',
+            'SBAC': 'SBA Communications',
+            // Mid-cap Real Estate additions
+            'GLPI': 'Gaming & Leisure Properties', 'SLG': 'SL Green', 'VNO': 'Vornado',
+            'DEI': 'Douglas Emmett', 'CUZ': 'Cousins Properties', 'HIW': 'Highwoods',
+            'OFC': 'Corporate Office', 'NNN': 'NNN REIT', 'ADC': 'Agree Realty',
+            'EPRT': 'Essential Properties', 'KRG': 'Kite Realty', 'AKR': 'Acadia Realty',
+            'BNL': 'Broadstone Net Lease', 'GTY': 'Getty Realty',
+            'IIPR': 'Innovative Industrial Properties', 'APLE': 'Apple Hospitality',
+            'RLJ': 'RLJ Lodging', 'PEB': 'Pebblebrook Hotel', 'SHO': 'Sunstone Hotel',
+            'DRH': 'DiamondRock', 'FR': 'First Industrial', 'STAG': 'STAG Industrial',
+            'LXP': 'LXP Industrial', 'COLD': 'Americold', 'LAMR': 'Lamar Advertising',
+            'OUT': 'Outfront Media',
 
             // Materials
             'NEM': 'Newmont', 'FCX': 'Freeport-McMoRan', 'NUE': 'Nucor', 'DOW': 'Dow Inc.',
@@ -4147,6 +4322,19 @@
             'SHW': 'Sherwin-Williams', 'PPG': 'PPG Industries', 'RPM': 'RPM International', 'AXTA': 'Axalta Coating',
             'ALB': 'Albemarle', 'SQM': 'SQM', 'LAC': 'Lithium Americas', 'AA': 'Alcoa',
             'FUL': 'H.B. Fuller', 'NEU': 'NewMarket', 'B': 'Barrick Mining',
+            // S&P 500 Materials additions
+            'CTVA': 'Corteva Agriscience', 'MOS': 'Mosaic', 'CF': 'CF Industries',
+            // Mid-cap Materials additions
+            'PAAS': 'Pan American Silver', 'AG': 'First Majestic', 'CDE': 'Coeur Mining',
+            'EGO': 'Eldorado Gold', 'SSRM': 'SSR Mining', 'HBM': 'Hudbay Minerals',
+            'TECK': 'Teck Resources', 'RIO': 'Rio Tinto', 'BHP': 'BHP Group',
+            'VALE': 'Vale', 'SCCO': 'Southern Copper', 'GFI': 'Gold Fields',
+            'BTG': 'B2Gold', 'IAUX': 'i-80 Gold', 'AMR': 'Alpha Metallurgical',
+            'HCC': 'Warrior Met Coal', 'ARCH': 'Arch Resources',
+            'MEOH': 'Methanex', 'CC': 'Chemours', 'OLN': 'Olin', 'TROX': 'Tronox',
+            'HUN': 'Huntsman', 'WLK': 'Westlake', 'CBT': 'Cabot', 'NGVT': 'Ingevity',
+            'ASH': 'Ashland', 'SON': 'Sonoco', 'SEE': 'Sealed Air',
+            'GPK': 'Graphic Packaging', 'SLVM': 'Sylvamo',
 
             // Defense
             'LMT': 'Lockheed Martin', 'RTX': 'RTX Corporation', 'NOC': 'Northrop Grumman', 'GD': 'General Dynamics',
@@ -4158,6 +4346,8 @@
             'PSN': 'Parsons Corporation', 'MRCY': 'Mercury Systems', 'DRS': 'Leonardo DRS',
             // Drones/eVTOL
             'RCAT': 'Red Cat Holdings', 'JOBY': 'Joby Aviation', 'ACHR': 'Archer Aviation',
+            // Mid-cap Defense additions
+            'OSIS': 'OSI Systems', 'VSE': 'VSE Corp.', 'BDC': 'Belden',
 
             // Space
             'RKLB': 'Rocket Lab', 'ASTS': 'AST SpaceMobile', 'LUNR': 'Intuitive Machines',
@@ -4168,6 +4358,9 @@
             'COIN': 'Coinbase', 'MSTR': 'Strategy', 'MARA': 'MARA Holdings',
             'RIOT': 'Riot Platforms', 'CLSK': 'CleanSpark', 'HUT': 'Hut 8',
             'BTDR': 'Bitdeer Technologies', 'BITF': 'Bitfarms',
+            // Crypto additions
+            'CORZ': 'Core Scientific', 'WULF': 'TeraWulf', 'IREN': 'Iris Energy',
+            'CIFR': 'Cipher Mining',
 
             // Index Funds
             'SPY': 'S&P 500 ETF', 'QQQ': 'Nasdaq 100 ETF', 'IWM': 'Russell 2000 ETF', 'VOO': 'Vanguard S&P 500'
@@ -4189,7 +4382,30 @@
             // Cybersecurity
             'FTNT': 'Technology', 'TENB': 'Technology', 'QLYS': 'Technology',
             'RPD': 'Technology', 'VRNS': 'Technology',
-            
+            // S&P 500 Technology additions
+            'ACN': 'Technology', 'ADSK': 'Technology', 'ANET': 'Technology', 'CSCO': 'Technology',
+            'CTSH': 'Technology', 'EPAM': 'Technology', 'FFIV': 'Technology', 'FICO': 'Technology',
+            'GDDY': 'Technology', 'GEN': 'Technology', 'GLW': 'Technology', 'HPE': 'Technology',
+            'JBL': 'Technology', 'KEYS': 'Technology', 'MSI': 'Technology',
+            'PAYC': 'Technology', 'PTC': 'Technology', 'TEL': 'Technology', 'TER': 'Technology',
+            'TRMB': 'Technology', 'TTD': 'Technology', 'TYL': 'Technology',
+            'VRSN': 'Technology', 'ZBRA': 'Technology', 'CDW': 'Technology',
+            'AKAM': 'Technology', 'CIEN': 'Technology', 'CSGP': 'Technology', 'NDSN': 'Technology',
+            'TDY': 'Technology',
+            'GRMN': 'Technology', 'IT': 'Technology', 'CHTR': 'Technology',
+            // Technology - Gaming/Media
+            'EA': 'Technology', 'TTWO': 'Technology', 'FOX': 'Consumer', 'MTCH': 'Technology',
+            // Mid-cap Technology additions
+            'CRDO': 'Technology', 'RMBS': 'Technology', 'LSCC': 'Technology',
+            'MTSI': 'Technology', 'DIOD': 'Technology', 'NTNX': 'Technology',
+            'CYBR': 'Technology', 'VRNT': 'Technology', 'ASAN': 'Technology', 'SQSP': 'Technology',
+            'FIVN': 'Technology', 'RBRK': 'Technology', 'ZI': 'Technology', 'DT': 'Technology',
+            'TWLO': 'Technology', 'DBX': 'Technology', 'BOX': 'Technology', 'JAMF': 'Technology',
+            'YOU': 'Technology', 'SMTC': 'Technology', 'CALX': 'Technology', 'PI': 'Technology',
+            'MANH': 'Technology', 'GWRE': 'Technology', 'WK': 'Technology',
+            'ALTR': 'Technology', 'BSY': 'Technology', 'AZPN': 'Technology',
+            'APPF': 'Technology', 'PCTY': 'Technology',
+
             // Tech - Hardware/Semiconductors
             'AAPL': 'Technology', 'QCOM': 'Technology', 'INTC': 'Technology', 'MU': 'Technology',
             'ARM': 'Technology', 'AVGO': 'Technology', 'TXN': 'Technology', 'ADI': 'Technology',
@@ -4228,6 +4444,36 @@
             'ZION': 'Financial', 'FHN': 'Financial',
             'WRB': 'Financial', 'CB': 'Financial', 'TRV': 'Financial', 'ALL': 'Financial',
             'PGR': 'Financial', 'AIG': 'Financial', 'MET': 'Financial', 'PRU': 'Financial',
+            // S&P 500 Financial additions
+            'SPGI': 'Financial', 'ICE': 'Financial', 'CME': 'Financial',
+            'MCO': 'Financial', 'MSCI': 'Financial', 'NDAQ': 'Financial',
+            'AON': 'Financial', 'AJG': 'Financial', 'ACGL': 'Financial',
+            'AFL': 'Financial', 'CINF': 'Financial', 'BRO': 'Financial',
+            'GL': 'Financial', 'ERIE': 'Financial', 'EG': 'Financial',
+            'BRK.B': 'Financial', 'BX': 'Financial', 'KKR': 'Financial',
+            'APO': 'Financial', 'ARES': 'Financial', 'IBKR': 'Financial',
+            'PFG': 'Financial', 'L': 'Financial', 'BEN': 'Financial',
+            'IVZ': 'Financial', 'SYF': 'Financial', 'CBOE': 'Financial',
+            'RJF': 'Financial', 'AMP': 'Financial', 'TROW': 'Financial',
+            'FISV': 'Financial', 'HIG': 'Financial', 'CPAY': 'Financial',
+            'AIZ': 'Financial', 'JKHY': 'Financial',
+            'CBRE': 'Financial', 'FDS': 'Financial', 'VRSK': 'Financial',
+            'WTW': 'Financial', 'EFX': 'Financial',
+            // Mid-cap Financial additions
+            'WAL': 'Financial', 'EWBC': 'Financial', 'CMA': 'Financial',
+            'FNB': 'Financial', 'WTFC': 'Financial', 'PNFP': 'Financial',
+            'SSB': 'Financial', 'BOKF': 'Financial', 'GBCI': 'Financial',
+            'NYCB': 'Financial', 'OZK': 'Financial',
+            'SBCF': 'Financial', 'UMBF': 'Financial',
+            'FCNCA': 'Financial', 'FNF': 'Financial',
+            'FAF': 'Financial', 'ESNT': 'Financial',
+            'RDN': 'Financial', 'KNSL': 'Financial', 'RLI': 'Financial',
+            'ORI': 'Financial', 'THG': 'Financial',
+            'AFG': 'Financial', 'RYAN': 'Financial',
+            'JEF': 'Financial', 'EVR': 'Financial', 'PJT': 'Financial',
+            'HLI': 'Financial', 'LPLA': 'Financial', 'PIPR': 'Financial',
+            'SF': 'Financial', 'MKTX': 'Financial', 'VIRT': 'Financial',
+            'TW': 'Financial',
             // Payments/Fintech
             'FOUR': 'Financial', 'PAYO': 'Financial', 'DLO': 'Financial',
             'RELY': 'Financial', 'FLYW': 'Financial',
@@ -4264,6 +4510,29 @@
             'DNA': 'Healthcare', 'FATE': 'Healthcare',
             // Digital Health
             'HIMS': 'Healthcare', 'DOCS': 'Healthcare', 'OSCR': 'Healthcare',
+            'ZTS': 'Healthcare', 'WAT': 'Healthcare',
+            // S&P 500 Healthcare additions
+            'MRK': 'Healthcare', 'A': 'Healthcare', 'IQV': 'Healthcare',
+            'GEHC': 'Healthcare', 'HOLX': 'Healthcare', 'DXCM': 'Healthcare',
+            'IDXX': 'Healthcare', 'PODD': 'Healthcare', 'ALGN': 'Healthcare',
+            'EW': 'Healthcare', 'COO': 'Healthcare',
+            'MTD': 'Healthcare', 'WST': 'Healthcare', 'TECH': 'Healthcare',
+            'CNC': 'Healthcare', 'MOH': 'Healthcare', 'COR': 'Healthcare',
+            'CAH': 'Healthcare', 'MCK': 'Healthcare', 'VTRS': 'Healthcare',
+            'LH': 'Healthcare', 'DGX': 'Healthcare', 'RMD': 'Healthcare',
+            'ELV': 'Healthcare', 'STE': 'Healthcare', 'HSIC': 'Healthcare',
+            'UHS': 'Healthcare', 'CRL': 'Healthcare', 'RVTY': 'Healthcare',
+            'SOLV': 'Healthcare',
+            // Mid-cap Healthcare additions
+            'NVCR': 'Healthcare', 'GKOS': 'Healthcare', 'NVST': 'Healthcare',
+            'XRAY': 'Healthcare', 'TFX': 'Healthcare', 'MMSI': 'Healthcare',
+            'PEN': 'Healthcare', 'LNTH': 'Healthcare', 'AZTA': 'Healthcare',
+            'NEOG': 'Healthcare', 'PRCT': 'Healthcare', 'IRTC': 'Healthcare',
+            'HALO': 'Healthcare', 'INSM': 'Healthcare', 'RARE': 'Healthcare',
+            'PTCT': 'Healthcare', 'ARWR': 'Healthcare',
+            'FOLD': 'Healthcare', 'MYGN': 'Healthcare',
+            'GH': 'Healthcare', 'NTRA': 'Healthcare', 'SDGR': 'Healthcare',
+            'VERA': 'Healthcare',
 
             // Consumer
             'AMZN': 'Consumer', 'WMT': 'Consumer', 'COST': 'Consumer', 'TGT': 'Consumer',
@@ -4271,7 +4540,8 @@
             'CMG': 'Consumer', 'YUM': 'Consumer', 'NKE': 'Consumer', 'LULU': 'Consumer',
             'ETSY': 'Consumer', 'W': 'Consumer', 'CHWY': 'Consumer',
             'DIS': 'Consumer', 'NFLX': 'Consumer', 'ROKU': 'Consumer', 'CARR': 'Industrials', 'WBD': 'Consumer',
-            'FOXA': 'Consumer', 'CMCSA': 'Consumer', 'T': 'Consumer', 'VZ': 'Consumer', 'TMUS': 'Consumer',
+            'FOXA': 'Consumer', 'CMCSA': 'Consumer', 'OMC': 'Consumer',
+            'T': 'Consumer', 'VZ': 'Consumer', 'TMUS': 'Consumer',
             'KO': 'Consumer', 'PEP': 'Consumer', 'PM': 'Consumer', 'MO': 'Consumer',
             'BUD': 'Consumer', 'TAP': 'Consumer', 'STZ': 'Consumer', 'MNST': 'Consumer',
             'CELH': 'Consumer', 'KDP': 'Consumer', 'ULTA': 'Consumer', 'ELF': 'Consumer',
@@ -4279,7 +4549,41 @@
             'UAA': 'Consumer', 'ORLY': 'Consumer', 'AZO': 'Consumer', 'AAP': 'Consumer',
             'GPC': 'Consumer', 'TSCO': 'Consumer', 'DG': 'Consumer', 'DLTR': 'Consumer',
             'ROST': 'Consumer', 'TJX': 'Consumer', 'BBY': 'Consumer',
-            
+            // S&P 500 Consumer additions
+            'PG': 'Consumer', 'CL': 'Consumer', 'KHC': 'Consumer',
+            'MDLZ': 'Consumer', 'GIS': 'Consumer', 'CLX': 'Consumer',
+            'CHD': 'Consumer', 'SJM': 'Consumer', 'KMB': 'Consumer',
+            'HRL': 'Consumer', 'CAG': 'Consumer', 'CPB': 'Consumer',
+            'MKC': 'Consumer', 'HSY': 'Consumer', 'KR': 'Consumer', 'SYY': 'Consumer',
+            'ADM': 'Consumer', 'TSN': 'Consumer', 'BG': 'Consumer',
+            'KVUE': 'Consumer', 'EL': 'Consumer', 'AMCR': 'Consumer',
+            'DPZ': 'Consumer', 'DRI': 'Consumer', 'EBAY': 'Consumer',
+            'HAS': 'Consumer', 'HLT': 'Consumer', 'LVS': 'Consumer',
+            'MAR': 'Consumer', 'MGM': 'Consumer', 'NCLH': 'Consumer',
+            'RCL': 'Consumer', 'RL': 'Consumer', 'TPR': 'Consumer',
+            'WYNN': 'Consumer', 'CCL': 'Consumer', 'WSM': 'Consumer',
+            'POOL': 'Consumer', 'LW': 'Consumer', 'NWS': 'Consumer',
+            'NWSA': 'Consumer', 'TKO': 'Consumer', 'LYV': 'Consumer',
+            'BF.B': 'Consumer',
+            // Mid-cap Consumer additions
+            'TXRH': 'Consumer', 'WING': 'Consumer', 'SHAK': 'Consumer',
+            'SG': 'Consumer', 'LOCO': 'Consumer', 'DNUT': 'Consumer',
+            'EAT': 'Consumer', 'CAKE': 'Consumer',
+            'BJRI': 'Consumer', 'PLAY': 'Consumer', 'DIN': 'Consumer',
+            'JACK': 'Consumer', 'ARCO': 'Consumer',
+            'FIVE': 'Consumer', 'OLLI': 'Consumer', 'BJ': 'Consumer',
+            'COLM': 'Consumer', 'SKX': 'Consumer', 'VFC': 'Consumer',
+            'GIII': 'Consumer', 'OXM': 'Consumer', 'HBI': 'Consumer',
+            'PVH': 'Consumer', 'COTY': 'Consumer', 'MNSO': 'Consumer',
+            'AEO': 'Consumer', 'ANF': 'Consumer', 'GPS': 'Consumer',
+            'VSCO': 'Consumer', 'BBWI': 'Consumer', 'RVLV': 'Consumer',
+            'WRBY': 'Consumer', 'FL': 'Consumer', 'JWN': 'Consumer',
+            'M': 'Consumer', 'KSS': 'Consumer', 'BURL': 'Consumer',
+            'PENN': 'Consumer', 'CZR': 'Consumer',
+            'BYD': 'Consumer', 'GDEN': 'Consumer', 'PLYA': 'Consumer',
+            'VAC': 'Consumer', 'MTN': 'Consumer', 'SIX': 'Consumer',
+            'SEAS': 'Consumer',
+
             // Energy
             'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'SLB': 'Energy',
             'EOG': 'Energy', 'OXY': 'Energy', 'MPC': 'Energy', 'PSX': 'Energy',
@@ -4294,6 +4598,23 @@
             'MGY': 'Energy', 'MTDR': 'Energy', 'CHRD': 'Energy', 'VNOM': 'Energy',
             'SMR': 'Energy', 'VST': 'Energy', 'CEG': 'Energy', 'CCJ': 'Energy',
             'LNG': 'Energy', 'AR': 'Energy', 'GEV': 'Energy',
+            // S&P 500 Energy/Utilities additions
+            'SRE': 'Energy', 'AES': 'Energy', 'PCG': 'Energy',
+            'EIX': 'Energy', 'XEL': 'Energy', 'WEC': 'Energy',
+            'ES': 'Energy', 'ETR': 'Energy', 'PEG': 'Energy',
+            'ED': 'Energy', 'FE': 'Energy', 'CNP': 'Energy',
+            'PPL': 'Energy', 'AEE': 'Energy', 'ATO': 'Energy',
+            'DTE': 'Energy', 'CMS': 'Energy', 'EVRG': 'Energy',
+            'NI': 'Energy', 'LNT': 'Energy', 'NRG': 'Energy',
+            'PNW': 'Energy', 'AWK': 'Energy',
+            'KMI': 'Energy', 'TPL': 'Energy', 'EXE': 'Energy',
+            // Mid-cap Energy/Clean Energy additions
+            'ARRY': 'Energy', 'MAXN': 'Energy', 'BE': 'Energy',
+            'STEM': 'Energy', 'NOVA': 'Energy', 'SHLS': 'Energy',
+            'ORA': 'Energy', 'CWEN': 'Energy', 'TAC': 'Energy',
+            'CNX': 'Energy', 'RRC': 'Energy', 'WFRD': 'Energy',
+            'CHX': 'Energy', 'LBRT': 'Energy', 'PTEN': 'Energy',
+            'HP': 'Energy',
 
             // Industrials
             'BA': 'Industrials', 'CAT': 'Industrials', 'DE': 'Industrials', 'GE': 'Industrials',
@@ -4313,7 +4634,35 @@
             'GNRC': 'Industrials',
             // Policy-Sensitive
             'GEO': 'Industrials', 'CXW': 'Industrials',
-            
+            // S&P 500 Industrials additions
+            'ADP': 'Industrials', 'OTIS': 'Industrials', 'CTAS': 'Industrials',
+            'WAB': 'Industrials', 'FAST': 'Industrials', 'URI': 'Industrials',
+            'CPRT': 'Industrials', 'GWW': 'Industrials', 'FIX': 'Industrials',
+            'ROL': 'Industrials', 'ALLE': 'Industrials', 'SNA': 'Industrials',
+            'SWK': 'Industrials', 'PNR': 'Industrials', 'PAYX': 'Industrials',
+            'DAL': 'Industrials', 'UAL': 'Industrials', 'LUV': 'Industrials',
+            'EXPD': 'Industrials', 'LII': 'Industrials', 'PKG': 'Industrials',
+            'AVY': 'Industrials', 'MAS': 'Industrials', 'IP': 'Industrials',
+            'WY': 'Industrials', 'BALL': 'Industrials', 'FTV': 'Industrials',
+            'IFF': 'Industrials', 'BR': 'Industrials', 'J': 'Industrials',
+            'VMC': 'Industrials', 'MLM': 'Industrials', 'CRH': 'Industrials',
+            'XYL': 'Industrials', 'SW': 'Industrials',
+            // Mid-cap Industrials additions
+            'ACM': 'Industrials', 'MTZ': 'Industrials', 'STRL': 'Industrials',
+            'GVA': 'Industrials', 'ROAD': 'Industrials',
+            'PRIM': 'Industrials', 'TPC': 'Industrials', 'AGX': 'Industrials',
+            'UFPI': 'Industrials', 'AZEK': 'Industrials',
+            'AWI': 'Industrials', 'TREX': 'Industrials', 'SITE': 'Industrials',
+            'BFAM': 'Industrials', 'HRI': 'Industrials',
+            'WSC': 'Industrials', 'SKYW': 'Industrials',
+            'ALK': 'Industrials', 'JBLU': 'Industrials', 'AAL': 'Industrials',
+            'SNDR': 'Industrials', 'SAIA': 'Industrials', 'ARCB': 'Industrials',
+            'WERN': 'Industrials', 'HUBG': 'Industrials', 'R': 'Industrials', 'GATX': 'Industrials',
+            'RXO': 'Industrials', 'ATKR': 'Industrials', 'AIT': 'Industrials',
+            'REZI': 'Industrials', 'LECO': 'Industrials', 'MIDD': 'Industrials',
+            'FELE': 'Industrials', 'WTS': 'Industrials', 'MWA': 'Industrials',
+            'ESE': 'Industrials', 'IEX': 'Industrials',
+
             // Real Estate
             'AMT': 'Real Estate', 'PLD': 'Real Estate', 'CCI': 'Real Estate', 'EQIX': 'Real Estate',
             'PSA': 'Real Estate', 'DLR': 'Real Estate', 'WELL': 'Real Estate', 'O': 'Real Estate',
@@ -4325,7 +4674,23 @@
             'NHI': 'Real Estate', 'CTRE': 'Real Estate', 'IRM': 'Real Estate', 'CUBE': 'Real Estate',
             'NSA': 'Real Estate', 'REXR': 'Real Estate',
             'TRNO': 'Real Estate', 'SELF': 'Real Estate', 'SAFE': 'Real Estate',
-            
+            // S&P 500 Real Estate additions
+            'EXR': 'Real Estate', 'ARE': 'Real Estate',
+            'KIM': 'Real Estate', 'REG': 'Real Estate', 'INVH': 'Real Estate',
+            'FRT': 'Real Estate', 'HST': 'Real Estate', 'BXP': 'Real Estate',
+            'SBAC': 'Real Estate',
+            // Mid-cap Real Estate additions
+            'GLPI': 'Real Estate', 'SLG': 'Real Estate', 'VNO': 'Real Estate',
+            'DEI': 'Real Estate', 'CUZ': 'Real Estate', 'HIW': 'Real Estate',
+            'OFC': 'Real Estate', 'NNN': 'Real Estate', 'ADC': 'Real Estate',
+            'EPRT': 'Real Estate', 'KRG': 'Real Estate', 'AKR': 'Real Estate',
+            'BNL': 'Real Estate', 'GTY': 'Real Estate',
+            'IIPR': 'Real Estate', 'APLE': 'Real Estate',
+            'RLJ': 'Real Estate', 'PEB': 'Real Estate', 'SHO': 'Real Estate',
+            'DRH': 'Real Estate', 'FR': 'Real Estate', 'STAG': 'Real Estate',
+            'LXP': 'Real Estate', 'COLD': 'Real Estate', 'LAMR': 'Real Estate',
+            'OUT': 'Real Estate',
+
             // Materials
             'NEM': 'Materials', 'FCX': 'Materials', 'GOLD': 'Materials', 'AU': 'Materials',
             'AEM': 'Materials', 'WPM': 'Materials', 'FNV': 'Materials', 'RGLD': 'Materials',
@@ -4338,7 +4703,20 @@
             'ALB': 'Materials', 'SQM': 'Materials', 'LAC': 'Materials', 'AA': 'Materials',
             'MP': 'Materials', 'DD': 'Materials', 'USAR': 'Materials',
             'FUL': 'Materials', 'NEU': 'Materials', 'UUUU': 'Materials', 'B': 'Materials',
-            
+            // S&P 500 Materials additions
+            'CTVA': 'Materials', 'MOS': 'Materials', 'CF': 'Materials',
+            // Mid-cap Materials additions
+            'PAAS': 'Materials', 'AG': 'Materials', 'CDE': 'Materials',
+            'EGO': 'Materials', 'SSRM': 'Materials', 'HBM': 'Materials',
+            'TECK': 'Materials', 'RIO': 'Materials', 'BHP': 'Materials',
+            'VALE': 'Materials', 'SCCO': 'Materials', 'GFI': 'Materials',
+            'BTG': 'Materials', 'IAUX': 'Materials', 'AMR': 'Materials',
+            'HCC': 'Materials', 'ARCH': 'Materials',
+            'MEOH': 'Materials', 'CC': 'Materials', 'OLN': 'Materials', 'TROX': 'Materials',
+            'HUN': 'Materials', 'WLK': 'Materials', 'CBT': 'Materials', 'NGVT': 'Materials',
+            'ASH': 'Materials', 'SON': 'Materials', 'SEE': 'Materials',
+            'GPK': 'Materials', 'SLVM': 'Materials',
+
             // Defense
             'LMT': 'Defense', 'RTX': 'Defense', 'NOC': 'Defense', 'GD': 'Defense',
             'LHX': 'Defense', 'HII': 'Defense', 'TXT': 'Defense', 'HWM': 'Defense',
@@ -4349,6 +4727,8 @@
             'PSN': 'Defense', 'MRCY': 'Defense', 'DRS': 'Defense',
             // Drones/eVTOL
             'RCAT': 'Defense', 'JOBY': 'Defense', 'ACHR': 'Defense',
+            // Mid-cap Defense additions
+            'OSIS': 'Defense', 'VSE': 'Defense', 'BDC': 'Defense',
             'EQT': 'Energy',
             // Reclassified from Defense
             'ROCK': 'Industrials', 'MLI': 'Industrials', 'RUSHA': 'Industrials',
@@ -4363,6 +4743,8 @@
             // Crypto
             'COIN': 'Crypto', 'MSTR': 'Crypto', 'MARA': 'Crypto', 'RIOT': 'Crypto',
             'CLSK': 'Crypto', 'HUT': 'Crypto', 'BTDR': 'Crypto', 'BITF': 'Crypto',
+            // Crypto additions
+            'CORZ': 'Crypto', 'WULF': 'Crypto', 'IREN': 'Crypto', 'CIFR': 'Crypto',
 
             // Index Funds (not tracked in portfolio)
             'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund'
@@ -6959,6 +7341,9 @@
             for (const pat of entrySignal.patterns) {
                 if (!pat.match || pat.antiPattern) continue;
 
+                // Only REV gets a signal bonus — other patterns show negative calibration edge (as of Mar 2026)
+                if (pat.id !== 'reversal') continue;
+
                 // Look up calibration edge for this pattern
                 let edge = null;
                 const key = pat.calibrationKey || (pat.id === 'reversal' ? 'rsi_low_structure_bull' : null);
@@ -9119,8 +9504,21 @@
                          'TEAM', 'WDAY', 'VEEV', 'ESTC', 'DDOG', 'NET', 'MDB', 'CRWD', 'PANW', 'ZS',
                          'OKTA', 'CFLT', 'GTLB', 'FROG', 'BILL', 'DOCN', 'MNDY', 'PCOR', 'APP',
                          'FTNT', 'TENB', 'QLYS', 'RPD', 'VRNS',
-                         'TOST', 'GLBE', 'CART', 'GRAB', 'IOT', 'BRZE'],
-                
+                         'TOST', 'GLBE', 'CART', 'GRAB', 'IOT', 'BRZE',
+                         // S&P 500 Technology additions
+                         'ACN', 'ADSK', 'ANET', 'CSCO', 'CTSH', 'EPAM', 'FFIV', 'FICO',
+                         'GDDY', 'GEN', 'GLW', 'HPE', 'JBL', 'KEYS', 'MSI',
+                         'PAYC', 'PTC', 'TEL', 'TER', 'TRMB', 'TTD', 'TYL',
+                         'VRSN', 'ZBRA', 'CDW', 'AKAM', 'CIEN', 'CSGP', 'NDSN', 'TDY',
+                         'GRMN', 'IT', 'CHTR',
+                         // Gaming/Media
+                         'EA', 'TTWO', 'FOX', 'MTCH',
+                         // Mid-cap Technology
+                         'CRDO', 'RMBS', 'LSCC', 'MTSI', 'DIOD', 'NTNX',
+                         'CYBR', 'VRNT', 'ASAN', 'SQSP', 'FIVN', 'RBRK', 'ZI', 'DT',
+                         'TWLO', 'DBX', 'BOX', 'JAMF', 'YOU', 'SMTC', 'CALX', 'PI',
+                         'MANH', 'GWRE', 'WK', 'ALTR', 'BSY', 'AZPN', 'APPF', 'PCTY'],
+
                 techHardware: ['AAPL', 'QCOM', 'INTC', 'MU', 'ARM', 'DELL', 'HPQ', 'AMAT', 'LRCX', 'MRVL',
                                'AMD', 'TXN', 'ADI', 'NXPI', 'KLAC', 'ASML', 'TSM', 'SNPS', 'CDNS', 'ON',
                                'MPWR', 'SWKS', 'QRVO', 'ENTG', 'FORM', 'MKSI', 'COHR', 'IPGP', 'LITE', 'AMBA',
@@ -9133,69 +9531,150 @@
                          'HMC', 'RACE', 'APTV', 'ALV',
                          'BLNK', 'CHPT', 'EVGO', 'PAG', 'QS',
                          'CVNA', 'KMX', 'AN', 'LAD'],
-                
+
                 finance: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'V', 'MA',
                           'XYZ', 'PYPL', 'GPN', 'AXP', 'FIS', 'COF', 'ALLY', 'USB', 'PNC', 'TFC', 'RF',
                           'KEY', 'FITB', 'MTB', 'CFG', 'HBAN', 'STT', 'BK', 'NTRS',
                           'ZION', 'FHN', 'WRB', 'CB', 'TRV', 'ALL', 'PGR', 'AIG', 'MET', 'PRU',
-                          'FOUR', 'PAYO', 'DLO', 'RELY', 'FLYW'],
-                
+                          'FOUR', 'PAYO', 'DLO', 'RELY', 'FLYW',
+                          // S&P 500 Financial additions
+                          'SPGI', 'ICE', 'CME', 'MCO', 'MSCI', 'NDAQ',
+                          'AON', 'AJG', 'ACGL', 'AFL', 'CINF', 'BRO', 'GL', 'ERIE', 'EG',
+                          'BRK.B', 'BX', 'KKR', 'APO', 'ARES', 'IBKR',
+                          'PFG', 'L', 'BEN', 'IVZ', 'SYF', 'CBOE',
+                          'RJF', 'AMP', 'TROW', 'FISV', 'HIG', 'CPAY', 'AIZ', 'JKHY',
+                          'CBRE', 'FDS', 'VRSK', 'WTW', 'EFX',
+                          // Mid-cap Financial
+                          'WAL', 'EWBC', 'CMA', 'FNB', 'WTFC', 'PNFP', 'SSB', 'BOKF', 'GBCI',
+                          'NYCB', 'OZK', 'SBCF', 'UMBF', 'FCNCA',
+                          'FNF', 'FAF', 'ESNT', 'RDN', 'KNSL', 'RLI', 'ORI', 'THG', 'AFG',
+                          'RYAN', 'JEF', 'EVR', 'PJT', 'HLI', 'LPLA', 'PIPR',
+                          'SF', 'MKTX', 'VIRT', 'TW'],
+
                 growth: ['DKNG', 'RBLX', 'U', 'PINS', 'SNAP', 'SPOT', 'ABNB', 'LYFT', 'DASH', 'UBER',
                          'CPNG', 'BKNG', 'EXPE', 'TCOM', 'TRIP', 'PTON', 'LULU', 'ETSY', 'W', 'CHWY',
                          'OPEN', 'COMP', 'RKT', 'CWAN', 'DUOL', 'BROS', 'CAVA', 'HOOD', 'AFRM',
                          'UPST', 'LC', 'NU', 'SOFI', 'NFLX', 'ROKU', 'WBD', 'FOXA', 'CMCSA', 'T',
                          'SHOP', 'SE', 'BABA', 'JD', 'PDD', 'MELI'],
-                
+
                 healthcare: ['JNJ', 'UNH', 'LLY', 'ABBV', 'PFE', 'MRNA', 'VRTX', 'REGN', 'BMY', 'GILD',
                              'AMGN', 'CVS', 'CI', 'HUM', 'ISRG', 'TMO', 'DHR', 'ABT', 'SYK', 'BSX',
                              'MDT', 'BDX', 'BAX', 'ZBH', 'HCA', 'DVA', 'EXAS', 'ILMN',
                              'BIIB', 'ALNY', 'INCY', 'NBIX', 'UTHR', 'JAZZ', 'SRPT', 'BMRN', 'IONS', 'RGEN',
                              'CRSP', 'NTLA', 'BEAM', 'RXRX', 'TWST', 'PACB', 'EDIT', 'IOVA',
                              'PCVX', 'MDGL', 'TGTX', 'LEGN', 'DNA', 'FATE',
-                             'HIMS', 'DOCS', 'OSCR'],
-                
+                             'HIMS', 'DOCS', 'OSCR',
+                             'ZTS', 'WAT',
+                             // S&P 500 Healthcare additions
+                             'MRK', 'A', 'IQV', 'GEHC', 'HOLX', 'DXCM', 'IDXX', 'PODD', 'ALGN',
+                             'EW', 'COO', 'MTD', 'WST', 'TECH', 'CNC', 'MOH', 'COR',
+                             'CAH', 'MCK', 'VTRS', 'LH', 'DGX', 'RMD', 'ELV', 'STE', 'HSIC',
+                             'UHS', 'CRL', 'RVTY', 'SOLV',
+                             // Mid-cap Healthcare
+                             'NVCR', 'GKOS', 'NVST', 'XRAY', 'TFX', 'MMSI', 'PEN', 'LNTH', 'AZTA',
+                             'NEOG', 'PRCT', 'IRTC', 'HALO', 'INSM', 'RARE', 'PTCT', 'ARWR',
+                             'FOLD', 'MYGN', 'GH', 'NTRA', 'SDGR', 'VERA'],
+
                 consumer: ['AMZN', 'WMT', 'COST', 'TGT', 'HD', 'LOW', 'SBUX', 'MCD', 'CMG', 'YUM',
                            'NKE', 'RH', 'DECK', 'CROX', 'ULTA', 'ELF', 'LEVI', 'UAA', 'DIS', 'GOOG',
                            'KO', 'PEP', 'PM', 'MO', 'BUD', 'TAP', 'STZ', 'MNST', 'CELH', 'KDP',
                            'ORLY', 'AZO', 'AAP', 'GPC', 'TSCO', 'DG', 'DLTR', 'ROST', 'TJX', 'BBY',
-                           'VZ', 'TMUS', 'ONON', 'BIRK'],
-                
+                           'VZ', 'TMUS', 'ONON', 'BIRK', 'OMC',
+                           // S&P 500 Consumer additions
+                           'PG', 'CL', 'KHC', 'MDLZ', 'GIS', 'CLX', 'CHD', 'SJM', 'KMB',
+                           'HRL', 'CAG', 'CPB', 'MKC', 'HSY', 'KR', 'SYY',
+                           'ADM', 'TSN', 'BG', 'KVUE', 'EL', 'AMCR',
+                           'DPZ', 'DRI', 'EBAY', 'HAS', 'HLT', 'LVS',
+                           'MAR', 'MGM', 'NCLH', 'RCL', 'RL', 'TPR',
+                           'WYNN', 'CCL', 'WSM', 'POOL', 'LW', 'NWS', 'NWSA',
+                           'TKO', 'LYV', 'BF.B',
+                           // Mid-cap Consumer
+                           'TXRH', 'WING', 'SHAK', 'SG', 'LOCO', 'DNUT',
+                           'EAT', 'CAKE', 'BJRI', 'PLAY', 'DIN', 'JACK', 'ARCO',
+                           'FIVE', 'OLLI', 'BJ', 'COLM', 'SKX', 'VFC',
+                           'GIII', 'OXM', 'HBI', 'PVH', 'COTY', 'MNSO',
+                           'AEO', 'ANF', 'GPS', 'VSCO', 'BBWI', 'RVLV',
+                           'WRBY', 'FL', 'JWN', 'M', 'KSS', 'BURL',
+                           'PENN', 'CZR', 'BYD', 'GDEN', 'PLYA',
+                           'VAC', 'MTN', 'SIX', 'SEAS'],
+
                 energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'OXY', 'MPC', 'PSX', 'VLO', 'TRGP',
                          'DVN', 'FANG', 'WMB', 'APA', 'HAL', 'BKR', 'NOV', 'FTI', 'NEE', 'DUK',
                          'SO', 'D', 'AEP', 'EXC', 'ENPH', 'SEDG', 'RUN', 'FSLR', 'PLUG',
                          'PBF', 'DK', 'CTRA', 'OVV', 'PR', 'SM', 'MGY', 'MTDR', 'CHRD', 'OKE',
                          'SMR', 'VST', 'CEG', 'CCJ', 'LNG', 'AR', 'GEV',
-                         'VNOM', 'EQT'],
-                
+                         'VNOM', 'EQT',
+                         // S&P 500 Energy/Utilities additions
+                         'SRE', 'AES', 'PCG', 'EIX', 'XEL', 'WEC',
+                         'ES', 'ETR', 'PEG', 'ED', 'FE', 'CNP',
+                         'PPL', 'AEE', 'ATO', 'DTE', 'CMS', 'EVRG',
+                         'NI', 'LNT', 'NRG', 'PNW', 'AWK', 'KMI', 'TPL', 'EXE',
+                         // Mid-cap Energy/Clean Energy
+                         'ARRY', 'MAXN', 'BE', 'STEM', 'NOVA', 'SHLS',
+                         'ORA', 'CWEN', 'TAC', 'CNX', 'RRC', 'WFRD',
+                         'CHX', 'LBRT', 'PTEN', 'HP'],
+
                 // NEW SECTORS ADDED:
-                
+
                 industrials: ['CAT', 'DE', 'CMI', 'EMR', 'ETN', 'PH', 'ROK', 'AME', 'DOV', 'ITW',
                               'GE', 'HON', 'MMM', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'BLD', 'BLDR',
                               'UNP', 'NSC', 'CSX', 'UPS', 'FDX', 'CHRW', 'JBHT', 'KNX', 'ODFL', 'XPO',
                               'CARR', 'VLTO', 'IR', 'WM', 'RSG', 'PCAR', 'PWR', 'JCI', 'AOS', 'ROP',
                               'ROCK', 'MLI', 'RUSHA', 'MYRG', 'DY', 'APOG',
                               'VRT', 'EME', 'APH', 'HUBB', 'WCC', 'TT', 'GNRC',
-                              'GEO', 'CXW'],
-                
+                              'GEO', 'CXW',
+                              // S&P 500 Industrials additions
+                              'ADP', 'OTIS', 'CTAS', 'WAB', 'FAST', 'URI', 'CPRT', 'GWW',
+                              'FIX', 'ROL', 'ALLE', 'SNA', 'SWK', 'PNR', 'PAYX',
+                              'DAL', 'UAL', 'LUV', 'EXPD', 'LII', 'PKG',
+                              'AVY', 'MAS', 'IP', 'WY', 'BALL', 'FTV',
+                              'IFF', 'BR', 'J', 'VMC', 'MLM', 'CRH', 'XYL', 'SW',
+                              // Mid-cap Industrials
+                              'ACM', 'MTZ', 'STRL', 'GVA', 'ROAD', 'PRIM', 'TPC', 'AGX',
+                              'UFPI', 'AZEK', 'AWI', 'TREX', 'SITE', 'BFAM', 'HRI', 'WSC',
+                              'SKYW', 'ALK', 'JBLU', 'AAL',
+                              'SNDR', 'SAIA', 'ARCB', 'WERN', 'HUBG', 'R', 'GATX', 'RXO',
+                              'ATKR', 'AIT', 'REZI', 'LECO', 'MIDD', 'FELE', 'WTS', 'MWA', 'ESE',
+                              'IEX'],
+
                 realEstate: ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'WELL', 'O', 'VICI', 'SPG',
                              'AVB', 'EQR', 'MAA', 'UDR', 'CPT', 'ESS', 'ELS', 'SUI', 'NXRT',
                              'VTR', 'STWD', 'DOC', 'OHI', 'SBRA', 'LTC', 'HR', 'MPT', 'NHI', 'CTRE',
-                             'IRM', 'CUBE', 'NSA', 'REXR', 'TRNO', 'SELF', 'SAFE'],
-                
+                             'IRM', 'CUBE', 'NSA', 'REXR', 'TRNO', 'SELF', 'SAFE',
+                             // S&P 500 Real Estate additions
+                             'EXR', 'ARE', 'KIM', 'REG', 'INVH', 'FRT', 'HST', 'BXP', 'SBAC',
+                             // Mid-cap Real Estate
+                             'GLPI', 'SLG', 'VNO', 'DEI', 'CUZ', 'HIW', 'OFC',
+                             'NNN', 'ADC', 'EPRT', 'KRG', 'AKR', 'BNL', 'GTY',
+                             'IIPR', 'APLE', 'RLJ', 'PEB', 'SHO', 'DRH',
+                             'FR', 'STAG', 'LXP', 'COLD', 'LAMR', 'OUT'],
+
                 materials: ['NEM', 'FCX', 'GOLD', 'AU', 'AEM', 'WPM', 'FNV', 'RGLD', 'KGC', 'HL',
                             'NUE', 'STLD', 'RS', 'CLF', 'AA', 'MT', 'TX', 'CMC', 'NB', 'ATI',
                             'DOW', 'LYB', 'EMN', 'CE', 'APD', 'LIN', 'GTLS', 'NUAI', 'ASPI', 'ECL', 'ALB', 'SQM', 'LAC',
                             'MP', 'DD', 'PPG', 'SHW', 'RPM', 'AXTA', 'FUL', 'NEU', 'USAR', 'UUUU',
-                            'B'],
+                            'B',
+                            // S&P 500 Materials additions
+                            'CTVA', 'MOS', 'CF',
+                            // Mid-cap Materials
+                            'PAAS', 'AG', 'CDE', 'EGO', 'SSRM', 'HBM',
+                            'TECK', 'RIO', 'BHP', 'VALE', 'SCCO', 'GFI', 'BTG', 'IAUX',
+                            'AMR', 'HCC', 'ARCH',
+                            'MEOH', 'CC', 'OLN', 'TROX', 'HUN', 'WLK', 'CBT', 'NGVT',
+                            'ASH', 'SON', 'SEE', 'GPK', 'SLVM'],
 
                 defense: ['LMT', 'RTX', 'NOC', 'GD', 'BA', 'LHX', 'HII', 'TXT', 'HWM', 'AXON',
                           'KTOS', 'AVAV', 'AIR', 'SAIC', 'LDOS', 'CACI', 'BAH', 'BWXT', 'WWD', 'MOG.A',
                           'TDG', 'HEI', 'CW', 'AIN', 'PSN', 'MRCY', 'DRS',
-                          'RCAT', 'JOBY', 'ACHR'],
+                          'RCAT', 'JOBY', 'ACHR',
+                          // Mid-cap Defense
+                          'OSIS', 'VSE', 'BDC'],
 
                 space: ['RKLB', 'ASTS', 'LUNR', 'RDW', 'BKSY', 'SPIR', 'IRDM', 'GSAT'],
 
-                crypto: ['COIN', 'MSTR', 'MARA', 'RIOT', 'CLSK', 'HUT', 'BTDR', 'BITF']
+                crypto: ['COIN', 'MSTR', 'MARA', 'RIOT', 'CLSK', 'HUT', 'BTDR', 'BITF',
+                         // Crypto additions
+                         'CORZ', 'WULF', 'IREN', 'CIFR']
             };
             
             // Use all stocks from every sector for maximum coverage
@@ -17604,12 +18083,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Sort: most alerts first, then worst P&L first
             holdingLines.sort((a, b) => b.signals - a.signals || a.pnlPct - b.pnlPct);
-            const maxHoldings = 20;
-            const displayed = holdingLines.slice(0, maxHoldings);
-            if (displayed.length > 0) {
-                let holdingSection = 'Holdings:\n' + displayed.map(h => h.line).join('\n');
-                if (holdingLines.length > maxHoldings) holdingSection += `\n...and ${holdingLines.length - maxHoldings} more positions`;
-                sections.push(holdingSection);
+            if (holdingLines.length > 0) {
+                sections.push('Holdings:\n' + holdingLines.map(h => h.line).join('\n'));
             }
 
             // Section 4: Trading Performance Summary
@@ -17952,7 +18427,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
         }
 
         // Module 2: Candidate Scorecard (paginated, full universe)
-        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: '', filterWatchlist: false, filterZone: false, overrideRegimeGate: false, sortField: 'score', sortDir: 'desc' };
+        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: 'reversal', filterWatchlist: false, filterZone: false, overrideRegimeGate: false, sortField: 'score', sortDir: 'desc' };
         const SCORECARD_PAGE_SIZE = 40;
 
         function scorecardSetSector(val) {
@@ -18577,7 +19052,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     <td class="${macdClass}">${macdArrow}</td>
                     <td class="${structClass}" style="font-size:10px;text-transform:capitalize">${structLabel}${c.fvg === 'bullish' ? ' <span class="fvg-badge fvg-bull" title="Bullish Fair Value Gap detected">FVG</span>' : c.fvg === 'bearish' ? ' <span class="fvg-badge fvg-bear" title="Bearish Fair Value Gap detected">FVG</span>' : ''}</td>
                     <td class="${dtcClass}">${dtcVal > 0 ? dtcVal.toFixed(1) : '--'}</td>
-                    <td>${c.sector || '--'}</td>
+                    <td class="${(() => { const flow = portfolio.lastSectorRotation?.sectors?.[c.sector]?.moneyFlow; return flow === 'inflow' ? 'sig-green' : flow === 'modest-inflow' ? 'sector-modest-inflow' : flow === 'outflow' ? 'sig-red' : flow === 'modest-outflow' ? 'sector-modest-outflow' : ''; })()}" title="${(() => { const flow = portfolio.lastSectorRotation?.sectors?.[c.sector]?.moneyFlow; return flow ? c.sector + ': ' + flow : c.sector || ''; })()}">${c.sector || '--'}</td>
                     <td class="mcap-cell">${formatMarketCap(c.marketCap)}</td>
                 </tr>`;
 
