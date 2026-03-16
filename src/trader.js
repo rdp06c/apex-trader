@@ -1735,7 +1735,8 @@
                                 marketCap: data.results.market_cap || null,
                                 sicDescription: data.results.sic_description || null,
                                 name: data.results.name || null,
-                                sharesOutstanding: data.results.share_class_shares_outstanding || null
+                                sharesOutstanding: data.results.share_class_shares_outstanding || null,
+                                nextEarningsDate: data.results.next_earnings_date || null
                             };
                             fetched++;
                         }
@@ -3032,8 +3033,29 @@
             return { riskReward, improvementVsCurrent };
         }
 
+        // Count weekdays (Mon-Fri) from today (ET) to a target date string (YYYY-MM-DD).
+        // Returns null if no date, -1 if past, 0 if today, else positive count.
+        function tradingDaysUntil(dateStr) {
+            if (!dateStr) return null;
+            const target = new Date(dateStr + 'T00:00:00');
+            if (isNaN(target.getTime())) return null;
+            const now = new Date();
+            const today = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            today.setHours(0, 0, 0, 0);
+            if (target < today) return -1;
+            let count = 0;
+            const d = new Date(today);
+            while (d < target) {
+                d.setDate(d.getDate() + 1);
+                const dow = d.getDay();
+                if (dow !== 0 && dow !== 6) count++;
+            }
+            return count;
+        }
+
         // Entry signal pattern definitions — data-driven for extensibility.
         // Non-reversal patterns are gated by calibration data (calibrationKey must be "hot").
+        // Patterns may have a `gate` array — hard prerequisites that block ALL match levels if any fail.
         const ENTRY_SIGNAL_PATTERNS = [
             {
                 id: 'reversal',
@@ -3050,6 +3072,12 @@
                     { id: 'rsi', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
                     { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' },
                     { id: 'pullback', label: 'Pullback', test: c => c.return5d != null && c.return5d >= -8 && c.return5d <= -2 }
+                ],
+                gate: [
+                    { id: 'no_earnings', label: 'No ER ≤3d', test: c => {
+                        const days = tradingDaysUntil(c.nextEarningsDate);
+                        return days === null || days < 0 || days > 3;
+                    } }
                 ],
                 minMatch: 2,
                 requireAny: ['rsi', 'pullback']
@@ -3150,18 +3178,31 @@
                     if (passed) matchCount++;
                 }
 
-                const total = pattern.criteria.length;
-                let match = null;
-                if (matchCount === total) {
-                    match = 'full';
-                } else if (matchCount >= total - 1) {
-                    match = 'strong';
-                } else if (matchCount >= pattern.minMatch) {
-                    const hasRequired = pattern.requireAny.some(id => criteriaResults[id]);
-                    if (hasRequired) match = 'partial';
+                // Check gate criteria — hard prerequisites that block all match levels
+                let gatePass = true;
+                const gateResults = {};
+                if (pattern.gate) {
+                    for (const g of pattern.gate) {
+                        const passed = g.test(candidate);
+                        gateResults[g.id] = passed;
+                        if (!passed) gatePass = false;
+                    }
                 }
 
-                const result = { id: pattern.id, label: pattern.label, badge: pattern.badge, match, matchCount, totalCriteria: total, criteria: criteriaResults, calibrationKey: pattern.calibrationKey, antiPattern: pattern.antiPattern };
+                const total = pattern.criteria.length;
+                let match = null;
+                if (gatePass) {
+                    if (matchCount === total) {
+                        match = 'full';
+                    } else if (matchCount >= total - 1) {
+                        match = 'strong';
+                    } else if (matchCount >= pattern.minMatch) {
+                        const hasRequired = pattern.requireAny.some(id => criteriaResults[id]);
+                        if (hasRequired) match = 'partial';
+                    }
+                }
+
+                const result = { id: pattern.id, label: pattern.label, badge: pattern.badge, match, matchCount, totalCriteria: total, criteria: criteriaResults, gate: gateResults, gatePass, calibrationKey: pattern.calibrationKey, antiPattern: pattern.antiPattern };
                 results.push(result);
 
                 if (pattern.antiPattern && match) {
@@ -5642,7 +5683,7 @@
                     });
                     const compositeScore = scoreResult.total;
                     const sBonus = flow === 'inflow' ? 2 : flow === 'modest-inflow' ? 1 : flow === 'outflow' ? -1 : 0;
-                    dryRunScored.push({ symbol, compositeScore, price: data.price || null, return5d: momentum?.totalReturn5d ?? null, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', volumeRatio: calculateVolumeRatio(symbol)?.ratio ?? null, scoreBreakdown: scoreResult.breakdown, isAccelerating: momentum?.isAccelerating ?? false, upDays: momentum?.upDays ?? 0, totalDays: momentum?.totalDays ?? 0, fvg: struct?.fvg || 'none', volumeTrend: momentum?.volumeTrend ?? 1, sectorFlow: flow, vcr: drVcr?.vcr ?? null, rangePosition: drRangePos?.rangePos ?? null, adx: drAdx?.adx ?? null, roc5: drRoc?.roc5 ?? null, roc10: drRoc?.roc10 ?? null, roc20: drRoc?.roc20 ?? null, rocDivergence: drRoc?.divergence ?? null, higherLowCount: drHL?.count ?? 0, obvSlope: drObv?.normalized ?? null, obvDivergence: drObv?.bullishDivergence ? 'bullish' : drObv?.bearishDivergence ? 'bearish' : 'none', gapPct: drGap?.gapPct ?? 0 });
+                    dryRunScored.push({ symbol, compositeScore, price: data.price || null, return5d: momentum?.totalReturn5d ?? null, momentum: momScore, rs: rs?.rsScore || 0, sector, sectorBonus: sBonus, structureScore: drStructScore, structure: struct?.structure || 'unknown', dayChange: parseFloat(dayChg.toFixed(2)), rsi: drRsi, macdCrossover: drMacd?.crossover || 'none', macdHistogram: drMacd?.histogram ?? null, daysToCover: drDtc, name: tickerDetailsCache[symbol]?.name || null, marketCap: tickerDetailsCache[symbol]?.marketCap || null, sma50: drSmaCrossover?.sma50 ?? null, smaCrossover: drSmaCrossover?.crossover || 'none', volumeRatio: calculateVolumeRatio(symbol)?.ratio ?? null, scoreBreakdown: scoreResult.breakdown, isAccelerating: momentum?.isAccelerating ?? false, upDays: momentum?.upDays ?? 0, totalDays: momentum?.totalDays ?? 0, fvg: struct?.fvg || 'none', volumeTrend: momentum?.volumeTrend ?? 1, sectorFlow: flow, vcr: drVcr?.vcr ?? null, rangePosition: drRangePos?.rangePos ?? null, adx: drAdx?.adx ?? null, roc5: drRoc?.roc5 ?? null, roc10: drRoc?.roc10 ?? null, roc20: drRoc?.roc20 ?? null, rocDivergence: drRoc?.divergence ?? null, higherLowCount: drHL?.count ?? 0, obvSlope: drObv?.normalized ?? null, obvDivergence: drObv?.bullishDivergence ? 'bullish' : drObv?.bearishDivergence ? 'bearish' : 'none', gapPct: drGap?.gapPct ?? 0, nextEarningsDate: tickerDetailsCache[symbol]?.nextEarningsDate || null });
                 });
 
                 // Fetch news for top candidates + holdings
@@ -14662,6 +14703,12 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                             for (const cr of patDef.criteria) {
                                 const hit = tipPat.criteria[cr.id];
                                 tipLines.push(`${hit ? '✓' : '✗'} ${cr.label}`);
+                            }
+                            if (patDef.gate) {
+                                for (const g of patDef.gate) {
+                                    const hit = tipPat.gate?.[g.id];
+                                    tipLines.push(`${hit ? '✓' : '⊘'} ${g.label}${!hit ? ' (blocked)' : ''}`);
+                                }
                             }
                         }
                     }

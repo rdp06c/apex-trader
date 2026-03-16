@@ -284,7 +284,8 @@ async function _fetchTickerDetailsRaw(symbols, apiKey) {
                         marketCap: data.results.market_cap || null,
                         sicDescription: data.results.sic_description || null,
                         name: data.results.name || null,
-                        sharesOutstanding: data.results.share_class_shares_outstanding || null
+                        sharesOutstanding: data.results.share_class_shares_outstanding || null,
+                        nextEarningsDate: data.results.next_earnings_date || null
                     };
                     fetched++;
                 }

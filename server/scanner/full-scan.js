@@ -299,6 +299,7 @@ async function runFullScan({ force = false } = {}) {
                 marketCapFormatted,
                 daysToCover,
                 name: td?.name || null,
+                nextEarningsDate: td?.nextEarningsDate || null,
                 sma50: smaCrossover?.sma50 ?? si.serverSma50 ?? null,
                 smaCrossover: smaCrossover?.crossover || 'none',
                 volumeRatio: volRatio?.ratio ?? null,
