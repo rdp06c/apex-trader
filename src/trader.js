@@ -12963,7 +12963,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             const fmtDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-            // Select 40 evenly-spaced calibration dates
+            // Select 80 evenly-spaced calibration dates across the range
             const allWeekdays = generateWeekdays(rangeStart, rangeEnd);
             const NUM_DATES = Math.min(80, allWeekdays.length);
             if (NUM_DATES < 5) throw new Error(`Only ${allWeekdays.length} trading days in range. Need at least 5.`);
