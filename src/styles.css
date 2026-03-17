@@ -2857,28 +2857,36 @@
         /* ── Technical Filters Row ───────────────────────── */
         .scorecard-tech-filters {
             margin-top: -4px;
-            padding-top: 0;
+            margin-bottom: 6px;
         }
         .tech-filter-group {
             display: inline-flex;
             align-items: center;
-            gap: 3px;
+            gap: 4px;
             flex: 0 0 auto;
         }
         .tech-filter-label {
-            font-size: 0.75rem;
+            font-size: 11px;
             color: var(--text-muted);
-            min-width: 26px;
             white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .tech-filter-title {
+            font-size: 0.8rem;
+            color: #888;
+            white-space: nowrap;
+            flex: 0 0 auto;
         }
         .tech-filter-input {
-            width: 52px;
+            width: 44px;
             background: var(--bg-inset);
             color: var(--text-primary);
             border: 1px solid var(--border-medium);
             border-radius: var(--radius-sm);
-            padding: 4px 6px;
-            font-size: 11px;
+            padding: 6px 4px;
+            font-size: 12px;
+            text-align: center;
             -moz-appearance: textfield;
         }
         .tech-filter-input::-webkit-inner-spin-button,
@@ -2886,21 +2894,31 @@
             -webkit-appearance: none;
             margin: 0;
         }
+        .tech-filter-input::placeholder {
+            color: var(--text-muted);
+            opacity: 0.5;
+            font-size: 10px;
+        }
         .tech-filter-input:focus {
             outline: none;
             border-color: var(--accent);
         }
         .tech-filter-sep {
             color: var(--text-muted);
-            font-size: 0.75rem;
+            font-size: 10px;
+            margin: 0 -1px;
+        }
+        .scorecard-tech-filters .scorecard-sector-filter {
+            font-size: 12px;
+            padding: 5px 26px 5px 8px;
         }
         .tech-filter-clear {
             background: none;
             border: 1px solid var(--border-medium);
             color: #f39c12;
             border-radius: var(--radius-sm);
-            padding: 4px 10px;
-            font-size: 11px;
+            padding: 5px 10px;
+            font-size: 12px;
             cursor: pointer;
             flex: 0 0 auto;
         }
