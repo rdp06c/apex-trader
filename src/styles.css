@@ -2866,15 +2866,15 @@
             flex: 0 0 auto;
         }
         .tech-filter-label {
-            font-size: 11px;
+            font-size: 12px;
             color: var(--text-muted);
             white-space: nowrap;
             text-transform: uppercase;
             letter-spacing: 0.3px;
         }
         .tech-filter-title {
-            font-size: 0.8rem;
-            color: #888;
+            font-size: 12px;
+            color: var(--text-muted);
             white-space: nowrap;
             flex: 0 0 auto;
         }
