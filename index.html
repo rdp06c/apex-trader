@@ -18784,8 +18784,11 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     if (_momMax != null && (c.momentum == null || c.momentum > _momMax)) return false;
                     if (_macdF) {
                         const cross = c.macdCrossover || 'none';
-                        if (_macdF === 'bullish' && cross !== 'bullish') return false;
-                        if (_macdF === 'bearish' && cross !== 'bearish') return false;
+                        const hist = c.macdHistogram;
+                        if (_macdF === 'bullish_cross' && cross !== 'bullish') return false;
+                        if (_macdF === 'bearish_cross' && cross !== 'bearish') return false;
+                        if (_macdF === 'bullish_any' && cross !== 'bullish' && !(hist != null && hist >= 0)) return false;
+                        if (_macdF === 'bearish_any' && cross !== 'bearish' && !(hist != null && hist < 0)) return false;
                     }
                     if (_structF) {
                         const s = c.structure || 'unknown';
@@ -18898,7 +18901,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             html += `<label class="tech-filter-group"><span class="tech-filter-label">RS</span><input type="number" min="0" max="100" step="1" placeholder="min" value="${scorecardState.filterRsMin}" onchange="scorecardSetTechFilter('filterRsMin',this.value)" class="tech-filter-input"><span class="tech-filter-sep">\u2013</span><input type="number" min="0" max="100" step="1" placeholder="max" value="${scorecardState.filterRsMax}" onchange="scorecardSetTechFilter('filterRsMax',this.value)" class="tech-filter-input"></label>`;
             html += `<label class="tech-filter-group"><span class="tech-filter-label">RSI</span><input type="number" min="0" max="100" step="1" placeholder="min" value="${scorecardState.filterRsiMin}" onchange="scorecardSetTechFilter('filterRsiMin',this.value)" class="tech-filter-input"><span class="tech-filter-sep">\u2013</span><input type="number" min="0" max="100" step="1" placeholder="max" value="${scorecardState.filterRsiMax}" onchange="scorecardSetTechFilter('filterRsiMax',this.value)" class="tech-filter-input"></label>`;
             html += `<label class="tech-filter-group"><span class="tech-filter-label">MOM</span><input type="number" min="0" max="10" step="0.5" placeholder="min" value="${scorecardState.filterMomMin}" onchange="scorecardSetTechFilter('filterMomMin',this.value)" class="tech-filter-input"><span class="tech-filter-sep">\u2013</span><input type="number" min="0" max="10" step="0.5" placeholder="max" value="${scorecardState.filterMomMax}" onchange="scorecardSetTechFilter('filterMomMax',this.value)" class="tech-filter-input"></label>`;
-            html += `<select onchange="scorecardSetTechFilter('filterMacd',this.value)" class="scorecard-sector-filter"><option value="">MACD: Any</option><option value="bullish"${scorecardState.filterMacd === 'bullish' ? ' selected' : ''}>MACD: Bullish</option><option value="bearish"${scorecardState.filterMacd === 'bearish' ? ' selected' : ''}>MACD: Bearish</option></select>`;
+            html += `<select onchange="scorecardSetTechFilter('filterMacd',this.value)" class="scorecard-sector-filter"><option value="">MACD: Any</option><option value="bullish_any"${scorecardState.filterMacd === 'bullish_any' ? ' selected' : ''}>MACD: ▲</option><option value="bullish_cross"${scorecardState.filterMacd === 'bullish_cross' ? ' selected' : ''}>MACD: ▲ Cross</option><option value="bearish_any"${scorecardState.filterMacd === 'bearish_any' ? ' selected' : ''}>MACD: ▼</option><option value="bearish_cross"${scorecardState.filterMacd === 'bearish_cross' ? ' selected' : ''}>MACD: ▼ Cross</option></select>`;
             html += `<select onchange="scorecardSetTechFilter('filterStructure',this.value)" class="scorecard-sector-filter"><option value="">Structure: Any</option><option value="bullish"${scorecardState.filterStructure === 'bullish' ? ' selected' : ''}>Structure: Bullish</option><option value="bearish"${scorecardState.filterStructure === 'bearish' ? ' selected' : ''}>Structure: Bearish</option></select>`;
             if (_hasTechFilters) {
                 html += `<button onclick="scorecardClearTechFilters()" class="tech-filter-clear">Clear Filters</button>`;
