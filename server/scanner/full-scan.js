@@ -336,6 +336,13 @@ async function runFullScan({ force = false } = {}) {
                 vixLevel
             });
             const lastCandidate = candidateScores[candidateScores.length - 1];
+            if (tradePlan) {
+                lastCandidate.tradePlanTarget = tradePlan.target;
+                lastCandidate.tradePlanStop = tradePlan.stop;
+                lastCandidate.tradePlanRR = tradePlan.riskReward;
+                lastCandidate.tradePlanSupport = tradePlan.support ?? null;
+                lastCandidate.tradePlanResistance = tradePlan.resistance ?? null;
+            }
             if (buyZone) {
                 lastCandidate.buyZonePrice = buyZone.buyZonePrice;
                 lastCandidate.buyZoneDistance = buyZone.distancePct;

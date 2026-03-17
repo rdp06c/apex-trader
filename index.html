@@ -18674,6 +18674,18 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 c._comboHeat = evaluateComboHeat(c);
                 c._signalBonus = computeSignalBonus(c._entrySignal, portfolio.calibratedWeights);
                 c._tradePlan = generateTradePlan(c);
+                // Fall back to server-persisted trade plan when local computation fails (no bars)
+                if (!c._tradePlan && c.tradePlanTarget) {
+                    c._tradePlan = {
+                        target: c.tradePlanTarget,
+                        stop: c.tradePlanStop,
+                        riskReward: c.tradePlanRR,
+                        support: c.tradePlanSupport ?? null,
+                        resistance: c.tradePlanResistance ?? null,
+                        entry: c.price,
+                        _fromServer: true
+                    };
+                }
                 c._buyZone = computeBuyZone(c, c._tradePlan, multiDayCache[c.symbol], portfolio.lastVIX?.level);
                 // Fall back to server-persisted buy zone when local computation fails (no bars)
                 if (!c._buyZone && c.buyZonePrice) {
@@ -18682,7 +18694,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         inZone: c.buyZoneInZone || false,
                         distancePct: c.buyZoneDistance ?? (c.price ? +((c.price - c.buyZonePrice) / c.price * 100).toFixed(1) : 999),
                         zoneSource: c.buyZoneSource || 'unknown',
-                        support: null, sma20: c.sma20, pullbackTarget: null, recentHigh: null, pullbackPct: null
+                        support: c._tradePlan?.support ?? null, sma20: c.sma20, pullbackTarget: null, recentHigh: null, pullbackPct: null
                     };
                 }
                 c._buyZoneRR = c._buyZone?.buyZonePrice && c._tradePlan
