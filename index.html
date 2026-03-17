@@ -17253,14 +17253,15 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             report(`📊 Calibration: ${calibrationDates.length} dates from ${calibrationDates[0]} to ${calibrationDates[calibrationDates.length - 1]}`);
 
-            // Compute full fetch window: earliest - 80 lookback to latest + 10 forward
+            // Fetch ALL trading days in range (+ lookback/forward buffer) so forward returns
+            // measure actual N-day returns, not Nth-available-bar returns
             const lookbackDates = getWeekdaysBefore(calibrationDates[0], 80);
             const forwardDates = getWeekdaysAfter(calibrationDates[calibrationDates.length - 1], 22);
-            const allFetchDates = [...new Set([...lookbackDates, ...calibrationDates, ...forwardDates])].sort();
+            const allFetchDates = [...new Set([...lookbackDates, ...allWeekdays, ...forwardDates])].sort();
 
             report(`🔄 Calibration: Fetching ${allFetchDates.length} dates of historical data...`);
 
-            // Fetch ALL dates in one pass (key optimization: ~230 calls vs ~3300)
+            // Fetch ALL dates in one pass (~600 calls for 2yr range)
             const masterBars = {};
             const universe = await screenStocks();
             const universeSet = new Set(universe);
