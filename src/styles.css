@@ -2854,6 +2854,61 @@
             text-align: center;
         }
 
+        /* ── Technical Filters Row ───────────────────────── */
+        .scorecard-tech-filters {
+            margin-top: -4px;
+            padding-top: 0;
+        }
+        .tech-filter-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            flex: 0 0 auto;
+        }
+        .tech-filter-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            min-width: 26px;
+            white-space: nowrap;
+        }
+        .tech-filter-input {
+            width: 52px;
+            background: var(--bg-inset);
+            color: var(--text-primary);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-sm);
+            padding: 4px 6px;
+            font-size: 11px;
+            -moz-appearance: textfield;
+        }
+        .tech-filter-input::-webkit-inner-spin-button,
+        .tech-filter-input::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .tech-filter-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .tech-filter-sep {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+        .tech-filter-clear {
+            background: none;
+            border: 1px solid var(--border-medium);
+            color: #f39c12;
+            border-radius: var(--radius-sm);
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            flex: 0 0 auto;
+        }
+        .tech-filter-clear:hover {
+            border-color: #f39c12;
+            background: rgba(243, 156, 18, 0.1);
+        }
+
         /* ── Sector Rotation Heatmap ─────────────────────── */
         .rotation-grid {
             display: grid;

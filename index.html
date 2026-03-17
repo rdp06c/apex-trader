@@ -2867,6 +2867,61 @@
             text-align: center;
         }
 
+        /* ── Technical Filters Row ───────────────────────── */
+        .scorecard-tech-filters {
+            margin-top: -4px;
+            padding-top: 0;
+        }
+        .tech-filter-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            flex: 0 0 auto;
+        }
+        .tech-filter-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            min-width: 26px;
+            white-space: nowrap;
+        }
+        .tech-filter-input {
+            width: 52px;
+            background: var(--bg-inset);
+            color: var(--text-primary);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-sm);
+            padding: 4px 6px;
+            font-size: 11px;
+            -moz-appearance: textfield;
+        }
+        .tech-filter-input::-webkit-inner-spin-button,
+        .tech-filter-input::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .tech-filter-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .tech-filter-sep {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+        .tech-filter-clear {
+            background: none;
+            border: 1px solid var(--border-medium);
+            color: #f39c12;
+            border-radius: var(--radius-sm);
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            flex: 0 0 auto;
+        }
+        .tech-filter-clear:hover {
+            border-color: #f39c12;
+            background: rgba(243, 156, 18, 0.1);
+        }
+
         /* ── Sector Rotation Heatmap ─────────────────────── */
         .rotation-grid {
             display: grid;
@@ -18423,7 +18478,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
         }
 
         // Module 2: Candidate Scorecard (paginated, full universe)
-        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: 'reversal', filterWatchlist: false, filterZone: false, overrideRegimeGate: false, sortField: 'score', sortDir: 'desc' };
+        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: 'reversal', filterWatchlist: false, filterZone: false, overrideRegimeGate: false, sortField: 'score', sortDir: 'desc', filterRsMin: '', filterRsMax: '', filterRsiMin: '', filterRsiMax: '', filterMomMin: '', filterMomMax: '', filterMacd: '', filterStructure: '' };
         const SCORECARD_PAGE_SIZE = 40;
 
         function scorecardSetSector(val) {
@@ -18476,6 +18531,25 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
         function scorecardSetPage(p) {
             scorecardState.page = p;
+            updateCandidateScorecard();
+        }
+
+        function scorecardSetTechFilter(field, val) {
+            scorecardState[field] = val;
+            scorecardState.page = 1;
+            updateCandidateScorecard();
+        }
+
+        function scorecardClearTechFilters() {
+            scorecardState.filterRsMin = '';
+            scorecardState.filterRsMax = '';
+            scorecardState.filterRsiMin = '';
+            scorecardState.filterRsiMax = '';
+            scorecardState.filterMomMin = '';
+            scorecardState.filterMomMax = '';
+            scorecardState.filterMacd = '';
+            scorecardState.filterStructure = '';
+            scorecardState.page = 1;
             updateCandidateScorecard();
         }
 
@@ -18661,6 +18735,37 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 candidates = candidates.filter(c => c._buyZone?.inZone);
             }
 
+            // Technical filters (range + dropdown)
+            const _rsMin = scorecardState.filterRsMin !== '' ? Number(scorecardState.filterRsMin) : null;
+            const _rsMax = scorecardState.filterRsMax !== '' ? Number(scorecardState.filterRsMax) : null;
+            const _rsiMin = scorecardState.filterRsiMin !== '' ? Number(scorecardState.filterRsiMin) : null;
+            const _rsiMax = scorecardState.filterRsiMax !== '' ? Number(scorecardState.filterRsiMax) : null;
+            const _momMin = scorecardState.filterMomMin !== '' ? Number(scorecardState.filterMomMin) : null;
+            const _momMax = scorecardState.filterMomMax !== '' ? Number(scorecardState.filterMomMax) : null;
+            const _macdF = scorecardState.filterMacd;
+            const _structF = scorecardState.filterStructure;
+            if (_rsMin != null || _rsMax != null || _rsiMin != null || _rsiMax != null || _momMin != null || _momMax != null || _macdF || _structF) {
+                candidates = candidates.filter(c => {
+                    if (_rsMin != null && (c.rs == null || c.rs < _rsMin)) return false;
+                    if (_rsMax != null && (c.rs == null || c.rs > _rsMax)) return false;
+                    if (_rsiMin != null && (c.rsi == null || c.rsi < _rsiMin)) return false;
+                    if (_rsiMax != null && (c.rsi == null || c.rsi > _rsiMax)) return false;
+                    if (_momMin != null && (c.momentum == null || c.momentum < _momMin)) return false;
+                    if (_momMax != null && (c.momentum == null || c.momentum > _momMax)) return false;
+                    if (_macdF) {
+                        const cross = c.macdCrossover || 'none';
+                        if (_macdF === 'bullish' && cross !== 'bullish') return false;
+                        if (_macdF === 'bearish' && cross !== 'bearish') return false;
+                    }
+                    if (_structF) {
+                        const s = c.structure || 'unknown';
+                        if (_structF === 'bullish' && s !== 'bullish' && s !== 'bullish_continuation') return false;
+                        if (_structF === 'bearish' && s !== 'bearish' && s !== 'bearish_continuation') return false;
+                    }
+                    return true;
+                });
+            }
+
             // Sort
             const sortAccessors = {
                 action: c => { const b = c._actionBadge; return b === 'buy' ? 5 : b === 'add' ? 4 : b === 'near' ? 3 : b === 'wait' ? 2 : b === 'setup' ? 1 : 0; },
@@ -18753,6 +18858,20 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 html += `<span class="scorecard-page-info">Page ${scorecardState.page} of ${totalPages} (${candidates.length} stocks)</span>`;
                 html += `<button onclick="scorecardSetPage(${scorecardState.page + 1})"${scorecardState.page >= totalPages ? ' disabled' : ''}">Next &raquo;</button>`;
                 html += '</div>';
+            }
+            html += '</div>';
+
+            // Technical filter row
+            const _hasTechFilters = scorecardState.filterRsMin !== '' || scorecardState.filterRsMax !== '' || scorecardState.filterRsiMin !== '' || scorecardState.filterRsiMax !== '' || scorecardState.filterMomMin !== '' || scorecardState.filterMomMax !== '' || scorecardState.filterMacd || scorecardState.filterStructure;
+            html += '<div class="scorecard-controls scorecard-tech-filters">';
+            html += '<span class="tech-filter-label" style="min-width:auto;">Filters:</span>';
+            html += `<label class="tech-filter-group"><span class="tech-filter-label">RS</span><input type="number" min="0" max="100" step="1" placeholder="min" value="${scorecardState.filterRsMin}" onchange="scorecardSetTechFilter('filterRsMin',this.value)" class="tech-filter-input"><span class="tech-filter-sep">\u2013</span><input type="number" min="0" max="100" step="1" placeholder="max" value="${scorecardState.filterRsMax}" onchange="scorecardSetTechFilter('filterRsMax',this.value)" class="tech-filter-input"></label>`;
+            html += `<label class="tech-filter-group"><span class="tech-filter-label">RSI</span><input type="number" min="0" max="100" step="1" placeholder="min" value="${scorecardState.filterRsiMin}" onchange="scorecardSetTechFilter('filterRsiMin',this.value)" class="tech-filter-input"><span class="tech-filter-sep">\u2013</span><input type="number" min="0" max="100" step="1" placeholder="max" value="${scorecardState.filterRsiMax}" onchange="scorecardSetTechFilter('filterRsiMax',this.value)" class="tech-filter-input"></label>`;
+            html += `<label class="tech-filter-group"><span class="tech-filter-label">MOM</span><input type="number" min="0" max="10" step="0.5" placeholder="min" value="${scorecardState.filterMomMin}" onchange="scorecardSetTechFilter('filterMomMin',this.value)" class="tech-filter-input"><span class="tech-filter-sep">\u2013</span><input type="number" min="0" max="10" step="0.5" placeholder="max" value="${scorecardState.filterMomMax}" onchange="scorecardSetTechFilter('filterMomMax',this.value)" class="tech-filter-input"></label>`;
+            html += `<select onchange="scorecardSetTechFilter('filterMacd',this.value)" class="scorecard-sector-filter"><option value="">MACD: Any</option><option value="bullish"${scorecardState.filterMacd === 'bullish' ? ' selected' : ''}>MACD: Bullish</option><option value="bearish"${scorecardState.filterMacd === 'bearish' ? ' selected' : ''}>MACD: Bearish</option></select>`;
+            html += `<select onchange="scorecardSetTechFilter('filterStructure',this.value)" class="scorecard-sector-filter"><option value="">Structure: Any</option><option value="bullish"${scorecardState.filterStructure === 'bullish' ? ' selected' : ''}>Structure: Bullish</option><option value="bearish"${scorecardState.filterStructure === 'bearish' ? ' selected' : ''}>Structure: Bearish</option></select>`;
+            if (_hasTechFilters) {
+                html += `<button onclick="scorecardClearTechFilters()" class="tech-filter-clear">Clear Filters</button>`;
             }
             html += '</div>';
 
