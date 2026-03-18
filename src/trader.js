@@ -3840,6 +3840,10 @@
             { id: 'range_bottom_bull', label: 'Range<20% + Bull Structure', tier: 2, group: 'reversal', filter: s => (s.rangePosition ?? 50) < 20 && (s.structureScore ?? 0) >= 1 },
             { id: 'adx_trending_mom', label: 'ADX>25 + Mom 5-8', tier: 2, group: 'momentum', filter: s => (s.adx ?? 0) > 25 && (s.momentumScore ?? 0) >= 5 && (s.momentumScore ?? 0) <= 8 },
             { id: 'hl_accumulation', label: '4+ Higher Lows + Low Vol', tier: 2, group: 'structure', filter: s => (s.higherLowCount ?? 0) >= 4 && (s.volumeRatio ?? 1) < 0.7 },
+            // REV structure segmentation — how does structure state affect reversal outcomes?
+            { id: 'rsi_low_struct_bear', label: 'RSI<40 + Bearish Structure', tier: 2, group: 'reversal', filter: s => s.rsi != null && s.rsi < 40 && (s.structureScore ?? 0) <= -1 },
+            { id: 'rsi_low_struct_range', label: 'RSI<40 + Ranging Structure', tier: 2, group: 'reversal', filter: s => s.rsi != null && s.rsi < 40 && (s.structureScore ?? 0) >= 0 && (s.structureScore ?? 0) <= 1 },
+            { id: 'rsi_low_choch_bull', label: 'RSI<40 + Bullish CHoCH', tier: 2, group: 'reversal', filter: s => s.rsi != null && s.rsi < 40 && (s.structureScore ?? 0) === 2 },
         ];
 
         // Evaluate which signal combos a candidate currently matches,
@@ -10126,13 +10130,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 html += '<td>' + (() => {
                     const sig = r._entrySignal;
                     if (!sig?.patterns?.length) return '—';
-                    let best = null;
-                    for (const pat of sig.patterns) {
-                        if (!pat.match || pat.antiPattern) continue;
-                        if (!best || pat.matchCount > best.matchCount) best = pat;
-                    }
                     const anti = sig.antiPatternMatch;
                     if (anti) return '<span class="entry-badge avoid">AVOID</span>';
+                    // Use stored bestPatternId (respects user override), fall back to highest matchCount
+                    let best = sig.bestPatternId ? sig.patterns.find(p => p.id === sig.bestPatternId && p.match) : null;
+                    if (!best) {
+                        for (const pat of sig.patterns) {
+                            if (!pat.match || pat.antiPattern) continue;
+                            if (!best || pat.matchCount > best.matchCount) best = pat;
+                        }
+                    }
                     if (!best) return '—';
                     const badge = best.badge || best.id.toUpperCase().slice(0, 3);
                     const matchClass = best.match === 'full' ? 'full' : best.match === 'strong' ? 'strong' : 'partial';
@@ -11188,6 +11195,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('manualTradeShares').value = '';
             document.getElementById('manualTradePrice').value = '';
             document.getElementById('manualTradeReason').value = '';
+            document.getElementById('manualTradeSetup').value = '';
             document.getElementById('manualTradeStatus').textContent = '';
             document.getElementById('manualTradeStatus').style.color = 'var(--text-muted)';
             switchManualTradeTab('buy');
@@ -11205,6 +11213,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             document.getElementById('manualTradeTitle').textContent = mode === 'buy' ? 'Manual Buy' : 'Manual Sell';
             document.getElementById('manualTradeSubmit').textContent = mode === 'buy' ? 'Submit Buy' : 'Submit Sell';
             document.getElementById('manualTradeSubmit').style.background = mode === 'buy' ? '' : 'var(--red)';
+
+            // Show setup selector only for buys
+            document.getElementById('manualTradeSetupWrap').style.display = mode === 'buy' ? '' : 'none';
 
             // For sell, populate symbol dropdown from holdings
             if (mode === 'sell') {
@@ -11406,6 +11417,19 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         price: price
                     };
                     entryTechnicals.entrySignal = evaluateEntrySignals(sigCandidate);
+
+                    // Override bestPatternId with user's setup selection (if specified)
+                    const userSetup = document.getElementById('manualTradeSetup').value;
+                    if (userSetup && entryTechnicals.entrySignal) {
+                        entryTechnicals.entrySignal.bestPatternId = userSetup;
+                        // Update bestMatch from the selected pattern's actual match quality
+                        const selectedPat = entryTechnicals.entrySignal.patterns.find(p => p.id === userSetup);
+                        if (selectedPat?.match) {
+                            entryTechnicals.entrySignal.bestMatch = selectedPat.match;
+                            entryTechnicals.entrySignal.bestMatchCount = selectedPat.matchCount;
+                        }
+                    }
+
                     const heat = evaluateComboHeat(sigCandidate);
                     if (heat) entryTechnicals.comboHeat = heat;
                 }
@@ -13296,6 +13320,151 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             return { lo: +lo.toFixed(3), hi: +hi.toFixed(3), significant: lo > 0 || hi < 0 };
         }
 
+        // Simulate "Stop -20%, Trail at +10%" strategy on a set of observations.
+        // Uses masterBars for day-by-day price tracking within the 40-day forward window.
+        function simulateStrategy(obs, masterBars, barTimestamps, upperBoundFn) {
+            const STOP_PCT = -20;
+            const TRAIL_ACTIVATION_PCT = 10;
+            const TRAIL_WIDTH_PCT = 10;
+
+            let wins = 0, losses = 0, opens = 0;
+            let totalReturn = 0;
+            const holdDays = [];
+            const returns = [];
+
+            for (const o of obs) {
+                const ts = barTimestamps[o.symbol];
+                if (!ts) { opens++; continue; }
+                const calTs = new Date(o.date + 'T23:59:59').getTime();
+                const startIdx = upperBoundFn(ts, calTs);
+                const bars = masterBars[o.symbol]?.slice(startIdx, startIdx + 40);
+                if (!bars || bars.length < 5) { opens++; continue; }
+
+                const entry = o.scoreInputs.currentPrice || bars[0]?.o || 0;
+                if (entry <= 0) { opens++; continue; }
+
+                const stopPrice = entry * (1 + STOP_PCT / 100);
+                let peak = entry;
+                let trailActive = false;
+                let trailStop = 0;
+                let exitReturn = null;
+                let exitDay = null;
+                let exitType = 'open';
+
+                for (let d = 0; d < bars.length; d++) {
+                    const bar = bars[d];
+                    // Check hard stop (only before trail activates)
+                    if (bar.l <= stopPrice && !trailActive) {
+                        exitReturn = STOP_PCT;
+                        exitDay = d + 1;
+                        exitType = 'stop';
+                        break;
+                    }
+                    // Update peak
+                    if (bar.h > peak) peak = bar.h;
+                    // Activate trailing when +10% reached
+                    if (!trailActive && peak >= entry * (1 + TRAIL_ACTIVATION_PCT / 100)) {
+                        trailActive = true;
+                        trailStop = peak * (1 - TRAIL_WIDTH_PCT / 100);
+                    }
+                    // Update and check trailing stop
+                    if (trailActive) {
+                        trailStop = Math.max(trailStop, peak * (1 - TRAIL_WIDTH_PCT / 100));
+                        if (bar.l <= trailStop) {
+                            exitReturn = ((trailStop - entry) / entry) * 100;
+                            exitDay = d + 1;
+                            exitType = 'trail';
+                            break;
+                        }
+                    }
+                }
+
+                if (exitType === 'open') {
+                    const lastBar = bars[bars.length - 1];
+                    exitReturn = ((lastBar.c - entry) / entry) * 100;
+                    exitDay = bars.length;
+                }
+
+                if (exitType === 'stop') losses++;
+                else if (exitType === 'trail') wins++;
+                else opens++;
+
+                totalReturn += exitReturn;
+                returns.push(exitReturn);
+                holdDays.push(exitDay);
+            }
+
+            const total = wins + losses + opens;
+            holdDays.sort((a, b) => a - b);
+            returns.sort((a, b) => a - b);
+
+            return {
+                n: total,
+                wins, losses, opens,
+                winRate: (wins + losses) > 0 ? +((wins / (wins + losses)) * 100).toFixed(1) : null,
+                avgReturn: total > 0 ? +(totalReturn / total).toFixed(2) : null,
+                medianReturn: returns.length > 0 ? +returns[Math.floor(returns.length / 2)].toFixed(2) : null,
+                medianHoldDays: holdDays.length > 0 ? holdDays[Math.floor(holdDays.length / 2)] : null,
+                profitFactor: returns.filter(r => r < 0).length > 0
+                    ? +(returns.filter(r => r > 0).reduce((s, r) => s + r, 0) / Math.abs(returns.filter(r => r < 0).reduce((s, r) => s + r, 0) || 1)).toFixed(2)
+                    : null,
+            };
+        }
+
+        // Analyze REV excursion profile: MAE/MFE + strategy simulation, segmented by structure state.
+        function analyzeRevExcursionProfile(observations, masterBars, barTimestamps, upperBoundFn) {
+            const revObs = observations.filter(o =>
+                o.scoreInputs.rsi != null && o.scoreInputs.rsi < 40 &&
+                o.mae10d != null && o.mfe10d != null
+            );
+            if (revObs.length < 50) return null;
+
+            const segments = {
+                bearish:  revObs.filter(o => (o.scoreInputs.structureScore ?? 0) <= -1),
+                ranging:  revObs.filter(o => { const s = o.scoreInputs.structureScore ?? 0; return s >= 0 && s <= 1; }),
+                choch:    revObs.filter(o => (o.scoreInputs.structureScore ?? 0) === 2),
+                bullish:  revObs.filter(o => (o.scoreInputs.structureScore ?? 0) >= 3),
+            };
+
+            const computeProfile = (obs) => {
+                if (obs.length < 20) return { n: obs.length, insufficient: true };
+
+                const sorted = (arr) => [...arr].sort((a, b) => a - b);
+                const mid = (arr) => arr[Math.floor(arr.length / 2)];
+                const mae10 = sorted(obs.map(o => o.mae10d));
+                const mfe10 = sorted(obs.map(o => o.mfe10d));
+                const mfe20 = sorted(obs.filter(o => o.mfe20d != null).map(o => o.mfe20d));
+                const mfe40 = sorted(obs.filter(o => o.mfe40d != null).map(o => o.mfe40d));
+
+                const bestMFE = obs.map(o => o.mfe40d ?? o.mfe20d ?? o.mfe10d);
+                const pctAbove = (arr, thresh) => +(arr.filter(v => v >= thresh).length / arr.length * 100).toFixed(1);
+
+                const stratResults = simulateStrategy(obs, masterBars, barTimestamps, upperBoundFn);
+
+                return {
+                    n: obs.length,
+                    medianMAE10d: +mid(mae10).toFixed(2),
+                    medianMFE10d: +mid(mfe10).toFixed(2),
+                    medianMFE20d: mfe20.length >= 20 ? +mid(mfe20).toFixed(2) : null,
+                    medianMFE40d: mfe40.length >= 20 ? +mid(mfe40).toFixed(2) : null,
+                    rewardRisk10d: mid(mae10) !== 0 ? +(mid(mfe10) / Math.abs(mid(mae10))).toFixed(2) : null,
+                    avgReturn10d: +(obs.reduce((s, o) => s + o.return10d, 0) / obs.length).toFixed(3),
+                    pctMFE5: pctAbove(bestMFE, 5),
+                    pctMFE10: pctAbove(bestMFE, 10),
+                    pctMFE15: pctAbove(bestMFE, 15),
+                    pctMFE20: pctAbove(bestMFE, 20),
+                    strategy: stratResults
+                };
+            };
+
+            return {
+                total: computeProfile(revObs),
+                segments: Object.fromEntries(
+                    Object.entries(segments).map(([k, v]) => [k, computeProfile(v)])
+                )
+            };
+        }
+
         function analyzeSignalCombos(observations, showAll = false) {
             const MIN_N = showAll ? 30 : 50;
             const HOT_THRESHOLD = showAll ? 0.2 : 0.5;
@@ -13447,11 +13616,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
         async function runCalibrationSweep(startDateStr, endDateStr, progressCallback) {
             const report = (msg) => { console.log(msg); if (progressCallback) progressCallback(msg); };
 
-            // Default date range: 12 months ago to 12 trading days ago (need 10d forward data + buffer)
+            // Default date range: 24 months ago to 42 trading days ago (need 40d forward data + buffer)
+            const FORWARD_DAYS = 42;
             const today = new Date();
             const endDefault = new Date(today);
             let forwardBuffer = 0;
-            while (forwardBuffer < 22) { endDefault.setDate(endDefault.getDate() - 1); if (endDefault.getDay() !== 0 && endDefault.getDay() !== 6) forwardBuffer++; }
+            while (forwardBuffer < FORWARD_DAYS) { endDefault.setDate(endDefault.getDate() - 1); if (endDefault.getDay() !== 0 && endDefault.getDay() !== 6) forwardBuffer++; }
             const startDefault = new Date(endDefault);
             startDefault.setMonth(startDefault.getMonth() - 24);
 
@@ -13484,7 +13654,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             // Fetch ALL trading days in range (+ lookback/forward buffer) so forward returns
             // measure actual N-day returns, not Nth-available-bar returns
             const lookbackDates = getWeekdaysBefore(calibrationDates[0], 80);
-            const forwardDates = getWeekdaysAfter(calibrationDates[calibrationDates.length - 1], 22);
+            const forwardDates = getWeekdaysAfter(calibrationDates[calibrationDates.length - 1], FORWARD_DAYS);
             const allFetchDates = [...new Set([...lookbackDates, ...allWeekdays, ...forwardDates])].sort();
 
             report(`🔄 Calibration: Fetching ${allFetchDates.length} dates of historical data...`);
@@ -13679,24 +13849,31 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                         // Look up forward returns via binary search (bars already sorted)
                         const futureStart = barTimestamps[sym] ? upperBound(barTimestamps[sym], calTimestamp) : 0;
-                        const futureBars = masterBars[sym]?.slice(futureStart, futureStart + 20) || [];
+                        const futureBars = masterBars[sym]?.slice(futureStart, futureStart + 40) || [];
                         const price5d = futureBars.length >= 5 ? futureBars[4].c : null;
                         const price10d = futureBars.length >= 10 ? futureBars[9].c : null;
                         const price15d = futureBars.length >= 15 ? futureBars[14].c : null;
                         const price20d = futureBars.length >= 20 ? futureBars[19].c : null;
+                        const price30d = futureBars.length >= 30 ? futureBars[29].c : null;
+                        const price40d = futureBars.length >= 40 ? futureBars[39].c : null;
                         const return5d = price5d ? ((price5d - data.price) / data.price) * 100 : null;
                         const return10d = price10d ? ((price10d - data.price) / data.price) * 100 : null;
                         const return15d = price15d ? ((price15d - data.price) / data.price) * 100 : null;
                         const return20d = price20d ? ((price20d - data.price) / data.price) * 100 : null;
+                        const return30d = price30d ? ((price30d - data.price) / data.price) * 100 : null;
+                        const return40d = price40d ? ((price40d - data.price) / data.price) * 100 : null;
 
                         // MAE/MFE from daily highs and lows
                         const entryPrice = data.price;
                         const futureBars10 = futureBars.slice(0, 10);
                         const futureBars20 = futureBars.slice(0, 20);
+                        const futureBars40 = futureBars;
                         const mae10d = futureBars10.length > 0 ? ((Math.min(...futureBars10.map(b => b.l)) - entryPrice) / entryPrice) * 100 : null;
                         const mfe10d = futureBars10.length > 0 ? ((Math.max(...futureBars10.map(b => b.h)) - entryPrice) / entryPrice) * 100 : null;
                         const mae20d = futureBars20.length > 0 ? ((Math.min(...futureBars20.map(b => b.l)) - entryPrice) / entryPrice) * 100 : null;
                         const mfe20d = futureBars20.length > 0 ? ((Math.max(...futureBars20.map(b => b.h)) - entryPrice) / entryPrice) * 100 : null;
+                        const mae40d = futureBars40.length > 20 ? ((Math.min(...futureBars40.map(b => b.l)) - entryPrice) / entryPrice) * 100 : null;
+                        const mfe40d = futureBars40.length > 20 ? ((Math.max(...futureBars40.map(b => b.h)) - entryPrice) / entryPrice) * 100 : null;
 
                         if (return10d != null) {
                             allObservations.push({
@@ -13710,10 +13887,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                                 return10d: return10d,
                                 return15d: return15d,
                                 return20d: return20d,
+                                return30d: return30d,
+                                return40d: return40d,
                                 mae10d: mae10d,
                                 mfe10d: mfe10d,
                                 mae20d: mae20d,
                                 mfe20d: mfe20d,
+                                mae40d: mae40d,
+                                mfe40d: mfe40d,
                                 volumeRatio: volRatio?.ratio ?? null,
                                 vix: vixByDate[calDate] || null
                             });
@@ -14060,6 +14241,25 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             ).join(', ');
             report(`📊 Entry pattern stats: ${patternSummary}`);
 
+            // REV excursion profile: MAE/MFE + strategy simulation by structure state
+            report('🔄 Analyzing REV excursion profile...');
+            const revExcursionProfile = analyzeRevExcursionProfile(allObservations, masterBars, barTimestamps, upperBound);
+            if (revExcursionProfile) {
+                const segs = revExcursionProfile.segments;
+                const fmtSeg = (name, s) => {
+                    if (!s || s.insufficient) return `  ${name.padEnd(10)} | n=${s?.n ?? 0} (insufficient)`;
+                    const st = s.strategy;
+                    return `  ${name.padEnd(10)} | n=${String(s.n).padStart(5)} | MAE ${String(s.medianMAE10d).padStart(6)}% | MFE40 ${s.medianMFE40d != null ? ('+' + s.medianMFE40d).padStart(6) : '  N/A '}% | ≥10% ${String(s.pctMFE10).padStart(5)}% | ≥20% ${String(s.pctMFE20).padStart(5)}% | Strat WR ${st?.winRate ?? 'N/A'}% avg ${st?.avgReturn ?? 'N/A'}% hold ${st?.medianHoldDays ?? '?'}d`;
+                };
+                report('📊 REV Excursion Profile (RSI<40, Stop -20% / Trail +10%):');
+                report(fmtSeg('ALL', revExcursionProfile.total));
+                for (const [name, seg] of Object.entries(segs)) {
+                    report(fmtSeg(name, seg));
+                }
+            } else {
+                report('⚠️ REV excursion profile: insufficient RSI<40 observations');
+            }
+
             // Sector-segmented combo analysis
             const sectorComboResults = {};
             const sectorGroups = {};
@@ -14097,6 +14297,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 sectorCombos: sectorComboResults,
                 excursionAnalysis: excursionAnalysis,
                 excursionStats: excursionStats,
+                revExcursionProfile: revExcursionProfile,
                 newIndicatorCorrelations: newIndicatorCorrelations,
                 extendedCorrelations: true,
                 validation: {
@@ -15312,6 +15513,22 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                                     const hit = tipPat.gate?.[g.id];
                                     tipLines.push(`${hit ? '✓' : '⊘'} ${g.label}${!hit ? ' (blocked)' : ''}`);
                                 }
+                            }
+                        }
+                    }
+                    // Append REV excursion profile to tooltip if available
+                    const revProf = portfolio.calibratedWeights?.revExcursionProfile;
+                    if (revProf && tipPat && tipPat.id === 'reversal') {
+                        const ss = c.structureScore ?? 0;
+                        const bucket = ss <= -1 ? 'bearish' : ss <= 1 ? 'ranging' : ss === 2 ? 'choch' : 'bullish';
+                        const p = revProf.segments?.[bucket];
+                        if (p && !p.insufficient) {
+                            tipLines.push('');
+                            tipLines.push(`Profile (${bucket}, n=${p.n}):`);
+                            tipLines.push(`  Drawdown: ${p.medianMAE10d}% | Upside: +${p.medianMFE40d ?? p.medianMFE10d}%`);
+                            tipLines.push(`  ≥10%: ${p.pctMFE10}% | ≥20%: ${p.pctMFE20}%`);
+                            if (p.strategy) {
+                                tipLines.push(`  Strategy: ${p.strategy.winRate}% WR, ${p.strategy.avgReturn}% avg, ${p.strategy.medianHoldDays}d hold`);
                             }
                         }
                     }

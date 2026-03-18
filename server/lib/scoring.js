@@ -1029,6 +1029,10 @@ const SIGNAL_COMBO_DEFS = [
     { id: 'range_bottom_bull', label: 'Range<20% + Bull Structure', tier: 2, group: 'reversal', filter: s => (s.rangePosition ?? 50) < 20 && (s.structureScore ?? 0) >= 1 },
     { id: 'adx_trending_mom', label: 'ADX>25 + Mom 5-8', tier: 2, group: 'momentum', filter: s => (s.adx ?? 0) > 25 && (s.momentumScore ?? 0) >= 5 && (s.momentumScore ?? 0) <= 8 },
     { id: 'hl_accumulation', label: '4+ Higher Lows + Low Vol', tier: 2, group: 'structure', filter: s => (s.higherLowCount ?? 0) >= 4 && (s.volumeRatio ?? 1) < 0.7 },
+    // REV structure segmentation — how does structure state affect reversal outcomes?
+    { id: 'rsi_low_struct_bear', label: 'RSI<40 + Bearish Structure', tier: 2, group: 'reversal', filter: s => s.rsi != null && s.rsi < 40 && (s.structureScore ?? 0) <= -1 },
+    { id: 'rsi_low_struct_range', label: 'RSI<40 + Ranging Structure', tier: 2, group: 'reversal', filter: s => s.rsi != null && s.rsi < 40 && (s.structureScore ?? 0) >= 0 && (s.structureScore ?? 0) <= 1 },
+    { id: 'rsi_low_choch_bull', label: 'RSI<40 + Bullish CHoCH', tier: 2, group: 'reversal', filter: s => s.rsi != null && s.rsi < 40 && (s.structureScore ?? 0) === 2 },
 ];
 
 // Evaluate which signal combos a candidate currently matches,

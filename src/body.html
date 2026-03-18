@@ -445,6 +445,17 @@
                         <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Date</label>
                         <input type="date" id="manualTradeDate" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
                     </div>
+                    <div id="manualTradeSetupWrap">
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Setup Type</label>
+                        <select id="manualTradeSetup" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px">
+                            <option value="">Auto (best match)</option>
+                            <option value="reversal">REV — Reversal</option>
+                            <option value="momentum_continuation">MOM — Momentum</option>
+                            <option value="quiet_momentum">QMO — Quiet Momentum</option>
+                            <option value="squeeze">SQZ — Squeeze</option>
+                            <option value="sector_leader">LDR — Sector Leader</option>
+                        </select>
+                    </div>
                     <div id="manualTradeReasonWrap">
                         <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Reason (optional)</label>
                         <input type="text" id="manualTradeReason" placeholder="e.g. Bullish MACD cross + RSI pullback" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
