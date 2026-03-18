@@ -3577,16 +3577,6 @@
             }
         ];
 
-        // Maps each setup type to which combo groups are relevant for heat display.
-        // Anti-patterns ('anti') are always included regardless of setup.
-        const SETUP_HEAT_GROUPS = {
-            reversal:       ['reversal'],
-            momentum_cont:  ['momentum'],
-            quiet_momentum: ['momentum'],
-            squeeze:        ['structure'],
-            sector_leader:  ['momentum', 'structure'],
-        };
-
         function evaluateEntrySignals(candidate) {
             const results = [];
             let bestMatch = null;
@@ -15426,7 +15416,6 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     const tier = m === 'full' ? 300 : m === 'strong' ? 200 : m === 'partial' ? 100 : 0;
                     return tier + count;
                 },
-                heat: c => { const raw = computeComboHeatBonus(c._comboHeat); return c._entrySignal?.bestMatch ? raw : Math.round(raw * 0.33 * 10) / 10; },
                 rr: c => c._tradePlan?.riskReward ?? 0,
             };
             const accessor = sortAccessors[scorecardState.sortField] || sortAccessors.score;
@@ -15496,7 +15485,6 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 '<th class="watchlist-col" title="Click star to add/remove from watchlist">★</th><th>#</th><th>Symbol</th>' +
                 sh('action', "Synthesized action: BUY = in zone, not held. ADD = in zone, held. NEAR = within 2% of zone. WAIT = above zone. SETUP = signal present, no zone data.", 'Action') +
                 sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Non-REV gated by calibration.", 'Sig') +
-                sh('heat', "Combo heat from calibration backtesting. Green dots = hot combos, red dots = cold combos. Number = weighted net edge vs baseline. Positive = historically outperforms, negative = underperforms.", 'Heat') +
                 sh('score', "Composite score from weighted signals + calibration heat bonus + entry signal bonus. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('limit', "Buy zone limit price. Set as single-day limit order. Based on highest of: structure support, SMA20, VIX-aware pullback from 20-day high.", 'Limit') +
@@ -15674,32 +15662,6 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     if (displayPat && !antiPat) matchedSetupId = displayPat.id;
                 }
 
-                // Combo heat indicator — filtered to setup-relevant combos when badge is displayed
-                const heat = c._comboHeat;
-                let heatCell = '';
-                if (heat && (heat.hotCount > 0 || heat.coldCount > 0)) {
-                    let filteredHot = heat.hotCombos;
-                    let filteredCold = heat.coldCombos;
-
-                    // When stock has a displayed setup badge, only show combos relevant to that setup
-                    if (matchedSetupId && SETUP_HEAT_GROUPS[matchedSetupId]) {
-                        const allowed = new Set([...SETUP_HEAT_GROUPS[matchedSetupId], 'anti']);
-                        filteredHot = heat.hotCombos.filter(h => allowed.has(h.group));
-                        filteredCold = heat.coldCombos.filter(h => allowed.has(h.group));
-                    }
-
-                    if (filteredHot.length > 0 || filteredCold.length > 0) {
-                        const dots = [];
-                        for (let h = 0; h < filteredHot.length; h++) dots.push('<span class="heat-dot hot"></span>');
-                        for (let h = 0; h < filteredCold.length; h++) dots.push('<span class="heat-dot cold"></span>');
-                        const tipParts = [];
-                        tipParts.push(`${filteredHot.length + filteredCold.length} combo(s) — informational only, not affecting score`);
-                        filteredHot.forEach(h => tipParts.push(`🟢 ${h.label}: +${h.vsBaseline.toFixed(1)}% edge, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
-                        filteredCold.forEach(h => tipParts.push(`🔴 ${h.label}: ${h.vsBaseline.toFixed(1)}% edge, ${h.winRate10d.toFixed(0)}% WR (${h.n})`));
-                        heatCell = `<span class="heat-dots" title="${tipParts.join('\n')}">${dots.join('')}</span>`;
-                    }
-                }
-
                 // Score driver indicator (Phase 4)
                 let driverBadge = '';
                 if (bd && score > 0) {
@@ -15780,7 +15742,6 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     <td><span class="scorecard-symbol">${c.symbol}</span>${held ? '<span class="scorecard-held-badge">HELD</span>' : ''}${name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${name}</div>` : ''}</td>
                     <td>${actionBadgeHtml}</td>
                     <td>${sigBadge}</td>
-                    <td>${heatCell}</td>
                     <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span>${driverBadge}</div></td>
                     <td style="font-size:11px">${priceStr}</td>
                     <td style="font-size:11px" title="${limitTip}">${limitCell}</td>
@@ -15877,7 +15838,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 return eb - ea;
             });
             const setupRankings = setups.map(s => `${s.badge} ${s.label}${fmtEdge(s.key)}`).join(' · ');
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Action: <span class="action-badge action-buy" style="display:inline">BUY</span> in zone · <span class="action-badge action-add" style="display:inline">ADD</span> held+zone · <span class="action-badge action-near" style="display:inline">NEAR</span> &lt;2% · <span class="action-badge action-wait" style="display:inline">WAIT</span> above zone · <span class="action-badge action-setup" style="display:inline">SETUP</span> signal</span></div>`;
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Action: <span class="action-badge action-buy" style="display:inline">BUY</span> in zone · <span class="action-badge action-add" style="display:inline">ADD</span> held+zone · <span class="action-badge action-near" style="display:inline">NEAR</span> &lt;2% · <span class="action-badge action-wait" style="display:inline">WAIT</span> above zone · <span class="action-badge action-setup" style="display:inline">SETUP</span> signal</span></div>`;
             container.innerHTML = html;
         }
 

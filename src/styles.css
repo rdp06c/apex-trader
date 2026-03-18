@@ -2717,11 +2717,6 @@
         .dist-near { color: #f39c12; }
         .tp-separator { grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 8px; padding-top: 8px; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; }
 
-        .heat-dots { display: inline-flex; gap: 3px; align-items: center; cursor: help; }
-        .heat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
-        .heat-dot.hot { background: var(--green); box-shadow: 0 0 4px rgba(46, 204, 64, 0.4); }
-        .heat-dot.cold { background: var(--red); box-shadow: 0 0 4px rgba(255, 71, 87, 0.4); }
-        .heat-net { font-size: 0.75em; font-weight: 600; margin-left: 3px; }
         .accel-badge { font-size: 0.75em; }
         .vol-rising { color: var(--green); }
         .vol-falling { color: var(--red); }
