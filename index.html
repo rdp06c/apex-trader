@@ -7482,7 +7482,9 @@
             }
 
             // Zone-aware badges (when buy zone data available)
-            if (zone && score >= 5 && structOk) {
+            // REV signals bypass structOk — calibration proves structure irrelevant for RSI<40
+            const structOkForSignal = (signalId === 'reversal') || structOk;
+            if (zone && score >= 5 && structOkForSignal) {
                 // Quality gates for BUY/ADD/NEAR — downgrade to WAIT with reason
                 const zoneRR = candidate._buyZoneRR?.riskReward;
                 let gateReason = null;
