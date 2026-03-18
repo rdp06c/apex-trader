@@ -14243,21 +14243,27 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // REV excursion profile: MAE/MFE + strategy simulation by structure state
             report('🔄 Analyzing REV excursion profile...');
-            const revExcursionProfile = analyzeRevExcursionProfile(allObservations, masterBars, barTimestamps, upperBound);
-            if (revExcursionProfile) {
-                const segs = revExcursionProfile.segments;
-                const fmtSeg = (name, s) => {
-                    if (!s || s.insufficient) return `  ${name.padEnd(10)} | n=${s?.n ?? 0} (insufficient)`;
-                    const st = s.strategy;
-                    return `  ${name.padEnd(10)} | n=${String(s.n).padStart(5)} | MAE ${String(s.medianMAE10d).padStart(6)}% | MFE40 ${s.medianMFE40d != null ? ('+' + s.medianMFE40d).padStart(6) : '  N/A '}% | ≥10% ${String(s.pctMFE10).padStart(5)}% | ≥20% ${String(s.pctMFE20).padStart(5)}% | Strat WR ${st?.winRate ?? 'N/A'}% avg ${st?.avgReturn ?? 'N/A'}% hold ${st?.medianHoldDays ?? '?'}d`;
-                };
-                report('📊 REV Excursion Profile (RSI<40, Stop -20% / Trail +10%):');
-                report(fmtSeg('ALL', revExcursionProfile.total));
-                for (const [name, seg] of Object.entries(segs)) {
-                    report(fmtSeg(name, seg));
+            let revExcursionProfile = null;
+            try {
+                revExcursionProfile = analyzeRevExcursionProfile(allObservations, masterBars, barTimestamps, upperBound);
+                if (revExcursionProfile) {
+                    const segs = revExcursionProfile.segments;
+                    const fmtSeg = (name, s) => {
+                        if (!s || s.insufficient) return `  ${name.padEnd(10)} | n=${s?.n ?? 0} (insufficient)`;
+                        const st = s.strategy;
+                        return `  ${name.padEnd(10)} | n=${String(s.n).padStart(5)} | MAE ${String(s.medianMAE10d).padStart(6)}% | MFE40 ${s.medianMFE40d != null ? ('+' + s.medianMFE40d).padStart(6) : '  N/A '}% | hit10% ${String(s.pctMFE10).padStart(5)}% | hit20% ${String(s.pctMFE20).padStart(5)}% | Strat WR ${st?.winRate ?? 'N/A'}% avg ${st?.avgReturn ?? 'N/A'}% hold ${st?.medianHoldDays ?? '?'}d`;
+                    };
+                    report('📊 REV Excursion Profile (RSI<40, Stop -20% / Trail +10%):');
+                    report(fmtSeg('ALL', revExcursionProfile.total));
+                    for (const [name, seg] of Object.entries(segs)) {
+                        report(fmtSeg(name, seg));
+                    }
+                } else {
+                    report('⚠️ REV excursion profile: insufficient RSI<40 observations');
                 }
-            } else {
-                report('⚠️ REV excursion profile: insufficient RSI<40 observations');
+            } catch (e) {
+                console.error('REV excursion profile error:', e);
+                report(`⚠️ REV excursion profile error: ${e.message}`);
             }
 
             // Sector-segmented combo analysis
