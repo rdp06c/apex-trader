@@ -3357,7 +3357,7 @@
 
             <!-- Portfolio Hero -->
             <div class="hero">
-                <div class="hero-label">Holdings Value</div>
+                <div class="hero-label">Holdings Value <span id="privacyToggle" onclick="togglePrivacyMode()" style="cursor:pointer;opacity:0.5;font-size:12px;vertical-align:middle" title="Toggle privacy mode">👁</span></div>
                 <div class="hero-value" id="portfolioValue">$0.00</div>
                 <div class="hero-change" id="heroChange"></div>
             </div>
@@ -14381,6 +14381,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 realizedEl.style.color = realizedTotal >= 0 ? 'var(--green)' : 'var(--red)';
             }
 
+            // Re-apply privacy mode after values update
+            if (privacyMode) applyPrivacyMode();
+
             // Update holdings (compact sidebar + detail main area)
             const holdingsList = document.getElementById('holdingsList');
             const holdingsDetailGrid = document.getElementById('holdingsDetailGrid');
@@ -19677,6 +19680,43 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
         // Module: Thesis Tracker
         // Unified collapse/expand for all sections
+        let privacyMode = localStorage.getItem('privacyMode') === 'true';
+        function togglePrivacyMode() {
+            privacyMode = !privacyMode;
+            localStorage.setItem('privacyMode', privacyMode);
+            applyPrivacyMode();
+        }
+        function applyPrivacyMode() {
+            const mask = '•••••';
+            const ids = ['portfolioValue', 'investedValue', 'unrealizedPL', 'realizedPL'];
+            const toggle = document.getElementById('privacyToggle');
+            if (privacyMode) {
+                ids.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        if (!el.dataset.realValue) el.dataset.realValue = el.textContent;
+                        el.textContent = mask;
+                    }
+                });
+                const heroChange = document.getElementById('heroChange');
+                if (heroChange) {
+                    if (!heroChange.dataset.realValue) heroChange.dataset.realValue = heroChange.innerHTML;
+                    heroChange.innerHTML = '';
+                }
+                if (toggle) toggle.style.opacity = '1';
+            } else {
+                ids.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && el.dataset.realValue) { el.textContent = el.dataset.realValue; delete el.dataset.realValue; }
+                });
+                const heroChange = document.getElementById('heroChange');
+                if (heroChange && heroChange.dataset.realValue) { heroChange.innerHTML = heroChange.dataset.realValue; delete heroChange.dataset.realValue; }
+                if (toggle) toggle.style.opacity = '0.5';
+            }
+        }
+        // Apply on load if previously enabled
+        if (privacyMode) setTimeout(applyPrivacyMode, 500);
+
         function toggleSection(sectionId) {
             const body = document.getElementById(sectionId + 'Body');
             const icon = document.getElementById(sectionId + 'Toggle');
