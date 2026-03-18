@@ -7254,18 +7254,19 @@
             };
         }
 
-        // R:R at buy zone limit entry: target projected from buy zone price (stable),
-        // stop from trade plan (structure-based). Avoids R:R drift as current price moves.
+        // R:R at buy zone limit entry: both target and stop projected from the limit
+        // price so the ratio is stable across scans. Only changes when ATR or VIX shift.
         function computeBuyZoneRR(tradePlan, buyZonePrice) {
-            if (!tradePlan || !buyZonePrice || !tradePlan.atr) return null;
+            if (!tradePlan || !buyZonePrice || !tradePlan.atr || !tradePlan.vixMult) return null;
             const target = buyZonePrice + tradePlan.atr * 2.5;
+            const stop = buyZonePrice - tradePlan.atr * tradePlan.vixMult;
             const reward = target - buyZonePrice;
-            const risk = buyZonePrice - tradePlan.stop;
+            const risk = buyZonePrice - stop;
             if (risk <= 0 || reward <= 0) return null;
             const riskReward = +(reward / risk).toFixed(1);
             const currentRR = tradePlan.riskReward;
             const improvementVsCurrent = currentRR ? +((riskReward / currentRR - 1) * 100).toFixed(0) : null;
-            return { riskReward, improvementVsCurrent, target: +target.toFixed(2) };
+            return { riskReward, improvementVsCurrent, target: +target.toFixed(2), stop: +stop.toFixed(2) };
         }
 
         // Count weekdays (Mon-Fri) from today (ET) to a target date string (YYYY-MM-DD).
@@ -19607,7 +19608,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                             planHtml += `<div class="tp-item"><span class="tp-label">Zone R:R</span><span class="tp-value ${bzRRColor}">${bzRR.riskReward.toFixed(1)}:1${bzRR.improvementVsCurrent != null ? ` (+${bzRR.improvementVsCurrent}% vs current)` : ''}</span></div>`;
                         }
                         planHtml += `<div class="tp-item"><span class="tp-label">Target</span><span class="tp-value muted">$${bzRR?.target ?? plan.target}${bzRR?.target && bzRR.target !== plan.target ? ' (from limit)' : ' (same)'}</span></div>`;
-                        planHtml += `<div class="tp-item"><span class="tp-label">Stop</span><span class="tp-value muted">$${plan.stop} (same)</span></div>`;
+                        planHtml += `<div class="tp-item"><span class="tp-label">Stop</span><span class="tp-value muted">$${bzRR?.stop ?? plan.stop}${bzRR?.stop && bzRR.stop !== +plan.stop ? ' (from limit)' : ' (same)'}</span></div>`;
                     }
 
                     planHtml += `</div>`;
