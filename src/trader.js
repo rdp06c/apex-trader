@@ -3643,7 +3643,7 @@
             const plan = candidate._tradePlan;
             const heat = candidate._comboHeat;
             const zone = candidate._buyZone;
-            const score = (candidate.compositeScore || 0) + (candidate._signalBonus || 0);
+            const score = (candidate.compositeScore || 0) + (candidate._signalBonus || 0) + (candidate._revStructureOffset || 0);
             const hasSignal = sig?.bestMatch === 'full' || sig?.bestMatch === 'strong';
             const hasPartial = sig?.bestMatch === 'partial';
             const hasHeat = (heat?.hotCount || 0) > 0;
@@ -15145,6 +15145,13 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 });
                 c.compositeScore = scoreResult.total;
                 c.scoreBreakdown = scoreResult.breakdown;
+                c._signalBonus = computeSignalBonus(entrySignal, portfolio.calibratedWeights);
+                // Neutralize structure penalty for REV-matched stocks
+                c._revStructureOffset = 0;
+                if (entrySignal?.bestPatternId === 'reversal' && entrySignal?.bestMatch) {
+                    const structContrib = scoreResult.breakdown?.structureBonus || 0;
+                    if (structContrib < 0) c._revStructureOffset = -structContrib;
+                }
             });
             data.candidates.sort((a, b) => b.compositeScore - a.compositeScore);
             console.log('📊 Re-scored candidates with new calibrated weights');
@@ -15206,6 +15213,13 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 c._entrySignal = evaluateEntrySignals(c);
                 c._comboHeat = evaluateComboHeat(c);
                 c._signalBonus = computeSignalBonus(c._entrySignal, portfolio.calibratedWeights);
+                // For REV-matched stocks, neutralize structure penalty — calibration proves
+                // structure is irrelevant for RSI<40 entries (identical outcomes across all states)
+                c._revStructureOffset = 0;
+                if (c._entrySignal?.bestPatternId === 'reversal' && c._entrySignal?.bestMatch) {
+                    const structContrib = c.scoreBreakdown?.structureBonus || 0;
+                    if (structContrib < 0) c._revStructureOffset = -structContrib;
+                }
                 c._tradePlan = generateTradePlan(c);
                 // Fall back to server-persisted trade plan when local computation fails (no bars)
                 if (!c._tradePlan && c.tradePlanTarget) {
@@ -15319,7 +15333,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 action: c => { const b = c._actionBadge; return b === 'buy' ? 5 : b === 'add' ? 4 : b === 'near' ? 3 : b === 'wait' ? 2 : b === 'setup' ? 1 : 0; },
                 limit: c => c._buyZone?.buyZonePrice ?? 0,
                 dist: c => c._buyZone?.distancePct ?? 999,
-                score: c => (c.compositeScore || 0) + (c._signalBonus || 0),
+                score: c => (c.compositeScore || 0) + (c._signalBonus || 0) + (c._revStructureOffset || 0),
                 price: c => c.price || 0,
                 day: c => c.dayChange || 0,
                 '5d': c => c.return5d != null ? c.return5d : -999,
@@ -15376,7 +15390,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             const start = (scorecardState.page - 1) * SCORECARD_PAGE_SIZE;
             const pageCandidates = candidates.slice(start, start + SCORECARD_PAGE_SIZE);
 
-            const maxScore = Math.max(...data.candidates.map(c => (c.compositeScore || 0) + (c._signalBonus || 0)), 1);
+            const maxScore = Math.max(...data.candidates.map(c => (c.compositeScore || 0) + (c._signalBonus || 0) + (c._revStructureOffset || 0)), 1);
 
             // Controls: holdings filter + sector filter + pagination
             let html = '<div class="scorecard-controls">';
@@ -15452,7 +15466,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 '</tr></thead><tbody>';
 
             pageCandidates.forEach((c, i) => {
-                const score = (c.compositeScore || 0) + (c._signalBonus || 0);
+                const score = (c.compositeScore || 0) + (c._signalBonus || 0) + (c._revStructureOffset || 0);
                 const scoreClass = score >= 10 ? 'score-high' : score >= 6 ? 'score-mid' : score >= 2 ? 'score-low' : 'score-poor';
                 const pct = Math.max(0, Math.min(100, (score / maxScore) * 100));
                 const held = holdingSymbols.has(c.symbol);
