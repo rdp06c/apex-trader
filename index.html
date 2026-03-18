@@ -17214,10 +17214,12 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             holdDays.sort((a, b) => a - b);
             returns.sort((a, b) => a - b);
 
+            const resolved = wins + losses;
             return {
                 n: total,
                 wins, losses, opens,
-                winRate: (wins + losses) > 0 ? +((wins / (wins + losses)) * 100).toFixed(1) : null,
+                resolvedPct: total > 0 ? +((resolved / total) * 100).toFixed(1) : 0,
+                winRate: resolved > 0 ? +((wins / resolved) * 100).toFixed(1) : null,
                 avgReturn: total > 0 ? +(totalReturn / total).toFixed(2) : null,
                 medianReturn: returns.length > 0 ? +returns[Math.floor(returns.length / 2)].toFixed(2) : null,
                 medianHoldDays: holdDays.length > 0 ? holdDays[Math.floor(holdDays.length / 2)] : null,
@@ -17294,6 +17296,19 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     'RSI 25-30':    revObs.filter(o => o.scoreInputs.rsi >= 25 && o.scoreInputs.rsi < 30),
                     'RSI 30-35':    revObs.filter(o => o.scoreInputs.rsi >= 30 && o.scoreInputs.rsi < 35),
                     'RSI 35-40':    revObs.filter(o => o.scoreInputs.rsi >= 35 && o.scoreInputs.rsi < 40),
+                }),
+                byVIX: buildSegments({
+                    'VIX<15':       revObs.filter(o => o.vix != null && o.vix < 15),
+                    'VIX 15-20':    revObs.filter(o => o.vix != null && o.vix >= 15 && o.vix < 20),
+                    'VIX 20-30':    revObs.filter(o => o.vix != null && o.vix >= 20 && o.vix < 30),
+                    'VIX 30+':      revObs.filter(o => o.vix != null && o.vix >= 30),
+                }),
+                // Cross-dimensional: high-conviction combos
+                crossTests: buildSegments({
+                    'RSI<30+Drop':  revObs.filter(o => o.scoreInputs.rsi < 30 && (o.scoreInputs.totalReturn5d ?? 0) < -8),
+                    'RSI<30+Pull':  revObs.filter(o => o.scoreInputs.rsi < 30 && (o.scoreInputs.totalReturn5d ?? 0) >= -8 && (o.scoreInputs.totalReturn5d ?? 0) <= -2),
+                    'RSI<25+Drop':  revObs.filter(o => o.scoreInputs.rsi < 25 && (o.scoreInputs.totalReturn5d ?? 0) < -8),
+                    'RSI<40+Drop+LowVIX': revObs.filter(o => (o.scoreInputs.totalReturn5d ?? 0) < -8 && o.vix != null && o.vix < 20),
                 }),
                 // Keep legacy 'segments' key for tooltip compatibility
                 segments: buildSegments({
@@ -18088,9 +18103,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 revExcursionProfile = analyzeRevExcursionProfile(allObservations, masterBars, barTimestamps, upperBound);
                 if (revExcursionProfile) {
                     const fmtSeg = (name, s) => {
-                        if (!s || s.insufficient) return `  ${name.padEnd(12)}| n=${s?.n ?? 0} (insufficient)`;
+                        if (!s || s.insufficient) return `  ${name.padEnd(18)}| n=${s?.n ?? 0} (insufficient)`;
                         const st = s.strategy;
-                        return `  ${name.padEnd(12)}| n=${String(s.n).padStart(5)} | MAE ${String(s.medianMAE10d).padStart(6)}% | MFE40 ${s.medianMFE40d != null ? ('+' + s.medianMFE40d).padStart(6) : '  N/A '}% | hit10% ${String(s.pctMFE10).padStart(5)}% | hit20% ${String(s.pctMFE20).padStart(5)}% | WR ${st?.winRate ?? 'N/A'}% avg ${st?.avgReturn ?? 'N/A'}%`;
+                        const resPct = st?.resolvedPct != null ? `${st.resolvedPct}%res` : '?';
+                        return `  ${name.padEnd(18)}| n=${String(s.n).padStart(5)} | MAE ${String(s.medianMAE10d).padStart(6)}% | MFE40 ${s.medianMFE40d != null ? ('+' + s.medianMFE40d).padStart(6) : '  N/A '}% | hit10% ${String(s.pctMFE10).padStart(5)}% | hit20% ${String(s.pctMFE20).padStart(5)}% | WR ${st?.winRate ?? 'N/A'}% avg ${st?.avgReturn ?? 'N/A'}% (${resPct})`;
                     };
                     // Consolidate into fewer messages so chat UI doesn't drop them
                     const lines = ['📊 REV Excursion Profile (RSI<40, Stop -20% / Trail +10%):'];
@@ -18103,6 +18119,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     for (const [name, seg] of Object.entries(revExcursionProfile.byPullback)) lines.push(fmtSeg(name, seg));
                     lines.push('  — By RSI Depth:');
                     for (const [name, seg] of Object.entries(revExcursionProfile.byRSI)) lines.push(fmtSeg(name, seg));
+                    lines.push('  — By VIX Regime:');
+                    for (const [name, seg] of Object.entries(revExcursionProfile.byVIX)) lines.push(fmtSeg(name, seg));
+                    lines.push('  — Cross-Dimensional (high conviction):');
+                    for (const [name, seg] of Object.entries(revExcursionProfile.crossTests)) lines.push(fmtSeg(name, seg));
                     // Send as single message to avoid chat UI message dropping
                     report(lines.join('\n'));
                 } else {
