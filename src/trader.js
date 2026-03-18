@@ -15419,7 +15419,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     const tier = m === 'full' ? 300 : m === 'strong' ? 200 : m === 'partial' ? 100 : 0;
                     return tier + count;
                 },
-                rr: c => c._tradePlan?.riskReward ?? 0,
+                rr: c => c._buyZoneRR?.riskReward ?? c._tradePlan?.riskReward ?? 0,
             };
             const accessor = sortAccessors[scorecardState.sortField] || sortAccessors.score;
             const dir = scorecardState.sortDir === 'asc' ? 1 : -1;
@@ -15492,7 +15492,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('limit', "Buy zone limit price. Set as single-day limit order. Based on highest of: structure support, SMA20, VIX-aware pullback from 20-day high.", 'Limit') +
                 sh('dist', "Distance from current price to buy zone. Negative/IN ZONE = at or below limit. Lower = closer to entry.", 'Dist') +
-                sh('rr', "Risk/Reward ratio (reward ÷ risk). Green ≥ 2.0 (strong), Yellow ≥ 1.5, Red < 1.5. Click row for target/stop details.", 'R:R') +
+                sh('rr', "Risk/Reward ratio. Shows Zone R:R (anchored to limit price) when buy zone exists, otherwise current-price R:R. Green ≥ 2.0, Yellow ≥ 1.5, Red < 1.5. Hover for both values.", 'R:R') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
                 sh('5d', "5-day cumulative return. Pullbacks with bullish structure are captured by calibration combo heat, not a fixed bonus.", '5D') +
                 sh('mom', "Momentum (0-10). Sweet spot is 5-7: strong trend without penalties. Weight halved (0.3x) — calibration shows momentum is anti-predictive. 9+ triggers extension penalty (-3.5) and 0.6x entry multiplier.", 'Mom') +
@@ -15692,9 +15692,12 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     stopTip += `\nATR: $${plan.atr} (${plan.atrPct}%)`;
                     stopTip += `\nVIX mult: ${plan.vixMult}x`;
 
-                    if (plan.riskReward != null) {
-                        rrClass = plan.riskReward >= 2.0 ? 'rr-strong' : plan.riskReward >= 1.5 ? 'rr-good' : 'rr-weak';
-                        rrCell = plan.riskReward.toFixed(1);
+                    // Show Zone R:R (stable, anchored to limit) when available; fall back to current-price R:R
+                    const bzRRVal = c._buyZoneRR?.riskReward;
+                    const displayRR = bzRRVal ?? plan.riskReward;
+                    if (displayRR != null) {
+                        rrClass = displayRR >= 2.0 ? 'rr-strong' : displayRR >= 1.5 ? 'rr-good' : 'rr-weak';
+                        rrCell = displayRR.toFixed(1);
                     }
                 }
 
@@ -15749,7 +15752,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     <td style="font-size:11px">${priceStr}</td>
                     <td style="font-size:11px" title="${limitTip}">${limitCell}</td>
                     <td class="${distClass}" style="font-size:11px">${distCell}</td>
-                    <td class="plan-cell ${rrClass}" title="${targetTip}\n${stopTip}" style="font-size:11px;font-weight:600">${rrCell}</td>
+                    <td class="plan-cell ${rrClass}" title="${c._buyZoneRR ? 'Zone R:R (at limit): ' + c._buyZoneRR.riskReward.toFixed(1) + ':1\nCurrent price R:R: ' + (plan?.riskReward?.toFixed(1) ?? '--') + ':1\n' : ''}${targetTip}\n${stopTip}" style="font-size:11px;font-weight:600">${rrCell}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td class="${ret5dClass}" style="font-size:11px">${ret5d != null ? (ret5d >= 0 ? '+' : '') + ret5d.toFixed(2) + '%' : '--'}</td>
                     <td class="${momClass}">${mom.toFixed(1)}${c.isAccelerating ? ' <span class="accel-badge" title="Momentum accelerating">⚡</span>' : ''}</td>
