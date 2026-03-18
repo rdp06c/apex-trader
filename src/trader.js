@@ -3224,17 +3224,33 @@
             const struct = detectStructure(candidate.symbol);
             const fibs = calculateFibTargets(bars);
 
+            // === FIB TARGETS ===
+            // Extensions for bullish, retracement targets for bearish (REV)
+            const resistance = struct?.lastSwingHigh;
+            let fibTarget1 = null, fibTarget2 = null, fibType = null;
+            if (fibs?.type === 'bullish') {
+                if (fibs.fib1272 > price) fibTarget1 = fibs.fib1272;
+                if (fibs.fib1618 > price) fibTarget2 = fibs.fib1618;
+                if (fibTarget1) fibType = 'extension';
+            } else if (fibs?.type === 'bearish' && fibs.swingHigh > price) {
+                // For reversals: retracement of the decline as upside targets
+                const swingRange = fibs.swingHigh - fibs.swingLow;
+                const retrace382 = fibs.swingLow + swingRange * 0.382;
+                const retrace618 = fibs.swingLow + swingRange * 0.618;
+                if (retrace382 > price) fibTarget1 = retrace382;
+                if (retrace618 > price) fibTarget2 = retrace618;
+                if (fibTarget1) fibType = 'retracement';
+            }
+
             // === TARGET ===
-            // ATR projection as primary, Fib 1.272 as cross-check.
+            // ATR projection as primary, fib level as cross-check.
             // Resistance is informational only — not a cap. Momentum stocks are expected
             // to break through the nearest swing high; capping there gives tiny targets
             // and terrible R:R for exactly the stocks that score best.
-            const resistance = struct?.lastSwingHigh;
             const atrTarget = price + (atr * 2.5);
             let target = atrTarget;
-            // If fib targets available and bullish, use the more conservative of ATR and fib
-            if (fibs?.type === 'bullish' && fibs.fib1272 > price) {
-                target = Math.min(atrTarget, fibs.fib1272);
+            if (fibTarget1 && fibTarget1 > price) {
+                target = Math.min(atrTarget, fibTarget1);
             }
             // Target must be above current price by at least 1%
             if (target <= price * 1.01) target = atrTarget;
@@ -3258,6 +3274,17 @@
             }
             // Stop must be below current price
             if (stop >= price) stop = atrStop;
+
+            // Display support fallback: don't leave blank for stocks at new lows
+            let displaySupport = support;
+            if (!displaySupport || displaySupport >= price) {
+                const atrFloor = price - atr;
+                if (fibs?.type === 'bearish' && fibs.fib1272 < price && fibs.fib1272 > atrFloor) {
+                    displaySupport = fibs.fib1272; // bearish fib extension (if reasonable)
+                } else {
+                    displaySupport = atrFloor; // ATR-based floor
+                }
+            }
 
             const risk = price - stop;
             const reward = target - price;
@@ -3314,9 +3341,10 @@
                 atr: +atr.toFixed(2),
                 atrPct: +((atr / price) * 100).toFixed(1),
                 resistance: resistance && resistance > price ? +resistance.toFixed(2) : null,
-                support: support && support < price ? +support.toFixed(2) : null,
-                fib1272: fibs?.type === 'bullish' && fibs.fib1272 > price ? +fibs.fib1272.toFixed(2) : null,
-                fib1618: fibs?.type === 'bullish' && fibs.fib1618 > price ? +fibs.fib1618.toFixed(2) : null,
+                support: displaySupport && displaySupport < price ? +displaySupport.toFixed(2) : null,
+                fib1272: fibTarget1 ? +fibTarget1.toFixed(2) : null,
+                fib1618: fibTarget2 ? +fibTarget2.toFixed(2) : null,
+                fibType,
                 vixMult: +vixMult.toFixed(1),
                 winRate,
                 avgReturn,
@@ -3360,8 +3388,26 @@
                 // All references are at or above current price — stock is deep in the buy zone
                 const allRefs = [support, sma20, pullbackTarget].filter(v => v != null);
                 if (allRefs.length > 0) {
-                    // Use the lowest reference as the zone price (deepest support)
                     const lowest = Math.min(...allRefs);
+                    // Check if price crashed far below all references (>5% gap)
+                    if ((lowest - price) / price > 0.05) {
+                        // Crash-through: refs are stale limit targets. Use ATR-based zone
+                        // slightly below current price for a discount entry.
+                        const atr = (bars && bars.length >= 15) ? calculateATR(bars) : null;
+                        if (atr && atr > 0) {
+                            return {
+                                buyZonePrice: +(price - atr * 0.5).toFixed(2),
+                                inZone: true,
+                                distancePct: 0,
+                                zoneSource: 'atr',
+                                support: support != null ? +support.toFixed(2) : null,
+                                sma20: sma20 != null ? +sma20.toFixed(2) : null,
+                                pullbackTarget,
+                                recentHigh: recentHigh != null ? +recentHigh.toFixed(2) : null,
+                                pullbackPct
+                            };
+                        }
+                    }
                     return {
                         buyZonePrice: +lowest.toFixed(2),
                         inZone: true,
@@ -15671,7 +15717,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     targetCell = `$${plan.target} <span style="font-size:9px;opacity:0.7">(+${plan.targetPct}%)</span>`;
                     targetTip = `Target: $${plan.target} (+${plan.targetPct}%)`;
                     if (plan.resistance) targetTip += `\nWatch resistance: $${plan.resistance}`;
-                    if (plan.fib1272) targetTip += `\nFib 1.272: $${plan.fib1272}`;
+                    if (plan.fib1272) targetTip += `\n${plan.fibType === 'retracement' ? 'Fib Ret .382' : 'Fib 1.272'}: $${plan.fib1272}`;
                     if (plan.winRate) targetTip += `\nWin Rate: ${plan.winRate}% (${plan.observations} obs)`;
                     if (plan.avgReturn) targetTip += `\nAvg 10D Return: +${plan.avgReturn}%`;
 
@@ -15768,8 +15814,10 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     // Row 2: Levels
                     planHtml += `<div class="tp-item"><span class="tp-label">Watch: Resistance</span><span class="tp-value ${plan.resistance ? 'yellow' : 'muted'}">${plan.resistance ? '$' + plan.resistance : '--'}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">Support Level</span><span class="tp-value ${plan.support ? 'green' : 'muted'}">${plan.support ? '$' + plan.support : '--'}</span></div>`;
-                    planHtml += `<div class="tp-item"><span class="tp-label">Fib 1.272</span><span class="tp-value muted">${plan.fib1272 ? '$' + plan.fib1272 : '--'}</span></div>`;
-                    planHtml += `<div class="tp-item"><span class="tp-label">Fib 1.618</span><span class="tp-value muted">${plan.fib1618 ? '$' + plan.fib1618 : '--'}</span></div>`;
+                    const fibLabel1 = plan.fibType === 'retracement' ? 'Fib Ret .382' : 'Fib 1.272';
+                    const fibLabel2 = plan.fibType === 'retracement' ? 'Fib Ret .618' : 'Fib 1.618';
+                    planHtml += `<div class="tp-item"><span class="tp-label">${fibLabel1}</span><span class="tp-value muted">${plan.fib1272 ? '$' + plan.fib1272 : '--'}</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">${fibLabel2}</span><span class="tp-value muted">${plan.fib1618 ? '$' + plan.fib1618 : '--'}</span></div>`;
                     // Row 3: Calibration context (only for full/strong matches)
                     planHtml += `<div class="tp-item"><span class="tp-label">Cal. Win Rate${confLabel}</span><span class="tp-value ${plan.winRate != null ? (plan.winRate >= 55 ? 'green' : '') : 'muted'}">${plan.winRate != null ? plan.winRate + '%' : '--'}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">Avg 10D Return${confLabel}</span><span class="tp-value ${plan.avgReturn != null ? (plan.avgReturn > 0 ? 'green' : 'red') : 'muted'}">${plan.avgReturn != null ? (plan.avgReturn > 0 ? '+' : '') + plan.avgReturn + '%' : '--'}</span></div>`;
@@ -15779,7 +15827,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         const bzRR = c._buyZoneRR;
                         planHtml += `<div class="tp-separator">Buy Zone Entry</div>`;
                         planHtml += `<div class="tp-item"><span class="tp-label">Limit</span><span class="tp-value green">$${bz.buyZonePrice.toFixed(2)} (${bz.distancePct.toFixed(1)}% below)</span></div>`;
-                        planHtml += `<div class="tp-item"><span class="tp-label">Source</span><span class="tp-value muted">${bz.zoneSource === 'support' ? 'Structure Support' : bz.zoneSource === 'sma20' ? 'SMA20' : 'Pullback Target'}</span></div>`;
+                        planHtml += `<div class="tp-item"><span class="tp-label">Source</span><span class="tp-value muted">${bz.zoneSource === 'support' ? 'Structure Support' : bz.zoneSource === 'sma20' ? 'SMA20' : bz.zoneSource === 'atr' ? 'ATR Discount' : 'Pullback Target'}</span></div>`;
                         if (bzRR) {
                             const bzRRColor = bzRR.riskReward >= 2.0 ? 'green' : bzRR.riskReward >= 1.5 ? 'yellow' : 'red';
                             planHtml += `<div class="tp-item"><span class="tp-label">Zone R:R</span><span class="tp-value ${bzRRColor}">${bzRR.riskReward.toFixed(1)}:1${bzRR.improvementVsCurrent != null ? ` (+${bzRR.improvementVsCurrent}% vs current)` : ''}</span></div>`;

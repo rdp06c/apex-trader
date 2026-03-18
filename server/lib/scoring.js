@@ -514,13 +514,29 @@ function generateTradePlan({ price, bars, structure, vixLevel, entrySignalPatter
     const vixMult = getATRMultiplier(vixLevel);
     const fibs = calculateFibTargets(bars);
 
-    // Target: ATR projection as primary, Fib 1.272 as cross-check.
-    // Resistance is informational only — not a cap.
+    // Fib targets: extensions for bullish, retracement targets for bearish (REV)
     const resistance = structure?.lastSwingHigh;
+    let fibTarget1 = null, fibTarget2 = null, fibType = null;
+    if (fibs?.type === 'bullish') {
+        if (fibs.fib1272 > price) fibTarget1 = fibs.fib1272;
+        if (fibs.fib1618 > price) fibTarget2 = fibs.fib1618;
+        if (fibTarget1) fibType = 'extension';
+    } else if (fibs?.type === 'bearish' && fibs.swingHigh > price) {
+        // For reversals: retracement of the decline as upside targets
+        const swingRange = fibs.swingHigh - fibs.swingLow;
+        const retrace382 = fibs.swingLow + swingRange * 0.382;
+        const retrace618 = fibs.swingLow + swingRange * 0.618;
+        if (retrace382 > price) fibTarget1 = retrace382;
+        if (retrace618 > price) fibTarget2 = retrace618;
+        if (fibTarget1) fibType = 'retracement';
+    }
+
+    // Target: ATR projection as primary, fib level as cross-check.
+    // Resistance is informational only — not a cap.
     const atrTarget = price + (atr * 2.5);
     let target = atrTarget;
-    if (fibs?.type === 'bullish' && fibs.fib1272 > price) {
-        target = Math.min(atrTarget, fibs.fib1272);
+    if (fibTarget1 && fibTarget1 > price) {
+        target = Math.min(atrTarget, fibTarget1);
     }
     if (target <= price * 1.01) target = atrTarget;
 
@@ -541,6 +557,17 @@ function generateTradePlan({ price, bars, structure, vixLevel, entrySignalPatter
     }
     if (stop >= price) stop = atrStop;
 
+    // Display support fallback: don't leave blank for stocks at new lows
+    let displaySupport = support;
+    if (!displaySupport || displaySupport >= price) {
+        const atrFloor = price - atr;
+        if (fibs?.type === 'bearish' && fibs.fib1272 < price && fibs.fib1272 > atrFloor) {
+            displaySupport = fibs.fib1272; // bearish fib extension (if reasonable)
+        } else {
+            displaySupport = atrFloor; // ATR-based floor
+        }
+    }
+
     const risk = price - stop;
     const reward = target - price;
     const riskReward = risk > 0 ? reward / risk : null;
@@ -558,9 +585,10 @@ function generateTradePlan({ price, bars, structure, vixLevel, entrySignalPatter
         atr: +atr.toFixed(2),
         atrPct: +((atr / price) * 100).toFixed(1),
         resistance: resistance && resistance > price ? +resistance.toFixed(2) : null,
-        support: support && support < price ? +support.toFixed(2) : null,
-        fib1272: fibs?.type === 'bullish' && fibs.fib1272 > price ? +fibs.fib1272.toFixed(2) : null,
-        fib1618: fibs?.type === 'bullish' && fibs.fib1618 > price ? +fibs.fib1618.toFixed(2) : null,
+        support: displaySupport && displaySupport < price ? +displaySupport.toFixed(2) : null,
+        fib1272: fibTarget1 ? +fibTarget1.toFixed(2) : null,
+        fib1618: fibTarget2 ? +fibTarget2.toFixed(2) : null,
+        fibType,
         vixMult: +vixMult.toFixed(1),
         winRate: bestHotCombo?.winRate10d ? +bestHotCombo.winRate10d.toFixed(0) : null,
         avgReturn: bestHotCombo?.avgReturn10d ? +bestHotCombo.avgReturn10d.toFixed(1) : null,
@@ -1123,6 +1151,25 @@ function computeBuyZone({ price, support, sma20, bars, vixLevel }) {
         const allRefs = [support, sma, pullbackTarget].filter(v => v != null);
         if (allRefs.length > 0) {
             const lowest = Math.min(...allRefs);
+            // Check if price crashed far below all references (>5% gap)
+            if ((lowest - price) / price > 0.05) {
+                // Crash-through: refs are stale limit targets. Use ATR-based zone
+                // slightly below current price for a discount entry.
+                const atr = (bars && bars.length >= 15) ? calculateATR(bars) : null;
+                if (atr && atr > 0) {
+                    return {
+                        buyZonePrice: +(price - atr * 0.5).toFixed(2),
+                        inZone: true,
+                        distancePct: 0,
+                        zoneSource: 'atr',
+                        support: support != null ? +support.toFixed(2) : null,
+                        sma20: sma != null ? +sma.toFixed(2) : null,
+                        pullbackTarget,
+                        recentHigh: recentHigh != null ? +recentHigh.toFixed(2) : null,
+                        pullbackPct
+                    };
+                }
+            }
             return {
                 buyZonePrice: +lowest.toFixed(2),
                 inZone: true,
