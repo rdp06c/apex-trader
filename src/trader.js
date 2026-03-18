@@ -3671,8 +3671,10 @@
             if (zone && score >= 5 && structOkForSignal) {
                 // Quality gates for BUY/ADD/NEAR — downgrade to WAIT with reason
                 const zoneRR = candidate._buyZoneRR?.riskReward;
+                const planRR = candidate._tradePlan?.riskReward;
                 let gateReason = null;
                 if (zoneRR != null && zoneRR < 1.0) gateReason = 'Zone R:R ' + zoneRR.toFixed(1) + ' < 1.0 — risk exceeds reward';
+                if (!gateReason && planRR != null && planRR < 1.0) gateReason = 'R:R ' + planRR.toFixed(1) + ' < 1.0 at current price';
 
                 // REV structure gate removed — calibration data (260k obs) shows structure is irrelevant
                 // for RSI<40 entries. VIX regime is the real differentiator, handled via entry signal criteria.
