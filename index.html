@@ -17227,20 +17227,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             };
         }
 
-        // Analyze REV excursion profile: MAE/MFE + strategy simulation, segmented by structure state.
+        // Analyze REV excursion profile: MAE/MFE + strategy simulation, segmented by multiple dimensions.
         function analyzeRevExcursionProfile(observations, masterBars, barTimestamps, upperBoundFn) {
             const revObs = observations.filter(o =>
                 o.scoreInputs.rsi != null && o.scoreInputs.rsi < 40 &&
                 o.mae10d != null && o.mfe10d != null
             );
             if (revObs.length < 50) return null;
-
-            const segments = {
-                bearish:  revObs.filter(o => (o.scoreInputs.structureScore ?? 0) <= -1),
-                ranging:  revObs.filter(o => { const s = o.scoreInputs.structureScore ?? 0; return s >= 0 && s <= 1; }),
-                choch:    revObs.filter(o => (o.scoreInputs.structureScore ?? 0) === 2),
-                bullish:  revObs.filter(o => (o.scoreInputs.structureScore ?? 0) >= 3),
-            };
 
             const computeProfile = (obs) => {
                 if (obs.length < 20) return { n: obs.length, insufficient: true };
@@ -17273,11 +17266,42 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 };
             };
 
+            const buildSegments = (segDef) => Object.fromEntries(
+                Object.entries(segDef).map(([k, v]) => [k, computeProfile(v)])
+            );
+
             return {
                 total: computeProfile(revObs),
-                segments: Object.fromEntries(
-                    Object.entries(segments).map(([k, v]) => [k, computeProfile(v)])
-                )
+                byStructure: buildSegments({
+                    bearish:  revObs.filter(o => (o.scoreInputs.structureScore ?? 0) <= -1),
+                    ranging:  revObs.filter(o => { const s = o.scoreInputs.structureScore ?? 0; return s >= 0 && s <= 1; }),
+                    choch:    revObs.filter(o => (o.scoreInputs.structureScore ?? 0) === 2),
+                    bullish:  revObs.filter(o => (o.scoreInputs.structureScore ?? 0) >= 3),
+                }),
+                byMACD: buildSegments({
+                    'MACD bull':    revObs.filter(o => o.scoreInputs.macdCrossover === 'bullish'),
+                    'MACD bear':    revObs.filter(o => o.scoreInputs.macdCrossover === 'bearish'),
+                    'MACD none':    revObs.filter(o => !o.scoreInputs.macdCrossover || o.scoreInputs.macdCrossover === 'none'),
+                }),
+                byPullback: buildSegments({
+                    'Pullback':     revObs.filter(o => (o.scoreInputs.totalReturn5d ?? 0) >= -8 && (o.scoreInputs.totalReturn5d ?? 0) <= -2),
+                    'Flat':         revObs.filter(o => (o.scoreInputs.totalReturn5d ?? 0) > -2 && (o.scoreInputs.totalReturn5d ?? 0) <= 2),
+                    'Deep drop':    revObs.filter(o => (o.scoreInputs.totalReturn5d ?? 0) < -8),
+                    'Bounce':       revObs.filter(o => (o.scoreInputs.totalReturn5d ?? 0) > 2),
+                }),
+                byRSI: buildSegments({
+                    'RSI<25':       revObs.filter(o => o.scoreInputs.rsi < 25),
+                    'RSI 25-30':    revObs.filter(o => o.scoreInputs.rsi >= 25 && o.scoreInputs.rsi < 30),
+                    'RSI 30-35':    revObs.filter(o => o.scoreInputs.rsi >= 30 && o.scoreInputs.rsi < 35),
+                    'RSI 35-40':    revObs.filter(o => o.scoreInputs.rsi >= 35 && o.scoreInputs.rsi < 40),
+                }),
+                // Keep legacy 'segments' key for tooltip compatibility
+                segments: buildSegments({
+                    bearish:  revObs.filter(o => (o.scoreInputs.structureScore ?? 0) <= -1),
+                    ranging:  revObs.filter(o => { const s = o.scoreInputs.structureScore ?? 0; return s >= 0 && s <= 1; }),
+                    choch:    revObs.filter(o => (o.scoreInputs.structureScore ?? 0) === 2),
+                    bullish:  revObs.filter(o => (o.scoreInputs.structureScore ?? 0) >= 3),
+                }),
             };
         }
 
@@ -18063,17 +18087,24 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             try {
                 revExcursionProfile = analyzeRevExcursionProfile(allObservations, masterBars, barTimestamps, upperBound);
                 if (revExcursionProfile) {
-                    const segs = revExcursionProfile.segments;
                     const fmtSeg = (name, s) => {
-                        if (!s || s.insufficient) return `  ${name.padEnd(10)} | n=${s?.n ?? 0} (insufficient)`;
+                        if (!s || s.insufficient) return `  ${name.padEnd(12)}| n=${s?.n ?? 0} (insufficient)`;
                         const st = s.strategy;
-                        return `  ${name.padEnd(10)} | n=${String(s.n).padStart(5)} | MAE ${String(s.medianMAE10d).padStart(6)}% | MFE40 ${s.medianMFE40d != null ? ('+' + s.medianMFE40d).padStart(6) : '  N/A '}% | hit10% ${String(s.pctMFE10).padStart(5)}% | hit20% ${String(s.pctMFE20).padStart(5)}% | Strat WR ${st?.winRate ?? 'N/A'}% avg ${st?.avgReturn ?? 'N/A'}% hold ${st?.medianHoldDays ?? '?'}d`;
+                        return `  ${name.padEnd(12)}| n=${String(s.n).padStart(5)} | MAE ${String(s.medianMAE10d).padStart(6)}% | MFE40 ${s.medianMFE40d != null ? ('+' + s.medianMFE40d).padStart(6) : '  N/A '}% | hit10% ${String(s.pctMFE10).padStart(5)}% | hit20% ${String(s.pctMFE20).padStart(5)}% | WR ${st?.winRate ?? 'N/A'}% avg ${st?.avgReturn ?? 'N/A'}%`;
                     };
-                    report('📊 REV Excursion Profile (RSI<40, Stop -20% / Trail +10%):');
-                    report(fmtSeg('ALL', revExcursionProfile.total));
-                    for (const [name, seg] of Object.entries(segs)) {
-                        report(fmtSeg(name, seg));
-                    }
+                    // Consolidate into fewer messages so chat UI doesn't drop them
+                    const lines = ['📊 REV Excursion Profile (RSI<40, Stop -20% / Trail +10%):'];
+                    lines.push(fmtSeg('ALL', revExcursionProfile.total));
+                    lines.push('  — By Structure:');
+                    for (const [name, seg] of Object.entries(revExcursionProfile.byStructure)) lines.push(fmtSeg(name, seg));
+                    lines.push('  — By MACD:');
+                    for (const [name, seg] of Object.entries(revExcursionProfile.byMACD)) lines.push(fmtSeg(name, seg));
+                    lines.push('  — By 5D Return:');
+                    for (const [name, seg] of Object.entries(revExcursionProfile.byPullback)) lines.push(fmtSeg(name, seg));
+                    lines.push('  — By RSI Depth:');
+                    for (const [name, seg] of Object.entries(revExcursionProfile.byRSI)) lines.push(fmtSeg(name, seg));
+                    // Send as single message to avoid chat UI message dropping
+                    report(lines.join('\n'));
                 } else {
                     report('⚠️ REV excursion profile: insufficient RSI<40 observations');
                 }
