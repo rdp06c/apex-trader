@@ -227,7 +227,7 @@ async function runFullScan({ force = false } = {}) {
             const entrySignal = evaluateEntrySignals({
                 macdCrossover: macd?.crossover || 'none', rsi,
                 macdHistogram: macd?.histogram ?? null,
-                _regime: currentRegime,
+                _regime: currentRegime, _vix: vixLevel ?? null,
                 structure: structure.structure, structureScore: structure.structureScore,
                 return5d: momentum.totalReturn5d ?? null,
                 momentum: momentum.score, momentumScore: momentum.score,

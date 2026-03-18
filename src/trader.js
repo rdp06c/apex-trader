@@ -3437,26 +3437,29 @@
                 id: 'reversal',
                 label: 'Reversal Entry',
                 badge: 'REV',
+                // Data-driven criteria (calibration 2026-03-18, 260k observations):
+                // - Structure: irrelevant (identical outcomes across all states)
+                // - MACD: irrelevant (bearish MACD actually has best WR)
+                // - RSI<40: primary driver
+                // - 5D return: #2 differentiator (deep drops best, but context-dependent on VIX)
+                // - VIX regime: #1 differentiator (VIX 15-20 = danger zone, VIX 30+ = golden zone)
                 criteria: [
-                    { id: 'macd', label: 'MACD Bull/Hist≤0', test: c => {
-                        if (c.macdCrossover === 'bullish') return true;
-                        // In bear/choppy, require actual crossover — histogram<=0 is default state, not a signal
-                        const r = c._regime || 'choppy';
-                        if (r === 'bearish' || r === 'choppy') return false;
-                        return c.macdHistogram != null && c.macdHistogram <= 0;
-                    } },
-                    { id: 'rsi', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
-                    { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' },
-                    { id: 'pullback', label: 'Pullback', test: c => c.return5d != null && c.return5d >= -8 && c.return5d <= -2 }
+                    { id: 'rsi_deep', label: 'RSI<30', test: c => c.rsi != null && c.rsi < 30 },
+                    { id: 'pullback', label: '5D Drop', test: c => c.return5d != null && c.return5d < -2 },
+                    { id: 'vix_ok', label: 'VIX Favorable', test: c => {
+                        const vix = c._vix ?? 20;
+                        return vix < 15 || vix >= 20; // VIX 15-20 is the danger zone
+                    } }
                 ],
                 gate: [
+                    { id: 'rsi_min', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
                     { id: 'no_earnings', label: 'No ER ≤3d', test: c => {
                         const days = tradingDaysUntil(c.nextEarningsDate);
                         return days === null || days < 0 || days > 3;
                     } }
                 ],
-                minMatch: 2,
-                requireAny: ['rsi', 'pullback']
+                minMatch: 1,
+                requireAny: ['rsi_deep', 'pullback']
             },
             {
                 id: 'momentum_cont',
@@ -3669,10 +3672,8 @@
                 let gateReason = null;
                 if (zoneRR != null && zoneRR < 1.0) gateReason = 'Zone R:R ' + zoneRR.toFixed(1) + ' < 1.0 — risk exceeds reward';
 
-                // REV signals require bullish structure — reversal thesis needs an uptrend to resume
-                const isRev = signalId === 'reversal';
-                const isBullishStruct = candidate.structure === 'bullish' || candidate.structure === 'bullish_continuation';
-                if (isRev && !isBullishStruct) gateReason = 'Structure is ' + (candidate.structure || 'unknown') + ' — REV needs bullish trend to reverse into';
+                // REV structure gate removed — calibration data (260k obs) shows structure is irrelevant
+                // for RSI<40 entries. VIX regime is the real differentiator, handled via entry signal criteria.
 
                 if (gateReason) {
                     candidate._waitReason = gateReason;
@@ -15105,6 +15106,8 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             if (!data?.candidates?.length) return;
             const signalAdj = getSignalAccuracyAdjustments();
             data.candidates.forEach(c => {
+                // Inject VIX for entry signal VIX-awareness
+                c._vix = vixCache?.level ?? portfolio.lastVIX ?? null;
                 // Compute entry signal first — needed to scale heat bonus
                 const entrySignal = evaluateEntrySignals(c);
                 c._entrySignal = entrySignal;
@@ -15196,6 +15199,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             const _currentRegime = portfolio.lastMarketRegime?.regime || 'choppy';
             candidates.forEach(c => {
                 c._regime = _currentRegime;
+                c._vix = vixCache?.level ?? portfolio.lastVIX ?? null;
                 c._entrySignal = evaluateEntrySignals(c);
                 c._comboHeat = evaluateComboHeat(c);
                 c._signalBonus = computeSignalBonus(c._entrySignal, portfolio.calibratedWeights);

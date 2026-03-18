@@ -802,26 +802,25 @@ const ENTRY_SIGNAL_PATTERNS = [
         id: 'reversal',
         label: 'Reversal Entry',
         badge: 'REV',
+        // Data-driven criteria (calibration 2026-03-18, 260k observations):
+        // Structure and MACD are irrelevant. RSI, 5D return, and VIX regime matter.
         criteria: [
-            { id: 'macd', label: 'MACD Bull/Hist≤0', test: c => {
-                if (c.macdCrossover === 'bullish') return true;
-                // In bear/choppy, require actual crossover — histogram<=0 is default state, not a signal
-                const r = c._regime || 'choppy';
-                if (r === 'bearish' || r === 'choppy') return false;
-                return c.macdHistogram != null && c.macdHistogram <= 0;
-            } },
-            { id: 'rsi', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
-            { id: 'structure', label: 'Bull Structure', test: c => c.structure === 'bullish' || c.structure === 'bullish_continuation' },
-            { id: 'pullback', label: 'Pullback', test: c => c.return5d != null && c.return5d >= -8 && c.return5d <= -2 }
+            { id: 'rsi_deep', label: 'RSI<30', test: c => c.rsi != null && c.rsi < 30 },
+            { id: 'pullback', label: '5D Drop', test: c => c.return5d != null && c.return5d < -2 },
+            { id: 'vix_ok', label: 'VIX Favorable', test: c => {
+                const vix = c._vix ?? 20;
+                return vix < 15 || vix >= 20;
+            } }
         ],
         gate: [
+            { id: 'rsi_min', label: 'RSI<40', test: c => c.rsi != null && c.rsi < 40 },
             { id: 'no_earnings', label: 'No ER ≤3d', test: c => {
                 const days = tradingDaysUntil(c.nextEarningsDate);
                 return days === null || days < 0 || days > 3;
             } }
         ],
-        minMatch: 2,
-        requireAny: ['rsi', 'pullback']
+        minMatch: 1,
+        requireAny: ['rsi_deep', 'pullback']
     },
     {
         id: 'momentum_cont',
