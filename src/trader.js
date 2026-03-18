@@ -3613,7 +3613,7 @@
                 const key = pat.calibrationKey || (pat.id === 'reversal' ? 'rsi_low_structure_bull' : null);
                 if (key && combos) {
                     const cal = combos[key];
-                    if (cal && !cal.insufficient && (cal.n ?? 0) >= 100) {
+                    if (cal && !cal.insufficient && (cal.n ?? 0) >= 100 && cal.significant !== false) {
                         edge = cal.vsBaselineReturn;
                     }
                 }
@@ -3882,7 +3882,7 @@
                 } catch { continue; }
 
                 const result = comboResults[def.id];
-                if (!result || result.insufficient || (result.n ?? 0) < 100) continue;
+                if (!result || result.insufficient || (result.n ?? 0) < 100 || result.significant === false) continue;
 
                 if (result.vsBaselineReturn > 0.5) {
                     hotCombos.push({ label: result.label, avgReturn10d: result.avgReturn10d, winRate10d: result.winRate10d, vsBaseline: result.vsBaselineReturn, n: result.n, group: def.group });
@@ -13258,11 +13258,14 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const winRate10d = (matched.filter(o => o.return10d > 0).length / matched.length) * 100;
                     const m20d = matched.filter(o => o.return20d != null);
                     const avgReturn20d = m20d.length >= 30 ? m20d.reduce((s, o) => s + o.return20d, 0) / m20d.length : null;
+                    const ci10d = bootstrapCI(matched.map(o => o.return10d));
                     return {
                         n: matched.length,
                         winRate10d: +winRate10d.toFixed(1),
                         avgReturn10d: +avgReturn10d.toFixed(3),
-                        avgReturn20d: avgReturn20d != null ? +avgReturn20d.toFixed(3) : null
+                        avgReturn20d: avgReturn20d != null ? +avgReturn20d.toFixed(3) : null,
+                        ci10d: ci10d,
+                        significant: ci10d.significant
                     };
                 };
 
@@ -13273,6 +13276,24 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 };
             }
             return stats;
+        }
+
+        // Bootstrap confidence interval for a set of return values.
+        // Returns { lo, hi, significant } where significant = CI doesn't cross zero.
+        function bootstrapCI(values, nBoot = 1000, ci = 0.90) {
+            const n = values.length;
+            if (n < 20) return { lo: null, hi: null, significant: false };
+            const means = new Float64Array(nBoot);
+            for (let b = 0; b < nBoot; b++) {
+                let sum = 0;
+                for (let i = 0; i < n; i++) sum += values[Math.floor(Math.random() * n)];
+                means[b] = sum / n;
+            }
+            means.sort();
+            const loIdx = Math.floor(nBoot * (1 - ci) / 2);
+            const hiIdx = Math.floor(nBoot * (1 + ci) / 2);
+            const lo = means[loIdx], hi = means[hiIdx];
+            return { lo: +lo.toFixed(3), hi: +hi.toFixed(3), significant: lo > 0 || hi < 0 };
         }
 
         function analyzeSignalCombos(observations, showAll = false) {
@@ -13325,6 +13346,10 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     medianReturn20d = s20.length % 2 !== 0 ? s20[m20] : (s20[m20 - 1] + s20[m20]) / 2;
                 }
 
+                // Bootstrap CI on 10d returns — significant if CI doesn't contain baseline mean
+                const ci10d = bootstrapCI(matching.map(o => o.return10d));
+                const significant = ci10d.lo != null && (ci10d.lo > baseAvg10d || ci10d.hi < baseAvg10d);
+
                 // Best-horizon classification: pick horizon with strongest vs-baseline signal
                 const vsBase5d = avgReturn5d - baseAvg5d;
                 const vsBase10d = avgReturn10d - baseAvg10d;
@@ -13355,7 +13380,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     winRate20d: winRate20d != null ? parseFloat(winRate20d.toFixed(1)) : null,
                     vsBaselineReturn: parseFloat(best.vs.toFixed(3)),
                     bestHorizon: best.h,
-                    vsBaselineWR: parseFloat((winRate10d - baseWR).toFixed(1))
+                    vsBaselineWR: parseFloat((winRate10d - baseWR).toFixed(1)),
+                    ci10d: ci10d,
+                    significant: significant
                 };
             }
 
@@ -13434,15 +13461,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             const fmtDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-            // Select 80 evenly-spaced calibration dates across the range
+            // Fixed-stride date anchoring: deterministic grid aligned to a fixed epoch.
+            // When the window shifts by 1 day, at most 1-2 boundary dates change (vs old
+            // linear interpolation which could shift all sample points).
+            const TARGET_DATES = 200;
+            const ANCHOR_EPOCH = new Date('2020-01-06'); // Fixed reference Monday
             const allWeekdays = generateWeekdays(rangeStart, rangeEnd);
-            const NUM_DATES = Math.min(80, allWeekdays.length);
-            if (NUM_DATES < 5) throw new Error(`Only ${allWeekdays.length} trading days in range. Need at least 5.`);
-            const calibrationDates = [];
-            for (let i = 0; i < NUM_DATES; i++) {
-                const idx = Math.round(i * (allWeekdays.length - 1) / (NUM_DATES - 1));
-                calibrationDates.push(allWeekdays[idx]);
-            }
+            if (allWeekdays.length < 5) throw new Error(`Only ${allWeekdays.length} trading days in range. Need at least 5.`);
+
+            // Build ordinal map from fixed epoch (or rangeStart if earlier)
+            const epochStart = rangeStart < ANCHOR_EPOCH ? rangeStart : ANCHOR_EPOCH;
+            const epochWeekdays = generateWeekdays(epochStart, rangeEnd);
+            const weekdayOrdinal = new Map(epochWeekdays.map((d, i) => [d, i]));
+
+            // Fixed stride: floor + clamp ensures stability across daily window shifts
+            const stride = Math.max(2, Math.floor(allWeekdays.length / TARGET_DATES));
+            const calibrationDates = allWeekdays.filter(d => (weekdayOrdinal.get(d) ?? 0) % stride === 0);
+            if (calibrationDates.length < 5) throw new Error(`Only ${calibrationDates.length} anchored dates in range. Need at least 5.`);
 
             report(`📊 Calibration: ${calibrationDates.length} dates from ${calibrationDates[0]} to ${calibrationDates[calibrationDates.length - 1]}`);
 
@@ -13480,6 +13515,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             }
             // Sort all bars by timestamp
             Object.values(masterBars).forEach(bars => bars.sort((a, b) => a.t - b.t));
+
+            // Pre-build sorted timestamp arrays for O(log n) binary search per stock per date
+            const barTimestamps = {};
+            for (const sym of Object.keys(masterBars)) {
+                barTimestamps[sym] = masterBars[sym].map(b => b.t);
+            }
+            // Upper bound: returns index of first element > target (bars are sorted asc)
+            function upperBound(arr, target) {
+                let lo = 0, hi = arr.length;
+                while (lo < hi) {
+                    const mid = (lo + hi) >>> 1;
+                    if (arr[mid] <= target) lo = mid + 1;
+                    else hi = mid;
+                }
+                return lo;
+            }
+
             report(`✅ Fetched ${fetchedCount}/${allFetchDates.length} dates, ${Object.keys(masterBars).length} symbols`);
 
             // Fetch VIX history for regime segmentation via Yahoo Finance (Worker proxy)
@@ -13515,7 +13567,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             // Walk-forward validation: chronological split (first 70% train, last 30% validate)
             const splitIdx = Math.floor(calibrationDates.length * 0.7);
-            const trainingDates = calibrationDates.slice(0, splitIdx);
+            const trainingDates = new Set(calibrationDates.slice(0, splitIdx));
             const validationDates = calibrationDates.slice(splitIdx);
 
             // Run full pipeline for each calibration date, collect observations
@@ -13526,19 +13578,23 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 for (let di = 0; di < calibrationDates.length; di++) {
                     const calDate = calibrationDates[di];
                     const calTimestamp = new Date(calDate + 'T23:59:59').getTime();
-                    const isTraining = trainingDates.includes(calDate);
+                    const isTraining = trainingDates.has(calDate);
 
-                    if (di % 5 === 0) report(`🔄 Calibration: Analyzing date ${di + 1}/${calibrationDates.length} (${calDate})...`);
+                    if (di % 10 === 0) {
+                        report(`🔄 Calibration: Analyzing date ${di + 1}/${calibrationDates.length} (${calDate})...`);
+                        await new Promise(r => setTimeout(r, 0)); // Yield to browser event loop
+                    }
 
-                    // Slice lookback window: only bars <= calibration date, last 80
+                    // Slice lookback window via binary search: O(log n) vs O(n) filter
                     multiDayCache = {};
                     const calMarketData = {};
                     for (const sym of universe) {
-                        const allBars = masterBars[sym];
-                        if (!allBars) continue;
-                        const windowBars = allBars.filter(b => b.t <= calTimestamp);
-                        if (windowBars.length < 10) continue;
-                        const sliced = windowBars.slice(-80);
+                        const ts = barTimestamps[sym];
+                        if (!ts) continue;
+                        const endIdx = upperBound(ts, calTimestamp); // first index > calTimestamp
+                        if (endIdx < 10) continue;
+                        const startIdx = Math.max(0, endIdx - 80);
+                        const sliced = masterBars[sym].slice(startIdx, endIdx);
                         multiDayCache[sym] = sliced;
                         const last = sliced[sliced.length - 1];
                         const prev = sliced.length >= 2 ? sliced[sliced.length - 2] : last;
@@ -13621,9 +13677,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         };
                         const scoreResult = calculateCompositeScore(scoreInputs);
 
-                        // Look up forward returns from masterBars
-                        const futureBars = masterBars[sym]?.filter(b => b.t > calTimestamp) || [];
-                        futureBars.sort((a, b) => a.t - b.t);
+                        // Look up forward returns via binary search (bars already sorted)
+                        const futureStart = barTimestamps[sym] ? upperBound(barTimestamps[sym], calTimestamp) : 0;
+                        const futureBars = masterBars[sym]?.slice(futureStart, futureStart + 20) || [];
                         const price5d = futureBars.length >= 5 ? futureBars[4].c : null;
                         const price10d = futureBars.length >= 10 ? futureBars[9].c : null;
                         const price15d = futureBars.length >= 15 ? futureBars[14].c : null;
@@ -15442,14 +15498,21 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             html += `<div style="font-size:10px;color:var(--text-faint);margin-top:8px">Last scored: ${new Date(data.timestamp).toLocaleString()} — ${totalCount} stocks scored</div>`;
             // Build legend with live calibration strength data, auto-sorted by edge
             const calCombos = portfolio.calibratedWeights?.signalCombos?.combos;
-            const getEdge = (key) => {
+            const getComboInfo = (key) => {
                 const c = calCombos?.[key];
                 if (!c || c.insufficient || (c.n ?? 0) < 100) return null;
-                return c.vsBaselineReturn;
+                return { edge: c.vsBaselineReturn, ci: c.ci10d, significant: c.significant };
             };
-            const fmtEdge = (val) => {
-                if (val == null) return '';
-                return ` <span style="color:${val > 0 ? 'var(--green)' : 'var(--red)'}">(${val >= 0 ? '+' : ''}${val.toFixed(1)}%)</span>`;
+            const getEdge = (key) => getComboInfo(key)?.edge ?? null;
+            const fmtEdge = (key) => {
+                const info = getComboInfo(key);
+                if (!info) return '';
+                const { edge, ci, significant } = info;
+                const color = edge > 0 ? 'var(--green)' : 'var(--red)';
+                const sign = edge >= 0 ? '+' : '';
+                const ciStr = ci && ci.lo != null ? ` \u00b1${((ci.hi - ci.lo) / 2).toFixed(1)}%` : '';
+                const sigMark = significant === false ? '*' : '';
+                return ` <span style="color:${color}">(${sign}${edge.toFixed(1)}%${ciStr}${sigMark})</span>`;
             };
             const setups = [
                 { badge: 'REV', label: 'reversal', key: 'rsi_low_structure_bull' },
@@ -15466,7 +15529,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 if (eb == null) return -1;
                 return eb - ea;
             });
-            const setupRankings = setups.map(s => `${s.badge} ${s.label}${fmtEdge(getEdge(s.key))}`).join(' · ');
+            const setupRankings = setups.map(s => `${s.badge} ${s.label}${fmtEdge(s.key)}`).join(' · ');
             html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Heat: <span class="heat-dot hot" style="display:inline-block"></span> hot / <span class="heat-dot cold" style="display:inline-block"></span> cold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Action: <span class="action-badge action-buy" style="display:inline">BUY</span> in zone · <span class="action-badge action-add" style="display:inline">ADD</span> held+zone · <span class="action-badge action-near" style="display:inline">NEAR</span> &lt;2% · <span class="action-badge action-wait" style="display:inline">WAIT</span> above zone · <span class="action-badge action-setup" style="display:inline">SETUP</span> signal</span></div>`;
             container.innerHTML = html;
         }

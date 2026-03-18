@@ -967,7 +967,7 @@ function computeSignalBonus(entrySignal, calibratedWeights) {
         const key = pat.calibrationKey || (pat.id === 'reversal' ? 'rsi_low_structure_bull' : null);
         if (key && combos) {
             const cal = combos[key];
-            if (cal && !cal.insufficient && (cal.n ?? 0) >= 100) {
+            if (cal && !cal.insufficient && (cal.n ?? 0) >= 100 && cal.significant !== false) {
                 edge = cal.vsBaselineReturn;
             }
         }
@@ -1069,7 +1069,7 @@ function evaluateComboHeat(candidate, comboResults) {
         } catch { continue; }
 
         const result = comboResults[def.id];
-        if (!result || result.insufficient || (result.n ?? 0) < 100) continue;
+        if (!result || result.insufficient || (result.n ?? 0) < 100 || result.significant === false) continue;
 
         if (result.vsBaselineReturn > 0.5) {
             hotCombos.push({ label: result.label, avgReturn10d: result.avgReturn10d, winRate10d: result.winRate10d, vsBaseline: result.vsBaselineReturn, n: result.n, group: def.group });
