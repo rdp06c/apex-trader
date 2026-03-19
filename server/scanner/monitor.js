@@ -15,7 +15,8 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const PORTFOLIO_PATH = path.join(DATA_DIR, 'portfolio.json');
 const STATE_PATH = path.join(DATA_DIR, 'scanner-state.json');
 const ALERT_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours between re-alerts for same condition
-const RR_ALERT_THRESHOLD = 1.0;
+const TARGET_PCT = 10; // +10% take profit (FORGE-validated)
+const STOP_PCT = 10;   // -10% cut loss (FORGE-validated)
 
 function loadPortfolio() {
     try {
@@ -73,19 +74,21 @@ async function runStructureCheck({ force = false } = {}) {
     if (!portfolio || !portfolio.holdings) return;
 
     const heldSymbols = Object.keys(portfolio.holdings).filter(s => portfolio.holdings[s] > 0);
-    if (heldSymbols.length === 0) {
-        console.log('Scanner: no holdings to monitor');
+    const watchlistSymbols = (portfolio.watchlist || []).filter(s => !portfolio.holdings?.[s]);
+    if (heldSymbols.length === 0 && watchlistSymbols.length === 0) {
+        console.log('Scanner: no holdings or watchlist to monitor');
         return;
     }
 
-    console.log(`Scanner: checking structure for ${heldSymbols.length} holdings: ${heldSymbols.join(', ')}`);
+    console.log(`Scanner: checking ${heldSymbols.length} holdings${watchlistSymbols.length > 0 ? `, ${watchlistSymbols.length} watchlist` : ''}`);
 
     const state = loadState();
     const alerts = [];
 
     try {
-        // Fetch current prices
-        const prices = await fetchBulkSnapshot(heldSymbols, apiKey);
+        // Fetch current prices (holdings + watchlist)
+        const allSymbols = [...heldSymbols, ...watchlistSymbols];
+        const prices = await fetchBulkSnapshot(allSymbols, apiKey);
 
         // Fetch ~65-day bars for structure analysis
         const symbolSet = new Set(heldSymbols);
@@ -148,7 +151,6 @@ async function runStructureCheck({ force = false } = {}) {
             }
             const holdReturn = thesis?.entryPrice && price ? ((price - thesis.entryPrice) / thesis.entryPrice) * 100 : null;
             if (holdDays >= 10 && holdReturn != null && Math.abs(holdReturn) <= 3) allSignals.push('Stale capital');
-            if (tradePlan?.riskReward != null && tradePlan.riskReward < RR_ALERT_THRESHOLD) allSignals.push('R:R deteriorated');
 
             // Split into actionable vs informational
             const lossSignals = [];
@@ -249,17 +251,31 @@ async function runStructureCheck({ force = false } = {}) {
                 }
             }
 
-            // Alert condition 5: R:R deteriorated below threshold
-            if (tradePlan?.riskReward != null && tradePlan.riskReward < RR_ALERT_THRESHOLD) {
-                if (shouldAlert(state, symbol, 'rr-deterioration')) {
+            // Alert condition 5: +10% target hit (FORGE take-profit)
+            if (holdReturn != null && holdReturn >= TARGET_PCT) {
+                if (shouldAlert(state, symbol, 'target-hit')) {
                     alerts.push({
                         symbol,
-                        condition: 'rr-deterioration',
-                        title: `APEX: ${symbol} R:R Below ${RR_ALERT_THRESHOLD}`,
-                        body: `${symbol} R:R at ${tradePlan.riskReward.toFixed(1)}.\nTarget: $${tradePlan.target} (+${tradePlan.targetPct}%)\nStop: $${tradePlan.stop} (-${tradePlan.stopPct}%)`,
-                        tags: ['warning']
+                        condition: 'target-hit',
+                        title: `APEX: ${symbol} +${TARGET_PCT}% Target Hit`,
+                        body: `${symbol} is up ${holdReturn.toFixed(1)}% from entry ($${thesis.entryPrice} → $${price}).\nConsider taking profit per FORGE playbook.`,
+                        tags: ['money_with_wings', 'white_check_mark']
                     });
-                    recordAlert(state, symbol, 'rr-deterioration');
+                    recordAlert(state, symbol, 'target-hit');
+                }
+            }
+
+            // Alert condition 6: -10% stop hit (FORGE cut-loss)
+            if (holdReturn != null && holdReturn <= -STOP_PCT) {
+                if (shouldAlert(state, symbol, 'stop-hit')) {
+                    alerts.push({
+                        symbol,
+                        condition: 'stop-hit',
+                        title: `APEX: ${symbol} -${STOP_PCT}% Stop Hit`,
+                        body: `${symbol} is down ${holdReturn.toFixed(1)}% from entry ($${thesis.entryPrice} → $${price}).\nConsider cutting loss per FORGE playbook.`,
+                        tags: ['octagonal_sign', 'chart_with_downwards_trend']
+                    });
+                    recordAlert(state, symbol, 'stop-hit');
                 }
             }
         }
@@ -291,6 +307,35 @@ async function runStructureCheck({ force = false } = {}) {
                 console.log(`Intraday signals computed for ${Object.keys(intradayBars).length} holdings`);
             } catch (err) {
                 console.warn('Intraday signal fetch failed:', err.message);
+            }
+        }
+
+        // Watchlist: alert when price hits buy zone limit
+        if (watchlistSymbols.length > 0) {
+            const candidates = portfolio.lastCandidateScores?.candidates || [];
+            const candidateMap = {};
+            for (const c of candidates) candidateMap[c.symbol] = c;
+
+            for (const symbol of watchlistSymbols) {
+                const snap = prices[symbol];
+                const price = snap?.price;
+                if (!price) continue;
+
+                const cand = candidateMap[symbol];
+                const limitPrice = cand?.buyZonePrice;
+                if (limitPrice == null) continue;
+
+                if (price <= limitPrice && shouldAlert(state, symbol, 'watchlist-limit')) {
+                    const distPct = ((price - limitPrice) / limitPrice * 100).toFixed(1);
+                    alerts.push({
+                        symbol,
+                        condition: 'watchlist-limit',
+                        title: `APEX: ${symbol} Hit Watchlist Limit`,
+                        body: `${symbol} at $${price} hit buy zone limit $${limitPrice} (${distPct}%).\nSource: ${cand.buyZoneSource || 'n/a'}`,
+                        tags: ['star', 'money_with_wings']
+                    });
+                    recordAlert(state, symbol, 'watchlist-limit');
+                }
             }
         }
 
