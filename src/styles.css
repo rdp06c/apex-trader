@@ -160,7 +160,8 @@
         .header-title-row {
             display: flex;
             align-items: baseline;
-            gap: 12px;
+            gap: 6px;
+            flex-wrap: nowrap;
         }
 
         .header-meta-row {
@@ -171,14 +172,15 @@
         }
 
         .header-link {
-            font-size: 11px;
+            font-size: 10px;
             color: var(--text-muted);
             text-decoration: none;
-            padding: 4px 10px;
+            padding: 3px 6px;
             background: var(--bg-raised);
             border: 1px solid var(--border-subtle);
             border-radius: var(--radius-sm);
             transition: all 0.2s;
+            white-space: nowrap;
         }
         .header-link:hover {
             color: var(--accent);
