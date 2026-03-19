@@ -1415,66 +1415,109 @@ function renderPositionAdds() {
 /* ── Win Rate by VIX Zone ───────────────────────────── */
 function renderVixZoneChart() {
   const ct = (data.closedTrades || []).filter(t => t.entryTechnicals?.vixLevel != null);
-  const zones = [
-    { label: 'VIX < 15', test: v => v < 15 },
-    { label: 'VIX 15-20', test: v => v >= 15 && v < 20 },
-    { label: 'VIX 20-25', test: v => v >= 20 && v < 25 },
-    { label: 'VIX 25+', test: v => v >= 25 },
-  ];
-  const labels = [], wrs = [], counts = [], colors = [];
-  for (const z of zones) {
-    const trades = ct.filter(t => z.test(t.entryTechnicals.vixLevel));
-    const wins = trades.filter(t => t.profitLoss > 0).length;
-    const wr = trades.length > 0 ? (wins / trades.length * 100) : 0;
-    labels.push(z.label + ' (' + trades.length + ')');
-    wrs.push(+wr.toFixed(1));
-    counts.push(trades.length);
-    colors.push(wr >= 55 ? COLORS.green : wr >= 50 ? COLORS.yellow : COLORS.red);
+  if (ct.length < 3) {
+    const ctx = document.getElementById('vixZoneChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted; ctx.font = "13px 'Inter', sans-serif"; ctx.textAlign = 'center';
+    ctx.fillText('Need trades with VIX data', ctx.canvas.width / 2, 80);
+    return;
   }
+  const zones = [
+    { label: 'VIX < 15', min: 0, max: 15, wins: 0, total: 0 },
+    { label: 'VIX 15-20', min: 15, max: 20, wins: 0, total: 0 },
+    { label: 'VIX 20-25', min: 20, max: 25, wins: 0, total: 0 },
+    { label: 'VIX 25+', min: 25, max: 999, wins: 0, total: 0 },
+  ];
+  ct.forEach(t => {
+    const v = t.entryTechnicals.vixLevel;
+    const z = zones.find(z => v >= z.min && v < z.max) || zones[zones.length - 1];
+    z.total++;
+    if (t.profitLoss > 0) z.wins++;
+  });
+  const active = zones.filter(z => z.total > 0);
   new Chart(document.getElementById('vixZoneChart'), {
     type: 'bar',
-    data: { labels, datasets: [{ data: wrs, backgroundColor: colors, borderRadius: 6 }] },
+    data: {
+      labels: active.map(z => z.label),
+      datasets: [{
+        data: active.map(z => (z.wins / z.total * 100)),
+        backgroundColor: active.map(z => (z.wins / z.total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: active.map(z => (z.wins / z.total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1, borderRadius: 4
+      }]
+    },
     options: {
-      responsive: true, plugins: { legend: { display: false } },
+      responsive: true,
       scales: {
-        y: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine }, title: { display: true, text: 'Win Rate %', color: COLORS.muted } },
+        y: { beginAtZero: true, max: 110, ticks: { callback: v => v <= 100 ? v + '%' : '' }, grid: { color: COLORS.gridLine } },
         x: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const z = active[ctx.dataIndex];
+              return `${z.wins}W/${z.total - z.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${z.total} trades`;
+            }
+          }
+        }
       }
     },
-    plugins: [fiftyLinePlugin]
+    plugins: [countLabelPlugin, fiftyLinePlugin]
   });
 }
 
 /* ── Win Rate by ATR % ──────────────────────────────── */
 function renderAtrPctChart() {
   const ct = (data.closedTrades || []).filter(t => t.entryTechnicals?.atr != null && t.buyPrice > 0);
-  const buckets = [
-    { label: '< 1%', test: p => p < 1 },
-    { label: '1-2%', test: p => p >= 1 && p < 2 },
-    { label: '2-3%', test: p => p >= 2 && p < 3 },
-    { label: '3-5%', test: p => p >= 3 && p < 5 },
-    { label: '5%+', test: p => p >= 5 },
-  ];
-  const labels = [], wrs = [], colors = [];
-  for (const b of buckets) {
-    const trades = ct.filter(t => b.test((t.entryTechnicals.atr / t.buyPrice) * 100));
-    const wins = trades.filter(t => t.profitLoss > 0).length;
-    const wr = trades.length > 0 ? (wins / trades.length * 100) : 0;
-    labels.push(b.label + ' (' + trades.length + ')');
-    wrs.push(+wr.toFixed(1));
-    colors.push(wr >= 55 ? COLORS.green : wr >= 50 ? COLORS.yellow : COLORS.red);
+  if (ct.length < 3) {
+    const ctx = document.getElementById('atrPctChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted; ctx.font = "13px 'Inter', sans-serif"; ctx.textAlign = 'center';
+    ctx.fillText('Need trades with ATR data', ctx.canvas.width / 2, 80);
+    return;
   }
+  const buckets = [
+    { label: '< 1%', min: 0, max: 1, wins: 0, total: 0 },
+    { label: '1-2%', min: 1, max: 2, wins: 0, total: 0 },
+    { label: '2-3%', min: 2, max: 3, wins: 0, total: 0 },
+    { label: '3-5%', min: 3, max: 5, wins: 0, total: 0 },
+    { label: '5%+', min: 5, max: 999, wins: 0, total: 0 },
+  ];
+  ct.forEach(t => {
+    const pct = (t.entryTechnicals.atr / t.buyPrice) * 100;
+    const b = buckets.find(b => pct >= b.min && pct < b.max) || buckets[buckets.length - 1];
+    b.total++;
+    if (t.profitLoss > 0) b.wins++;
+  });
+  const active = buckets.filter(b => b.total > 0);
   new Chart(document.getElementById('atrPctChart'), {
     type: 'bar',
-    data: { labels, datasets: [{ data: wrs, backgroundColor: colors, borderRadius: 6 }] },
+    data: {
+      labels: active.map(b => b.label),
+      datasets: [{
+        data: active.map(b => (b.wins / b.total * 100)),
+        backgroundColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
+        borderColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win : COLORS.loss),
+        borderWidth: 1, borderRadius: 4
+      }]
+    },
     options: {
-      responsive: true, plugins: { legend: { display: false } },
+      responsive: true,
       scales: {
-        y: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine }, title: { display: true, text: 'Win Rate %', color: COLORS.muted } },
+        y: { beginAtZero: true, max: 110, ticks: { callback: v => v <= 100 ? v + '%' : '' }, grid: { color: COLORS.gridLine } },
         x: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = active[ctx.dataIndex];
+              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
+            }
+          }
+        }
       }
     },
-    plugins: [fiftyLinePlugin]
+    plugins: [countLabelPlugin, fiftyLinePlugin]
   });
 }
 
@@ -1482,34 +1525,62 @@ function renderAtrPctChart() {
 function renderExitComplianceChart() {
   const ct = (data.closedTrades || []).filter(t => t.returnPercent != null);
   if (ct.length < 3) {
-    document.getElementById('exitComplianceChart').parentElement.innerHTML += '<div class="empty-chart">Need at least 3 closed trades</div>';
+    const ctx = document.getElementById('exitComplianceChart').getContext('2d');
+    ctx.fillStyle = COLORS.muted; ctx.font = "13px 'Inter', sans-serif"; ctx.textAlign = 'center';
+    ctx.fillText('Need at least 3 closed trades', ctx.canvas.width / 2, 80);
     return;
   }
   const buckets = [
-    { label: '≤ -15%', lo: -Infinity, hi: -15 },
-    { label: '-15 to -10%', lo: -15, hi: -10 },
-    { label: '-10 to -5%', lo: -10, hi: -5 },
-    { label: '-5 to 0%', lo: -5, hi: 0 },
-    { label: '0 to +5%', lo: 0, hi: 5 },
-    { label: '+5 to +10%', lo: 5, hi: 10 },
-    { label: '+10 to +15%', lo: 10, hi: 15 },
-    { label: '> +15%', lo: 15, hi: Infinity },
+    { label: '≤ -15%', min: -Infinity, max: -15, wins: 0, total: 0 },
+    { label: '-15 to -10%', min: -15, max: -10, wins: 0, total: 0 },
+    { label: '-10 to -5%', min: -10, max: -5, wins: 0, total: 0 },
+    { label: '-5 to 0%', min: -5, max: 0, wins: 0, total: 0 },
+    { label: '0 to +5%', min: 0, max: 5, wins: 0, total: 0 },
+    { label: '+5 to +10%', min: 5, max: 10, wins: 0, total: 0 },
+    { label: '+10 to +15%', min: 10, max: 15, wins: 0, total: 0 },
+    { label: '> +15%', min: 15, max: Infinity, wins: 0, total: 0 },
   ];
-  const counts = buckets.map(b => ct.filter(t => t.returnPercent >= b.lo && t.returnPercent < b.hi).length);
-  const colors = buckets.map(b => {
-    if (b.hi <= -10 || b.lo >= 10) return COLORS.green; // compliant exits
-    if (b.lo >= 0 && b.hi <= 10) return COLORS.yellow; // sold before +10%
-    if (b.lo >= -10 && b.hi <= 0) return COLORS.yellow; // held past -10%
-    return COLORS.red;
+  ct.forEach(t => {
+    const b = buckets.find(b => t.returnPercent >= b.min && t.returnPercent < b.max) || buckets[buckets.length - 1];
+    b.total++;
+  });
+  const active = buckets.filter(b => b.total > 0);
+  // Green = compliant (+10% or -10% exits), yellow = in between
+  const exitColors = active.map(b => {
+    if (b.max <= -10 || b.min >= 10) return COLORS.win + '99';
+    return COLORS.accent + '66';
+  });
+  const exitBorders = active.map(b => {
+    if (b.max <= -10 || b.min >= 10) return COLORS.win;
+    return COLORS.accent;
   });
   new Chart(document.getElementById('exitComplianceChart'), {
     type: 'bar',
-    data: { labels: buckets.map(b => b.label), datasets: [{ data: counts, backgroundColor: colors, borderRadius: 6 }] },
+    data: {
+      labels: active.map(b => b.label),
+      datasets: [{
+        data: active.map(b => b.total),
+        backgroundColor: exitColors,
+        borderColor: exitBorders,
+        borderWidth: 1, borderRadius: 4
+      }]
+    },
     options: {
-      responsive: true, plugins: { legend: { display: false } },
+      responsive: true,
       scales: {
-        y: { grid: { color: COLORS.gridLine }, title: { display: true, text: 'Trade Count', color: COLORS.muted } },
+        y: { beginAtZero: true, grid: { color: COLORS.gridLine } },
         x: { grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = active[ctx.dataIndex];
+              const pct = (b.total / ct.length * 100).toFixed(0);
+              return `${b.total} trades (${pct}% of all exits)`;
+            }
+          }
+        }
       }
     }
   });
