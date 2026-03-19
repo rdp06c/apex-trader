@@ -7077,12 +7077,10 @@
             // Support for display only (informational)
             let displaySupport = struct?.lastSwingLow;
             if (!displaySupport || displaySupport >= price) {
-                const atrFloor = price - atr;
-                if (fibs?.type === 'bearish' && fibs.fib1272 < price && fibs.fib1272 > atrFloor) {
-                    displaySupport = fibs.fib1272; // bearish fib extension (if reasonable)
-                } else {
-                    displaySupport = atrFloor; // ATR-based floor
-                }
+                const recentBars = bars.slice(-20);
+                const lowestLow = Math.min(...recentBars.map(b => b.l));
+                if (lowestLow < price) displaySupport = lowestLow;
+                else displaySupport = +(price - atr).toFixed(2);
             }
 
             const riskReward = 1.0; // Always 1:1 with fixed +10%/-10%
@@ -7497,12 +7495,15 @@
             let regimeAllowed = regimeOverride;
             if (!regimeOverride) {
                 if (vixLevel >= 20) {
+                    // Elevated/Fear: REV signals only
                     regimeAllowed = signalId === 'reversal' || !signalId;
                 } else if (vixLevel >= 15) {
+                    // Normal: MOM and LDR signals, REV only if full quality
                     const isMomOrLdr = signalId === 'momentum' || signalId === 'leader';
                     const isRevFull = signalId === 'reversal' && sig?.bestMatch === 'full';
                     regimeAllowed = isMomOrLdr || isRevFull;
                 } else {
+                    // Calm: MOM full quality only
                     regimeAllowed = signalId === 'momentum' && sig?.bestMatch === 'full';
                 }
             }
@@ -14499,7 +14500,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const _dtcVal = shortInterestCache[symbol]?.daysToCover;
                     const _struct = _bars && _bars.length >= 5 ? detectStructure(symbol) : null;
 
-                    // Trade plan: R:R, S/R levels — local bars preferred, scanner fallback
+                    // Trade plan: ATR metrics, S/R levels — local bars preferred, scanner fallback
                     const _tradePlan = (() => {
                         if (!_bars || _bars.length < 20) return _sr?.tradePlan || null;
                         return generateTradePlan({ symbol, price: stockPrice.price });
@@ -19505,8 +19506,10 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     const targetATRs = plan.targetInATRs;
                     if (targetATRs != null) {
                         if (vixNow >= 25) {
+                            // Fear: low ATRs = easy bounce = green
                             rrClass = targetATRs <= 3 ? 'rr-strong' : targetATRs <= 5 ? 'rr-good' : 'rr-weak';
                         } else {
+                            // Calm/normal: high ATRs = steady grind = green
                             rrClass = targetATRs >= 5 ? 'rr-strong' : targetATRs >= 3 ? 'rr-good' : 'rr-weak';
                         }
                         rrCell = targetATRs + ' ATR';
@@ -19613,8 +19616,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         planHtml += `<div class="tp-separator">Buy Zone Entry</div>`;
                         planHtml += `<div class="tp-item"><span class="tp-label">Limit</span><span class="tp-value green">$${bz.buyZonePrice.toFixed(2)} (${bz.distancePct.toFixed(1)}% below)</span></div>`;
                         planHtml += `<div class="tp-item"><span class="tp-label">Source</span><span class="tp-value muted">${bz.zoneSource === 'support' ? 'Structure Support' : bz.zoneSource === 'sma20' ? 'SMA20' : bz.zoneSource === 'atr' ? 'ATR Discount' : 'Pullback Target'}</span></div>`;
-                        if (false) { // Zone R:R removed — fixed +10%/-10% exits make it always 1:1
-                        }
+                        // Zone entry uses same fixed +10%/-10% exits — no separate R:R needed
                         planHtml += `<div class="tp-item"><span class="tp-label">Target</span><span class="tp-value muted">$${bzRR?.target ?? plan.target}${bzRR?.target && bzRR.target !== plan.target ? ' (from limit)' : ' (same)'}</span></div>`;
                         planHtml += `<div class="tp-item"><span class="tp-label">Stop</span><span class="tp-value muted">$${bzRR?.stop ?? plan.stop}${bzRR?.stop && bzRR.stop !== +plan.stop ? ' (from limit)' : ' (same)'}</span></div>`;
                     }

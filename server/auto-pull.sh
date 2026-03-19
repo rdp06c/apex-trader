@@ -10,6 +10,8 @@ REMOTE=$(git rev-parse origin/main)
 
 if [ "$LOCAL" != "$REMOTE" ]; then
     echo "$(date): New changes detected, pulling..."
+    # Stash any local changes (e.g., build artifacts) before pulling
+    git stash --quiet 2>/dev/null || true
     git pull origin main
 
     # Rebuild if source files changed
