@@ -1216,7 +1216,7 @@
                             pointHoverBorderWidth: 2
                         },
                         {
-                            label: 'SPY Return',
+                            label: 'SPY',
                             data: [],
                             borderColor: '#60a5fa',
                             backgroundColor: 'transparent',
@@ -1227,6 +1227,36 @@
                             pointRadius: 0,
                             pointHoverRadius: 4,
                             pointHoverBackgroundColor: '#60a5fa',
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2
+                        },
+                        {
+                            label: 'QQQ',
+                            data: [],
+                            borderColor: '#a78bfa',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            borderDash: [6, 3],
+                            tension: 0.35,
+                            fill: false,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            pointHoverBackgroundColor: '#a78bfa',
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2
+                        },
+                        {
+                            label: 'DIA',
+                            data: [],
+                            borderColor: '#34d399',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            borderDash: [6, 3],
+                            tension: 0.35,
+                            fill: false,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            pointHoverBackgroundColor: '#34d399',
                             pointHoverBorderColor: '#fff',
                             pointHoverBorderWidth: 2
                         }
@@ -1411,32 +1441,44 @@
             // Build cumulative return array from stored data
             const cumulativeReturns = dates.map(d => dailyMap[d].totalReturnPct);
 
-            // Fetch SPY data for comparison
-            let spyReturns = new Array(dates.length).fill(null);
-            try {
-                const spyBars = await fetchSPYForChart(dates[0]);
-                if (spyBars && spyBars.length > 0) {
-                    const spyByDate = {};
-                    for (const bar of spyBars) {
-                        const d = new Date(bar.t).toISOString().split('T')[0];
-                        spyByDate[d] = bar.c;
-                    }
-                    let baselinePrice = null;
-                    for (const bar of spyBars) {
-                        const d = new Date(bar.t).toISOString().split('T')[0];
-                        if (d <= dates[0]) baselinePrice = bar.c;
-                        else break;
-                    }
-                    if (!baselinePrice) baselinePrice = spyBars[0].c;
-
-                    let lastSPYPrice = baselinePrice;
-                    for (let i = 0; i < dates.length; i++) {
-                        if (spyByDate[dates[i]]) lastSPYPrice = spyByDate[dates[i]];
-                        spyReturns[i] = Math.round(((lastSPYPrice - baselinePrice) / baselinePrice) * 100 * 100) / 100;
-                    }
+            // Fetch benchmark data for comparison (SPY, QQQ, DIA)
+            function computeBenchmarkReturns(bars, dates) {
+                const returns = new Array(dates.length).fill(null);
+                if (!bars || bars.length === 0) return returns;
+                const byDate = {};
+                for (const bar of bars) {
+                    const d = new Date(bar.t).toISOString().split('T')[0];
+                    byDate[d] = bar.c;
                 }
+                let baselinePrice = null;
+                for (const bar of bars) {
+                    const d = new Date(bar.t).toISOString().split('T')[0];
+                    if (d <= dates[0]) baselinePrice = bar.c;
+                    else break;
+                }
+                if (!baselinePrice) baselinePrice = bars[0].c;
+                let lastPrice = baselinePrice;
+                for (let i = 0; i < dates.length; i++) {
+                    if (byDate[dates[i]]) lastPrice = byDate[dates[i]];
+                    returns[i] = Math.round(((lastPrice - baselinePrice) / baselinePrice) * 100 * 100) / 100;
+                }
+                return returns;
+            }
+
+            let spyReturns = new Array(dates.length).fill(null);
+            let qqqReturns = new Array(dates.length).fill(null);
+            let diaReturns = new Array(dates.length).fill(null);
+            try {
+                const [spyBars, qqqBars, diaBars] = await Promise.all([
+                    fetchBenchmarkForChart('SPY', dates[0]),
+                    fetchBenchmarkForChart('QQQ', dates[0]),
+                    fetchBenchmarkForChart('DIA', dates[0])
+                ]);
+                spyReturns = computeBenchmarkReturns(spyBars, dates);
+                qqqReturns = computeBenchmarkReturns(qqqBars, dates);
+                diaReturns = computeBenchmarkReturns(diaBars, dates);
             } catch (e) {
-                console.warn('SPY chart data unavailable:', e.message);
+                console.warn('Benchmark chart data unavailable:', e.message);
             }
 
             // Format date labels
@@ -1454,6 +1496,8 @@
             performanceChart.data.labels = labels;
             performanceChart.data.datasets[0].data = cumulativeReturns;
             performanceChart.data.datasets[1].data = spyReturns;
+            performanceChart.data.datasets[2].data = qqqReturns;
+            performanceChart.data.datasets[3].data = diaReturns;
             performanceChart.update();
         }
 
@@ -1692,7 +1736,7 @@
         // Cache for 5-day price history (fetched once per analysis run)
         let multiDayCache = {};
         const MULTIDAY_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
-        let spyChartBars = null; // { bars: [...], fetchedAt: timestamp }
+        // Benchmark chart bar caches managed by benchmarkChartCaches in fetchBenchmarkForChart
         
         // Fetch 5-day price history from Polygon aggregate bars
         async function fetch5DayHistory(symbol) {
@@ -1896,27 +1940,30 @@
             } catch (e) { console.warn('Could not persist grouped daily cache:', e.message); }
         }
 
-        // Fetch SPY daily bars for the performance chart comparison
-        async function fetchSPYForChart(fromDate) {
-            const SPY_CHART_TTL = 30 * 60 * 1000;
-            if (spyChartBars && Date.now() - spyChartBars.fetchedAt < SPY_CHART_TTL) {
-                return spyChartBars.bars;
+        // Fetch daily bars for a benchmark ticker (SPY, QQQ, DIA) for performance chart
+        const BENCHMARK_CHART_TTL = 30 * 60 * 1000;
+        const benchmarkChartCaches = { SPY: null, QQQ: null, DIA: null };
+        async function fetchBenchmarkForChart(symbol, fromDate) {
+            const cached = benchmarkChartCaches[symbol];
+            if (cached && Date.now() - cached.fetchedAt < BENCHMARK_CHART_TTL) {
+                return cached.bars;
             }
             if (!POLYGON_API_KEY) return null;
             try {
                 const toStr = new Date().toISOString().split('T')[0];
                 const resp = await fetch(
-                    `https://api.polygon.io/v2/aggs/ticker/SPY/range/1/day/${fromDate}/${toStr}?adjusted=true&sort=asc&limit=50000&apiKey=${POLYGON_API_KEY}`
+                    `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${fromDate}/${toStr}?adjusted=true&sort=asc&limit=50000&apiKey=${POLYGON_API_KEY}`
                 );
                 if (!resp.ok) return null;
                 const data = await resp.json();
                 if (data.results && data.results.length > 0) {
-                    spyChartBars = { bars: data.results, fetchedAt: Date.now() };
+                    benchmarkChartCaches[symbol] = { bars: data.results, fetchedAt: Date.now() };
                     return data.results;
                 }
-            } catch (e) { console.warn('SPY chart fetch failed:', e.message); }
+            } catch (e) { console.warn(`${symbol} chart fetch failed:`, e.message); }
             return null;
         }
+        async function fetchSPYForChart(fromDate) { return fetchBenchmarkForChart('SPY', fromDate); }
 
         // === TECHNICAL INDICATORS (Client-Side from 40-bar data) ===
 
