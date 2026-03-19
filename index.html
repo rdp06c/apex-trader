@@ -3949,7 +3949,7 @@
             momentumMultiplier: 0.3, rsMultiplier: 0.6, structureMultiplier: 1.25,
             accelBonus: 0, consistencyBonus: 0,
             sectorInflow: 2.0, sectorModestInflow: 1.0, sectorOutflow: -1.0,
-            rsiOversold30: 4.0, rsiOversold40: 2.5, rsiOversold50: 0.8,        // amplified: RSI<40 is +19pp edge
+            rsiOversold25: 2.0, rsiOversold30: 4.0, rsiOversold40: 2.5, rsiOversold50: 0.8,  // RSI<25 capped per FORGE; RSI 25-40 is +19pp edge
             rsiOverbought70: -4.5, rsiOverbought80: -7.0,                       // amplified: RSI>70 is -21pp edge
             macdBullish: 2.5, macdBearish: -2.0, macdNone: -0.5,
             rsMeanRev95: -4.0, rsMeanRev90: -3.0, rsMeanRev85: -2.0, rsMeanRev80: -0.5, // expanded: RS>90 wins 14%
@@ -6944,7 +6944,7 @@
                 : 0;
 
             const rsiBonusPenalty = rsi != null
-                ? (rsi < 30 ? w.rsiOversold30 : rsi < 40 ? w.rsiOversold40 : rsi < 50 ? w.rsiOversold50
+                ? (rsi < 25 ? (w.rsiOversold25 ?? 2.0) : rsi < 30 ? w.rsiOversold30 : rsi < 40 ? w.rsiOversold40 : rsi < 50 ? w.rsiOversold50
                     : rsi > 80 ? w.rsiOverbought80 : rsi > 70 ? w.rsiOverbought70 : 0)
                 : 0;
             const macdBonus = macdCrossover === 'bullish' ? w.macdBullish : macdCrossover === 'bearish' ? w.macdBearish : w.macdNone;
@@ -7066,41 +7066,16 @@
                 if (fibTarget1) fibType = 'retracement';
             }
 
-            // === TARGET ===
-            // ATR projection as primary, fib level as cross-check.
-            // Resistance is informational only — not a cap. Momentum stocks are expected
-            // to break through the nearest swing high; capping there gives tiny targets
-            // and terrible R:R for exactly the stocks that score best.
-            const atrTarget = price + (atr * 2.5);
-            let target = atrTarget;
-            if (fibTarget1 && fibTarget1 > price) {
-                target = Math.min(atrTarget, fibTarget1);
-            }
-            // Target must be above current price by at least 1%
-            if (target <= price * 1.01) target = atrTarget;
+            // === TARGET & STOP === (FORGE-validated: fixed +10%/-10%, Mar 2026)
+            const target = +(price * 1.10).toFixed(2);  // Fixed +10% profit target
+            const stop = +(price * 0.90).toFixed(2);    // Fixed -10% stop loss
 
-            // === STOP ===
-            // ATR-based confirmed by structure support
-            // Fallback: if no swing low from structure or swing low is above price,
-            // use lowest low of last 20 bars as approximate support
-            let support = struct?.lastSwingLow;
-            if (!support || support >= price) {
-                const recentBars = bars.slice(-20);
-                const lowestLow = Math.min(...recentBars.map(b => b.l));
-                if (lowestLow < price) support = lowestLow;
-                else support = null;
-            }
-            const atrStop = price - (atr * vixMult);
-            let stop = atrStop;
-            if (support && support < price * 0.995 && support > atrStop) {
-                // Use support with a small cushion (2% below) if it's tighter than ATR stop
-                stop = Math.max(support * 0.98, atrStop);
-            }
-            // Stop must be below current price
-            if (stop >= price) stop = atrStop;
+            // ATR metrics for display (replaces R:R — FORGE data shows ATR% predicts winners by VIX zone)
+            const atrPctOfPrice = +((atr / price) * 100).toFixed(1);
+            const targetInATRs = atr > 0 ? +((price * 0.10) / atr).toFixed(1) : null;
 
-            // Display support fallback: don't leave blank for stocks at new lows
-            let displaySupport = support;
+            // Support for display only (informational)
+            let displaySupport = struct?.lastSwingLow;
             if (!displaySupport || displaySupport >= price) {
                 const atrFloor = price - atr;
                 if (fibs?.type === 'bearish' && fibs.fib1272 < price && fibs.fib1272 > atrFloor) {
@@ -7110,9 +7085,7 @@
                 }
             }
 
-            const risk = price - stop;
-            const reward = target - price;
-            const riskReward = risk > 0 ? reward / risk : null;
+            const riskReward = 1.0; // Always 1:1 with fixed +10%/-10%
 
             // === CALIBRATION CONTEXT ===
             const signal = candidate._entrySignal;
@@ -7157,13 +7130,15 @@
 
             return {
                 entry: +price.toFixed(2),
-                target: +target.toFixed(2),
-                targetPct: +((target / price - 1) * 100).toFixed(1),
-                stop: +stop.toFixed(2),
-                stopPct: +((1 - stop / price) * 100).toFixed(1),
-                riskReward: riskReward != null ? +riskReward.toFixed(1) : null,
+                target,
+                targetPct: 10.0,
+                stop,
+                stopPct: 10.0,
+                riskReward: riskReward,
                 atr: +atr.toFixed(2),
-                atrPct: +((atr / price) * 100).toFixed(1),
+                atrPct: atrPctOfPrice,
+                atrPctOfPrice,
+                targetInATRs,
                 resistance: resistance && resistance > price ? +resistance.toFixed(2) : null,
                 support: displaySupport && displaySupport < price ? +displaySupport.toFixed(2) : null,
                 fib1272: fibTarget1 ? +fibTarget1.toFixed(2) : null,
@@ -7514,13 +7489,23 @@
             const held = portfolio.holdings && !!portfolio.holdings[candidate.symbol];
             const structOk = candidate.structure !== 'bearish' && candidate.structure !== 'bearish_continuation';
 
-            // Regime-based signal gating: in bear/choppy markets only REV signals qualify for BUY/ADD/NEAR
-            const regime = portfolio.lastMarketRegime?.regime || 'choppy';
-            const isBearish = regime === 'bearish' || regime === 'choppy';
+            // VIX-zone signal routing (FORGE-validated, Mar 2026)
+            // VIX 25+: REV only | VIX 20-25: REV only | VIX 15-20: MOM/LDR (REV if full) | VIX <15: MOM full only
+            const vixLevel = portfolio.lastVIX?.level ?? 20;
             const signalId = sig?.bestPatternId;
-            const isRevSignal = signalId === 'reversal' || !signalId;
             const regimeOverride = scorecardState.overrideRegimeGate === true;
-            const regimeAllowed = !isBearish || isRevSignal || regimeOverride;
+            let regimeAllowed = regimeOverride;
+            if (!regimeOverride) {
+                if (vixLevel >= 20) {
+                    regimeAllowed = signalId === 'reversal' || !signalId;
+                } else if (vixLevel >= 15) {
+                    const isMomOrLdr = signalId === 'momentum' || signalId === 'leader';
+                    const isRevFull = signalId === 'reversal' && sig?.bestMatch === 'full';
+                    regimeAllowed = isMomOrLdr || isRevFull;
+                } else {
+                    regimeAllowed = signalId === 'momentum' && sig?.bestMatch === 'full';
+                }
+            }
 
             // AVOID anti-pattern vetoes BUY/ADD — downgrade to SETUP at best
             if (isAvoid) {
@@ -7533,11 +7518,8 @@
             const structOkForSignal = (signalId === 'reversal') || structOk;
             if (zone && score >= 5 && structOkForSignal) {
                 // Quality gates for BUY/ADD/NEAR — downgrade to WAIT with reason
-                const zoneRR = candidate._buyZoneRR?.riskReward;
-                const planRR = candidate._tradePlan?.riskReward;
+                // R:R gate removed — fixed +10%/-10% exits make R:R always 1:1
                 let gateReason = null;
-                if (zoneRR != null && zoneRR < 1.0) gateReason = 'Zone R:R ' + zoneRR.toFixed(1) + ' < 1.0 — risk exceeds reward';
-                if (!gateReason && planRR != null && planRR < 1.0) gateReason = 'R:R ' + planRR.toFixed(1) + ' < 1.0 at current price';
 
                 // REV structure gate removed — calibration data (260k obs) shows structure is irrelevant
                 // for RSI<40 entries. VIX regime is the real differentiator, handled via entry signal criteria.
@@ -13926,7 +13908,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const rsiEntry = h.entryRSI != null ? Math.round(h.entryRSI) : null;
                 const macd = h._macdResult?.crossover || '—';
                 const tp = h._tradePlan;
-                const rr = tp?.riskReward ?? null;
+                const rr = tp?.targetInATRs ?? null;
                 const tpSupport = tp?.support ?? null;
                 const tpResist = tp?.resistance ?? null;
                 // Prefer trade plan stop/target over thesis (trade plan is live ATR-based)
@@ -13964,7 +13946,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             html += '<div class="risk-table-wrap"><table class="risk-table">';
             html += '<thead><tr>';
-            html += '<th>Symbol</th><th>Sig</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>R:R</th><th>S/R</th><th>Thesis</th>';
+            html += '<th>Symbol</th><th>Sig</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>ATR</th><th>S/R</th><th>Thesis</th>';
             html += '<th>MOM</th><th>RS</th><th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
             html += '</tr></thead><tbody>';
 
@@ -14020,8 +14002,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     ? `<span style="${r.enhancedTargetDist != null && parseFloat(r.enhancedTargetDist) <= 2 ? 'color:#22c55e' : ''}" title="${r.enhancedTargetDist}% away${r.targetPrice && r.enhancedTarget !== r.targetPrice ? ' (thesis: $' + r.targetPrice.toFixed(2) + ')' : ''}${r.fibTarget ? ' (Fib)' : ''}">$${r.enhancedTarget.toFixed(2)}</span>`
                     : '—';
                 html += `<td>${targetDisplay}</td>`;
-                // R:R cell — color-coded: green >=2.0, yellow >=1.5, red <1.5
-                const rrColor = r.rr != null ? (r.rr >= 2.0 ? 'color:#22c55e' : r.rr >= 1.5 ? 'color:#f59e0b' : 'color:#ef4444') : '';
+                // ATR cell — target in ATRs, color varies by VIX zone
+                const vNow = portfolio.lastVIX?.level ?? 20;
+                const rrColor = r.rr != null ? (
+                    vNow >= 25
+                        ? (r.rr <= 3 ? 'color:#22c55e' : r.rr <= 5 ? 'color:#f59e0b' : 'color:#ef4444')
+                        : (r.rr >= 5 ? 'color:#22c55e' : r.rr >= 3 ? 'color:#f59e0b' : 'color:#ef4444')
+                ) : '';
                 const rrDisplay = r.rr != null ? `<span style="${rrColor};font-weight:600">${r.rr.toFixed(1)}</span>` : '\u2014';
                 html += `<td>${rrDisplay}</td>`;
                 // S/R cell — combined support/resistance
@@ -14544,7 +14531,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (_thesis?.entryStructure === 'bullish' && _struct?.structure === 'bearish')
                         _allLossSignals.push('Structure flipped');
                     if (daysHeld >= 10 && Math.abs(gainLossPercent) <= 3) _allLossSignals.push('Stale capital');
-                    if (_tradePlan?.riskReward != null && _tradePlan.riskReward < 1.0) _allLossSignals.push('R:R deteriorated');
+                    // Fixed +10%/-10% exits — R:R is always 1:1, no deterioration check needed
 
                     const _lossSignals = [];
                     const _infoSignals = [];
@@ -19243,7 +19230,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     const tier = m === 'full' ? 300 : m === 'strong' ? 200 : m === 'partial' ? 100 : 0;
                     return tier + count;
                 },
-                rr: c => c._buyZoneRR?.riskReward ?? c._tradePlan?.riskReward ?? 0,
+                rr: c => c._tradePlan?.targetInATRs ?? 99,
             };
             const accessor = sortAccessors[scorecardState.sortField] || sortAccessors.score;
             const dir = scorecardState.sortDir === 'asc' ? 1 : -1;
@@ -19270,11 +19257,9 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             });
             html += '</select>';
             html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;flex:0 0 auto;white-space:nowrap;"><input type="checkbox" onchange="scorecardToggleZone()"${scorecardState.filterZone ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> In Zone</label>`;
-            const regime = portfolio.lastMarketRegime?.regime || 'choppy';
-            const regimeBearish = regime === 'bearish' || regime === 'choppy';
-            if (regimeBearish) {
-                html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#f39c12;cursor:pointer;flex:0 0 auto;white-space:nowrap;" title="In ${regime} regime, only REV signals qualify for BUY/ADD/NEAR. Toggle to override."><input type="checkbox" onchange="scorecardToggleRegimeOverride()"${scorecardState.overrideRegimeGate ? ' checked' : ''} style="accent-color:#f39c12;cursor:pointer;"> All Signals (${regime}: REV only)</label>`;
-            }
+            const vixNow = portfolio.lastVIX?.level ?? 20;
+            const vixZoneLabel = vixNow >= 25 ? 'VIX ' + Math.round(vixNow) + ': REV only' : vixNow >= 20 ? 'VIX ' + Math.round(vixNow) + ': REV only' : vixNow >= 15 ? 'VIX ' + Math.round(vixNow) + ': MOM/LDR' : 'VIX ' + Math.round(vixNow) + ': MOM full only';
+            html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#f39c12;cursor:pointer;flex:0 0 auto;white-space:nowrap;" title="VIX-zone signal routing (FORGE playbook). Toggle to override and see all signals."><input type="checkbox" onchange="scorecardToggleRegimeOverride()"${scorecardState.overrideRegimeGate ? ' checked' : ''} style="accent-color:#f39c12;cursor:pointer;"> ${scorecardState.overrideRegimeGate ? 'All Signals (override)' : vixZoneLabel}</label>`;
             if (data.timestamp) {
                 const scanAge = Math.floor((Date.now() - new Date(data.timestamp).getTime()) / 1000);
                 const ageStr = scanAge < 60 ? 'just now' : scanAge < 3600 ? `${Math.floor(scanAge / 60)}m ago` : scanAge < 86400 ? `${Math.floor(scanAge / 3600)}h ago` : `${Math.floor(scanAge / 86400)}d ago`;
@@ -19311,12 +19296,12 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             html += '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
                 '<th class="watchlist-col" title="Click star to add/remove from watchlist">★</th><th>#</th><th>Symbol</th>' +
                 sh('action', "Synthesized action: BUY = in zone, not held. ADD = in zone, held. NEAR = within 2% of zone. WAIT = above zone. SETUP = signal present, no zone data.", 'Action') +
-                sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Non-REV gated by calibration.", 'Sig') +
+                sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Gated by VIX zone per FORGE playbook.", 'Sig') +
                 sh('score', "Composite score from weighted signals + calibration heat bonus + entry signal bonus. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('limit', "Buy zone limit price. Set as single-day limit order. Based on highest of: structure support, SMA20, VIX-aware pullback from 20-day high.", 'Limit') +
                 sh('dist', "Distance from current price to buy zone. Negative/IN ZONE = at or below limit. Lower = closer to entry.", 'Dist') +
-                sh('rr', "Risk/Reward ratio. Shows Zone R:R (anchored to limit price) when buy zone exists, otherwise current-price R:R. Green ≥ 2.0, Yellow ≥ 1.5, Red < 1.5. Hover for both values.", 'R:R') +
+                sh('rr', "Target in ATRs — how many average daily moves to reach +10%. VIX 25+: low = green (easy bounce). VIX <25: high = green (steady grind). Based on 44K+ FORGE backtested trades.", 'ATR') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
                 sh('5d', "5-day cumulative return. Pullbacks with bullish structure are captured by calibration combo heat, not a fixed bonus.", '5D') +
                 sh('mom', "Momentum (0-10). Sweet spot is 5-7: strong trend without penalties. Weight halved (0.3x) — calibration shows momentum is anti-predictive. 9+ triggers extension penalty (-3.5) and 0.6x entry multiplier.", 'Mom') +
@@ -19514,14 +19499,17 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     stopTip = `Stop: $${plan.stop} (-${plan.stopPct}%)`;
                     if (plan.support) stopTip += `\nSupport: $${plan.support}`;
                     stopTip += `\nATR: $${plan.atr} (${plan.atrPct}%)`;
-                    stopTip += `\nVIX mult: ${plan.vixMult}x`;
 
-                    // Show Zone R:R (stable, anchored to limit) when available; fall back to current-price R:R
-                    const bzRRVal = c._buyZoneRR?.riskReward;
-                    const displayRR = bzRRVal ?? plan.riskReward;
-                    if (displayRR != null) {
-                        rrClass = displayRR >= 2.0 ? 'rr-strong' : displayRR >= 1.5 ? 'rr-good' : 'rr-weak';
-                        rrCell = displayRR.toFixed(1);
+                    // ATR metrics replace R:R (FORGE-validated, Mar 2026)
+                    const vixNow = portfolio.lastVIX?.level ?? 20;
+                    const targetATRs = plan.targetInATRs;
+                    if (targetATRs != null) {
+                        if (vixNow >= 25) {
+                            rrClass = targetATRs <= 3 ? 'rr-strong' : targetATRs <= 5 ? 'rr-good' : 'rr-weak';
+                        } else {
+                            rrClass = targetATRs >= 5 ? 'rr-strong' : targetATRs >= 3 ? 'rr-good' : 'rr-weak';
+                        }
+                        rrCell = targetATRs + ' ATR';
                     }
                 }
 
@@ -19576,7 +19564,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     <td style="font-size:11px">${priceStr}</td>
                     <td style="font-size:11px" title="${limitTip}">${limitCell}</td>
                     <td class="${distClass}" style="font-size:11px">${distCell}</td>
-                    <td class="plan-cell ${rrClass}" title="${c._buyZoneRR ? 'Zone R:R (at limit): ' + c._buyZoneRR.riskReward.toFixed(1) + ':1\nCurrent price R:R: ' + (plan?.riskReward?.toFixed(1) ?? '--') + ':1\n' : ''}${targetTip}\n${stopTip}" style="font-size:11px;font-weight:600">${rrCell}</td>
+                    <td class="plan-cell ${rrClass}" title="Target: ${plan?.targetInATRs ?? '--'} ATRs to +10%\nATR: ${plan?.atrPct ?? '--'}% of price\n${targetTip}\n${stopTip}" style="font-size:11px;font-weight:600">${rrCell}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
                     <td class="${ret5dClass}" style="font-size:11px">${ret5d != null ? (ret5d >= 0 ? '+' : '') + ret5d.toFixed(2) + '%' : '--'}</td>
                     <td class="${momClass}">${mom.toFixed(1)}${c.isAccelerating ? ' <span class="accel-badge" title="Momentum accelerating">⚡</span>' : ''}</td>
@@ -19592,16 +19580,22 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
 
                 // Expansion row with full trade plan detail — fixed grid layout for consistency
                 if (plan) {
-                    const rrColor = plan.riskReward >= 2.0 ? 'green' : plan.riskReward >= 1.5 ? 'yellow' : 'red';
                     const confLabel = plan.calConfidence === 'high' ? '' : plan.calConfidence === 'moderate' ? ' (est.)' : '';
+                    const atrColor = (() => {
+                        const vNow = portfolio.lastVIX?.level ?? 20;
+                        const tATR = plan.targetInATRs;
+                        if (tATR == null) return 'muted';
+                        if (vNow >= 25) return tATR <= 3 ? 'green' : tATR <= 5 ? 'yellow' : 'red';
+                        return tATR >= 5 ? 'green' : tATR >= 3 ? 'yellow' : 'red';
+                    })();
                     let planHtml = `<div class="trade-plan-detail">`;
                     // Row 1: Core trade plan
                     planHtml += `<div class="tp-item"><span class="tp-label">Entry</span><span class="tp-value">$${plan.entry}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">Target</span><span class="tp-value green">$${plan.target} (+${plan.targetPct}%)</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">Stop</span><span class="tp-value red">$${plan.stop} (-${plan.stopPct}%)</span></div>`;
-                    planHtml += `<div class="tp-item"><span class="tp-label">R:R</span><span class="tp-value ${rrColor}">${plan.riskReward != null ? plan.riskReward.toFixed(1) + ':1' : '--'}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">ATR</span><span class="tp-value muted">$${plan.atr} (${plan.atrPct}%)</span></div>`;
-                    planHtml += `<div class="tp-item"><span class="tp-label">VIX Stop Width</span><span class="tp-value muted">${plan.vixMult}x ATR</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">Target in ATRs</span><span class="tp-value ${atrColor}">${plan.targetInATRs ?? '--'}</span></div>`;
+                    planHtml += `<div class="tp-item"><span class="tp-label">ATR % Price</span><span class="tp-value ${atrColor}">${plan.atrPctOfPrice ?? '--'}%</span></div>`;
                     // Row 2: Levels
                     planHtml += `<div class="tp-item"><span class="tp-label">Watch: Resistance</span><span class="tp-value ${plan.resistance ? 'yellow' : 'muted'}">${plan.resistance ? '$' + plan.resistance : '--'}</span></div>`;
                     planHtml += `<div class="tp-item"><span class="tp-label">Support Level</span><span class="tp-value ${plan.support ? 'green' : 'muted'}">${plan.support ? '$' + plan.support : '--'}</span></div>`;
@@ -19619,9 +19613,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         planHtml += `<div class="tp-separator">Buy Zone Entry</div>`;
                         planHtml += `<div class="tp-item"><span class="tp-label">Limit</span><span class="tp-value green">$${bz.buyZonePrice.toFixed(2)} (${bz.distancePct.toFixed(1)}% below)</span></div>`;
                         planHtml += `<div class="tp-item"><span class="tp-label">Source</span><span class="tp-value muted">${bz.zoneSource === 'support' ? 'Structure Support' : bz.zoneSource === 'sma20' ? 'SMA20' : bz.zoneSource === 'atr' ? 'ATR Discount' : 'Pullback Target'}</span></div>`;
-                        if (bzRR) {
-                            const bzRRColor = bzRR.riskReward >= 2.0 ? 'green' : bzRR.riskReward >= 1.5 ? 'yellow' : 'red';
-                            planHtml += `<div class="tp-item"><span class="tp-label">Zone R:R</span><span class="tp-value ${bzRRColor}">${bzRR.riskReward.toFixed(1)}:1${bzRR.improvementVsCurrent != null ? ` (+${bzRR.improvementVsCurrent}% vs current)` : ''}</span></div>`;
+                        if (false) { // Zone R:R removed — fixed +10%/-10% exits make it always 1:1
                         }
                         planHtml += `<div class="tp-item"><span class="tp-label">Target</span><span class="tp-value muted">$${bzRR?.target ?? plan.target}${bzRR?.target && bzRR.target !== plan.target ? ' (from limit)' : ' (same)'}</span></div>`;
                         planHtml += `<div class="tp-item"><span class="tp-label">Stop</span><span class="tp-value muted">$${bzRR?.stop ?? plan.stop}${bzRR?.stop && bzRR.stop !== +plan.stop ? ' (from limit)' : ' (same)'}</span></div>`;
@@ -19668,7 +19660,12 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 return eb - ea;
             });
             const setupRankings = setups.map(s => `${s.badge} ${s.label}${fmtEdge(s.key)}`).join(' · ');
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Action: <span class="action-badge action-buy" style="display:inline">BUY</span> in zone · <span class="action-badge action-add" style="display:inline">ADD</span> held+zone · <span class="action-badge action-near" style="display:inline">NEAR</span> &lt;2% · <span class="action-badge action-wait" style="display:inline">WAIT</span> above zone · <span class="action-badge action-setup" style="display:inline">SETUP</span> signal</span></div>`;
+            const _vixNow = portfolio.lastVIX?.level ?? 20;
+            const _vixGuide = _vixNow >= 25 ? 'VIX 25+: REV · ATR 3%+ · RSI 25-40 · RS 20-60'
+                : _vixNow >= 20 ? 'VIX 20-25: REV · ATR &lt;2% · RS 40+ · Shallow dips'
+                : _vixNow >= 15 ? 'VIX 15-20: MOM · ATR &lt;3% · Mom 5-6 · RS 50-70'
+                : 'VIX &lt;15: MOM full only · ATR &lt;2% · Defense/RE only';
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>FORGE playbook: ${_vixGuide}</span><span>Exit: +10% take profit · -10% cut loss · 3-day min hold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Action: <span class="action-badge action-buy" style="display:inline">BUY</span> in zone · <span class="action-badge action-add" style="display:inline">ADD</span> held+zone · <span class="action-badge action-near" style="display:inline">NEAR</span> &lt;2% · <span class="action-badge action-wait" style="display:inline">WAIT</span> above zone · <span class="action-badge action-setup" style="display:inline">SETUP</span> signal</span></div>`;
             container.innerHTML = html;
         }
 
