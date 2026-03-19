@@ -15445,11 +15445,9 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             });
             html += '</select>';
             html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#888;cursor:pointer;flex:0 0 auto;white-space:nowrap;"><input type="checkbox" onchange="scorecardToggleZone()"${scorecardState.filterZone ? ' checked' : ''} style="accent-color:#00d4aa;cursor:pointer;"> In Zone</label>`;
-            const regime = portfolio.lastMarketRegime?.regime || 'choppy';
-            const regimeBearish = regime === 'bearish' || regime === 'choppy';
-            if (regimeBearish) {
-                html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#f39c12;cursor:pointer;flex:0 0 auto;white-space:nowrap;" title="In ${regime} regime, only REV signals qualify for BUY/ADD/NEAR. Toggle to override."><input type="checkbox" onchange="scorecardToggleRegimeOverride()"${scorecardState.overrideRegimeGate ? ' checked' : ''} style="accent-color:#f39c12;cursor:pointer;"> All Signals (${regime}: REV only)</label>`;
-            }
+            const vixNow = portfolio.lastVIX?.level ?? 20;
+            const vixZoneLabel = vixNow >= 25 ? 'VIX ' + Math.round(vixNow) + ': REV only' : vixNow >= 20 ? 'VIX ' + Math.round(vixNow) + ': REV only' : vixNow >= 15 ? 'VIX ' + Math.round(vixNow) + ': MOM/LDR' : 'VIX ' + Math.round(vixNow) + ': MOM full only';
+            html += `<label style="display:inline-flex;align-items:center;gap:4px;font-size:0.8rem;color:#f39c12;cursor:pointer;flex:0 0 auto;white-space:nowrap;" title="VIX-zone signal routing (FORGE playbook). Toggle to override and see all signals."><input type="checkbox" onchange="scorecardToggleRegimeOverride()"${scorecardState.overrideRegimeGate ? ' checked' : ''} style="accent-color:#f39c12;cursor:pointer;"> ${scorecardState.overrideRegimeGate ? 'All Signals (override)' : vixZoneLabel}</label>`;
             if (data.timestamp) {
                 const scanAge = Math.floor((Date.now() - new Date(data.timestamp).getTime()) / 1000);
                 const ageStr = scanAge < 60 ? 'just now' : scanAge < 3600 ? `${Math.floor(scanAge / 60)}m ago` : scanAge < 86400 ? `${Math.floor(scanAge / 3600)}h ago` : `${Math.floor(scanAge / 86400)}d ago`;
@@ -15486,7 +15484,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             html += '<div class="scorecard-table-wrap"><table class="scorecard-table"><thead><tr>' +
                 '<th class="watchlist-col" title="Click star to add/remove from watchlist">★</th><th>#</th><th>Symbol</th>' +
                 sh('action', "Synthesized action: BUY = in zone, not held. ADD = in zone, held. NEAR = within 2% of zone. WAIT = above zone. SETUP = signal present, no zone data.", 'Action') +
-                sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Non-REV gated by calibration.", 'Sig') +
+                sh('sig', "Entry signal. Green=all criteria met, Yellow=one miss, Gray=minimum met. REV=reversal, MOM=momentum, QMO=quiet momentum, SQZ=squeeze, LDR=sector leader, AVOID=exhausted. Gated by VIX zone per FORGE playbook.", 'Sig') +
                 sh('score', "Composite score from weighted signals + calibration heat bonus + entry signal bonus. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('limit', "Buy zone limit price. Set as single-day limit order. Based on highest of: structure support, SMA20, VIX-aware pullback from 20-day high.", 'Limit') +
@@ -15851,7 +15849,12 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 return eb - ea;
             });
             const setupRankings = setups.map(s => `${s.badge} ${s.label}${fmtEdge(s.key)}`).join(' · ');
-            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>Setups by edge: ${setupRankings}</span><span>Non-REV gated by calibration · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Action: <span class="action-badge action-buy" style="display:inline">BUY</span> in zone · <span class="action-badge action-add" style="display:inline">ADD</span> held+zone · <span class="action-badge action-near" style="display:inline">NEAR</span> &lt;2% · <span class="action-badge action-wait" style="display:inline">WAIT</span> above zone · <span class="action-badge action-setup" style="display:inline">SETUP</span> signal</span></div>`;
+            const _vixNow = portfolio.lastVIX?.level ?? 20;
+            const _vixGuide = _vixNow >= 25 ? 'VIX 25+: REV · ATR 3%+ · RSI 25-40 · RS 20-60'
+                : _vixNow >= 20 ? 'VIX 20-25: REV · ATR &lt;2% · RS 40+ · Shallow dips'
+                : _vixNow >= 15 ? 'VIX 15-20: MOM · ATR &lt;3% · Mom 5-6 · RS 50-70'
+                : 'VIX &lt;15: MOM full only · ATR &lt;2% · Defense/RE only';
+            html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:var(--bg-surface);border-radius:4px;border-left:3px solid var(--accent);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center"><span>Sig: <span class="entry-badge full" style="display:inline">GREEN</span> all met <span class="entry-badge strong" style="display:inline">YELLOW</span> one miss <span class="entry-badge partial" style="display:inline">GRAY</span> minimum met <span class="entry-badge avoid" style="display:inline">RED</span> avoid</span><span>FORGE playbook: ${_vixGuide}</span><span>Exit: +10% take profit · -10% cut loss · 3-day min hold · Score: <span class="score-driver sig" style="display:inline">S</span> signal / <span class="score-driver mom" style="display:inline">M</span> momentum · Action: <span class="action-badge action-buy" style="display:inline">BUY</span> in zone · <span class="action-badge action-add" style="display:inline">ADD</span> held+zone · <span class="action-badge action-near" style="display:inline">NEAR</span> &lt;2% · <span class="action-badge action-wait" style="display:inline">WAIT</span> above zone · <span class="action-badge action-setup" style="display:inline">SETUP</span> signal</span></div>`;
             container.innerHTML = html;
         }
 

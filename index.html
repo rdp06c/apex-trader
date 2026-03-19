@@ -2885,6 +2885,7 @@
             color: var(--text-muted);
             white-space: nowrap;
             flex: 0 0 auto;
+            line-height: 28px;
         }
         .tech-filter-input {
             width: 44px;
@@ -6567,6 +6568,17 @@
             for (let i = 1; i < bars.length - 1; i++) {
                 if (bars[i].h > bars[i - 1].h && bars[i].h > bars[i + 1].h) swingHighs.push({ index: i, price: bars[i].h });
                 if (bars[i].l < bars[i - 1].l && bars[i].l < bars[i + 1].l) swingLows.push({ index: i, price: bars[i].l });
+            }
+            // Fallback: sustained decline has no swing lows, sustained rally has no swing highs
+            if (swingLows.length === 0 && swingHighs.length > 0) {
+                let minPrice = Infinity, minIdx = 0;
+                for (let i = 0; i < bars.length; i++) { if (bars[i].l < minPrice) { minPrice = bars[i].l; minIdx = i; } }
+                swingLows.push({ index: minIdx, price: minPrice });
+            }
+            if (swingHighs.length === 0 && swingLows.length > 0) {
+                let maxPrice = -Infinity, maxIdx = 0;
+                for (let i = 0; i < bars.length; i++) { if (bars[i].h > maxPrice) { maxPrice = bars[i].h; maxIdx = i; } }
+                swingHighs.push({ index: maxIdx, price: maxPrice });
             }
             if (swingHighs.length < 1 || swingLows.length < 1) return null;
             const currentPrice = bars[bars.length - 1].c;
