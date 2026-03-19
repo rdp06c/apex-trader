@@ -10099,7 +10099,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 const rsiEntry = h.entryRSI != null ? Math.round(h.entryRSI) : null;
                 const macd = h._macdResult?.crossover || '—';
                 const tp = h._tradePlan;
-                const rr = tp?.riskReward ?? null;
+                const rr = tp?.targetInATRs ?? null;
                 const tpSupport = tp?.support ?? null;
                 const tpResist = tp?.resistance ?? null;
                 // Prefer trade plan stop/target over thesis (trade plan is live ATR-based)
@@ -10137,7 +10137,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
             html += '<div class="risk-table-wrap"><table class="risk-table">';
             html += '<thead><tr>';
-            html += '<th>Symbol</th><th>Sig</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>R:R</th><th>S/R</th><th>Thesis</th>';
+            html += '<th>Symbol</th><th>Sig</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>ATR</th><th>S/R</th><th>Thesis</th>';
             html += '<th>MOM</th><th>RS</th><th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
             html += '</tr></thead><tbody>';
 
@@ -10193,8 +10193,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     ? `<span style="${r.enhancedTargetDist != null && parseFloat(r.enhancedTargetDist) <= 2 ? 'color:#22c55e' : ''}" title="${r.enhancedTargetDist}% away${r.targetPrice && r.enhancedTarget !== r.targetPrice ? ' (thesis: $' + r.targetPrice.toFixed(2) + ')' : ''}${r.fibTarget ? ' (Fib)' : ''}">$${r.enhancedTarget.toFixed(2)}</span>`
                     : '—';
                 html += `<td>${targetDisplay}</td>`;
-                // R:R cell — color-coded: green >=2.0, yellow >=1.5, red <1.5
-                const rrColor = r.rr != null ? (r.rr >= 2.0 ? 'color:#22c55e' : r.rr >= 1.5 ? 'color:#f59e0b' : 'color:#ef4444') : '';
+                // ATR cell — target in ATRs, color varies by VIX zone
+                const vNow = portfolio.lastVIX?.level ?? 20;
+                const rrColor = r.rr != null ? (
+                    vNow >= 25
+                        ? (r.rr <= 3 ? 'color:#22c55e' : r.rr <= 5 ? 'color:#f59e0b' : 'color:#ef4444')
+                        : (r.rr >= 5 ? 'color:#22c55e' : r.rr >= 3 ? 'color:#f59e0b' : 'color:#ef4444')
+                ) : '';
                 const rrDisplay = r.rr != null ? `<span style="${rrColor};font-weight:600">${r.rr.toFixed(1)}</span>` : '\u2014';
                 html += `<td>${rrDisplay}</td>`;
                 // S/R cell — combined support/resistance
@@ -15416,7 +15421,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     const tier = m === 'full' ? 300 : m === 'strong' ? 200 : m === 'partial' ? 100 : 0;
                     return tier + count;
                 },
-                rr: c => c._buyZoneRR?.riskReward ?? c._tradePlan?.riskReward ?? 0,
+                rr: c => c._tradePlan?.targetInATRs ?? 99,
             };
             const accessor = sortAccessors[scorecardState.sortField] || sortAccessors.score;
             const dir = scorecardState.sortDir === 'asc' ? 1 : -1;
@@ -15489,7 +15494,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('limit', "Buy zone limit price. Set as single-day limit order. Based on highest of: structure support, SMA20, VIX-aware pullback from 20-day high.", 'Limit') +
                 sh('dist', "Distance from current price to buy zone. Negative/IN ZONE = at or below limit. Lower = closer to entry.", 'Dist') +
-                sh('rr', "Risk/Reward ratio. Shows Zone R:R (anchored to limit price) when buy zone exists, otherwise current-price R:R. Green ≥ 2.0, Yellow ≥ 1.5, Red < 1.5. Hover for both values.", 'R:R') +
+                sh('rr', "Target in ATRs — how many average daily moves to reach +10%. VIX 25+: low = green (easy bounce). VIX <25: high = green (steady grind). Based on 44K+ FORGE backtested trades.", 'ATR') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
                 sh('5d', "5-day cumulative return. Pullbacks with bullish structure are captured by calibration combo heat, not a fixed bonus.", '5D') +
                 sh('mom', "Momentum (0-10). Sweet spot is 5-7: strong trend without penalties. Weight halved (0.3x) — calibration shows momentum is anti-predictive. 9+ triggers extension penalty (-3.5) and 0.6x entry multiplier.", 'Mom') +
