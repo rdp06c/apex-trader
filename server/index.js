@@ -72,6 +72,11 @@ app.get('/journal', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'journal.html'));
 });
 
+// Trading playbook (FORGE-validated)
+app.get('/playbook', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'playbook.html'));
+});
+
 app.use(express.static(path.join(__dirname, '..')));
 
 app.listen(PORT, () => {
