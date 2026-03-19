@@ -3706,11 +3706,8 @@
             const structOkForSignal = (signalId === 'reversal') || structOk;
             if (zone && score >= 5 && structOkForSignal) {
                 // Quality gates for BUY/ADD/NEAR — downgrade to WAIT with reason
-                const zoneRR = candidate._buyZoneRR?.riskReward;
-                const planRR = candidate._tradePlan?.riskReward;
+                // R:R gate removed — fixed +10%/-10% exits make R:R always 1:1
                 let gateReason = null;
-                if (zoneRR != null && zoneRR < 1.0) gateReason = 'Zone R:R ' + zoneRR.toFixed(1) + ' < 1.0 — risk exceeds reward';
-                if (!gateReason && planRR != null && planRR < 1.0) gateReason = 'R:R ' + planRR.toFixed(1) + ' < 1.0 at current price';
 
                 // REV structure gate removed — calibration data (260k obs) shows structure is irrelevant
                 // for RSI<40 entries. VIX regime is the real differentiator, handled via entry signal criteria.
@@ -10690,7 +10687,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const _dtcVal = shortInterestCache[symbol]?.daysToCover;
                     const _struct = _bars && _bars.length >= 5 ? detectStructure(symbol) : null;
 
-                    // Trade plan: R:R, S/R levels — local bars preferred, scanner fallback
+                    // Trade plan: ATR metrics, S/R levels — local bars preferred, scanner fallback
                     const _tradePlan = (() => {
                         if (!_bars || _bars.length < 20) return _sr?.tradePlan || null;
                         return generateTradePlan({ symbol, price: stockPrice.price });
@@ -10722,7 +10719,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     if (_thesis?.entryStructure === 'bullish' && _struct?.structure === 'bearish')
                         _allLossSignals.push('Structure flipped');
                     if (daysHeld >= 10 && Math.abs(gainLossPercent) <= 3) _allLossSignals.push('Stale capital');
-                    if (_tradePlan?.riskReward != null && _tradePlan.riskReward < 1.0) _allLossSignals.push('R:R deteriorated');
+                    // Fixed +10%/-10% exits — R:R is always 1:1, no deterioration check needed
 
                     const _lossSignals = [];
                     const _infoSignals = [];
@@ -15808,10 +15805,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         planHtml += `<div class="tp-separator">Buy Zone Entry</div>`;
                         planHtml += `<div class="tp-item"><span class="tp-label">Limit</span><span class="tp-value green">$${bz.buyZonePrice.toFixed(2)} (${bz.distancePct.toFixed(1)}% below)</span></div>`;
                         planHtml += `<div class="tp-item"><span class="tp-label">Source</span><span class="tp-value muted">${bz.zoneSource === 'support' ? 'Structure Support' : bz.zoneSource === 'sma20' ? 'SMA20' : bz.zoneSource === 'atr' ? 'ATR Discount' : 'Pullback Target'}</span></div>`;
-                        if (bzRR) {
-                            const bzRRColor = bzRR.riskReward >= 2.0 ? 'green' : bzRR.riskReward >= 1.5 ? 'yellow' : 'red';
-                            planHtml += `<div class="tp-item"><span class="tp-label">Zone R:R</span><span class="tp-value ${bzRRColor}">${bzRR.riskReward.toFixed(1)}:1${bzRR.improvementVsCurrent != null ? ` (+${bzRR.improvementVsCurrent}% vs current)` : ''}</span></div>`;
-                        }
+                        // Zone entry uses same fixed +10%/-10% exits — no separate R:R needed
                         planHtml += `<div class="tp-item"><span class="tp-label">Target</span><span class="tp-value muted">$${bzRR?.target ?? plan.target}${bzRR?.target && bzRR.target !== plan.target ? ' (from limit)' : ' (same)'}</span></div>`;
                         planHtml += `<div class="tp-item"><span class="tp-label">Stop</span><span class="tp-value muted">$${bzRR?.stop ?? plan.stop}${bzRR?.stop && bzRR.stop !== +plan.stop ? ' (from limit)' : ' (same)'}</span></div>`;
                     }
