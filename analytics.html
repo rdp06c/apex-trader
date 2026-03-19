@@ -385,33 +385,47 @@
     <div id="positionAddsContent"></div>
   </div>
 
+  <!-- ═══ FORGE PLAYBOOK VALIDATION ═══ -->
+  <div class="grid">
+    <div class="card">
+      <div class="chart-title">Win Rate by VIX Zone</div>
+      <div class="section-sub">FORGE playbook: VIX 25+ &amp; 20-25 = REV, VIX 15-20 = MOM, VIX &lt;15 = selective</div>
+      <canvas id="vixZoneChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Win Rate by ATR %</div>
+      <div class="section-sub">FORGE playbook: VIX 25+ favor high ATR (bounce), VIX &lt;25 favor low ATR (grind)</div>
+      <canvas id="atrPctChart"></canvas>
+    </div>
+  </div>
+
   <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Combo Heat vs Outcome</div>
-    <div class="section-sub">Do trades entered with hot calibration combos outperform cold ones?</div>
-    <div id="comboHeatContent"></div>
+    <div class="chart-title">Exit Rule Compliance</div>
+    <div class="section-sub">Are you following +10% take profit / -10% cut loss? Shows actual exit percentages.</div>
+    <canvas id="exitComplianceChart"></canvas>
   </div>
 
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Composite Score vs. Outcome</div>
-    <div class="section-sub">Do higher-scored trades perform better?</div>
+    <div class="section-sub">FORGE finding: score is a weak predictor (60-67% WR range). Other factors matter more.</div>
     <canvas id="compositeScatter"></canvas>
   </div>
 
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Entry RSI vs. Outcome</div>
-    <div class="section-sub">Does buying oversold stocks improve returns?</div>
+    <div class="section-sub">FORGE finding: RSI 25-40 is the sweet spot. RSI &lt;25 underperforms in every VIX zone.</div>
     <canvas id="rsiScatter"></canvas>
   </div>
 
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Entry RS vs. Outcome</div>
-    <div class="section-sub">Does buying high relative strength stocks improve returns?</div>
+    <div class="section-sub">FORGE finding: RS 30-70 is optimal. RS &lt;20 and RS 80+ underperform.</div>
     <canvas id="rsScatter"></canvas>
   </div>
 
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Entry RS vs. RSI</div>
-    <div class="section-sub">Are you buying the ideal setup? High RS + Low RSI = strong stock on a pullback</div>
+    <div class="section-sub">Sweet spot: RS 30-70 + RSI 25-40. Avoid extremes on both axes.</div>
     <canvas id="rsRsiScatter"></canvas>
   </div>
 
@@ -837,7 +851,9 @@ function renderAll() {
   renderDrawdownChart();
   renderEntrySignalOutcome();
   renderPositionAdds();
-  renderComboHeatOutcome();
+  renderVixZoneChart();
+  renderAtrPctChart();
+  renderExitComplianceChart();
   renderCompositeScatter();
   renderRSIScatter();
   renderRSScatter();
@@ -1396,9 +1412,113 @@ function renderPositionAdds() {
   });
 }
 
-/* ── Combo Heat vs Outcome ───────────────────────────── */
+/* ── Win Rate by VIX Zone ───────────────────────────── */
+function renderVixZoneChart() {
+  const ct = (data.closedTrades || []).filter(t => t.entryTechnicals?.vixLevel != null);
+  const zones = [
+    { label: 'VIX < 15', test: v => v < 15 },
+    { label: 'VIX 15-20', test: v => v >= 15 && v < 20 },
+    { label: 'VIX 20-25', test: v => v >= 20 && v < 25 },
+    { label: 'VIX 25+', test: v => v >= 25 },
+  ];
+  const labels = [], wrs = [], counts = [], colors = [];
+  for (const z of zones) {
+    const trades = ct.filter(t => z.test(t.entryTechnicals.vixLevel));
+    const wins = trades.filter(t => t.profitLoss > 0).length;
+    const wr = trades.length > 0 ? (wins / trades.length * 100) : 0;
+    labels.push(z.label + ' (' + trades.length + ')');
+    wrs.push(+wr.toFixed(1));
+    counts.push(trades.length);
+    colors.push(wr >= 55 ? COLORS.green : wr >= 50 ? COLORS.yellow : COLORS.red);
+  }
+  new Chart(document.getElementById('vixZoneChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: wrs, backgroundColor: colors, borderRadius: 6 }] },
+    options: {
+      responsive: true, plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine }, title: { display: true, text: 'Win Rate %', color: COLORS.muted } },
+        x: { grid: { display: false } }
+      }
+    },
+    plugins: [fiftyLinePlugin]
+  });
+}
+
+/* ── Win Rate by ATR % ──────────────────────────────── */
+function renderAtrPctChart() {
+  const ct = (data.closedTrades || []).filter(t => t.entryTechnicals?.atr != null && t.buyPrice > 0);
+  const buckets = [
+    { label: '< 1%', test: p => p < 1 },
+    { label: '1-2%', test: p => p >= 1 && p < 2 },
+    { label: '2-3%', test: p => p >= 2 && p < 3 },
+    { label: '3-5%', test: p => p >= 3 && p < 5 },
+    { label: '5%+', test: p => p >= 5 },
+  ];
+  const labels = [], wrs = [], colors = [];
+  for (const b of buckets) {
+    const trades = ct.filter(t => b.test((t.entryTechnicals.atr / t.buyPrice) * 100));
+    const wins = trades.filter(t => t.profitLoss > 0).length;
+    const wr = trades.length > 0 ? (wins / trades.length * 100) : 0;
+    labels.push(b.label + ' (' + trades.length + ')');
+    wrs.push(+wr.toFixed(1));
+    colors.push(wr >= 55 ? COLORS.green : wr >= 50 ? COLORS.yellow : COLORS.red);
+  }
+  new Chart(document.getElementById('atrPctChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: wrs, backgroundColor: colors, borderRadius: 6 }] },
+    options: {
+      responsive: true, plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: COLORS.gridLine }, title: { display: true, text: 'Win Rate %', color: COLORS.muted } },
+        x: { grid: { display: false } }
+      }
+    },
+    plugins: [fiftyLinePlugin]
+  });
+}
+
+/* ── Exit Rule Compliance ───────────────────────────── */
+function renderExitComplianceChart() {
+  const ct = (data.closedTrades || []).filter(t => t.returnPercent != null);
+  if (ct.length < 3) {
+    document.getElementById('exitComplianceChart').parentElement.innerHTML += '<div class="empty-chart">Need at least 3 closed trades</div>';
+    return;
+  }
+  const buckets = [
+    { label: '≤ -15%', lo: -Infinity, hi: -15 },
+    { label: '-15 to -10%', lo: -15, hi: -10 },
+    { label: '-10 to -5%', lo: -10, hi: -5 },
+    { label: '-5 to 0%', lo: -5, hi: 0 },
+    { label: '0 to +5%', lo: 0, hi: 5 },
+    { label: '+5 to +10%', lo: 5, hi: 10 },
+    { label: '+10 to +15%', lo: 10, hi: 15 },
+    { label: '> +15%', lo: 15, hi: Infinity },
+  ];
+  const counts = buckets.map(b => ct.filter(t => t.returnPercent >= b.lo && t.returnPercent < b.hi).length);
+  const colors = buckets.map(b => {
+    if (b.hi <= -10 || b.lo >= 10) return COLORS.green; // compliant exits
+    if (b.lo >= 0 && b.hi <= 10) return COLORS.yellow; // sold before +10%
+    if (b.lo >= -10 && b.hi <= 0) return COLORS.yellow; // held past -10%
+    return COLORS.red;
+  });
+  new Chart(document.getElementById('exitComplianceChart'), {
+    type: 'bar',
+    data: { labels: buckets.map(b => b.label), datasets: [{ data: counts, backgroundColor: colors, borderRadius: 6 }] },
+    options: {
+      responsive: true, plugins: { legend: { display: false } },
+      scales: {
+        y: { grid: { color: COLORS.gridLine }, title: { display: true, text: 'Trade Count', color: COLORS.muted } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+/* ── (Legacy) Combo Heat vs Outcome — kept for historical data ── */
 function renderComboHeatOutcome() {
   const container = document.getElementById('comboHeatContent');
+  if (!container) return; // removed from HTML
   const ct = (data.closedTrades || []).filter(t => t.entryTechnicals);
 
   if (ct.length < 3) {
