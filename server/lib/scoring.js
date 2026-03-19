@@ -230,7 +230,7 @@ const DEFAULT_WEIGHTS = {
     momentumMultiplier: 0.3, rsMultiplier: 0.6, structureMultiplier: 1.25,
     accelBonus: 0, consistencyBonus: 0,
     sectorInflow: 2.0, sectorModestInflow: 1.0, sectorOutflow: -1.0,
-    rsiOversold30: 4.0, rsiOversold40: 2.5, rsiOversold50: 0.8,        // amplified: RSI<40 is +19pp edge
+    rsiOversold25: 2.0, rsiOversold30: 4.0, rsiOversold40: 2.5, rsiOversold50: 0.8,  // RSI<25 capped per FORGE; RSI 25-40 is +19pp edge
     rsiOverbought70: -4.5, rsiOverbought80: -7.0,                       // amplified: RSI>70 is -21pp edge
     macdBullish: 2.5, macdBearish: -2.0, macdNone: -0.5,
     rsMeanRev95: -4.0, rsMeanRev90: -3.0, rsMeanRev85: -2.0, rsMeanRev80: -0.5, // expanded: RS>90 wins 14%
@@ -427,7 +427,7 @@ function calculateCompositeScore({ momentumScore, rsNormalized, sectorFlow, stru
         : 0;
 
     const rsiBonusPenalty = rsi != null
-        ? (rsi < 30 ? w.rsiOversold30 : rsi < 40 ? w.rsiOversold40 : rsi < 50 ? w.rsiOversold50
+        ? (rsi < 25 ? (w.rsiOversold25 ?? 2.0) : rsi < 30 ? w.rsiOversold30 : rsi < 40 ? w.rsiOversold40 : rsi < 50 ? w.rsiOversold50
             : rsi > 80 ? w.rsiOverbought80 : rsi > 70 ? w.rsiOverbought70 : 0)
         : 0;
     const macdBonus = macdCrossover === 'bullish' ? w.macdBullish : macdCrossover === 'bearish' ? w.macdBearish : w.macdNone;
@@ -714,6 +714,22 @@ function calculateFibTargets(bars) {
         }
     }
 
+    // Fallback: sustained decline has no swing lows, sustained rally has no swing highs
+    // Use absolute min/max as the missing reference point
+    if (swingLows.length === 0 && swingHighs.length > 0) {
+        let minPrice = Infinity, minIdx = 0;
+        for (let i = 0; i < bars.length; i++) {
+            if (bars[i].l < minPrice) { minPrice = bars[i].l; minIdx = i; }
+        }
+        swingLows.push({ index: minIdx, price: minPrice });
+    }
+    if (swingHighs.length === 0 && swingLows.length > 0) {
+        let maxPrice = -Infinity, maxIdx = 0;
+        for (let i = 0; i < bars.length; i++) {
+            if (bars[i].h > maxPrice) { maxPrice = bars[i].h; maxIdx = i; }
+        }
+        swingHighs.push({ index: maxIdx, price: maxPrice });
+    }
     if (swingHighs.length < 1 || swingLows.length < 1) return null;
 
     const currentPrice = bars[bars.length - 1].c;
