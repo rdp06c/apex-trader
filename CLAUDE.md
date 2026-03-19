@@ -29,8 +29,9 @@ server/
     backups/        ← Last 5 portfolio saves (gitignored)
     scanner-state.json ← Scanner readings and alert history (gitignored)
     scan-state.json ← Full scan results and top scorers (gitignored)
-analytics.html        ← Analytics page (standalone, 20+ charts with global filters)
+analytics.html        ← Analytics page (standalone, 20+ charts incl VIX zone, ATR%, exit compliance)
 journal.html          ← Trade journal page (standalone, trade detail modal)
+playbook.html         ← FORGE-validated trading playbook (printable reference card)
 build.cmd / build.sh  ← Build scripts
 index.html            ← Generated output (DO NOT EDIT DIRECTLY)
 package.json          ← Express, node-cron dependencies
@@ -117,14 +118,18 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 
 **Calibration Engine** (`runCalibrationSweep`): Sweeps 80 historical dates, runs full pipeline, correlates scoring components with forward returns, derives calibrated weights with shrinkage. Regime-segmented. Out-of-sample validated. Chat command: `calibrate`. Also runs signal combo analysis (`analyzeSignalCombos`) — tests 18 curated signal combinations against historical observations to discover which combos predict positive/negative 10-day forward returns vs baseline.
 
-**Entry Signals & Combo Heat**: Two complementary scorecard systems:
-- `ENTRY_SIGNAL_PATTERNS` + `evaluateEntrySignals()` — 6 data-driven patterns: REV (reversal), MOM (momentum continuation), QMO (quiet momentum), SQZ (squeeze), LDR (sector leader), AVOID (exhausted runner anti-pattern). Non-REV patterns are gated by calibration (n≥100, positive edge). GREEN = all criteria met, YELLOW = one miss, GRAY = minimum met, RED = avoid. `computeSignalBonus()` bridges signals into the score — GREEN/YELLOW matches boost composite score scaled by calibration edge. **As of March 2026 calibration, REV is the only pattern showing positive edge.** Other patterns (MOM, QMO, SQZ, LDR) are currently showing negative or flat calibration results.
+**Entry Signals & VIX-Zone Routing**: Signal gating is VIX-zone based (FORGE-validated, March 2026):
+- VIX 20+: REV signals only qualify for BUY/ADD/NEAR
+- VIX 15-20: MOM and LDR signals qualify; REV only if full quality (all 3 criteria met)
+- VIX < 15: MOM full quality only
+- Override checkbox in scorecard header to see all signals regardless of VIX zone
+- `ENTRY_SIGNAL_PATTERNS` + `evaluateEntrySignals()` — 6 data-driven patterns: REV (reversal), MOM (momentum continuation), QMO (quiet momentum), SQZ (squeeze), LDR (sector leader), AVOID (exhausted runner anti-pattern). GREEN = all criteria met, YELLOW = one miss, GRAY = minimum met, RED = avoid. `computeSignalBonus()` bridges signals into the score. **REV is the strongest signal (+19pp edge, 55.9% WR on 18K+ trades). MOM is preferred in calm markets (VIX < 20).**
 - `SIGNAL_COMBO_DEFS` + `evaluateComboHeat()` — tests each stock's current signals against 18 combos, cross-references calibration results to show green dots (hot combos) and red dots (cold combos) in the Heat column. **Heat now directly affects the composite score** via `computeComboHeatBonus()` — hot combos add up to +2.0 each, cold combos subtract up to -2.0 each, net capped at ±6.0. Heat dots filtered by setup type via `SETUP_HEAT_GROUPS`. Requires calibration data to function.
 - Score driver badge (S/M) indicates whether a stock's score is signal-driven or momentum-driven.
 
 **Holdings Health**: Holdings cards show a compact inline stat line (MOM, RS, RSI with mini SVG sparklines showing trajectory, plus MACD, Structure, DTC, CHoCH, Vol, Stop/Target levels) and a footer row (Entry, Cost, Now, S/R, News count with tooltip). Sell/profit signals display as a centered badge in the card header. Cards are sortable by Date Added, Total P&L%, Daily Change%, Position Size, or Health (with ascending/descending toggle). Custom themed dropdown replaces native `<select>` for dark mode compatibility.
 
-**Risk Dashboard** (`updateRiskDashboard`): Table view of all holdings sorted by risk level (danger → caution → healthy). Columns: Symbol, Sig (entry signal badge), Price, P&L%, Stop (ATR-based from trade plan, thesis fallback), Target (ATR-based from trade plan, thesis/fib fallback), R:R (color-coded: green ≥2.0, yellow ≥1.5, red <1.5), S/R (support/resistance levels), Thesis status, MOM (entry→current), RS (entry→current), Structure, RSI (entry→current), MACD, Signals (actionable loss signal count). Trade plan values (`generateTradePlan`) preferred over thesis for Stop/Target — thesis shown in tooltip when overridden.
+**Risk Dashboard** (`updateRiskDashboard`): Table view of all holdings sorted by risk level (danger → caution → healthy). Columns: Symbol, Sig (entry signal badge), Price, P&L%, Stop (fixed -10% from entry), Target (fixed +10% from entry), ATR (target in ATRs — color-coded by VIX zone: low ATRs green in fear, high ATRs green in calm), S/R (support/resistance levels), Thesis status, MOM (entry→current), RS (entry→current), Structure, RSI (entry→current), MACD, Signals (actionable loss signal count).
 
 **Health History Tracking**: Daily health snapshots per holding stored in `holdingTheses[symbol].healthHistory[]`. Seeded at buy time from entry data + caches. Updated daily by server full scan (RS, momentum, RSI, MACD, structure, compositeScore, price). Deduped by date, capped at 120 entries. Powers sparklines on holdings cards and health-over-time charts in journal detail view. Preserved into `closedTrade.exitTechnicals.healthHistory` on sell.
 
@@ -143,7 +148,7 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 
 ## Analytics Page (`analytics.html`)
 
-Standalone page with 20+ Chart.js visualizations of closed trade data. Global filter bar: date presets (All/30D/90D/YTD), custom date range, outcome (All/Wins/Losses), sector dropdown, symbol search. Filters work by swapping `data.closedTrades` with a filtered subset before `renderAll()` — zero changes needed in individual render functions. Key sections: return distribution, cumulative P&L, drawdown, streaks, win rate by sector/month/hold time, entry signal accuracy, "Did I Sell Too Early?" (5D post-exit tracking with bar chart, detail table, pattern detection).
+Standalone page with 20+ Chart.js visualizations of closed trade data. Global filter bar: date presets (All/30D/90D/YTD), custom date range, outcome (All/Wins/Losses), sector dropdown, symbol search. Filters work by swapping `data.closedTrades` with a filtered subset before `renderAll()` — zero changes needed in individual render functions. Key sections: **Win Rate by VIX Zone** (FORGE playbook validation), **Win Rate by ATR%** (R:R replacement), **Exit Rule Compliance** (+10%/-10% adherence), return distribution, cumulative P&L, drawdown, streaks, win rate by sector/month/hold time, entry signal accuracy, "Did I Sell Too Early?" (5D post-exit tracking).
 
 ## Journal Page (`journal.html`)
 
@@ -161,11 +166,9 @@ Checks structure on all held positions every 15 minutes during market hours. Can
 - Bearish CHoCH detected → "Bearish CHoCH"
 - Price below stop price (if set in holding thesis) → "Stop Loss Breached"
 - Bearish volume divergence detected → "Volume Divergence"
-- R:R drops below 1.0 → "R:R Deteriorated" (trade plan computed per holding, zero extra API calls)
+**Trade plan integration**: Scanner computes `generateTradePlan()` per holding using bars and structure already fetched. Fixed +10% target / -10% stop (FORGE-validated). Stored in `scanner-state.json` readings as `tradePlan` (ATR metrics, stop, target, support, resistance). Client falls back to scanner trade plan when local bars unavailable.
 
-**Trade plan integration**: Scanner computes `generateTradePlan()` per holding using bars and structure already fetched. Stored in `scanner-state.json` readings as `tradePlan` (R:R, stop, target, support, resistance). Client falls back to scanner trade plan when local bars unavailable.
-
-**Loss signals** (computed per holding, displayed on admin panel): ATR stop, bearish CHoCH, bearish structure, thesis stop breached, RS collapse (>30pt drop), momentum collapse (entry 7+ → now <3), structure flip, volume divergence, R:R deteriorated (<1.0).
+**Loss signals** (computed per holding, displayed on admin panel): ATR stop, bearish CHoCH, bearish structure, thesis stop breached, RS collapse (>30pt drop), momentum collapse (entry 7+ → now <3), structure flip, volume divergence.
 
 **Deduplication:** Same condition for same symbol won't re-alert within 4 hours.
 
@@ -190,7 +193,7 @@ Scoring in `server/lib/scoring.js`: all pure scoring functions adapted to accept
 Available at `/admin` (linked from dashboard header nav). Shows:
 - Server uptime, market status, last scanner run, last full scan, total alerts sent, stocks scored
 - Top scorers from last full scan (symbol, score, price)
-- Scanner readings for each holding (price, structure, RSI, MACD, R:R color-coded, CHoCH, loss signal count with warnings)
+- Scanner readings for each holding (price, structure, RSI, MACD, ATR color-coded, CHoCH, loss signal count with warnings)
 - Action buttons: "Pull & Restart" (triggers auto-pull.sh), "Run Scanner Now" (structure check), "Run Full Scan" (~540 stock scan)
 - Log viewers: server logs (journalctl), auto-pull logs
 
@@ -262,6 +265,28 @@ Coverage includes: full S&P 500, AI/software, semiconductors, cybersecurity, bio
 - Server files in `server/` — these run on the Pi only, not in the browser
 - Scoring functions duplicated between `src/trader.js` (browser) and `server/lib/scoring.js` (Node.js) — keep in sync. Includes `evaluateEntrySignals`, `ENTRY_SIGNAL_PATTERNS`, `computeSignalBonus`, `computeComboHeatBonus`, and `generateTradePlan`.
 - Stock lists duplicated between `src/trader.js` and `server/lib/stocks.js` — keep in sync
+
+## FORGE Playbook Integration (March 2026)
+
+FORGE backtesting (44,487 trades, 2018-2026) validated a trading playbook now integrated into APEX:
+
+**Exit rules:** Fixed +10% take profit / -10% cut loss / 3-day minimum hold. Replaces ATR-based targets.
+
+**VIX-zone signal routing:**
+- VIX 25+: REV signals, ATR 3%+ of price, RSI 25-40, RS 20-60
+- VIX 20-25: REV signals, ATR < 2% of price, RS 40+, shallow dips
+- VIX 15-20: MOM signals, ATR < 3%, momentum 5-6, RS 50-70
+- VIX < 15: MOM full quality only, ATR < 2%, Defense/Real Estate only
+
+**RSI cap:** RSI < 25 bonus reduced to 2.0 (from 4.0). Deep oversold underperforms RSI 25-40 in every VIX zone.
+
+**ATR replaces R:R:** "Target in ATRs" = (price × 10%) / ATR. Color-coded by VIX zone — low ATRs green in fear (easy bounce), high ATRs green in calm (steady grind).
+
+**Never buy:** Automotive sector (<50% WR), RSI < 25, REV in VIX < 15, MOM with momentum 8+, ATR 5%+ in calm markets.
+
+**Playbook reference:** Available at `/playbook` (linked in dashboard nav). Source: `playbook.html`.
+
+**Calibration:** Don't run APEX's old calibration sweep. Re-run FORGE backtests every 6 months to validate playbook. Weights are locked to FORGE-validated values.
 
 ## Scorecard Column Highlighting
 
