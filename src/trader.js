@@ -15050,7 +15050,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
         }
 
         // Module 2: Candidate Scorecard (paginated, full universe)
-        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: 'reversal', filterWatchlist: false, filterZone: false, overrideRegimeGate: false, sortField: 'score', sortDir: 'desc', filterRsMin: '', filterRsMax: '', filterRsiMin: '', filterRsiMax: '', filterMomMin: '', filterMomMax: '', filterMacd: '', filterStructure: '' };
+        const scorecardState = { page: 1, filterSector: '', filterHeld: false, filterSignal: 'reversal', filterWatchlist: false, filterZone: false, overrideRegimeGate: false, sortField: 'score', sortDir: 'desc', filterRsMin: '', filterRsMax: '', filterRsiMin: '', filterRsiMax: '', filterAtrMin: '', filterAtrMax: '', filterMacd: '', filterStructure: '' };
         const SCORECARD_PAGE_SIZE = 40;
 
         function scorecardSetSector(val) {
@@ -15117,8 +15117,8 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             scorecardState.filterRsMax = '';
             scorecardState.filterRsiMin = '';
             scorecardState.filterRsiMax = '';
-            scorecardState.filterMomMin = '';
-            scorecardState.filterMomMax = '';
+            scorecardState.filterAtrMin = '';
+            scorecardState.filterAtrMax = '';
             scorecardState.filterMacd = '';
             scorecardState.filterStructure = '';
             scorecardState.page = 1;
@@ -15341,18 +15341,19 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             const _rsMax = scorecardState.filterRsMax !== '' ? Number(scorecardState.filterRsMax) : null;
             const _rsiMin = scorecardState.filterRsiMin !== '' ? Number(scorecardState.filterRsiMin) : null;
             const _rsiMax = scorecardState.filterRsiMax !== '' ? Number(scorecardState.filterRsiMax) : null;
-            const _momMin = scorecardState.filterMomMin !== '' ? Number(scorecardState.filterMomMin) : null;
-            const _momMax = scorecardState.filterMomMax !== '' ? Number(scorecardState.filterMomMax) : null;
+            const _atrMin = scorecardState.filterAtrMin !== '' ? Number(scorecardState.filterAtrMin) : null;
+            const _atrMax = scorecardState.filterAtrMax !== '' ? Number(scorecardState.filterAtrMax) : null;
             const _macdF = scorecardState.filterMacd;
             const _structF = scorecardState.filterStructure;
-            if (_rsMin != null || _rsMax != null || _rsiMin != null || _rsiMax != null || _momMin != null || _momMax != null || _macdF || _structF) {
+            if (_rsMin != null || _rsMax != null || _rsiMin != null || _rsiMax != null || _atrMin != null || _atrMax != null || _macdF || _structF) {
                 candidates = candidates.filter(c => {
                     if (_rsMin != null && (c.rs == null || c.rs < _rsMin)) return false;
                     if (_rsMax != null && (c.rs == null || c.rs > _rsMax)) return false;
                     if (_rsiMin != null && (c.rsi == null || c.rsi < _rsiMin)) return false;
                     if (_rsiMax != null && (c.rsi == null || c.rsi > _rsiMax)) return false;
-                    if (_momMin != null && (c.momentum == null || c.momentum < _momMin)) return false;
-                    if (_momMax != null && (c.momentum == null || c.momentum > _momMax)) return false;
+                    const _tATR = c._tradePlan?.targetInATRs;
+                    if (_atrMin != null && (_tATR == null || _tATR < _atrMin)) return false;
+                    if (_atrMax != null && (_tATR == null || _tATR > _atrMax)) return false;
                     if (_macdF) {
                         const cross = c.macdCrossover || 'none';
                         const hist = c.macdHistogram;
@@ -15463,12 +15464,12 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             html += '</div>';
 
             // Technical filter row
-            const _hasTechFilters = scorecardState.filterRsMin !== '' || scorecardState.filterRsMax !== '' || scorecardState.filterRsiMin !== '' || scorecardState.filterRsiMax !== '' || scorecardState.filterMomMin !== '' || scorecardState.filterMomMax !== '' || scorecardState.filterMacd || scorecardState.filterStructure;
+            const _hasTechFilters = scorecardState.filterRsMin !== '' || scorecardState.filterRsMax !== '' || scorecardState.filterRsiMin !== '' || scorecardState.filterRsiMax !== '' || scorecardState.filterAtrMin !== '' || scorecardState.filterAtrMax !== '' || scorecardState.filterMacd || scorecardState.filterStructure;
             html += '<div class="scorecard-controls scorecard-tech-filters">';
             html += '<label class="tech-filter-group"><span class="tech-filter-label">Filters:</span></label>';
             html += `<label class="tech-filter-group"><span class="tech-filter-label">RS</span><input type="number" min="0" max="100" step="1" placeholder="min" value="${scorecardState.filterRsMin}" onchange="scorecardSetTechFilter('filterRsMin',this.value)" class="tech-filter-input"><span class="tech-filter-sep">\u2013</span><input type="number" min="0" max="100" step="1" placeholder="max" value="${scorecardState.filterRsMax}" onchange="scorecardSetTechFilter('filterRsMax',this.value)" class="tech-filter-input"></label>`;
             html += `<label class="tech-filter-group"><span class="tech-filter-label">RSI</span><input type="number" min="0" max="100" step="1" placeholder="min" value="${scorecardState.filterRsiMin}" onchange="scorecardSetTechFilter('filterRsiMin',this.value)" class="tech-filter-input"><span class="tech-filter-sep">\u2013</span><input type="number" min="0" max="100" step="1" placeholder="max" value="${scorecardState.filterRsiMax}" onchange="scorecardSetTechFilter('filterRsiMax',this.value)" class="tech-filter-input"></label>`;
-            html += `<label class="tech-filter-group"><span class="tech-filter-label">MOM</span><input type="number" min="0" max="10" step="0.5" placeholder="min" value="${scorecardState.filterMomMin}" onchange="scorecardSetTechFilter('filterMomMin',this.value)" class="tech-filter-input"><span class="tech-filter-sep">\u2013</span><input type="number" min="0" max="10" step="0.5" placeholder="max" value="${scorecardState.filterMomMax}" onchange="scorecardSetTechFilter('filterMomMax',this.value)" class="tech-filter-input"></label>`;
+            html += `<label class="tech-filter-group"><span class="tech-filter-label">ATR</span><input type="number" min="0" max="20" step="0.5" placeholder="min" value="${scorecardState.filterAtrMin}" onchange="scorecardSetTechFilter('filterAtrMin',this.value)" class="tech-filter-input"><span class="tech-filter-sep">\u2013</span><input type="number" min="0" max="20" step="0.5" placeholder="max" value="${scorecardState.filterAtrMax}" onchange="scorecardSetTechFilter('filterAtrMax',this.value)" class="tech-filter-input"></label>`;
             html += `<select onchange="scorecardSetTechFilter('filterMacd',this.value)" class="scorecard-sector-filter"><option value="">MACD: Any</option><option value="bullish_any"${scorecardState.filterMacd === 'bullish_any' ? ' selected' : ''}>MACD: ▲</option><option value="bullish_cross"${scorecardState.filterMacd === 'bullish_cross' ? ' selected' : ''}>MACD: ▲ Cross</option><option value="bearish_any"${scorecardState.filterMacd === 'bearish_any' ? ' selected' : ''}>MACD: ▼</option><option value="bearish_cross"${scorecardState.filterMacd === 'bearish_cross' ? ' selected' : ''}>MACD: ▼ Cross</option></select>`;
             html += `<select onchange="scorecardSetTechFilter('filterStructure',this.value)" class="scorecard-sector-filter"><option value="">Structure: Any</option><option value="bullish"${scorecardState.filterStructure === 'bullish' ? ' selected' : ''}>Structure: Bullish</option><option value="bearish"${scorecardState.filterStructure === 'bearish' ? ' selected' : ''}>Structure: Bearish</option></select>`;
             if (_hasTechFilters) {
