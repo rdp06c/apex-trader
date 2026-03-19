@@ -2874,7 +2874,7 @@
             color: var(--text-muted);
             white-space: nowrap;
             flex: 0 0 auto;
-            align-self: center;
+            padding: 6px 0;
         }
         .tech-filter-input {
             width: 44px;
