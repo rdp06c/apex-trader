@@ -10356,7 +10356,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             <div>
                                 <div class="holding-card-symbol">${h.symbol}</div>
                                 <div class="holding-card-name"><a href="https://www.tradingview.com/symbols/${encodeURIComponent(h.symbol)}" target="_blank" rel="noopener" class="holding-card-link">${h.stockName}</a> <span class="holding-card-sector">· ${h.stockSector}</span></div>
-                                <div class="holding-card-shares">${h.shares} shares · ${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'}${h.isPastTimeframe ? ' <span class="negative">OVERDUE</span>' : ''} · ${h.positionSizePercent.toFixed(1)}% of portfolio</div>
+                                <div class="holding-card-shares">${h.shares} shares · ${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'} · ${h.positionSizePercent.toFixed(1)}% of portfolio</div>
                             </div>
                             <div>
                                 <div class="holding-card-value">$${h.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
@@ -10370,19 +10370,13 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             </div>
                             ${(() => {
                                 if (h._lossSignals.length >= 1) {
-                                    const cls = h._lossSignals.length >= 2 ? 'sell' : 'warn';
-                                    const infoSuffix = h._infoSignals.length ? ' | Dampened: ' + h._infoSignals.join(', ') : '';
-                                    const tip = escapeHtml(h._lossSignals.join(', ') + infoSuffix);
-                                    const total = h._lossSignals.length + (h._profitSignals.length || 0) || 1;
-                                    return '<span class="hc-signal-badge ' + cls + '" title="' + tip + '">\u26A0 SELL ' + h._lossSignals.length + '/' + total + '</span>';
+                                    const tip = escapeHtml(h._lossSignals.join(', '));
+                                    const cls = h._lossSignals[0].includes('-15%') ? 'sell' : 'warn';
+                                    return '<span class="hc-signal-badge ' + cls + '" title="' + tip + '">\u26A0 ' + escapeHtml(h._lossSignals[0]) + '</span>';
                                 }
-                                if (h._infoSignals.length >= 1) {
-                                    const tip = escapeHtml(h._infoSignals.map(s => '(dampened) ' + s).join(', '));
-                                    return '<span class="hc-signal-badge info" title="' + tip + '">\u2139 INFO ' + h._infoSignals.length + '</span>';
-                                }
-                                if (h._profitSignals.length >= 2) {
+                                if (h._profitSignals.length >= 1) {
                                     const tip = escapeHtml(h._profitSignals.join(', '));
-                                    return '<span class="hc-signal-badge profit" title="' + tip + '">\u2713 PROFIT ' + h._profitSignals.length + '/5</span>';
+                                    return '<span class="hc-signal-badge profit" title="' + tip + '">\u2713 TAKE PROFIT</span>';
                                 }
                                 return '';
                             })()}
@@ -10693,19 +10687,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     const gainLossPercent = avgPurchasePrice > 0 ? ((stockPrice.price - avgPurchasePrice) / avgPurchasePrice) * 100 : 0;
                     const positionSizePercent = totalValue > 0 ? (currentValue / totalValue) * 100 : 0;
 
-                    let expectedDays = { min: 7, max: 14, label: '1-2 weeks' };
-                    const reasoningLower = reasoning.toLowerCase();
-                    if (reasoningLower.includes('earnings') || reasoningLower.includes('guidance')) {
-                        expectedDays = { min: 7, max: 14, label: '1-2 weeks' };
-                    } else if (reasoningLower.includes('contract') || reasoningLower.includes('deal')) {
-                        expectedDays = { min: 14, max: 21, label: '2-3 weeks' };
-                    } else if (reasoningLower.includes('upgrade') || reasoningLower.includes('analyst')) {
-                        expectedDays = { min: 3, max: 5, label: '3-5 days' };
-                    } else if (reasoningLower.includes('sector') || reasoningLower.includes('rotation')) {
-                        expectedDays = { min: 7, max: 14, label: '1-2 weeks' };
-                    }
-
-                    const isPastTimeframe = daysHeld > expectedDays.max;
                     const stockName = stockNames[symbol] || symbol;
                     const stockSector = stockSectors[symbol] || 'Unknown';
 
@@ -10740,48 +10721,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         return generateTradePlan({ symbol, price: stockPrice.price });
                     })() || _sr?.tradePlan || null;
 
+                    // Target 10 sell signals: +10%/-10% with 3-day min hold, -15% emergency stop
                     const _profitSignals = [];
-                    if (_fib?.type === 'bullish' && stockPrice.price >= _fib.fib100) _profitSignals.push('Fib target');
-                    if (_rsiVal != null && _rsiVal > 70) _profitSignals.push('RSI overbought');
-                    if (_macdResult?.crossover === 'bearish') _profitSignals.push('MACD bearish');
-                    if (_volDiv?.divergence && _volDiv.direction === 'bearish') _profitSignals.push('Vol divergence');
-                    if (isPastTimeframe) _profitSignals.push('Past timeframe');
+                    if (gainLossPercent >= 10 && daysHeld >= 3) _profitSignals.push('+10% — take profit');
 
                     // Thesis-based sell/profit signals (Phase 2)
                     const _thesis = (portfolio.holdingTheses || {})[symbol];
                     const _candidateNow = (portfolio.lastCandidateScores?.candidates || []).find(c => c.symbol === symbol);
                     const _setupType = _thesis?.entrySetupType || _et?.entrySignal?.bestPatternId || null;
 
-                    // VIX-aware loss signal classification — structure signals dampened during high VIX / certain setups
-                    const _allLossSignals = [];
-                    if (_atrStop && stockPrice.price <= _atrStop) _allLossSignals.push('ATR stop breached');
-                    if (_struct?.choch && _struct.chochType === 'bearish') _allLossSignals.push('Bearish CHoCH');
-                    if (_struct?.structure === 'bearish') _allLossSignals.push('Bearish structure');
-                    if (gainLossPercent <= -10) _allLossSignals.push('Down 10%+');
-                    if (_thesis?.stopPrice && stockPrice.price <= _thesis.stopPrice) _allLossSignals.push('Stop breached');
-                    if (_thesis?.entryRS != null && _candidateNow?.rs != null && (_candidateNow.rs - _thesis.entryRS) <= -30)
-                        _allLossSignals.push(`RS ${Math.round(_thesis.entryRS)}\u2192${Math.round(_candidateNow.rs)}`);
-                    if (_thesis?.entryMomentum >= 7 && _candidateNow?.momentum != null && _candidateNow.momentum < 3)
-                        _allLossSignals.push(`Mom ${_thesis.entryMomentum.toFixed(1)}\u2192${_candidateNow.momentum.toFixed(1)}`);
-                    if (_thesis?.entryStructure === 'bullish' && _struct?.structure === 'bearish')
-                        _allLossSignals.push('Structure flipped');
-                    if (daysHeld >= 10 && Math.abs(gainLossPercent) <= 3) _allLossSignals.push('Stale capital');
-                    // Fixed +10%/-10% exits — R:R is always 1:1, no deterioration check needed
-
                     const _lossSignals = [];
                     const _infoSignals = [];
-                    for (const sig of _allLossSignals) {
-                        // RS/Mom signals have dynamic text — classify by prefix
-                        const sigKey = sig.startsWith('RS ') ? 'RS collapse' : sig.startsWith('Mom ') ? 'Mom collapse' : sig;
-                        if (classifyLossSignal(sigKey, _vixLevel, _setupType) === 'actionable') {
-                            _lossSignals.push(sig);
-                        } else {
-                            _infoSignals.push(sig);
-                        }
-                    }
+                    if (gainLossPercent <= -15) _lossSignals.push('-15% — emergency stop');
+                    else if (gainLossPercent <= -10 && daysHeld >= 3) _lossSignals.push('-10% — cut loss');
                     const _intraday = _sr?.intraday;
-
-                    if (_thesis?.targetPrice && stockPrice.price >= _thesis.targetPrice) _profitSignals.push('Target reached');
 
                     const _thesisStatus = evaluateThesisStatus(
                         _thesis,
@@ -10803,7 +10756,7 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     holdingDataArray.push({
                         symbol, shares, stockPrice, currentValue, changeClass, avgPurchasePrice,
                         earliestDate, conviction, daysHeld, gainLoss, gainLossPercent, gainLossClass,
-                        positionSizePercent, isPastTimeframe, stockName, stockSector, entryMomentum,
+                        positionSizePercent, stockName, stockSector, entryMomentum,
                         entryRS, entryRSI, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
                         _struct, _profitSignals, _lossSignals, _infoSignals, _thesis, _candidateNow, _intraday,
                         _thesisStatus, _entrySignal, _tradePlan, insertionOrder: insertionOrder++
