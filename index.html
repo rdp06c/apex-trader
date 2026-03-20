@@ -19237,6 +19237,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
             const sortAccessors = {
                 action: c => { const b = c._actionBadge; return b === 'buy' ? 5 : b === 'add' ? 4 : b === 'near' ? 3 : b === 'wait' ? 2 : b === 'setup' ? 1 : 0; },
                 limit: c => c._buyZone?.buyZonePrice ?? 0,
+                smaPct: c => (c.sma20 && c.price) ? ((c.price - c.sma20) / c.sma20 * 100) : -999,
                 dist: c => c._buyZone?.distancePct ?? 999,
                 score: c => (c.compositeScore || 0) + (c._signalBonus || 0) + (c._revStructureOffset || 0),
                 price: c => c.price || 0,
@@ -19351,6 +19352,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 sh('score', "Composite score from weighted signals + calibration heat bonus + entry signal bonus. Higher is better. Hover over a stock\'s score to see the full breakdown.", 'Score') +
                 sh('price', "Current stock price (last trade or regular session close).", 'Price') +
                 sh('limit', "Buy zone limit price. Set as single-day limit order. Based on highest of: structure support, SMA20, VIX-aware pullback from 20-day high.", 'Limit') +
+                sh('smaPct', "Distance from SMA20 as % of price. Green = quality zone (-10% to 0%). Yellow = extended (-10% to -15%). Red = danger zone (>15% below) — FORGE shows 43-51% WR at VIX under 25.", 'SMA%') +
                 sh('dist', "Distance from current price to buy zone. Negative/IN ZONE = at or below limit. Lower = closer to entry.", 'Dist') +
                 sh('rr', "Target in ATRs — how many average daily moves to reach +10%. VIX 25+: low = green (easy bounce). VIX <25: high = green (steady grind). Based on 44K+ FORGE backtested trades.", 'ATR') +
                 sh('day', "Today\'s price change %. Large gains (5%+) trigger runner penalties. Declines are not penalized — they often mean-revert.", 'Day') +
@@ -19616,6 +19618,15 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     <td title="${scoreTooltip}"><div class="scorecard-score-cell"><div class="scorecard-bar"><div class="scorecard-bar-fill ${scoreClass}" style="width:${pct}%"></div></div><span class="scorecard-score-num ${scoreClass}">${score.toFixed(1)}</span>${driverBadge}</div></td>
                     <td style="font-size:11px">${priceStr}</td>
                     <td style="font-size:11px" title="${limitTip}">${limitCell}</td>
+                    ${(() => {
+                        if (c.sma20 == null || !c.price) return '<td style="font-size:11px;color:var(--text-muted)">--</td>';
+                        const smaPct = ((c.price - c.sma20) / c.sma20 * 100);
+                        const smaStr = (smaPct >= 0 ? '+' : '') + smaPct.toFixed(1) + '%';
+                        const danger = smaPct < -15 && vixNow < 25;
+                        const smaClass = danger ? 'color:#ef4444;font-weight:700' : smaPct < -15 ? 'color:#ca8a04' : smaPct < -10 ? 'color:#eab308' : smaPct <= 0 ? 'color:#22c55e' : 'color:var(--text-muted)';
+                        const smaTip = danger ? 'FORGE: >15% below SMA20 at VIX<25 = 43-51% WR. Avoid.' : `${smaPct.toFixed(1)}% from 20-day SMA ($${c.sma20.toFixed(2)})`;
+                        return `<td style="font-size:11px;${smaClass}" title="${smaTip}">${smaStr}</td>`;
+                    })()}
                     <td class="${distClass}" style="font-size:11px">${distCell}</td>
                     <td class="plan-cell ${rrClass}" title="Target: ${plan?.targetInATRs ?? '--'} ATRs to +10%\nATR: ${plan?.atrPct ?? '--'}% of price\n${targetTip}\n${stopTip}" style="font-size:11px;font-weight:600">${rrCell}</td>
                     <td class="${dayClass}" style="font-size:11px">${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%</td>
