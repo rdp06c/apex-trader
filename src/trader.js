@@ -3788,98 +3788,6 @@
 
         // Thesis status evaluation — compares entry technicals to current state
         // to determine if the trade thesis (reversal or momentum) is playing out.
-        function evaluateThesisStatus(thesis, currentData, daysHeld) {
-            if (!thesis) return { status: 'unknown', reasons: ['No entry data'] };
-
-            const { entryMomentum, entryRSI, entryMACDCrossover, entryStructure } = thesis;
-            const hasEntryData = entryMomentum != null || entryRSI != null || entryStructure != null;
-            if (!hasEntryData) return { status: 'unknown', reasons: ['No entry data'] };
-
-            const { rsi, macdCrossover, structure, momentum, price, choch, chochType } = currentData;
-
-            // Detect entry type: reversal vs momentum
-            const isReversal = (entryMomentum != null && entryMomentum < 5) ||
-                (entryRSI != null && entryRSI < 45) ||
-                (entryStructure === 'bearish' || entryStructure === 'ranging');
-
-            const confirmReasons = [];
-            const failReasons = [];
-
-            if (isReversal) {
-                // Reversal confirmation checks
-                if (entryMACDCrossover && entryMACDCrossover !== 'bullish' && macdCrossover === 'bullish')
-                    confirmReasons.push('MACD flipped bullish');
-                if (entryRSI != null && entryRSI < 40 && rsi != null && rsi > 45)
-                    confirmReasons.push(`RSI bouncing ${Math.round(entryRSI)}\u2192${Math.round(rsi)}`);
-                if ((entryStructure === 'bearish' || entryStructure === 'ranging') && structure === 'bullish')
-                    confirmReasons.push('Structure improved');
-                if (entryMomentum != null && momentum != null && (momentum - entryMomentum) >= 2)
-                    confirmReasons.push(`Momentum +${(momentum - entryMomentum).toFixed(1)}`);
-
-                // Reversal failure checks
-                if (structure === 'bearish')
-                    failReasons.push('Structure bearish');
-                if (entryRSI != null && rsi != null && rsi < entryRSI && rsi < 35)
-                    failReasons.push(`RSI new low ${Math.round(rsi)}`);
-                if (macdCrossover !== 'bullish' && daysHeld >= 3)
-                    failReasons.push('MACD still bearish 3d+');
-                if (thesis.stopPrice && price != null && price <= thesis.stopPrice)
-                    failReasons.push('Below stop');
-                if (choch && chochType === 'bearish')
-                    failReasons.push('Bearish CHoCH');
-            } else {
-                // Momentum confirmation checks
-                if (thesis.entryPrice && price != null && price > thesis.entryPrice)
-                    confirmReasons.push('Price above entry');
-                if (structure === 'bullish')
-                    confirmReasons.push('Structure bullish');
-                if (entryMomentum != null && momentum != null && (entryMomentum - momentum) < 3)
-                    confirmReasons.push('Momentum held');
-
-                // Momentum failure checks
-                if (entryStructure === 'bullish' && structure === 'bearish')
-                    failReasons.push('Structure flipped');
-                if (entryMomentum != null && momentum != null && (entryMomentum - momentum) >= 3)
-                    failReasons.push(`Momentum collapsed ${entryMomentum.toFixed(1)}\u2192${momentum.toFixed(1)}`);
-                if (thesis.stopPrice && price != null && price <= thesis.stopPrice)
-                    failReasons.push('Below stop');
-            }
-
-            const status = confirmReasons.length >= 2 ? 'confirmed' :
-                failReasons.length >= 2 ? 'failed' : 'pending';
-
-            let reasons;
-            if (status === 'confirmed') {
-                reasons = confirmReasons;
-            } else if (status === 'failed') {
-                reasons = failReasons;
-            } else {
-                // Pending — show what's confirmed, what's failing, and what's still waiting
-                reasons = [
-                    ...confirmReasons.map(r => '\u2713 ' + r),
-                    ...failReasons.map(r => '\u2717 ' + r)
-                ];
-                if (reasons.length === 0) {
-                    // No checks matched either way — explain what we're waiting for
-                    const waiting = [];
-                    if (isReversal) {
-                        if (momentum == null && rsi == null) waiting.push('Run Scan Market for current data');
-                        else {
-                            if (macdCrossover !== 'bullish') waiting.push('Waiting: MACD bullish crossover');
-                            if (structure !== 'bullish') waiting.push('Waiting: structure to turn bullish');
-                            if (rsi != null && entryRSI != null && rsi <= 45) waiting.push('Waiting: RSI to bounce above 45');
-                        }
-                    } else {
-                        if (momentum == null) waiting.push('Run Scan Market for current data');
-                        else waiting.push('Waiting: price/momentum confirmation');
-                    }
-                    reasons = waiting;
-                }
-            }
-
-            return { status, reasons, type: isReversal ? 'reversal' : 'momentum' };
-        }
-
         // Signal combo definitions — shared between calibration analysis and live heat evaluation.
         // Uses scoreInputs field names (same shape as calibration observations).
         const sectorFlowIsInflow = f => f === 'inflow' || f === 'accumulate' || f === 'favorable' || f === 'modest-inflow';
@@ -10335,24 +10243,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             ${h._dtcVal && h._dtcVal > 0 ? '<span class="hc-stat"><span class="hc-stat-lbl">DTC</span><span class="hc-stat-val ' + (h._dtcVal > 5 ? 'dtc-squeeze' : h._dtcVal > 3 ? 'dtc-elevated' : '') + '">' + h._dtcVal.toFixed(1) + '</span></span>' : ''}
                             ${h._struct?.choch ? '<span class="hc-stat"><span class="hc-stat-lbl">CHoCH</span><span class="hc-stat-val ' + (h._struct.chochType === 'bullish' ? 'choch-bullish' : 'choch-bearish') + '">' + (h._struct.chochType === 'bullish' ? '▲' : '▼') + '</span></span>' : ''}
                             ${h._volDiv?.divergence ? '<span class="hc-stat"><span class="hc-stat-lbl">Vol</span><span class="hc-stat-val ' + (h._volDiv.direction === 'bearish' ? 'negative' : 'positive') + '">' + h._volDiv.direction + '</span></span>' : ''}
-                            ${(() => {
-                                const thesisStop = h._thesis?.stopPrice;
-                                const atr = h._atrStop;
-                                const stop = thesisStop || atr;
-                                const label = thesisStop ? 'Stop' : 'ATR Stop';
-                                return stop ? '<span class="hc-stat"><span class="hc-stat-lbl">' + label + '</span><span class="hc-stat-val ' + (h.stockPrice.price <= stop ? 'negative' : '') + '">$' + stop.toFixed(2) + '</span></span>' : '';
-                            })()}
-                            ${(() => {
-                                const thesisTarget = h._thesis?.targetPrice;
-                                const fib = h._fib?.type === 'bullish' ? h._fib : null;
-                                if (thesisTarget) {
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">Target</span><span class="hc-stat-val ' + (h.stockPrice.price >= thesisTarget ? 'positive' : '') + '">$' + thesisTarget.toFixed(2) + '</span></span>';
-                                }
-                                if (fib) {
-                                    return '<span class="hc-stat"><span class="hc-stat-lbl">Fib</span><span class="hc-stat-val"><span class="' + (h.stockPrice.price >= fib.fib100 ? 'positive' : '') + '">$' + fib.fib100.toFixed(2) + '</span> · <span class="' + (h.stockPrice.price >= fib.fib1272 ? 'positive' : '') + '">$' + fib.fib1272.toFixed(2) + '</span></span></span>';
-                                }
-                                return '';
-                            })()}
+                            ${h.avgPurchasePrice > 0 ? '<span class="hc-stat"><span class="hc-stat-lbl">Stop</span><span class="hc-stat-val ' + (h.stockPrice.price <= h.avgPurchasePrice * 0.9 ? 'negative' : '') + '">$' + (h.avgPurchasePrice * 0.9).toFixed(2) + '</span></span>' : ''}
+                            ${h.avgPurchasePrice > 0 ? '<span class="hc-stat"><span class="hc-stat-lbl">Target</span><span class="hc-stat-val ' + (h.stockPrice.price >= h.avgPurchasePrice * 1.1 ? 'positive' : '') + '">$' + (h.avgPurchasePrice * 1.1).toFixed(2) + '</span></span>' : ''}
                         </div>
                         ${h._intraday ? `<div class="holding-card-stats hc-intraday">
                             <span class="hc-stat"><span class="hc-stat-lbl">5m RSI</span><span class="hc-stat-val ${h._intraday.rsi != null ? (h._intraday.rsi < 30 ? 'rsi-oversold' : h._intraday.rsi > 70 ? 'rsi-overbought' : '') : ''}">${h._intraday.rsi != null ? Math.round(h._intraday.rsi) : '--'}</span></span>
@@ -10614,10 +10506,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
 
                     const _sr = scannerReadings[symbol];
                     const _bars = multiDayCache[symbol];
-                    const _atr = _sr?.atr ?? calculateATR(_bars);
-                    const _vixLevel = portfolio.lastVIX?.level;
-                    const _atrMult = getATRMultiplier(_vixLevel);
-                    const _atrStop = _sr?.atrStop ?? (_atr && avgPurchasePrice > 0 ? Math.round((avgPurchasePrice - _atrMult * _atr) * 100) / 100 : null);
                     const _volDiv = _sr?.volumeDivergence ?? detectVolumeDivergence(_bars);
                     const _fib = _sr?.fibTargets ?? calculateFibTargets(_bars);
                     const _rsiVal = _bars && _bars.length >= 14 ? calculateRSI(_bars) : null;
@@ -10646,20 +10534,6 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                     else if (gainLossPercent <= -10 && daysHeld >= 3) _lossSignals.push('-10% — cut loss');
                     const _intraday = _sr?.intraday;
 
-                    const _thesisStatus = evaluateThesisStatus(
-                        _thesis,
-                        {
-                            rsi: _rsiVal,
-                            macdCrossover: _macdResult?.crossover || 'none',
-                            structure: _struct?.structure || 'unknown',
-                            momentum: _candidateNow?.momentum ?? null,
-                            price: stockPrice.price,
-                            choch: _struct?.choch || false,
-                            chochType: _struct?.chochType || 'none'
-                        },
-                        daysHeld
-                    );
-
                     // Entry signal captured at buy time
                     const _entrySignal = _et?.entrySignal || null;
 
@@ -10667,9 +10541,9 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                         symbol, shares, stockPrice, currentValue, changeClass, avgPurchasePrice,
                         earliestDate, conviction, daysHeld, gainLoss, gainLossPercent, gainLossClass,
                         positionSizePercent, stockName, stockSector, entryMomentum,
-                        entryRS, entryRSI, dailyClass, _atrStop, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
+                        entryRS, entryRSI, dailyClass, _volDiv, _fib, _rsiVal, _macdResult, _dtcVal,
                         _struct, _profitSignals, _lossSignals, _infoSignals, _thesis, _candidateNow, _intraday,
-                        _thesisStatus, _entrySignal, _tradePlan, insertionOrder: insertionOrder++
+                        _entrySignal, _tradePlan, insertionOrder: insertionOrder++
                     });
                 }
 
