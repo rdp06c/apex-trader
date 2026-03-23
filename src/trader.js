@@ -10232,13 +10232,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 case 'positionSize':
                     sorted.sort((a, b) => b.currentValue - a.currentValue);
                     break;
-                case 'health':
-                    sorted.sort((a, b) => {
-                        const aLoss = a._lossSignals?.length || 0;
-                        const bLoss = b._lossSignals?.length || 0;
-                        if (aLoss !== bLoss) return bLoss - aLoss;
-                        return (b._infoSignals?.length || 0) - (a._infoSignals?.length || 0);
-                    });
+                case 'symbol':
+                    sorted.sort((a, b) => a.symbol.localeCompare(b.symbol));
                     break;
                 case 'dateAdded':
                 default:

@@ -3549,7 +3549,7 @@
                                 <div class="custom-select-option" data-value="totalPL" onclick="selectSortOption(this)">Total P&amp;L %</div>
                                 <div class="custom-select-option" data-value="dailyChange" onclick="selectSortOption(this)">Daily Change %</div>
                                 <div class="custom-select-option" data-value="positionSize" onclick="selectSortOption(this)">Position Size</div>
-                                <div class="custom-select-option" data-value="health" onclick="selectSortOption(this)">Health</div>
+                                <div class="custom-select-option" data-value="symbol" onclick="selectSortOption(this)">Symbol</div>
                             </div>
                         </div>
                         <button id="holdingsSortDir" class="holdings-sort-dir" onclick="toggleHoldingsSortDir()" title="Toggle sort direction">&#9660;</button>
@@ -13968,13 +13968,8 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 case 'positionSize':
                     sorted.sort((a, b) => b.currentValue - a.currentValue);
                     break;
-                case 'health':
-                    sorted.sort((a, b) => {
-                        const aLoss = a._lossSignals?.length || 0;
-                        const bLoss = b._lossSignals?.length || 0;
-                        if (aLoss !== bLoss) return bLoss - aLoss;
-                        return (b._infoSignals?.length || 0) - (a._infoSignals?.length || 0);
-                    });
+                case 'symbol':
+                    sorted.sort((a, b) => a.symbol.localeCompare(b.symbol));
                     break;
                 case 'dateAdded':
                 default:
