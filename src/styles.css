@@ -2461,11 +2461,6 @@
             border: 1px solid rgba(239, 68, 68, 0.25);
         }
 
-        .risk-pill-info {
-            background: rgba(100, 149, 237, 0.12);
-            color: #6495ed;
-            border: 1px solid rgba(100, 149, 237, 0.25);
-        }
 
         .risk-table-wrap {
             overflow-x: auto;
@@ -2513,80 +2508,6 @@
             border-left: 3px solid #ef4444;
         }
 
-        .risk-signal-badge {
-            display: inline-block;
-            padding: 2px 7px;
-            border-radius: 10px;
-            font-size: 10px;
-            font-weight: 700;
-            line-height: 1.4;
-        }
-
-        .risk-signal-badge.danger {
-            background: rgba(239, 68, 68, 0.15);
-            color: #ef4444;
-        }
-
-        .risk-signal-badge.caution {
-            background: rgba(245, 158, 11, 0.15);
-            color: #f59e0b;
-        }
-
-        .risk-signal-badge.healthy {
-            background: rgba(34, 197, 94, 0.15);
-            color: #22c55e;
-        }
-
-        .risk-thesis-badge {
-            display: inline-block;
-            padding: 2px 7px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 600;
-            line-height: 1.4;
-            cursor: help;
-        }
-
-        .risk-thesis-badge.confirmed {
-            background: rgba(34, 197, 94, 0.15);
-            color: #22c55e;
-        }
-
-        .risk-thesis-badge.pending {
-            background: rgba(245, 158, 11, 0.15);
-            color: #f59e0b;
-        }
-
-        .risk-thesis-badge.failed {
-            background: rgba(239, 68, 68, 0.15);
-            color: #ef4444;
-        }
-
-        .risk-thesis-badge.unknown {
-            color: #6b7280;
-        }
-
-        .risk-struct-badge {
-            font-size: 10px;
-            font-weight: 600;
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-
-        .risk-struct-bullish {
-            color: #22c55e;
-            background: rgba(34, 197, 94, 0.1);
-        }
-
-        .risk-struct-bearish {
-            color: #ef4444;
-            background: rgba(239, 68, 68, 0.1);
-        }
-
-        .risk-struct-neutral {
-            color: var(--text-faint);
-            background: rgba(255, 255, 255, 0.05);
-        }
 
         /* ── Candidate Scorecard ─────────────────────────── */
         .scorecard-table-wrap {

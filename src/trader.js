@@ -10116,108 +10116,65 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                 return;
             }
 
-            // Classify each holding (only actionable signals drive risk level)
+            // Target 10 classification: based on P&L% proximity to ±10%
             const rows = dataArray.map(h => {
-                const signals = (h._lossSignals || []).length;
-                const infoSignals = (h._infoSignals || []).length;
-                const level = signals >= 2 ? 'danger' : signals === 1 ? 'caution' : 'healthy';
                 const price = h.stockPrice?.price;
-                const stopPrice = h._thesis?.stopPrice || h._atrStop;
-                let stopDist = null;
-                if (stopPrice && price && price > 0) {
-                    stopDist = ((price - stopPrice) / price * 100).toFixed(1);
-                }
-                const targetPrice = h._thesis?.targetPrice;
-                const fibTarget = !targetPrice && h._fib?.type === 'bullish' ? h._fib : null;
-                const effectiveTarget = targetPrice || (fibTarget ? fibTarget.fib100 : null);
-                let targetDist = null;
-                if (effectiveTarget && price && price > 0) {
-                    targetDist = ((effectiveTarget - price) / price * 100).toFixed(1);
-                }
-                const structLabel = h._struct?.structure || '—';
-                const mom = h._candidateNow?.momentum != null ? +h._candidateNow.momentum.toFixed(1) : null;
-                const momEntry = h.entryMomentum != null ? +h.entryMomentum.toFixed(1) : null;
-                const rs = h._candidateNow?.rs != null ? Math.round(h._candidateNow.rs) : null;
-                const rsEntry = h.entryRS != null ? Math.round(h.entryRS) : null;
-                const rsi = h._rsiVal != null ? Math.round(h._rsiVal) : '—';
-                const rsiEntry = h.entryRSI != null ? Math.round(h.entryRSI) : null;
-                const macd = h._macdResult?.crossover || '—';
-                const tp = h._tradePlan;
-                const rr = tp?.targetInATRs ?? null;
-                const tpSupport = tp?.support ?? null;
-                const tpResist = tp?.resistance ?? null;
-                // Prefer trade plan stop/target over thesis (trade plan is live ATR-based)
-                const tpStop = tp?.stop ?? null;
-                const tpTarget = tp?.target ?? null;
-                const enhancedStop = tpStop || stopPrice;
-                let enhancedStopDist = null;
-                if (enhancedStop && price && price > 0) {
-                    enhancedStopDist = ((price - enhancedStop) / price * 100).toFixed(1);
-                }
-                const enhancedTarget = tpTarget || effectiveTarget;
-                let enhancedTargetDist = null;
-                if (enhancedTarget && price && price > 0) {
-                    enhancedTargetDist = ((enhancedTarget - price) / price * 100).toFixed(1);
-                }
-                return { ...h, signals, infoSignals, level, price, stopPrice, stopDist, targetPrice, effectiveTarget, fibTarget, targetDist, structLabel, mom, momEntry, rs, rsEntry, rsi, rsiEntry, macd, rr, tpSupport, tpResist, enhancedStop, enhancedStopDist, enhancedTarget, enhancedTargetDist };
+                const pl = h.gainLossPercent ?? 0;
+                const level = pl <= -8 ? 'danger' : pl <= -5 ? 'caution' : 'healthy';
+                const stopPrice = h.avgPurchasePrice > 0 ? h.avgPurchasePrice * 0.9 : null;
+                const targetPrice = h.avgPurchasePrice > 0 ? h.avgPurchasePrice * 1.1 : null;
+                return { ...h, level, price, stopPrice, targetPrice, pl };
             });
 
-            // Sort: danger first, then caution, then healthy
+            // Sort: danger first, then caution, then healthy; within level by P&L ascending
             const levelOrder = { danger: 0, caution: 1, healthy: 2 };
-            rows.sort((a, b) => (levelOrder[a.level] - levelOrder[b.level]) || (b.signals - a.signals));
+            rows.sort((a, b) => (levelOrder[a.level] - levelOrder[b.level]) || (a.pl - b.pl));
 
-            const counts = { healthy: 0, caution: 0, danger: 0, info: 0 };
-            rows.forEach(r => {
-                counts[r.level]++;
-                if (r.infoSignals > 0 && r.signals === 0) counts.info++;
-            });
+            const counts = { healthy: 0, caution: 0, danger: 0 };
+            rows.forEach(r => counts[r.level]++);
 
             let html = '<div class="risk-summary">';
             html += `<span class="risk-pill risk-pill-healthy">${counts.healthy} Healthy</span>`;
             html += `<span class="risk-pill risk-pill-caution">${counts.caution} Caution</span>`;
             html += `<span class="risk-pill risk-pill-danger">${counts.danger} At Risk</span>`;
-            if (counts.info > 0) html += `<span class="risk-pill risk-pill-info">${counts.info} Dampened</span>`;
             html += '</div>';
 
             html += '<div class="risk-table-wrap"><table class="risk-table">';
             html += '<thead><tr>';
-            html += '<th>Symbol</th><th>Sig</th><th>Price</th><th>P&L %</th><th>Stop</th><th>Target</th><th>ATR</th><th>S/R</th><th>Thesis</th>';
-            html += '<th>MOM</th><th>RS</th><th>Structure</th><th>RSI</th><th>MACD</th><th>Signals</th>';
+            html += '<th>Symbol</th><th>Sig</th><th>Price</th><th>P&L %</th><th>Stop (−10%)</th><th>Target (+10%)</th><th>Days</th>';
             html += '</tr></thead><tbody>';
 
             for (const r of rows) {
-                const structClass = r.structLabel === 'bullish' ? 'risk-struct-bullish' :
-                    r.structLabel === 'bearish' ? 'risk-struct-bearish' : 'risk-struct-neutral';
+                const plColor = r.pl > 0 ? 'color:#22c55e' : r.pl < 0 ? 'color:#ef4444' : '';
 
-                const plColor = r.gainLossPercent > 0 ? 'color:#22c55e' :
-                    r.gainLossPercent < 0 ? 'color:#ef4444' : '';
-
-                const stopDistDisplay = r.enhancedStop != null
-                    ? `<span style="${parseFloat(r.enhancedStopDist) < 5 ? 'color:#ef4444' : parseFloat(r.enhancedStopDist) < 10 ? 'color:#f59e0b' : 'color:#22c55e'}" title="${r.enhancedStopDist}% away${r.stopPrice && r.enhancedStop !== r.stopPrice ? ' (thesis: $' + r.stopPrice.toFixed(2) + ')' : ''}">$${r.enhancedStop.toFixed(2)}</span>`
-                    : '—';
-
-                const rsiDeltaColor = r.rsiEntry != null && r.rsi !== '—'
-                    ? (r.rsi - r.rsiEntry <= -20 ? 'color:#ef4444' : r.rsi - r.rsiEntry >= 20 ? 'color:#22c55e' : '')
+                // Stop: color by proximity (< 2% away = red, < 5% = yellow, else green)
+                const stopDist = r.stopPrice && r.price ? ((r.price - r.stopPrice) / r.price * 100) : null;
+                const stopColor = stopDist != null
+                    ? (stopDist < 2 ? 'color:#ef4444' : stopDist < 5 ? 'color:#f59e0b' : 'color:#22c55e')
                     : '';
-                const rsiDisplay = r.rsiEntry != null && r.rsi !== '—'
-                    ? `${r.rsiEntry}<span style="opacity:0.5">\u2192</span><span style="${rsiDeltaColor}">${r.rsi}</span>`
-                    : `${r.rsi}`;
+                const stopDisplay = r.stopPrice != null
+                    ? `<span style="${stopColor}" title="${stopDist != null ? stopDist.toFixed(1) + '% above stop' : ''}">$${r.stopPrice.toFixed(2)}</span>`
+                    : '\u2014';
 
-                const macdColor = r.macd === 'bullish' ? 'color:#22c55e' :
-                    r.macd === 'bearish' ? 'color:#ef4444' : '';
+                // Target: color by proximity (< 2% away = green)
+                const targetDist = r.targetPrice && r.price ? ((r.targetPrice - r.price) / r.price * 100) : null;
+                const targetColor = targetDist != null && targetDist <= 2 ? 'color:#22c55e' : '';
+                const targetDisplay = r.targetPrice != null
+                    ? `<span style="${targetColor}" title="${targetDist != null ? targetDist.toFixed(1) + '% to target' : ''}">$${r.targetPrice.toFixed(2)}</span>`
+                    : '\u2014';
 
-                const signalBadgeClass = r.level;
-                const signalList = (r._lossSignals || []).join(', ');
-                const signalTitle = signalList ? ` title="${escapeHtml(signalList)}"` : '';
+                // Days held: highlight if < 3 (minimum hold)
+                const daysDisplay = r.daysHeld != null
+                    ? `<span${r.daysHeld < 3 ? ' style="color:#f59e0b" title="3-day minimum hold"' : ''}>${r.daysHeld === 0 ? 'Today' : r.daysHeld}</span>`
+                    : '\u2014';
 
                 html += `<tr class="risk-row-${r.level}">`;
                 html += `<td style="font-weight:600">${escapeHtml(r.symbol)}</td>`;
                 html += '<td>' + (() => {
                     const sig = r._entrySignal;
-                    if (!sig?.patterns?.length) return '—';
+                    if (!sig?.patterns?.length) return '\u2014';
                     const anti = sig.antiPatternMatch;
                     if (anti) return '<span class="entry-badge avoid">AVOID</span>';
-                    // Use stored bestPatternId (respects user override), fall back to highest matchCount
                     let best = sig.bestPatternId ? sig.patterns.find(p => p.id === sig.bestPatternId && p.match) : null;
                     if (!best) {
                         for (const pat of sig.patterns) {
@@ -10225,58 +10182,16 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
                             if (!best || pat.matchCount > best.matchCount) best = pat;
                         }
                     }
-                    if (!best) return '—';
+                    if (!best) return '\u2014';
                     const badge = best.badge || best.id.toUpperCase().slice(0, 3);
                     const matchClass = best.match === 'full' ? 'full' : best.match === 'strong' ? 'strong' : 'partial';
                     return `<span class="entry-badge ${matchClass} setup-${best.id}">${badge}</span>`;
                 })() + '</td>';
-                html += `<td>$${r.price ? r.price.toFixed(2) : '—'}</td>`;
-                html += `<td style="${plColor}">${r.gainLossPercent != null ? (r.gainLossPercent > 0 ? '+' : '') + r.gainLossPercent.toFixed(1) + '%' : '—'}</td>`;
-                html += `<td>${stopDistDisplay}</td>`;
-                const targetDisplay = r.enhancedTarget != null
-                    ? `<span style="${r.enhancedTargetDist != null && parseFloat(r.enhancedTargetDist) <= 2 ? 'color:#22c55e' : ''}" title="${r.enhancedTargetDist}% away${r.targetPrice && r.enhancedTarget !== r.targetPrice ? ' (thesis: $' + r.targetPrice.toFixed(2) + ')' : ''}${r.fibTarget ? ' (Fib)' : ''}">$${r.enhancedTarget.toFixed(2)}</span>`
-                    : '—';
+                html += `<td>$${r.price ? r.price.toFixed(2) : '\u2014'}</td>`;
+                html += `<td style="${plColor}">${r.pl != null ? (r.pl > 0 ? '+' : '') + r.pl.toFixed(1) + '%' : '\u2014'}</td>`;
+                html += `<td>${stopDisplay}</td>`;
                 html += `<td>${targetDisplay}</td>`;
-                // ATR cell — target in ATRs, color varies by VIX zone
-                const vNow = portfolio.lastVIX?.level ?? 20;
-                const rrColor = r.rr != null ? (
-                    vNow >= 25
-                        ? (r.rr <= 3 ? 'color:#22c55e' : r.rr <= 5 ? 'color:#f59e0b' : 'color:#ef4444')
-                        : (r.rr >= 5 ? 'color:#22c55e' : r.rr >= 3 ? 'color:#f59e0b' : 'color:#ef4444')
-                ) : '';
-                const rrDisplay = r.rr != null ? `<span style="${rrColor};font-weight:600">${r.rr.toFixed(1)}</span>` : '\u2014';
-                html += `<td>${rrDisplay}</td>`;
-                // S/R cell — combined support/resistance
-                const srParts = [];
-                if (r.tpSupport != null) srParts.push('$' + Math.round(r.tpSupport));
-                if (r.tpResist != null) srParts.push('$' + Math.round(r.tpResist));
-                const srDisplay = srParts.length > 0 ? `<span style="font-size:0.85em">${srParts.join('/')}</span>` : '\u2014';
-                html += `<td>${srDisplay}</td>`;
-                const thesisStatus = r._thesisStatus || { status: 'unknown', reasons: [] };
-                const thesisIcon = thesisStatus.status === 'confirmed' ? '\u2713' :
-                    thesisStatus.status === 'failed' ? '\u2717' :
-                    thesisStatus.status === 'pending' ? '\u23F3' : '\u2014';
-                const thesisLabel = thesisStatus.type ? ` ${thesisStatus.type[0].toUpperCase()}` : '';
-                const thesisTooltip = thesisStatus.reasons.length > 0 ? thesisStatus.reasons.join('\n') : '';
-                html += `<td><span class="risk-thesis-badge ${thesisStatus.status}" title="${escapeHtml(thesisTooltip)}">${thesisIcon}${thesisLabel}</span></td>`;
-                const momDeltaColor = r.momEntry != null && r.mom != null
-                    ? (r.mom - r.momEntry <= -3 ? 'color:#ef4444' : r.mom - r.momEntry >= 3 ? 'color:#22c55e' : '')
-                    : '';
-                const momDisplay = r.momEntry != null && r.mom != null
-                    ? `${r.momEntry}<span style="opacity:0.5">\u2192</span><span style="${momDeltaColor}">${r.mom}</span>`
-                    : r.mom != null ? `${r.mom}` : r.momEntry != null ? `${r.momEntry}` : '\u2014';
-                html += `<td>${momDisplay}</td>`;
-                const rsDeltaColor = r.rsEntry != null && r.rs != null
-                    ? (r.rs - r.rsEntry <= -15 ? 'color:#ef4444' : r.rs - r.rsEntry >= 15 ? 'color:#22c55e' : '')
-                    : '';
-                const rsDisplay = r.rsEntry != null && r.rs != null
-                    ? `${r.rsEntry}<span style="opacity:0.5">\u2192</span><span style="${rsDeltaColor}">${r.rs}</span>`
-                    : r.rs != null ? `${r.rs}` : r.rsEntry != null ? `${r.rsEntry}` : '\u2014';
-                html += `<td>${rsDisplay}</td>`;
-                html += `<td><span class="risk-struct-badge ${structClass}">${r.structLabel}</span></td>`;
-                html += `<td>${rsiDisplay}</td>`;
-                html += `<td style="${macdColor}">${r.macd}</td>`;
-                html += `<td><span class="risk-signal-badge ${signalBadgeClass}"${signalTitle}>${r.signals}</span></td>`;
+                html += `<td>${daysDisplay}</td>`;
                 html += '</tr>';
             }
 
