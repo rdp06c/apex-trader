@@ -15055,12 +15055,18 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         riskReward: c.tradePlanRR,
                         support: c.tradePlanSupport ?? null,
                         resistance: c.tradePlanResistance ?? null,
+                        atr: c.tradePlanAtr ?? null,
+                        atrPct: c.tradePlanAtrPct ?? null,
+                        targetInATRs: c.tradePlanTargetInATRs ?? null,
+                        vixMult: c.tradePlanVixMult ?? null,
                         entry: c.price,
                         _fromServer: true
                     };
                 }
-                c._buyZone = computeBuyZone(c, c._tradePlan, multiDayCache[c.symbol], portfolio.lastVIX?.level);
-                // Fall back to server-persisted buy zone when local computation fails (no bars)
+                // Prefer local computation (has bars for pullback target), fall back to server data
+                if (multiDayCache[c.symbol]?.length >= 5) {
+                    c._buyZone = computeBuyZone(c, c._tradePlan, multiDayCache[c.symbol], portfolio.lastVIX?.level);
+                }
                 if (!c._buyZone && c.buyZonePrice) {
                     c._buyZone = {
                         buyZonePrice: c.buyZonePrice,

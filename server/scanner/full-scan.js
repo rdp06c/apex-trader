@@ -342,6 +342,10 @@ async function runFullScan({ force = false } = {}) {
                 lastCandidate.tradePlanRR = tradePlan.riskReward;
                 lastCandidate.tradePlanSupport = tradePlan.support ?? null;
                 lastCandidate.tradePlanResistance = tradePlan.resistance ?? null;
+                lastCandidate.tradePlanAtr = tradePlan.atr ?? null;
+                lastCandidate.tradePlanAtrPct = tradePlan.atrPct ?? null;
+                lastCandidate.tradePlanTargetInATRs = tradePlan.targetInATRs ?? null;
+                lastCandidate.tradePlanVixMult = tradePlan.vixMult ?? null;
             }
             if (buyZone) {
                 lastCandidate.buyZonePrice = buyZone.buyZonePrice;
