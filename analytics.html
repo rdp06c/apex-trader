@@ -273,15 +273,23 @@
     min-height: 120px; color: var(--text-muted); font-size: 13px;
     font-style: italic;
   }
+
+  /* ── Section Headers ─────────────────────────────────── */
+  .section-header {
+    font-size: 11px; color: var(--text-faint); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 2px;
+    margin-bottom: 14px; margin-top: 16px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle);
+  }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div class="header-branding">
-    <div class="header-subtitle">Phase 2 Analytics</div>
+    <div class="header-subtitle">FORGE Playbook Analytics</div>
     <h1>APEX Analytics</h1>
-    <div class="header-tagline">Scoring engine validation &amp; trade pattern insights</div>
+    <div class="header-tagline">Playbook compliance, entry quality &amp; trade pattern insights</div>
   </div>
   <div>
     <a href="/" class="header-btn secondary" style="text-decoration:none;display:inline-block;text-align:center">Dashboard</a>
@@ -340,87 +348,70 @@
     <button class="filter-reset" onclick="resetFilters()" title="Reset all filters">&#x2715; Reset</button>
   </div>
 
+  <!-- ═══ FORGE PLAYBOOK COMPLIANCE ═══ -->
+  <div class="section-header">FORGE Playbook Compliance</div>
+
   <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Return on Capital Deployed</div>
-    <div class="section-sub">Cumulative P&amp;L as a percentage of total capital put to work across closed trades</div>
-    <canvas id="perfChart"></canvas>
+    <div class="chart-title">VIX Zone &times; Signal Type</div>
+    <div class="section-sub">FORGE routing: REV in VIX 20+, MOM/LDR in VIX 15-20, MOM full quality in VIX &lt;15</div>
+    <div id="vixSignalContent"></div>
   </div>
 
-  <!-- ═══ P&L DEEP DIVE ═══ -->
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Cumulative Realized P&amp;L</div>
-    <div class="section-sub">Running total of closed-trade profits</div>
-    <canvas id="cumulativePL"></canvas>
-  </div>
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Rolling Win Rate</div>
-    <div class="section-sub">Win rate over the last 10 trades &mdash; are you improving?</div>
-    <canvas id="rollingWinRate"></canvas>
-  </div>
-
-  <!-- ═══ RISK ═══ -->
   <div class="grid">
     <div class="card">
-      <div class="chart-title">Return Distribution</div>
-      <div class="section-sub">Histogram of individual trade returns &mdash; are your wins bigger than your losses?</div>
-      <canvas id="returnDistChart"></canvas>
+      <div class="chart-title">FORGE Rule Compliance</div>
+      <div class="section-sub">Trades checked against FORGE "never buy" rules</div>
+      <div id="forgeComplianceContent"></div>
     </div>
     <div class="card">
-      <div class="chart-title">Drawdown from Peak</div>
-      <div class="section-sub">How deep the valleys get &mdash; max decline from highest return %</div>
-      <canvas id="drawdownChart"></canvas>
+      <div class="chart-title">3-Day Hold Compliance</div>
+      <div class="section-sub">FORGE mandates 3-day minimum hold</div>
+      <div id="holdComplianceContent"></div>
     </div>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Exit Rule Compliance</div>
+    <div class="section-sub">Are you following +10% take profit / -10% cut loss?</div>
+    <canvas id="exitComplianceChart"></canvas>
   </div>
 
   <!-- ═══ ENTRY QUALITY ═══ -->
+  <div class="section-header">Entry Quality</div>
+
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Entry Setup Type vs Outcome</div>
     <div class="section-sub">Win rate and avg return by entry setup type (REV, MOM, QMO, SQZ, LDR) and match quality</div>
     <div id="entrySignalContent"></div>
   </div>
 
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Position Adds vs Outcome</div>
-    <div class="section-sub">Do trades where you added to the position perform better than single entries?</div>
-    <div id="positionAddsContent"></div>
-  </div>
-
-  <!-- ═══ FORGE PLAYBOOK VALIDATION ═══ -->
   <div class="grid">
     <div class="card">
       <div class="chart-title">Win Rate by VIX Zone</div>
-      <div class="section-sub">FORGE playbook: VIX 25+ &amp; 20-25 = REV, VIX 15-20 = MOM, VIX &lt;15 = selective</div>
+      <div class="section-sub">FORGE: VIX 25+ &amp; 20-25 = REV, VIX 15-20 = MOM, VIX &lt;15 = selective</div>
       <canvas id="vixZoneChart"></canvas>
     </div>
     <div class="card">
       <div class="chart-title">Win Rate by ATR %</div>
-      <div class="section-sub">FORGE playbook: VIX 25+ favor high ATR (bounce), VIX &lt;25 favor low ATR (grind)</div>
+      <div class="section-sub">FORGE: high ATR in fear (bounce), low ATR in calm (grind)</div>
       <canvas id="atrPctChart"></canvas>
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Exit Rule Compliance</div>
-    <div class="section-sub">Are you following +10% take profit / -10% cut loss? Shows actual exit percentages.</div>
-    <canvas id="exitComplianceChart"></canvas>
-  </div>
+  <!-- ═══ TECHNICAL INDICATORS ═══ -->
+  <div class="section-header">Technical Indicator Validation</div>
 
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Composite Score vs. Outcome</div>
-    <div class="section-sub">FORGE finding: score is a weak predictor (60-67% WR range). Other factors matter more.</div>
-    <canvas id="compositeScatter"></canvas>
-  </div>
-
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Entry RSI vs. Outcome</div>
-    <div class="section-sub">FORGE finding: RSI 25-40 is the sweet spot. RSI &lt;25 underperforms in every VIX zone.</div>
-    <canvas id="rsiScatter"></canvas>
-  </div>
-
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Entry RS vs. Outcome</div>
-    <div class="section-sub">FORGE finding: RS 30-70 is optimal. RS &lt;20 and RS 80+ underperform.</div>
-    <canvas id="rsScatter"></canvas>
+  <div class="grid">
+    <div class="card">
+      <div class="chart-title">Entry RSI vs. Outcome</div>
+      <div class="section-sub">FORGE: RSI 25-40 sweet spot. RSI &lt;25 underperforms.</div>
+      <canvas id="rsiScatter"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Entry RS vs. Outcome</div>
+      <div class="section-sub">FORGE: RS 30-70 optimal. RS &lt;20 and RS 80+ underperform.</div>
+      <canvas id="rsScatter"></canvas>
+    </div>
   </div>
 
   <div class="card" style="margin-bottom:24px">
@@ -429,31 +420,10 @@
     <canvas id="rsRsiScatter"></canvas>
   </div>
 
-  <!-- ═══ MARKET CONTEXT ═══ -->
-  <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Performance by Market Regime</div>
-    <div class="section-sub">Win rate, avg return, and trade count by bull / bear / choppy regime at entry</div>
-    <div id="regimeContent"></div>
-  </div>
-
-  <div class="grid">
-    <div class="card">
-      <div class="chart-title">Win Rate by Sector Flow</div>
-      <div class="section-sub">Did buying into inflow sectors outperform outflow?</div>
-      <canvas id="sectorFlowChart"></canvas>
-    </div>
-    <div class="card">
-      <div class="chart-title">Win Rate by Sector</div>
-      <div class="section-sub">Where does the edge come from?</div>
-      <canvas id="sectorChart"></canvas>
-    </div>
-  </div>
-
-  <!-- ═══ SIGNAL VALIDATION ═══ -->
   <div class="grid">
     <div class="card">
       <div class="chart-title">Win Rate by Momentum Range</div>
-      <div class="section-sub">What momentum at entry produces winners?</div>
+      <div class="section-sub">FORGE: MOM 5-7 sweet spot. 8+ = extended (never buy MOM 8+).</div>
       <canvas id="momentumChart"></canvas>
     </div>
     <div class="card">
@@ -463,33 +433,99 @@
     </div>
   </div>
 
-  <!-- ═══ TRADE MECHANICS ═══ -->
+  <!-- ═══ MARKET CONTEXT ═══ -->
+  <div class="section-header">Market Context</div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="chart-title">Win Rate by Sector Flow</div>
+      <div class="section-sub">Did buying into inflow sectors outperform outflow?</div>
+      <canvas id="sectorFlowChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Win Rate by Sector</div>
+      <div class="section-sub">FORGE: Automotive &lt;50% WR &mdash; never buy.</div>
+      <canvas id="sectorChart"></canvas>
+    </div>
+  </div>
+
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Win Rate by Hold Duration</div>
-    <div class="section-sub">How long should trades be held?</div>
+    <div class="section-sub">FORGE rule: 3-day minimum hold</div>
     <canvas id="holdChart"></canvas>
   </div>
 
-  <!-- ═══ WHAT'S WORKING ═══ -->
+  <!-- ═══ PERFORMANCE ═══ -->
+  <div class="section-header">Performance</div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Return on Capital Deployed</div>
+    <div class="section-sub">Cumulative P&amp;L as a percentage of total capital put to work</div>
+    <canvas id="perfChart"></canvas>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Cumulative Realized P&amp;L</div>
+    <div class="section-sub">Running total of closed-trade profits</div>
+    <canvas id="cumulativePL"></canvas>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Rolling Win Rate</div>
+    <div class="section-sub">Win rate over the last 10 trades</div>
+    <canvas id="rollingWinRate"></canvas>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="chart-title">Return Distribution</div>
+      <div class="section-sub">Histogram of individual trade returns</div>
+      <canvas id="returnDistChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Drawdown from Peak</div>
+      <div class="section-sub">Max decline from highest return %</div>
+      <canvas id="drawdownChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══ BEHAVIORAL ═══ -->
+  <div class="section-header">Behavioral</div>
+
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Win &amp; Loss Streaks</div>
-    <div class="section-sub">Consecutive W/L runs over time &mdash; are losses clustering (tilt)?</div>
+    <div class="section-sub">Consecutive W/L runs &mdash; are losses clustering (tilt)?</div>
     <canvas id="streakChart"></canvas>
   </div>
+
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Rolling Expectancy</div>
-    <div class="section-sub">Expected $ per trade over last 10 trades: (win% &times; avg win) &minus; (loss% &times; avg loss)</div>
+    <div class="section-sub">Expected $ per trade over last 10 trades</div>
     <canvas id="expectancyChart"></canvas>
   </div>
 
-  <!-- ═══ EXIT QUALITY ═══ -->
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Did I Sell Too Early?</div>
-    <div class="section-sub">Stock price movement after selling &mdash; green = stock fell (good exit), red = stock rose (left money on table)</div>
+    <div class="section-sub">Stock price movement after selling</div>
     <div id="postExitSummary" style="margin-bottom:16px"></div>
     <canvas id="postExitChart"></canvas>
     <div id="postExitTable" style="margin-top:20px"></div>
     <div id="postExitPatterns" style="margin-top:20px"></div>
+  </div>
+
+  <!-- ═══ REFERENCE ═══ -->
+  <div class="section-header">Reference</div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Composite Score vs. Outcome</div>
+    <div class="section-sub">FORGE finding: score is a weak predictor (60-67% WR range)</div>
+    <canvas id="compositeScatter"></canvas>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="chart-title">Performance by Market Regime</div>
+    <div class="section-sub">Win rate and trade count by bull / bear / choppy regime at entry</div>
+    <div id="regimeContent"></div>
   </div>
 
 </div>
@@ -844,30 +880,38 @@ const fiftyLinePlugin = {
 function renderAll() {
   destroyAllCharts();
   renderStats();
+  // FORGE Compliance
+  renderVixSignalMatrix();
+  renderForgeCompliance();
+  renderHoldCompliance();
+  renderExitComplianceChart();
+  // Entry Quality
+  renderEntrySignalOutcome();
+  renderVixZoneChart();
+  renderAtrPctChart();
+  // Technical Indicators
+  renderRSIScatter();
+  renderRSScatter();
+  renderRSvsRSI();
+  renderMomentumChart();
+  renderStructureChart();
+  // Market Context
+  renderSectorFlowChart();
+  renderSectorChart();
+  renderHoldChart();
+  // Performance
   renderPerfChart();
   renderCumulativePL();
   renderRollingWinRate();
   renderReturnDistChart();
   renderDrawdownChart();
-  renderEntrySignalOutcome();
-  renderPositionAdds();
-  renderVixZoneChart();
-  renderAtrPctChart();
-  renderExitComplianceChart();
-  renderCompositeScatter();
-  renderRSIScatter();
-  renderRSScatter();
-  renderRSvsRSI();
-  renderRegimePerformance();
-  renderSectorFlowChart();
-  renderSectorChart();
-  renderMomentumChart();
-  renderStructureChart();
-  renderHoldChart();
-
+  // Behavioral
   renderStreakChart();
   renderExpectancyChart();
   renderPostExitChart();
+  // Reference
+  renderCompositeScatter();
+  renderRegimePerformance();
 }
 
 /* ── Summary Stats ────────────────────────────────────── */
@@ -1284,134 +1328,6 @@ function renderEntrySignalOutcome() {
   });
 }
 
-/* ── Position Adds vs Outcome ─────────────────────────── */
-function renderPositionAdds() {
-  const container = document.getElementById('positionAddsContent');
-  const ct = data.closedTrades || [];
-  const tx = data.transactions || [];
-
-  if (ct.length < 3) {
-    container.innerHTML = '<div class="empty-chart">Need at least 3 closed trades</div>';
-    return;
-  }
-
-  // For each closed trade, count how many BUY transactions fall within its date range
-  const tradesWithAdds = ct.map(t => {
-    const buyDate = new Date(t.buyDate).getTime();
-    const sellDate = new Date(t.sellDate).getTime();
-    const buys = tx.filter(x =>
-      x.type === 'BUY' && x.symbol === t.symbol &&
-      new Date(x.timestamp).getTime() >= buyDate - 86400000 && // 1 day tolerance
-      new Date(x.timestamp).getTime() <= sellDate + 86400000
-    );
-    return { ...t, addCount: Math.max(buys.length, 1) };
-  });
-
-  // Bucket: 1 buy, 2 buys, 3+ buys
-  const bucketDefs = [
-    { label: 'Single Entry', min: 1, max: 1 },
-    { label: '1 Add (2 buys)', min: 2, max: 2 },
-    { label: '2+ Adds (3+ buys)', min: 3, max: Infinity }
-  ];
-  const buckets = bucketDefs.map(d => ({ ...d, wins: 0, losses: 0, totalReturn: 0 }));
-
-  for (const t of tradesWithAdds) {
-    const b = buckets.find(b => t.addCount >= b.min && t.addCount <= b.max);
-    if (!b) continue;
-    if (t.profitLoss > 0) b.wins++;
-    else b.losses++;
-    b.totalReturn += t.returnPercent;
-  }
-
-  const active = buckets.filter(b => (b.wins + b.losses) > 0);
-
-  // Cards
-  let html = '<div class="signal-match-grid">';
-  for (const b of active) {
-    const total = b.wins + b.losses;
-    const wr = (b.wins / total * 100);
-    const avgRet = b.totalReturn / total;
-    const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
-    html += `<div class="signal-match-card">
-      <div class="signal-match-label">${b.label}</div>
-      <div class="signal-match-value" style="color:${wrColor}">${wr.toFixed(0)}%</div>
-      <div class="signal-match-sub">${b.wins}W/${b.losses}L &middot; avg ${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>
-    </div>`;
-  }
-  html += '</div>';
-
-  // Bar chart
-  html += '<canvas id="positionAddsChart" style="max-height:220px"></canvas>';
-  container.innerHTML = html;
-
-  if (!active.length) return;
-
-  const wrData = active.map(b => b.wins / (b.wins + b.losses) * 100);
-  const retData = active.map(b => b.totalReturn / (b.wins + b.losses));
-
-  new Chart(document.getElementById('positionAddsChart'), {
-    type: 'bar',
-    data: {
-      labels: active.map(b => b.label),
-      datasets: [
-        {
-          label: 'Win Rate %',
-          data: wrData,
-          backgroundColor: wrData.map(v => v >= 50 ? COLORS.win + '99' : COLORS.loss + '99'),
-          borderColor: wrData.map(v => v >= 50 ? COLORS.win : COLORS.loss),
-          borderWidth: 1,
-          borderRadius: 4,
-          yAxisID: 'y'
-        },
-        {
-          label: 'Avg Return %',
-          data: retData,
-          type: 'line',
-          borderColor: COLORS.accent,
-          backgroundColor: COLORS.accent + '44',
-          pointBackgroundColor: COLORS.accent,
-          pointRadius: 5,
-          borderWidth: 2,
-          tension: 0.3,
-          yAxisID: 'y1'
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const b = active[ctx.dataIndex];
-              const total = b.wins + b.losses;
-              if (ctx.datasetIndex === 0) return `Win rate: ${ctx.parsed.y.toFixed(0)}% (${total} trades)`;
-              return `Avg return: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(1)}%`;
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true, max: 100,
-          ticks: { callback: v => v + '%' },
-          grid: { color: COLORS.gridLine },
-          title: { display: true, text: 'Win Rate %', color: COLORS.muted }
-        },
-        y1: {
-          position: 'right',
-          ticks: { callback: v => (v >= 0 ? '+' : '') + v + '%' },
-          grid: { display: false },
-          title: { display: true, text: 'Avg Return %', color: COLORS.muted }
-        },
-        x: { grid: { display: false } }
-      }
-    },
-    plugins: [fiftyLinePlugin]
-  });
-}
-
 /* ── Win Rate by VIX Zone ───────────────────────────── */
 function renderVixZoneChart() {
   const ct = (data.closedTrades || []).filter(t => t.entryTechnicals?.vixLevel != null);
@@ -1584,131 +1500,6 @@ function renderExitComplianceChart() {
       }
     }
   });
-}
-
-/* ── (Legacy) Combo Heat vs Outcome — kept for historical data ── */
-function renderComboHeatOutcome() {
-  const container = document.getElementById('comboHeatContent');
-  if (!container) return; // removed from HTML
-  const ct = (data.closedTrades || []).filter(t => t.entryTechnicals);
-
-  if (ct.length < 3) {
-    container.innerHTML = '<div class="empty-chart">Need at least 3 trades with entry technical data</div>';
-    return;
-  }
-
-  // Group by heat direction
-  const groups = {
-    hot: { label: 'Hot Combos', wins: 0, losses: 0, totalReturn: 0 },
-    cold: { label: 'Cold Combos', wins: 0, losses: 0, totalReturn: 0 },
-    neutral: { label: 'Neutral / No Data', wins: 0, losses: 0, totalReturn: 0 }
-  };
-
-  // Also collect scatter points for trades that have netHeat
-  const scatterPoints = [];
-
-  for (const t of ct) {
-    const heat = t.entryTechnicals.comboHeat;
-    let group;
-    if (heat && heat.netHeat > 0) group = groups.hot;
-    else if (heat && heat.netHeat < 0) group = groups.cold;
-    else group = groups.neutral;
-
-    if (t.profitLoss > 0) group.wins++;
-    else group.losses++;
-    group.totalReturn += t.returnPercent;
-
-    if (heat && heat.netHeat != null && heat.netHeat !== 0) {
-      scatterPoints.push({
-        x: heat.netHeat,
-        y: t.returnPercent,
-        r: 6,
-        symbol: t.symbol,
-        netHeat: heat.netHeat,
-        hotCount: heat.hotCount || 0,
-        coldCount: heat.coldCount || 0,
-        ret: t.returnPercent,
-        win: t.profitLoss > 0
-      });
-    }
-  }
-
-  const active = Object.values(groups).filter(g => (g.wins + g.losses) > 0);
-
-  // Cards
-  let html = '<div class="signal-match-grid">';
-  for (const g of active) {
-    const total = g.wins + g.losses;
-    const wr = (g.wins / total * 100);
-    const avgRet = g.totalReturn / total;
-    const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
-    html += `<div class="signal-match-card">
-      <div class="signal-match-label">${g.label}</div>
-      <div class="signal-match-value" style="color:${wrColor}">${wr.toFixed(0)}%</div>
-      <div class="signal-match-sub">${g.wins}W/${g.losses}L &middot; avg ${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>
-    </div>`;
-  }
-  html += '</div>';
-
-  // Scatter chart if we have heat data points
-  if (scatterPoints.length >= 2) {
-    html += '<canvas id="comboHeatScatter" style="max-height:220px"></canvas>';
-    container.innerHTML = html;
-
-    new Chart(document.getElementById('comboHeatScatter'), {
-      type: 'bubble',
-      data: {
-        datasets: [
-          {
-            label: 'Wins',
-            data: scatterPoints.filter(p => p.win),
-            backgroundColor: COLORS.win + '88',
-            borderWidth: 0
-          },
-          {
-            label: 'Losses',
-            data: scatterPoints.filter(p => !p.win),
-            backgroundColor: COLORS.loss + '88',
-            borderWidth: 0
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: {
-            boxPadding: 6,
-            callbacks: {
-              label: ctx => {
-                const p = ctx.raw;
-                return [
-                  `${p.symbol}: ${p.ret > 0 ? '+' : ''}${p.ret.toFixed(1)}%`,
-                  `Net heat: ${p.netHeat > 0 ? '+' : ''}${p.netHeat.toFixed(2)}`,
-                  `${p.hotCount} hot, ${p.coldCount} cold combos`
-                ];
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            title: { display: true, text: 'Net Combo Heat', color: COLORS.muted },
-            grid: { color: COLORS.gridLine }
-          },
-          y: {
-            title: { display: true, text: 'Return %', color: COLORS.muted },
-            grid: { color: COLORS.gridLine },
-            ticks: { callback: v => v + '%' }
-          }
-        }
-      },
-      plugins: [zeroLinePlugin]
-    });
-  } else {
-    html += '<div class="empty-chart" style="margin-top:12px">Scatter chart will appear once more trades with combo heat data are closed</div>';
-    container.innerHTML = html;
-  }
 }
 
 /* ── Composite Score vs Outcome ───────────────────────── */
@@ -3073,6 +2864,311 @@ function renderPostExitPatterns(trades) {
     html += `<div style="padding:8px 12px;margin-bottom:6px;border-left:3px solid ${borderColor};background:${borderColor}11;border-radius:0 6px 6px 0;font-size:12px;line-height:1.5;color:${COLORS.secondary}">${icon} ${p.text}</div>`;
   }
   el.innerHTML = html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   FORGE PLAYBOOK COMPLIANCE CHARTS
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Helper: extract signal type from a trade ─────────── */
+function getTradeSignalType(t) {
+  const sig = t.entryTechnicals?.entrySignal;
+  if (!sig?.patterns?.length) return 'None';
+  if (sig.antiPatternMatch) return 'AVOID';
+  const best = sig.patterns.filter(p => p.match && !p.antiPattern)
+    .sort((a, b) => (b.matchCount || 0) - (a.matchCount || 0))[0];
+  return best ? (best.badge || best.id.toUpperCase().slice(0, 3)) : 'None';
+}
+
+/* ── VIX Zone x Signal Type Matrix ────────────────────── */
+function renderVixSignalMatrix() {
+  const container = document.getElementById('vixSignalContent');
+  const ct = (data.closedTrades || []).filter(t => t.entryTechnicals?.vixLevel != null);
+
+  if (ct.length < 3) {
+    container.innerHTML = '<div class="empty-chart">Need at least 3 trades with VIX data</div>';
+    return;
+  }
+
+  const vixZones = [
+    { label: 'VIX < 15', min: 0, max: 15 },
+    { label: 'VIX 15-20', min: 15, max: 20 },
+    { label: 'VIX 20-25', min: 20, max: 25 },
+    { label: 'VIX 25+', min: 25, max: 999 }
+  ];
+  const signalTypes = ['REV', 'MOM', 'QMO', 'SQZ', 'LDR', 'None'];
+
+  const matrix = {};
+  for (const sig of signalTypes) {
+    matrix[sig] = {};
+    for (const zone of vixZones) {
+      matrix[sig][zone.label] = { wins: 0, losses: 0, totalReturn: 0 };
+    }
+  }
+
+  ct.forEach(t => {
+    const vix = t.entryTechnicals.vixLevel;
+    const zone = vixZones.find(z => vix >= z.min && vix < z.max) || vixZones[vixZones.length - 1];
+    const setupKey = getTradeSignalType(t);
+
+    if (!matrix[setupKey]) {
+      matrix[setupKey] = {};
+      for (const z of vixZones) matrix[setupKey][z.label] = { wins: 0, losses: 0, totalReturn: 0 };
+      signalTypes.push(setupKey);
+    }
+    const cell = matrix[setupKey][zone.label];
+    if (t.profitLoss > 0) cell.wins++;
+    else cell.losses++;
+    cell.totalReturn += t.returnPercent;
+  });
+
+  // FORGE-aligned and violation combos
+  const forgeAligned = new Set([
+    'REV|VIX 20-25', 'REV|VIX 25+',
+    'MOM|VIX < 15', 'MOM|VIX 15-20',
+    'LDR|VIX 15-20'
+  ]);
+  const forgeViolation = new Set([
+    'REV|VIX < 15',
+    'MOM|VIX 25+'
+  ]);
+
+  const activeSignals = signalTypes.filter(sig =>
+    vixZones.some(z => { const c = matrix[sig]?.[z.label]; return c && (c.wins + c.losses) > 0; })
+  );
+
+  const thStyle = 'padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border-medium)';
+  const tdStyle = 'padding:10px 14px;text-align:center;border-bottom:1px solid var(--border-subtle);font-size:12px';
+
+  let html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">';
+  html += '<thead><tr>';
+  html += `<th style="${thStyle};text-align:left">Signal</th>`;
+  for (const zone of vixZones) html += `<th style="${thStyle}">${zone.label}</th>`;
+  html += `<th style="${thStyle}">Total</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const sig of activeSignals) {
+    let rowWins = 0, rowLosses = 0, rowReturn = 0;
+    html += '<tr>';
+    html += `<td style="${tdStyle};text-align:left;font-weight:700;color:var(--text-primary)">${sig}</td>`;
+    for (const zone of vixZones) {
+      const c = matrix[sig][zone.label];
+      const total = c.wins + c.losses;
+      rowWins += c.wins;
+      rowLosses += c.losses;
+      rowReturn += c.totalReturn;
+
+      if (total === 0) {
+        html += `<td style="${tdStyle};color:var(--text-faint)">&mdash;</td>`;
+        continue;
+      }
+
+      const wr = (c.wins / total * 100);
+      const avgRet = c.totalReturn / total;
+      const comboKey = sig + '|' + zone.label;
+
+      let bgColor = 'transparent';
+      let borderLeft = 'none';
+      if (forgeAligned.has(comboKey)) {
+        bgColor = 'rgba(52, 211, 153, 0.06)';
+        borderLeft = '3px solid ' + COLORS.win;
+      } else if (forgeViolation.has(comboKey)) {
+        bgColor = 'rgba(248, 113, 113, 0.06)';
+        borderLeft = '3px solid ' + COLORS.loss;
+      }
+
+      const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
+      html += `<td style="${tdStyle};background:${bgColor};border-left:${borderLeft}">`;
+      html += `<div style="font-weight:700;color:${wrColor}">${wr.toFixed(0)}%</div>`;
+      html += `<div style="font-size:10px;color:var(--text-muted)">${c.wins}W/${c.losses}L</div>`;
+      html += `<div style="font-size:10px;color:${avgRet >= 0 ? COLORS.win : COLORS.loss}">${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>`;
+      html += '</td>';
+    }
+
+    const rowTotal = rowWins + rowLosses;
+    if (rowTotal > 0) {
+      const rowWr = (rowWins / rowTotal * 100);
+      const wrColor = rowWr >= 60 ? COLORS.win : rowWr >= 40 ? COLORS.yellow : COLORS.loss;
+      html += `<td style="${tdStyle};border-left:1px solid var(--border-medium)">`;
+      html += `<div style="font-weight:700;color:${wrColor}">${rowWr.toFixed(0)}%</div>`;
+      html += `<div style="font-size:10px;color:var(--text-muted)">${rowTotal} trades</div>`;
+      html += '</td>';
+    } else {
+      html += `<td style="${tdStyle}">&mdash;</td>`;
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody></table></div>';
+  html += `<div style="margin-top:10px;font-size:10px;color:var(--text-faint)"><span style="display:inline-block;width:12px;height:12px;border-left:3px solid ${COLORS.win};margin-right:4px;vertical-align:middle"></span>FORGE-aligned &nbsp;&nbsp;<span style="display:inline-block;width:12px;height:12px;border-left:3px solid ${COLORS.loss};margin-right:4px;vertical-align:middle"></span>FORGE violation</div>`;
+  container.innerHTML = html;
+}
+
+/* ── FORGE Rule Compliance ────────────────────────────── */
+function renderForgeCompliance() {
+  const container = document.getElementById('forgeComplianceContent');
+  const ct = (data.closedTrades || []).filter(t => t.entryTechnicals);
+
+  if (ct.length < 1) {
+    container.innerHTML = '<div class="empty-chart">Need trades with entry technical data</div>';
+    return;
+  }
+
+  const violations = [];
+  let checkedCount = 0;
+
+  ct.forEach(t => {
+    const et = t.entryTechnicals;
+    const vix = et.vixLevel;
+    const rsi = et.rsi;
+    const mom = et.momentumScore;
+    const atr = et.atr;
+    const sector = t.sector;
+    const sig = getTradeSignalType(t);
+
+    const tradeViolations = [];
+
+    if (sector === 'Automotive') tradeViolations.push('Automotive sector');
+    if (rsi != null && rsi < 25) tradeViolations.push('RSI < 25 (' + rsi.toFixed(0) + ')');
+    if (sig === 'REV' && vix != null && vix < 15) tradeViolations.push('REV in VIX < 15');
+    if (sig === 'MOM' && mom != null && mom >= 8) tradeViolations.push('MOM w/ momentum 8+ (' + mom.toFixed(1) + ')');
+
+    if (atr != null && t.buyPrice > 0 && vix != null && vix < 20) {
+      const atrPct = (atr / t.buyPrice) * 100;
+      if (atrPct >= 5) tradeViolations.push('ATR ' + atrPct.toFixed(1) + '% in calm');
+    }
+
+    checkedCount++;
+    if (tradeViolations.length > 0) {
+      violations.push({
+        symbol: t.symbol,
+        buyDate: t.buyDate,
+        returnPercent: t.returnPercent,
+        profitLoss: t.profitLoss,
+        violations: tradeViolations
+      });
+    }
+  });
+
+  const compliantCount = checkedCount - violations.length;
+  const complianceRate = checkedCount > 0 ? (compliantCount / checkedCount * 100) : 0;
+  const compColor = complianceRate >= 80 ? COLORS.win : complianceRate >= 60 ? COLORS.yellow : COLORS.loss;
+
+  const violationWins = violations.filter(v => v.profitLoss > 0).length;
+  const violationWR = violations.length > 0 ? (violationWins / violations.length * 100) : 0;
+
+  let html = '';
+  html += '<div style="text-align:center;margin-bottom:16px">';
+  html += `<div style="font-size:36px;font-weight:800;color:${compColor}">${complianceRate.toFixed(0)}%</div>`;
+  html += `<div style="font-size:11px;color:var(--text-muted)">${compliantCount} of ${checkedCount} trades FORGE-compliant</div>`;
+  html += '</div>';
+
+  if (violations.length > 0) {
+    html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">';
+    html += `Violation trades: <strong style="color:${violationWR >= 50 ? COLORS.win : COLORS.loss}">${violationWR.toFixed(0)}% WR</strong> (${violationWins}W/${violations.length - violationWins}L)`;
+    html += '</div>';
+
+    html += '<div style="max-height:200px;overflow-y:auto">';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    html += '<thead><tr style="position:sticky;top:0;background:var(--bg-surface)">';
+    html += '<th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-size:10px;border-bottom:1px solid var(--border-medium)">Symbol</th>';
+    html += '<th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-size:10px;border-bottom:1px solid var(--border-medium)">Violation</th>';
+    html += '<th style="text-align:right;padding:4px 8px;color:var(--text-muted);font-size:10px;border-bottom:1px solid var(--border-medium)">Result</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const v of violations.slice(0, 20)) {
+      const plColor = v.profitLoss > 0 ? COLORS.win : COLORS.loss;
+      const date = v.buyDate ? new Date(v.buyDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      html += '<tr style="border-bottom:1px solid var(--border-subtle)">';
+      html += `<td style="padding:4px 8px;font-weight:600">${v.symbol}<span style="color:var(--text-faint);font-weight:400;margin-left:4px">${date}</span></td>`;
+      html += `<td style="padding:4px 8px;color:${COLORS.loss}">${v.violations.join(', ')}</td>`;
+      html += `<td style="padding:4px 8px;text-align:right;color:${plColor}">${v.returnPercent > 0 ? '+' : ''}${v.returnPercent.toFixed(1)}%</td>`;
+      html += '</tr>';
+    }
+    if (violations.length > 20) {
+      html += `<tr><td colspan="3" style="padding:4px 8px;color:var(--text-faint);font-style:italic">+ ${violations.length - 20} more</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  } else {
+    html += '<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:12px 0">No FORGE rule violations detected</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+/* ── 3-Day Hold Compliance ────────────────────────────── */
+function renderHoldCompliance() {
+  const container = document.getElementById('holdComplianceContent');
+  const ct = (data.closedTrades || []);
+
+  if (ct.length < 1) {
+    container.innerHTML = '<div class="empty-chart">Need closed trades</div>';
+    return;
+  }
+
+  const THREE_DAYS = 3 * 86400000;
+  const compliant = [];
+  const violated = [];
+
+  ct.forEach(t => {
+    const ht = t.holdTime || (new Date(t.sellDate) - new Date(t.buyDate));
+    if (ht >= THREE_DAYS) compliant.push(t);
+    else violated.push(t);
+  });
+
+  const compRate = (compliant.length / ct.length * 100);
+  const compColor = compRate >= 80 ? COLORS.win : compRate >= 60 ? COLORS.yellow : COLORS.loss;
+
+  const compWins = compliant.filter(t => t.profitLoss > 0).length;
+  const compWR = compliant.length > 0 ? (compWins / compliant.length * 100) : 0;
+  const violWins = violated.filter(t => t.profitLoss > 0).length;
+  const violWR = violated.length > 0 ? (violWins / violated.length * 100) : 0;
+
+  let html = '';
+  html += '<div style="text-align:center;margin-bottom:16px">';
+  html += `<div style="font-size:36px;font-weight:800;color:${compColor}">${compRate.toFixed(0)}%</div>`;
+  html += `<div style="font-size:11px;color:var(--text-muted)">${compliant.length} of ${ct.length} held 3+ days</div>`;
+  html += '</div>';
+
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+
+  const compWrColor = compWR >= 50 ? COLORS.win : COLORS.loss;
+  html += '<div style="background:var(--bg-inset);border-radius:var(--radius-sm);padding:12px;text-align:center;border:1px solid var(--border-subtle)">';
+  html += '<div style="font-size:10px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Held 3+ Days</div>';
+  html += `<div style="font-size:24px;font-weight:800;color:${compWrColor}">${compWR.toFixed(0)}%</div>`;
+  html += `<div style="font-size:10px;color:var(--text-muted)">${compWins}W/${compliant.length - compWins}L</div>`;
+  html += '</div>';
+
+  if (violated.length > 0) {
+    const violWrColor = violWR >= 50 ? COLORS.win : COLORS.loss;
+    html += '<div style="background:var(--bg-inset);border-radius:var(--radius-sm);padding:12px;text-align:center;border:1px solid var(--border-subtle)">';
+    html += '<div style="font-size:10px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Exited Early</div>';
+    html += `<div style="font-size:24px;font-weight:800;color:${violWrColor}">${violWR.toFixed(0)}%</div>`;
+    html += `<div style="font-size:10px;color:var(--text-muted)">${violWins}W/${violated.length - violWins}L</div>`;
+    html += '</div>';
+  } else {
+    html += '<div style="background:var(--bg-inset);border-radius:var(--radius-sm);padding:12px;text-align:center;border:1px solid var(--border-subtle)">';
+    html += '<div style="font-size:10px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Exited Early</div>';
+    html += '<div style="font-size:24px;font-weight:800;color:var(--text-muted)">&mdash;</div>';
+    html += '<div style="font-size:10px;color:var(--text-muted)">None</div>';
+    html += '</div>';
+  }
+
+  html += '</div>';
+
+  if (violated.length > 0) {
+    html += '<div style="margin-top:10px;font-size:10px;color:var(--text-faint)">Early exits: ';
+    html += violated.slice(0, 10).map(t => {
+      const ht = t.holdTime || (new Date(t.sellDate) - new Date(t.buyDate));
+      const days = (ht / 86400000).toFixed(1);
+      const color = t.profitLoss > 0 ? COLORS.win : COLORS.loss;
+      return `<span style="color:${color}">${t.symbol}</span> (${days}d)`;
+    }).join(', ');
+    if (violated.length > 10) html += ` + ${violated.length - 10} more`;
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
 }
 </script>
 </body>
