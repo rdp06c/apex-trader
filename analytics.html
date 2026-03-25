@@ -2834,7 +2834,7 @@ function renderVixSignalMatrix() {
     { label: 'VIX 20-25', min: 20, max: 25 },
     { label: 'VIX 25+', min: 25, max: 999 }
   ];
-  const signalTypes = ['REV', 'MOM', 'QMO', 'SQZ', 'LDR', 'None'];
+  const signalTypes = ['REV', 'MOM'];
 
   const matrix = {};
   for (const sig of signalTypes) {
@@ -2849,11 +2849,7 @@ function renderVixSignalMatrix() {
     const zone = vixZones.find(z => vix >= z.min && vix < z.max) || vixZones[vixZones.length - 1];
     const setupKey = getTradeSignalType(t);
 
-    if (!matrix[setupKey]) {
-      matrix[setupKey] = {};
-      for (const z of vixZones) matrix[setupKey][z.label] = { wins: 0, losses: 0, totalReturn: 0 };
-      signalTypes.push(setupKey);
-    }
+    if (!matrix[setupKey]) return; // skip QMO, AVOID, None — not FORGE-routed
     const cell = matrix[setupKey][zone.label];
     if (t.profitLoss > 0) cell.wins++;
     else cell.losses++;
@@ -2863,8 +2859,7 @@ function renderVixSignalMatrix() {
   // FORGE-aligned and violation combos
   const forgeAligned = new Set([
     'REV|VIX 20-25', 'REV|VIX 25+',
-    'MOM|VIX < 15', 'MOM|VIX 15-20',
-    'LDR|VIX 15-20'
+    'MOM|VIX < 15', 'MOM|VIX 15-20'
   ]);
   const forgeViolation = new Set([
     'REV|VIX < 15',
