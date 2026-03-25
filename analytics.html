@@ -381,7 +381,7 @@
 
   <div class="card" style="margin-bottom:24px">
     <div class="chart-title">Entry Setup Type vs Outcome</div>
-    <div class="section-sub">Win rate and avg return by entry setup type (REV, MOM, QMO, SQZ, LDR) and match quality</div>
+    <div class="section-sub">Win rate by setup type (REV, MOM, QMO, SQZ, LDR) and match quality (GREEN/YELLOW/GRAY)</div>
     <div id="entrySignalContent"></div>
   </div>
 
@@ -1171,13 +1171,16 @@ function renderEntrySignalOutcome() {
     return;
   }
 
-  // Group by entry setup type (REV/MOM/QMO/SQZ/LDR/AVOID/None)
   const setupOrder = ['REV', 'MOM', 'QMO', 'SQZ', 'LDR', 'AVOID', 'None'];
-  const buckets = {};
-  for (const key of setupOrder) buckets[key] = { wins: 0, losses: 0, totalReturn: 0 };
+  const qualities = ['full', 'strong', 'partial', 'none'];
+  const qualityLabels = { full: 'GREEN', strong: 'YELLOW', partial: 'GRAY', none: 'No Sig' };
 
-  // Also track match quality: full vs strong vs partial
-  const qualityBuckets = { full: { wins: 0, losses: 0, totalReturn: 0 }, strong: { wins: 0, losses: 0, totalReturn: 0 }, partial: { wins: 0, losses: 0, totalReturn: 0 }, none: { wins: 0, losses: 0, totalReturn: 0 } };
+  // Build setup × quality matrix
+  const matrix = {};
+  for (const sig of setupOrder) {
+    matrix[sig] = {};
+    for (const q of qualities) matrix[sig][q] = { wins: 0, losses: 0, totalReturn: 0 };
+  }
 
   ct.forEach(t => {
     const sig = t.entryTechnicals.entrySignal;
@@ -1185,7 +1188,6 @@ function renderEntrySignalOutcome() {
     let matchQuality = 'none';
 
     if (sig?.patterns?.length) {
-      // Find best non-anti pattern
       const anti = sig.antiPatternMatch;
       if (anti) {
         setupKey = 'AVOID';
@@ -1199,132 +1201,69 @@ function renderEntrySignalOutcome() {
       }
     }
 
-    if (!buckets[setupKey]) buckets[setupKey] = { wins: 0, losses: 0, totalReturn: 0 };
-    const b = buckets[setupKey];
-    if (t.profitLoss > 0) b.wins++;
-    else b.losses++;
-    b.totalReturn += t.returnPercent;
-
-    const q = qualityBuckets[matchQuality];
-    if (t.profitLoss > 0) q.wins++;
-    else q.losses++;
-    q.totalReturn += t.returnPercent;
-  });
-
-  // Setup type cards
-  const activeSetups = setupOrder.filter(k => (buckets[k].wins + buckets[k].losses) > 0);
-  // Add any unexpected keys
-  for (const k of Object.keys(buckets)) {
-    if (!activeSetups.includes(k) && (buckets[k].wins + buckets[k].losses) > 0) activeSetups.push(k);
-  }
-
-  let html = '<div class="signal-match-grid">';
-  for (const key of activeSetups) {
-    const b = buckets[key];
-    const total = b.wins + b.losses;
-    const wr = (b.wins / total * 100);
-    const avgRet = b.totalReturn / total;
-    const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
-    html += `<div class="signal-match-card">
-      <div class="signal-match-label">${key}</div>
-      <div class="signal-match-value" style="color:${wrColor}">${wr.toFixed(0)}%</div>
-      <div class="signal-match-sub">${b.wins}W/${b.losses}L &middot; avg ${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>
-    </div>`;
-  }
-  html += '</div>';
-
-  // Match quality cards (full/strong/partial/none)
-  const activeQualities = ['full', 'strong', 'partial', 'none'].filter(k => (qualityBuckets[k].wins + qualityBuckets[k].losses) > 0);
-  if (activeQualities.length > 1) {
-    const qualityLabels = { full: 'GREEN (full)', strong: 'YELLOW (strong)', partial: 'GRAY (partial)', none: 'No Signal' };
-    html += '<div style="margin-top:12px;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">By Match Quality</div>';
-    html += '<div class="signal-match-grid" style="margin-top:6px">';
-    for (const key of activeQualities) {
-      const b = qualityBuckets[key];
-      const total = b.wins + b.losses;
-      const wr = (b.wins / total * 100);
-      const avgRet = b.totalReturn / total;
-      const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
-      html += `<div class="signal-match-card">
-        <div class="signal-match-label">${qualityLabels[key]}</div>
-        <div class="signal-match-value" style="color:${wrColor}">${wr.toFixed(0)}%</div>
-        <div class="signal-match-sub">${b.wins}W/${b.losses}L &middot; avg ${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>
-      </div>`;
+    if (!matrix[setupKey]) {
+      matrix[setupKey] = {};
+      for (const q of qualities) matrix[setupKey][q] = { wins: 0, losses: 0, totalReturn: 0 };
+      setupOrder.push(setupKey);
     }
-    html += '</div>';
+    const cell = matrix[setupKey][matchQuality];
+    if (t.profitLoss > 0) cell.wins++;
+    else cell.losses++;
+    cell.totalReturn += t.returnPercent;
+  });
+
+  // Filter to setups and qualities that have trades
+  const activeSetups = setupOrder.filter(sig =>
+    qualities.some(q => { const c = matrix[sig]?.[q]; return c && (c.wins + c.losses) > 0; })
+  );
+  const activeQualities = qualities.filter(q =>
+    activeSetups.some(sig => { const c = matrix[sig]?.[q]; return c && (c.wins + c.losses) > 0; })
+  );
+
+  const thStyle = 'padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border-medium)';
+  const tdStyle = 'padding:10px 14px;text-align:center;border-bottom:1px solid var(--border-subtle);font-size:12px';
+
+  function renderCell(c) {
+    const total = c.wins + c.losses;
+    if (total === 0) return `<td style="${tdStyle};color:var(--text-faint)">&mdash;</td>`;
+    const wr = (c.wins / total * 100);
+    const avgRet = c.totalReturn / total;
+    const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
+    return `<td style="${tdStyle}"><div style="font-weight:700;color:${wrColor}">${wr.toFixed(0)}%</div><div style="font-size:10px;color:var(--text-muted)">${c.wins}W/${c.losses}L</div><div style="font-size:10px;color:${avgRet >= 0 ? COLORS.win : COLORS.loss}">${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div></td>`;
   }
 
-  // Bar chart — setup type win rate + avg return
-  html += '<canvas id="entrySignalChart" style="max-height:220px"></canvas>';
+  let html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">';
+  html += '<thead><tr>';
+  html += `<th style="${thStyle};text-align:left">Setup</th>`;
+  for (const q of activeQualities) html += `<th style="${thStyle}">${qualityLabels[q]}</th>`;
+  html += `<th style="${thStyle}">Total</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const sig of activeSetups) {
+    let rowWins = 0, rowLosses = 0, rowReturn = 0;
+    html += '<tr>';
+    html += `<td style="${tdStyle};text-align:left;font-weight:700;color:var(--text-primary)">${sig}</td>`;
+    for (const q of activeQualities) {
+      const c = matrix[sig][q];
+      rowWins += c.wins;
+      rowLosses += c.losses;
+      rowReturn += c.totalReturn;
+      html += renderCell(c);
+    }
+    const rowTotal = rowWins + rowLosses;
+    if (rowTotal > 0) {
+      const rowWr = (rowWins / rowTotal * 100);
+      const rowAvg = rowReturn / rowTotal;
+      const wrColor = rowWr >= 60 ? COLORS.win : rowWr >= 40 ? COLORS.yellow : COLORS.loss;
+      html += `<td style="${tdStyle};border-left:1px solid var(--border-medium)"><div style="font-weight:700;color:${wrColor}">${rowWr.toFixed(0)}%</div><div style="font-size:10px;color:var(--text-muted)">${rowTotal} trades</div><div style="font-size:10px;color:${rowAvg >= 0 ? COLORS.win : COLORS.loss}">${rowAvg >= 0 ? '+' : ''}${rowAvg.toFixed(1)}%</div></td>`;
+    } else {
+      html += `<td style="${tdStyle}">&mdash;</td>`;
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody></table></div>';
   container.innerHTML = html;
-
-  if (activeSetups.length === 0) return;
-
-  const wrData = activeSetups.map(k => buckets[k].wins / (buckets[k].wins + buckets[k].losses) * 100);
-  const retData = activeSetups.map(k => buckets[k].totalReturn / (buckets[k].wins + buckets[k].losses));
-
-  new Chart(document.getElementById('entrySignalChart'), {
-    type: 'bar',
-    data: {
-      labels: activeSetups,
-      datasets: [
-        {
-          label: 'Win Rate %',
-          data: wrData,
-          backgroundColor: wrData.map(v => v >= 50 ? COLORS.win + '99' : COLORS.loss + '99'),
-          borderColor: wrData.map(v => v >= 50 ? COLORS.win : COLORS.loss),
-          borderWidth: 1,
-          borderRadius: 4,
-          yAxisID: 'y'
-        },
-        {
-          label: 'Avg Return %',
-          data: retData,
-          type: 'line',
-          borderColor: COLORS.accent,
-          backgroundColor: COLORS.accent + '44',
-          pointBackgroundColor: COLORS.accent,
-          pointRadius: 5,
-          borderWidth: 2,
-          tension: 0.3,
-          yAxisID: 'y1'
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const k = activeSetups[ctx.dataIndex];
-              const b = buckets[k];
-              const total = b.wins + b.losses;
-              if (ctx.datasetIndex === 0) return `Win rate: ${ctx.parsed.y.toFixed(0)}% (${total} trades)`;
-              return `Avg return: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(1)}%`;
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true, max: 100,
-          ticks: { callback: v => v + '%' },
-          grid: { color: COLORS.gridLine },
-          title: { display: true, text: 'Win Rate %', color: COLORS.muted }
-        },
-        y1: {
-          position: 'right',
-          ticks: { callback: v => (v >= 0 ? '+' : '') + v + '%' },
-          grid: { display: false },
-          title: { display: true, text: 'Avg Return %', color: COLORS.muted }
-        },
-        x: { grid: { display: false } }
-      }
-    },
-    plugins: [fiftyLinePlugin]
-  });
 }
 
 /* ── Win Rate by VIX Zone ───────────────────────────── */
