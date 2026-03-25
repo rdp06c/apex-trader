@@ -731,6 +731,8 @@ function reconstructMissingClosedTrades(d) {
 function loadData(d, source) {
   data = d;
   reconstructMissingClosedTrades(data);
+  // Filter out voided/cancelled trades (e.g. wrong stock entered then sold at same price)
+  data.closedTrades = (data.closedTrades || []).filter(t => !(t.buyPrice === t.sellPrice && t.returnPercent === 0));
   document.getElementById('landing').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
   renderAll();

@@ -673,7 +673,10 @@ function classifyExitReason(reasoning, returnPercent) {
 function loadData(d, source) {
   data = d;
   reconstructMissingClosedTrades(data);
-  allClosedTrades = [...(data.closedTrades || [])];
+  // Filter out voided/cancelled trades (e.g. wrong stock entered then sold at same price)
+  const rawTrades = data.closedTrades || [];
+  data.closedTrades = rawTrades.filter(t => !(t.buyPrice === t.sellPrice && t.returnPercent === 0));
+  allClosedTrades = [...data.closedTrades];
   populateFilterSectors();
   document.getElementById('loadStatus').textContent = 'Loaded: ' + source;
   document.getElementById('landing').style.display = 'none';
