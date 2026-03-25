@@ -2576,12 +2576,26 @@ function renderPostExitChart() {
     return;
   }
 
-  // ── Summary Stats ──
+  // ── Summary Stats (all trades) ──
   renderPostExitSummary(trades);
 
-  // ── Chart ──
-  const labels = trades.map(t => t.symbol);
-  const d5 = trades.map(t => get5dReturn(t));
+  // ── Chart (last 20 trades) ──
+  const CHART_LIMIT = 20;
+  const chartTrades = trades.slice(-CHART_LIMIT);
+  const chartNote = document.getElementById('postExitChart').parentElement;
+  if (trades.length > CHART_LIMIT) {
+    let noteEl = document.getElementById('postExitChartNote');
+    if (!noteEl) {
+      noteEl = document.createElement('div');
+      noteEl.id = 'postExitChartNote';
+      noteEl.style.cssText = 'font-size:10px;color:var(--text-faint);margin-bottom:6px';
+      chartNote.insertBefore(noteEl, document.getElementById('postExitChart'));
+    }
+    noteEl.textContent = `Showing last ${CHART_LIMIT} of ${trades.length} trades`;
+  }
+
+  const labels = chartTrades.map(t => t.symbol);
+  const d5 = chartTrades.map(t => get5dReturn(t));
 
   new Chart(document.getElementById('postExitChart'), {
     type: 'bar',
@@ -2608,7 +2622,7 @@ function renderPostExitChart() {
             label: ctx => {
               const d = ctx.parsed.y;
               if (d == null) return '';
-              const t = trades[ctx.dataIndex];
+              const t = chartTrades[ctx.dataIndex];
               const lines = [
                 `Exit return: ${t.returnPercent > 0 ? '+' : ''}${t.returnPercent.toFixed(1)}%`,
                 `5d move: ${d > 0 ? '+' : ''}${d.toFixed(1)}%`
