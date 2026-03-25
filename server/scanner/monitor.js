@@ -7,7 +7,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 const { isMarketOpen, detectStructure, calculateRSI, calculateMACD, calculateATR, getATRMultiplier, classifyLossSignal, detectVolumeDivergence, calculateFibTargets, generateTradePlan } = require('../lib/scoring');
-const { fetchBulkSnapshot, fetchGroupedDailyBars, fetchIntradayBars } = require('../lib/fetchers');
+const { fetchBulkSnapshot, fetchGroupedDailyBars } = require('../lib/fetchers');
 const { sendAlert } = require('./alerts');
 const { runFullScan, getScanStatus, isScanRunning, getScanRunningInfo } = require('./full-scan');
 
@@ -187,126 +187,36 @@ async function runStructureCheck({ force = false } = {}) {
                 timestamp: new Date().toISOString()
             };
 
-            // Alert conditions — only fire for actionable signals (skip dampened/informational)
-            // Alert condition 1: Structure breakdown
-            const entryStructure = thesis?.entryTechnicals?.structure || thesis?.entryStructure;
-            if (entryStructure === 'bullish' && current.structure === 'bearish') {
-                const isActionable = classifyLossSignal('Structure flipped', vixLevel, setupType) === 'actionable';
-                if (isActionable && shouldAlert(state, symbol, 'structure-breakdown')) {
-                    alerts.push({
-                        symbol,
-                        condition: 'structure-breakdown',
-                        title: `APEX: ${symbol} Structure Breakdown`,
-                        body: `${symbol} structure changed from bullish to bearish.\nPrice: $${price || '?'}\nSignal: ${current.structureSignal}\nScore: ${current.structureScore}`,
-                        tags: ['chart_with_downwards_trend', 'warning']
-                    });
-                    recordAlert(state, symbol, 'structure-breakdown');
-                }
-            }
+            // === TARGET 10 ALERTS ===
+            // Only alert on the two things that matter: +10% target and -10% stop.
+            // Structure, CHoCH, volume divergence, ATR stops are noise under FORGE rules.
 
-            // Alert condition 2: Bearish CHoCH
-            if (current.choch && current.chochType === 'bearish') {
-                const isActionable = classifyLossSignal('Bearish CHoCH', vixLevel, setupType) === 'actionable';
-                if (isActionable && shouldAlert(state, symbol, 'bearish-choch')) {
-                    alerts.push({
-                        symbol,
-                        condition: 'bearish-choch',
-                        title: `APEX: ${symbol} Bearish CHoCH`,
-                        body: `${symbol} detected bearish Change of Character.\nPrice: $${price || '?'}\nStructure: ${current.structure}\nPrevious swing pattern reversed.`,
-                        tags: ['rotating_light']
-                    });
-                    recordAlert(state, symbol, 'bearish-choch');
-                }
-            }
-
-            // Alert condition 3: Stop loss breached (manual or ATR-based) — always actionable
-            const stopPrice = thesis?.stopPrice || thesis?.targets?.stop;
-            const effectiveStop = stopPrice || atrStop;
-            if (effectiveStop && price && price <= effectiveStop) {
-                const stopType = stopPrice ? 'manual' : 'ATR';
-                if (shouldAlert(state, symbol, 'stop-breached')) {
-                    alerts.push({
-                        symbol,
-                        condition: 'stop-breached',
-                        title: `APEX: ${symbol} ${stopType} Stop Breached`,
-                        body: `${symbol} at $${price} is below ${stopType} stop of $${effectiveStop}.${atr ? `\nATR: $${atr} (${atrMult}×)` : ''}`,
-                        tags: ['octagonal_sign']
-                    });
-                    recordAlert(state, symbol, 'stop-breached');
-                }
-            }
-
-            // Alert condition 4: Bearish volume divergence
-            if (volDiv.divergence && volDiv.direction === 'bearish') {
-                const isActionable = classifyLossSignal('Vol divergence', vixLevel, setupType) === 'actionable';
-                if (isActionable && shouldAlert(state, symbol, 'volume-divergence')) {
-                    alerts.push({
-                        symbol,
-                        condition: 'volume-divergence',
-                        title: `APEX: ${symbol} Volume Divergence`,
-                        body: `${symbol} price rising but volume declining over ${volDiv.days} days.\nPrice trend: ${volDiv.priceTrend > 0 ? '+' : ''}${volDiv.priceTrend}%/day\nVolume trend: ${volDiv.volumeTrend}%/day`,
-                        tags: ['chart_with_downwards_trend']
-                    });
-                    recordAlert(state, symbol, 'volume-divergence');
-                }
-            }
-
-            // Alert condition 5: +10% target hit (FORGE take-profit)
+            // Alert: +10% target hit (FORGE take-profit)
             if (holdReturn != null && holdReturn >= TARGET_PCT) {
                 if (shouldAlert(state, symbol, 'target-hit')) {
                     alerts.push({
                         symbol,
                         condition: 'target-hit',
                         title: `APEX: ${symbol} +${TARGET_PCT}% Target Hit`,
-                        body: `${symbol} is up ${holdReturn.toFixed(1)}% from entry ($${thesis.entryPrice} → $${price}).\nConsider taking profit per FORGE playbook.`,
+                        body: `${symbol} is up ${holdReturn.toFixed(1)}% from entry ($${thesis.entryPrice} → $${price}).\nHeld ${holdDays} days. Consider taking profit per FORGE playbook.`,
                         tags: ['money_with_wings', 'white_check_mark']
                     });
                     recordAlert(state, symbol, 'target-hit');
                 }
             }
 
-            // Alert condition 6: -10% stop hit (FORGE cut-loss)
+            // Alert: -10% stop hit (FORGE cut-loss)
             if (holdReturn != null && holdReturn <= -STOP_PCT) {
                 if (shouldAlert(state, symbol, 'stop-hit')) {
                     alerts.push({
                         symbol,
                         condition: 'stop-hit',
                         title: `APEX: ${symbol} -${STOP_PCT}% Stop Hit`,
-                        body: `${symbol} is down ${holdReturn.toFixed(1)}% from entry ($${thesis.entryPrice} → $${price}).\nConsider cutting loss per FORGE playbook.`,
+                        body: `${symbol} is down ${holdReturn.toFixed(1)}% from entry ($${thesis.entryPrice} → $${price}).\nHeld ${holdDays} days. Consider cutting loss per FORGE playbook.`,
                         tags: ['octagonal_sign', 'chart_with_downwards_trend']
                     });
                     recordAlert(state, symbol, 'stop-hit');
                 }
-            }
-        }
-
-        // Intraday signals (5-min bars) — only during market hours
-        if (isMarketOpen()) {
-            try {
-                const intradayBars = await fetchIntradayBars(heldSymbols, apiKey);
-                for (const symbol of heldSymbols) {
-                    const bars5m = intradayBars[symbol];
-                    if (!bars5m || bars5m.length < 14) continue;
-                    const idRsi = calculateRSI(bars5m);
-                    const idMacd = calculateMACD(bars5m);
-                    const idStruct = detectStructure(bars5m);
-                    if (state.readings[symbol]) {
-                        state.readings[symbol].intraday = {
-                            rsi: idRsi != null ? Math.round(idRsi * 100) / 100 : null,
-                            macd: idMacd?.crossover || 'none',
-                            macdHistogram: idMacd?.histogram ?? null,
-                            structure: idStruct?.structure || null,
-                            structureScore: idStruct?.structureScore ?? 0,
-                            choch: idStruct?.choch || false,
-                            chochType: idStruct?.chochType || null,
-                            barCount: bars5m.length,
-                            timestamp: new Date().toISOString()
-                        };
-                    }
-                }
-                console.log(`Intraday signals computed for ${Object.keys(intradayBars).length} holdings`);
-            } catch (err) {
-                console.warn('Intraday signal fetch failed:', err.message);
             }
         }
 
