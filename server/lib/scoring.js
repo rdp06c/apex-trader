@@ -584,6 +584,8 @@ function generateTradePlan({ price, bars, structure, vixLevel, entrySignalPatter
         riskReward: riskReward != null ? +riskReward.toFixed(1) : null,
         atr: +atr.toFixed(2),
         atrPct: +((atr / price) * 100).toFixed(1),
+        atrPctOfPrice: +((atr / price) * 100).toFixed(1),
+        targetInATRs: atr > 0 ? +((price * 0.10) / atr).toFixed(1) : null,
         resistance: resistance && resistance > price ? +resistance.toFixed(2) : null,
         support: displaySupport && displaySupport < price ? +displaySupport.toFixed(2) : null,
         fib1272: fibTarget1 ? +fibTarget1.toFixed(2) : null,
