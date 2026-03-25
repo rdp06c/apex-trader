@@ -379,9 +379,9 @@ function start() {
         });
     });
 
-    // Full market scan at 9:35 AM ET and 12:30 PM ET (weekdays)
-    // 9:35 gives 5 min after open for prices to settle
-    // 12:30 gives a midday update
+    // Full market scan every 30 min during market hours (weekdays 9:35 AM - 3:35 PM ET)
+    // Plus end-of-day scan at 4:05 PM ET (force=true to run after close)
+    // Overlap-safe: scanRunning guard in full-scan.js skips if previous scan still running
     cron.schedule('35 9 * * 1-5', () => {
         console.log('Full scan: triggered (9:35 AM ET schedule)');
         runFullScan().catch(err => {
@@ -389,8 +389,9 @@ function start() {
         });
     }, { timezone: 'America/New_York' });
 
-    cron.schedule('30 12 * * 1-5', () => {
-        console.log('Full scan: triggered (12:30 PM ET schedule)');
+    cron.schedule('5,35 10-15 * * 1-5', () => {
+        const now = new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false });
+        console.log(`Full scan: triggered (${now} ET schedule)`);
         runFullScan().catch(err => {
             console.error('Full scan: unhandled error:', err.message);
         });
@@ -405,7 +406,7 @@ function start() {
         });
     }, { timezone: 'America/New_York' });
 
-    console.log('Scanner: scheduled (structure check every 15 min, full scan 9:35 AM + 12:30 PM + 4:05 PM ET)');
+    console.log('Scanner: scheduled (structure check every 15 min, full scan every 30 min 9:35 AM - 3:35 PM + 4:05 PM ET)');
 
     // Run structure check on startup if market is open
     if (isMarketOpen()) {
