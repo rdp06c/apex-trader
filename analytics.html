@@ -2129,12 +2129,14 @@ function renderStructureChart() {
 
 /* ── Win Rate by Hold Duration ────────────────────────── */
 function renderHoldChart() {
+  const THREE_DAYS = 3 * 86400000;
   const buckets = [
-    { label: '<1 day', min: 0, max: 86400000, wins: 0, total: 0 },
-    { label: '1-2 days', min: 86400000, max: 172800000, wins: 0, total: 0 },
-    { label: '2-4 days', min: 172800000, max: 345600000, wins: 0, total: 0 },
-    { label: '4-7 days', min: 345600000, max: 604800000, wins: 0, total: 0 },
-    { label: '7+ days', min: 604800000, max: Infinity, wins: 0, total: 0 }
+    { label: '< 1 day', min: 0, max: 86400000, wins: 0, total: 0, violation: true },
+    { label: '1-3 days', min: 86400000, max: THREE_DAYS, wins: 0, total: 0, violation: true },
+    { label: '3-5 days', min: THREE_DAYS, max: 5 * 86400000, wins: 0, total: 0 },
+    { label: '5-7 days', min: 5 * 86400000, max: 7 * 86400000, wins: 0, total: 0 },
+    { label: '7-14 days', min: 7 * 86400000, max: 14 * 86400000, wins: 0, total: 0 },
+    { label: '14+ days', min: 14 * 86400000, max: Infinity, wins: 0, total: 0 }
   ];
 
   (data.closedTrades || []).forEach(t => {
@@ -2148,14 +2150,24 @@ function renderHoldChart() {
 
   const active = buckets.filter(b => b.total > 0);
 
+  // Violation buckets (<3 days) get red-tinted bars regardless of WR
+  const bgColors = active.map(b => {
+    if (b.violation) return COLORS.loss + '55';
+    return (b.wins / b.total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99';
+  });
+  const borderColors = active.map(b => {
+    if (b.violation) return COLORS.loss;
+    return (b.wins / b.total >= 0.5) ? COLORS.win : COLORS.loss;
+  });
+
   new Chart(document.getElementById('holdChart'), {
     type: 'bar',
     data: {
       labels: active.map(b => b.label),
       datasets: [{
         data: active.map(b => (b.wins / b.total * 100)),
-        backgroundColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win + '99' : COLORS.loss + '99'),
-        borderColor: active.map(b => (b.wins / b.total >= 0.5) ? COLORS.win : COLORS.loss),
+        backgroundColor: bgColors,
+        borderColor: borderColors,
         borderWidth: 1,
         borderRadius: 4
       }]
@@ -2171,13 +2183,40 @@ function renderHoldChart() {
           callbacks: {
             label: ctx => {
               const b = active[ctx.dataIndex];
-              return `${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`;
+              const lines = [`${b.wins}W/${b.total - b.wins}L (${ctx.parsed.y.toFixed(0)}%) — ${b.total} trades`];
+              if (b.violation) lines.push('Below 3-day FORGE minimum');
+              return lines;
             }
           }
         }
       }
     },
-    plugins: [countLabelPlugin, fiftyLinePlugin]
+    plugins: [countLabelPlugin, fiftyLinePlugin, {
+      id: 'threeDayLine',
+      afterDraw(chart) {
+        // Draw vertical separator between violation and compliant buckets
+        const violationCount = active.filter(b => b.violation).length;
+        if (violationCount === 0 || violationCount >= active.length) return;
+        const xScale = chart.scales.x;
+        const ctx = chart.ctx;
+        const area = chart.chartArea;
+        // Line between last violation bucket and first compliant bucket
+        const x = (xScale.getPixelForValue(violationCount - 1) + xScale.getPixelForValue(violationCount)) / 2;
+        ctx.save();
+        ctx.strokeStyle = COLORS.loss;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(x, area.top);
+        ctx.lineTo(x, area.bottom);
+        ctx.stroke();
+        ctx.fillStyle = COLORS.loss;
+        ctx.font = "10px 'Inter', sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText('3-day min', x, area.top - 6);
+        ctx.restore();
+      }
+    }]
   });
 }
 
