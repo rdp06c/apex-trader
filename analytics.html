@@ -380,8 +380,8 @@
   <div class="section-header">Entry Quality</div>
 
   <div class="card" style="margin-bottom:24px">
-    <div class="chart-title">Entry Setup Type vs Outcome</div>
-    <div class="section-sub">Win rate by setup type (REV, MOM, QMO, SQZ, LDR) and match quality (GREEN/YELLOW/GRAY)</div>
+    <div class="chart-title">REV Trade Profile</div>
+    <div class="section-sub">What does a winning REV trade look like? Match quality, entry conditions, and sector breakdown.</div>
     <div id="entrySignalContent"></div>
   </div>
 
@@ -1166,103 +1166,138 @@ function renderEntrySignalOutcome() {
   const container = document.getElementById('entrySignalContent');
   const ct = (data.closedTrades || []).filter(t => t.entryTechnicals);
 
-  if (ct.length < 3) {
-    container.innerHTML = '<div class="empty-chart">Need at least 3 trades with entry technical data</div>';
+  // Filter to REV trades only
+  const revTrades = ct.filter(t => getTradeSignalType(t) === 'REV');
+
+  if (revTrades.length < 2) {
+    container.innerHTML = '<div class="empty-chart">Need at least 2 REV trades for profile analysis</div>';
     return;
   }
 
-  const setupOrder = ['REV', 'MOM', 'QMO', 'SQZ', 'LDR', 'AVOID', 'None'];
-  const qualities = ['full', 'strong', 'partial', 'none'];
-  const qualityLabels = { full: 'GREEN', strong: 'YELLOW', partial: 'GRAY', none: 'No Sig' };
+  const wins = revTrades.filter(t => t.profitLoss > 0);
+  const losses = revTrades.filter(t => t.profitLoss <= 0);
+  const wr = (wins.length / revTrades.length * 100);
+  const avgRet = revTrades.reduce((s, t) => s + t.returnPercent, 0) / revTrades.length;
+  const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
 
-  // Build setup × quality matrix
-  const matrix = {};
-  for (const sig of setupOrder) {
-    matrix[sig] = {};
-    for (const q of qualities) matrix[sig][q] = { wins: 0, losses: 0, totalReturn: 0 };
-  }
-
-  ct.forEach(t => {
+  // ── Match quality breakdown ──
+  const qualityBuckets = { full: { wins: 0, losses: 0, ret: 0 }, strong: { wins: 0, losses: 0, ret: 0 }, partial: { wins: 0, losses: 0, ret: 0 } };
+  revTrades.forEach(t => {
     const sig = t.entryTechnicals.entrySignal;
-    let setupKey = 'None';
-    let matchQuality = 'none';
-
+    let quality = 'partial';
     if (sig?.patterns?.length) {
-      const anti = sig.antiPatternMatch;
-      if (anti) {
-        setupKey = 'AVOID';
-        matchQuality = 'full';
-      } else {
-        const best = sig.patterns.filter(p => p.match && !p.antiPattern).sort((a, b) => (b.matchCount || 0) - (a.matchCount || 0))[0];
-        if (best) {
-          setupKey = best.badge || best.id.toUpperCase().slice(0, 3);
-          matchQuality = best.match || 'partial';
-        }
-      }
+      const best = sig.patterns.filter(p => p.match && !p.antiPattern).sort((a, b) => (b.matchCount || 0) - (a.matchCount || 0))[0];
+      if (best) quality = best.match || 'partial';
     }
-
-    if (!matrix[setupKey]) {
-      matrix[setupKey] = {};
-      for (const q of qualities) matrix[setupKey][q] = { wins: 0, losses: 0, totalReturn: 0 };
-      setupOrder.push(setupKey);
-    }
-    const cell = matrix[setupKey][matchQuality];
-    if (t.profitLoss > 0) cell.wins++;
-    else cell.losses++;
-    cell.totalReturn += t.returnPercent;
+    const b = qualityBuckets[quality] || qualityBuckets.partial;
+    if (t.profitLoss > 0) b.wins++;
+    else b.losses++;
+    b.ret += t.returnPercent;
   });
 
-  // Filter to setups and qualities that have trades
-  const activeSetups = setupOrder.filter(sig =>
-    qualities.some(q => { const c = matrix[sig]?.[q]; return c && (c.wins + c.losses) > 0; })
-  );
-  const activeQualities = qualities.filter(q =>
-    activeSetups.some(sig => { const c = matrix[sig]?.[q]; return c && (c.wins + c.losses) > 0; })
-  );
-
-  const thStyle = 'padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border-medium)';
-  const tdStyle = 'padding:10px 14px;text-align:center;border-bottom:1px solid var(--border-subtle);font-size:12px';
-
-  function renderCell(c) {
-    const total = c.wins + c.losses;
-    if (total === 0) return `<td style="${tdStyle};color:var(--text-faint)">&mdash;</td>`;
-    const wr = (c.wins / total * 100);
-    const avgRet = c.totalReturn / total;
-    const wrColor = wr >= 60 ? COLORS.win : wr >= 40 ? COLORS.yellow : COLORS.loss;
-    return `<td style="${tdStyle}"><div style="font-weight:700;color:${wrColor}">${wr.toFixed(0)}%</div><div style="font-size:10px;color:var(--text-muted)">${c.wins}W/${c.losses}L</div><div style="font-size:10px;color:${avgRet >= 0 ? COLORS.win : COLORS.loss}">${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div></td>`;
+  // ── Entry condition averages: wins vs losses ──
+  function avgField(trades, fn) {
+    const vals = trades.map(fn).filter(v => v != null);
+    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
   }
 
-  let html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">';
+  const conditions = [
+    { label: 'RSI', fn: t => t.entryTechnicals.rsi, fmt: v => v.toFixed(0), good: v => v >= 25 && v <= 40 },
+    { label: 'RS', fn: t => t.entryTechnicals.rsScore, fmt: v => v.toFixed(0), good: v => v >= 30 && v <= 70 },
+    { label: 'Momentum', fn: t => t.entryTechnicals.momentumScore, fmt: v => v.toFixed(1), good: v => v >= 3 && v <= 7 },
+    { label: 'VIX', fn: t => t.entryTechnicals.vixLevel, fmt: v => v.toFixed(1), good: v => v >= 20 },
+    { label: 'ATR %', fn: t => t.entryTechnicals.atr && t.buyPrice ? (t.entryTechnicals.atr / t.buyPrice * 100) : null, fmt: v => v.toFixed(1) + '%', good: v => v < 5 }
+  ];
+
+  // ── Sector breakdown ──
+  const sectorBuckets = {};
+  revTrades.forEach(t => {
+    const sector = t.sector || SECTOR_MAP[t.symbol] || 'Unknown';
+    if (!sectorBuckets[sector]) sectorBuckets[sector] = { wins: 0, losses: 0 };
+    if (t.profitLoss > 0) sectorBuckets[sector].wins++;
+    else sectorBuckets[sector].losses++;
+  });
+  const activeSectors = Object.entries(sectorBuckets)
+    .map(([s, b]) => ({ sector: s, ...b, total: b.wins + b.losses, wr: b.wins / (b.wins + b.losses) * 100 }))
+    .sort((a, b) => b.total - a.total);
+
+  // ── Render ──
+  let html = '';
+
+  // Header stats
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:8px;margin-bottom:16px">';
+  html += `<div style="background:var(--bg-inset);border-radius:var(--radius-sm);padding:12px;text-align:center;border:1px solid var(--border-subtle)">`;
+  html += `<div style="font-size:10px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">REV Win Rate</div>`;
+  html += `<div style="font-size:28px;font-weight:800;color:${wrColor}">${wr.toFixed(0)}%</div>`;
+  html += `<div style="font-size:10px;color:var(--text-muted)">${wins.length}W/${losses.length}L</div></div>`;
+  html += `<div style="background:var(--bg-inset);border-radius:var(--radius-sm);padding:12px;text-align:center;border:1px solid var(--border-subtle)">`;
+  html += `<div style="font-size:10px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Avg Return</div>`;
+  html += `<div style="font-size:28px;font-weight:800;color:${avgRet >= 0 ? COLORS.win : COLORS.loss}">${avgRet >= 0 ? '+' : ''}${avgRet.toFixed(1)}%</div>`;
+  html += `<div style="font-size:10px;color:var(--text-muted)">${revTrades.length} trades</div></div>`;
+
+  // Quality cards
+  const qualityLabels = { full: 'GREEN', strong: 'YELLOW', partial: 'GRAY' };
+  for (const [key, label] of Object.entries(qualityLabels)) {
+    const b = qualityBuckets[key];
+    const total = b.wins + b.losses;
+    if (total === 0) continue;
+    const qwr = (b.wins / total * 100);
+    const qavg = b.ret / total;
+    const qColor = qwr >= 60 ? COLORS.win : qwr >= 40 ? COLORS.yellow : COLORS.loss;
+    html += `<div style="background:var(--bg-inset);border-radius:var(--radius-sm);padding:12px;text-align:center;border:1px solid var(--border-subtle)">`;
+    html += `<div style="font-size:10px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">${label}</div>`;
+    html += `<div style="font-size:28px;font-weight:800;color:${qColor}">${qwr.toFixed(0)}%</div>`;
+    html += `<div style="font-size:10px;color:var(--text-muted)">${b.wins}W/${b.losses}L &middot; ${qavg >= 0 ? '+' : ''}${qavg.toFixed(1)}%</div></div>`;
+  }
+  html += '</div>';
+
+  // Entry conditions: wins vs losses
+  html += '<div style="margin-bottom:16px">';
+  html += '<div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Winning vs Losing REV Entry Conditions</div>';
+  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">';
   html += '<thead><tr>';
-  html += `<th style="${thStyle};text-align:left">Setup</th>`;
-  for (const q of activeQualities) html += `<th style="${thStyle}">${qualityLabels[q]}</th>`;
-  html += `<th style="${thStyle}">Total</th>`;
+  html += '<th style="text-align:left;padding:8px 12px;font-size:10px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border-medium)">Condition</th>';
+  html += '<th style="text-align:center;padding:8px 12px;font-size:10px;color:' + COLORS.win + ';font-weight:600;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border-medium)">Wins</th>';
+  html += '<th style="text-align:center;padding:8px 12px;font-size:10px;color:' + COLORS.loss + ';font-weight:600;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border-medium)">Losses</th>';
+  html += '<th style="text-align:center;padding:8px 12px;font-size:10px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border-medium)">FORGE Zone</th>';
   html += '</tr></thead><tbody>';
 
-  for (const sig of activeSetups) {
-    let rowWins = 0, rowLosses = 0, rowReturn = 0;
-    html += '<tr>';
-    html += `<td style="${tdStyle};text-align:left;font-weight:700;color:var(--text-primary)">${sig}</td>`;
-    for (const q of activeQualities) {
-      const c = matrix[sig][q];
-      rowWins += c.wins;
-      rowLosses += c.losses;
-      rowReturn += c.totalReturn;
-      html += renderCell(c);
+  for (const cond of conditions) {
+    const winAvg = avgField(wins, cond.fn);
+    const lossAvg = avgField(losses, cond.fn);
+    html += '<tr style="border-bottom:1px solid var(--border-subtle)">';
+    html += `<td style="padding:8px 12px;font-weight:600;color:var(--text-primary);font-size:12px">${cond.label}</td>`;
+    html += `<td style="padding:8px 12px;text-align:center;font-size:13px;font-weight:700;color:${COLORS.win}">${winAvg != null ? cond.fmt(winAvg) : '&mdash;'}</td>`;
+    html += `<td style="padding:8px 12px;text-align:center;font-size:13px;font-weight:700;color:${COLORS.loss}">${lossAvg != null ? cond.fmt(lossAvg) : '&mdash;'}</td>`;
+
+    // FORGE zone indicator
+    let zoneHtml = '&mdash;';
+    if (winAvg != null && cond.good) {
+      const inZone = cond.good(winAvg);
+      zoneHtml = inZone
+        ? `<span style="color:${COLORS.win};font-size:11px;font-weight:600">In zone</span>`
+        : `<span style="color:${COLORS.loss};font-size:11px;font-weight:600">Outside</span>`;
     }
-    const rowTotal = rowWins + rowLosses;
-    if (rowTotal > 0) {
-      const rowWr = (rowWins / rowTotal * 100);
-      const rowAvg = rowReturn / rowTotal;
-      const wrColor = rowWr >= 60 ? COLORS.win : rowWr >= 40 ? COLORS.yellow : COLORS.loss;
-      html += `<td style="${tdStyle};border-left:1px solid var(--border-medium)"><div style="font-weight:700;color:${wrColor}">${rowWr.toFixed(0)}%</div><div style="font-size:10px;color:var(--text-muted)">${rowTotal} trades</div><div style="font-size:10px;color:${rowAvg >= 0 ? COLORS.win : COLORS.loss}">${rowAvg >= 0 ? '+' : ''}${rowAvg.toFixed(1)}%</div></td>`;
-    } else {
-      html += `<td style="${tdStyle}">&mdash;</td>`;
-    }
+    html += `<td style="padding:8px 12px;text-align:center">${zoneHtml}</td>`;
     html += '</tr>';
   }
+  html += '</tbody></table></div></div>';
 
-  html += '</tbody></table></div>';
+  // Sector breakdown
+  if (activeSectors.length > 0) {
+    html += '<div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">REV by Sector</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+    for (const s of activeSectors.slice(0, 10)) {
+      const sColor = s.wr >= 60 ? COLORS.win : s.wr >= 40 ? COLORS.yellow : COLORS.loss;
+      html += `<div style="background:var(--bg-inset);border-radius:var(--radius-sm);padding:6px 10px;border:1px solid var(--border-subtle);font-size:11px">`;
+      html += `<span style="font-weight:600;color:var(--text-primary)">${s.sector}</span> `;
+      html += `<span style="color:${sColor};font-weight:700">${s.wr.toFixed(0)}%</span> `;
+      html += `<span style="color:var(--text-faint)">${s.total}</span>`;
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
   container.innerHTML = html;
 }
 
