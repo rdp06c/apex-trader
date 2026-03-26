@@ -157,18 +157,22 @@
             margin-top: 2px;
         }
 
-        .header-title-row {
-            display: flex;
-            align-items: baseline;
-            gap: 6px;
-            flex-wrap: wrap;
+        .header-nav-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 8px;
+            align-items: center;
         }
 
-        .header-meta-row {
+        .header-nav-grid h1 {
+            margin: 0;
+        }
+
+        .header-nav-links {
             display: flex;
+            gap: 4px;
             align-items: center;
-            gap: 6px;
-            margin-top: 4px;
+            flex-wrap: wrap;
         }
 
         .header-link {
@@ -3071,7 +3075,7 @@
             h1 { font-size: 22px; }
             .hero-value { font-size: 24px; }
 
-            .header-meta-row {
+            .header-nav-grid {
                 width: 100%;
             }
 

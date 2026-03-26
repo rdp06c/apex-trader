@@ -170,18 +170,22 @@
             margin-top: 2px;
         }
 
-        .header-title-row {
-            display: flex;
-            align-items: baseline;
-            gap: 6px;
-            flex-wrap: wrap;
+        .header-nav-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 8px;
+            align-items: center;
         }
 
-        .header-meta-row {
+        .header-nav-grid h1 {
+            margin: 0;
+        }
+
+        .header-nav-links {
             display: flex;
+            gap: 4px;
             align-items: center;
-            gap: 6px;
-            margin-top: 4px;
+            flex-wrap: wrap;
         }
 
         .header-link {
@@ -3084,7 +3088,7 @@
             h1 { font-size: 22px; }
             .hero-value { font-size: 24px; }
 
-            .header-meta-row {
+            .header-nav-grid {
                 width: 100%;
             }
 
@@ -3258,16 +3262,18 @@
             <div class="sidebar-header">
                 <div class="header-branding">
                     <div class="header-subtitle">Powered by ARC Investments</div>
-                    <div class="header-title-row">
+                    <div class="header-nav-grid">
                         <h1>APEX</h1>
-                        <a href="/monitor" class="header-link">Monitor</a>
-                        <a href="/analytics" class="header-link">Analytics</a>
-                        <a href="/journal" class="header-link">Journal</a>
-                    </div>
-                    <div class="header-meta-row">
+                        <div class="header-nav-links">
+                            <a href="/monitor" class="header-link">Monitor</a>
+                            <a href="/analytics" class="header-link">Analytics</a>
+                            <a href="/journal" class="header-link">Journal</a>
+                        </div>
                         <span id="status" class="status">&#9679; Active</span>
-                        <a href="/playbook" class="header-link">Playbook</a>
-                        <a href="/admin" class="header-link">Admin</a>
+                        <div class="header-nav-links">
+                            <a href="/playbook" class="header-link">Playbook</a>
+                            <a href="/admin" class="header-link">Admin</a>
+                        </div>
                     </div>
                 </div>
             </div>
