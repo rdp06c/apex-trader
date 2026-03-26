@@ -339,6 +339,8 @@ async function runFullScan({ force = false } = {}) {
             if (tradePlan) {
                 lastCandidate.tradePlanTarget = tradePlan.target;
                 lastCandidate.tradePlanStop = tradePlan.stop;
+                lastCandidate.tradePlanTargetPct = tradePlan.targetPct ?? 10.0;
+                lastCandidate.tradePlanStopPct = tradePlan.stopPct ?? 10.0;
                 lastCandidate.tradePlanRR = tradePlan.riskReward;
                 lastCandidate.tradePlanSupport = tradePlan.support ?? null;
                 lastCandidate.tradePlanResistance = tradePlan.resistance ?? null;
@@ -346,6 +348,13 @@ async function runFullScan({ force = false } = {}) {
                 lastCandidate.tradePlanAtrPct = tradePlan.atrPct ?? null;
                 lastCandidate.tradePlanTargetInATRs = tradePlan.targetInATRs ?? null;
                 lastCandidate.tradePlanVixMult = tradePlan.vixMult ?? null;
+                lastCandidate.tradePlanFib1272 = tradePlan.fib1272 ?? null;
+                lastCandidate.tradePlanFib1618 = tradePlan.fib1618 ?? null;
+                lastCandidate.tradePlanWinRate = tradePlan.winRate ?? null;
+                lastCandidate.tradePlanAvgReturn = tradePlan.avgReturn ?? null;
+                lastCandidate.tradePlanObservations = tradePlan.observations ?? null;
+                lastCandidate.tradePlanCalConfidence = tradePlan.calConfidence ?? null;
+                lastCandidate.tradePlanEntry = tradePlan.entry ?? null;
             }
             if (buyZone) {
                 lastCandidate.buyZonePrice = buyZone.buyZonePrice;

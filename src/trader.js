@@ -15060,6 +15060,8 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                     c._tradePlan = {
                         target: c.tradePlanTarget,
                         stop: c.tradePlanStop,
+                        targetPct: c.tradePlanTargetPct ?? 10.0,
+                        stopPct: c.tradePlanStopPct ?? 10.0,
                         riskReward: c.tradePlanRR,
                         support: c.tradePlanSupport ?? null,
                         resistance: c.tradePlanResistance ?? null,
@@ -15067,7 +15069,13 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         atrPct: c.tradePlanAtrPct ?? null,
                         targetInATRs: c.tradePlanTargetInATRs ?? null,
                         vixMult: c.tradePlanVixMult ?? null,
-                        entry: c.price,
+                        fib1272: c.tradePlanFib1272 ?? null,
+                        fib1618: c.tradePlanFib1618 ?? null,
+                        winRate: c.tradePlanWinRate ?? null,
+                        avgReturn: c.tradePlanAvgReturn ?? null,
+                        observations: c.tradePlanObservations ?? null,
+                        calConfidence: c.tradePlanCalConfidence ?? null,
+                        entry: c.tradePlanEntry ?? c.price,
                         _fromServer: true
                     };
                 }

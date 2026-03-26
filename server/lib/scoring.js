@@ -531,46 +531,23 @@ function generateTradePlan({ price, bars, structure, vixLevel, entrySignalPatter
         if (fibTarget1) fibType = 'retracement';
     }
 
-    // Target: ATR projection as primary, fib level as cross-check.
-    // Resistance is informational only — not a cap.
-    const atrTarget = price + (atr * 2.5);
-    let target = atrTarget;
-    if (fibTarget1 && fibTarget1 > price) {
-        target = Math.min(atrTarget, fibTarget1);
-    }
-    if (target <= price * 1.01) target = atrTarget;
+    // FORGE-validated: fixed +10% take profit / -10% stop loss (Mar 2026)
+    const target = +(price * 1.10).toFixed(2);
+    const stop = +(price * 0.90).toFixed(2);
+    const riskReward = 1.0; // Always 1:1 with fixed +10%/-10%
 
-    // Stop: ATR-based confirmed by structure support
-    // Fallback: if no swing low from structure or swing low is above price,
-    // use lowest low of last 20 bars as approximate support
-    let support = structure?.lastSwingLow;
-    if (!support || support >= price) {
+    // ATR metrics for display (replaces R:R — FORGE data shows ATR% predicts winners by VIX zone)
+    const atrPctOfPrice = +((atr / price) * 100).toFixed(1);
+    const targetInATRs = atr > 0 ? +((price * 0.10) / atr).toFixed(1) : null;
+
+    // Support for display only (informational)
+    let displaySupport = structure?.lastSwingLow;
+    if (!displaySupport || displaySupport >= price) {
         const recentBars = bars.slice(-20);
         const lowestLow = Math.min(...recentBars.map(b => b.l));
-        if (lowestLow < price) support = lowestLow;
-        else support = null;
+        if (lowestLow < price) displaySupport = lowestLow;
+        else displaySupport = +(price - atr).toFixed(2);
     }
-    const atrStop = price - (atr * vixMult);
-    let stop = atrStop;
-    if (support && support < price * 0.995 && support > atrStop) {
-        stop = Math.max(support * 0.98, atrStop);
-    }
-    if (stop >= price) stop = atrStop;
-
-    // Display support fallback: don't leave blank for stocks at new lows
-    let displaySupport = support;
-    if (!displaySupport || displaySupport >= price) {
-        const atrFloor = price - atr;
-        if (fibs?.type === 'bearish' && fibs.fib1272 < price && fibs.fib1272 > atrFloor) {
-            displaySupport = fibs.fib1272; // bearish fib extension (if reasonable)
-        } else {
-            displaySupport = atrFloor; // ATR-based floor
-        }
-    }
-
-    const risk = price - stop;
-    const reward = target - price;
-    const riskReward = risk > 0 ? reward / risk : null;
 
     // Calibration context
     const bestHotCombo = comboHeat?.hotCombos?.[0];
@@ -578,14 +555,14 @@ function generateTradePlan({ price, bars, structure, vixLevel, entrySignalPatter
     return {
         entry: +price.toFixed(2),
         target: +target.toFixed(2),
-        targetPct: +((target / price - 1) * 100).toFixed(1),
-        stop: +stop.toFixed(2),
-        stopPct: +((1 - stop / price) * 100).toFixed(1),
-        riskReward: riskReward != null ? +riskReward.toFixed(1) : null,
+        targetPct: 10.0,
+        stop,
+        stopPct: 10.0,
+        riskReward,
         atr: +atr.toFixed(2),
-        atrPct: +((atr / price) * 100).toFixed(1),
-        atrPctOfPrice: +((atr / price) * 100).toFixed(1),
-        targetInATRs: atr > 0 ? +((price * 0.10) / atr).toFixed(1) : null,
+        atrPct: atrPctOfPrice,
+        atrPctOfPrice,
+        targetInATRs,
         resistance: resistance && resistance > price ? +resistance.toFixed(2) : null,
         support: displaySupport && displaySupport < price ? +displaySupport.toFixed(2) : null,
         fib1272: fibTarget1 ? +fibTarget1.toFixed(2) : null,
