@@ -172,12 +172,12 @@ async function runFullScan({ force = false } = {}) {
             // Structure
             const structure = bars ? detectStructure(bars) : { structureScore: 0, fvg: 'none' };
 
-            // Technical indicators (prefer server values, fall back to client calculation)
+            // Technical indicators (prefer server RSI, always use local MACD for crossover detection)
+            // Server MACD only gives a single snapshot (histogram) — can't detect crossovers.
+            // Local calculateMACD compares today vs yesterday from bars to detect actual crosses.
             const si = serverIndicators[symbol] || {};
             const rsi = si.serverRsi ?? calculateRSI(bars);
-            const macd = si.serverMacd
-                ? { crossover: si.serverMacd.histogram > 0 ? 'bullish' : 'bearish', histogram: si.serverMacd.histogram }
-                : calculateMACD(bars);
+            const macd = calculateMACD(bars);
             const sma20 = calculateSMA(bars, 20);
             const smaCrossover = calculateSMACrossover(bars);
 

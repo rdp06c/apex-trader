@@ -6121,9 +6121,9 @@
                     const serverInd = serverIndicatorMap[symbol];
                     const drRsi = serverInd?.serverRsi ?? calculateRSI(drBars);
                     const drSma20 = calculateSMA(drBars, 20);
-                    const drMacd = serverInd?.serverMacd
-                        ? { crossover: serverInd.serverMacd.histogram > 0 ? 'bullish' : 'bearish', histogram: serverInd.serverMacd.histogram }
-                        : calculateMACD(drBars);
+                    // Always use local MACD for crossover detection — server MACD is a single
+                    // snapshot (histogram) and can't distinguish a fresh cross from continuation.
+                    const drMacd = calculateMACD(drBars);
                     const drSmaCrossover = calculateSMACrossover(drBars);
                     const drDtc = shortInterestCache[symbol]?.daysToCover || 0;
                     const drStructScore = struct?.structureScore || 0;
