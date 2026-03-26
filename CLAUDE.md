@@ -247,7 +247,7 @@ Persisted to Pi server (with localStorage fallback). Key fields: `holdings`, `tr
 
 ## Known Issues
 
-- **Technical indicators dual source**: Client-side RSI/MACD are approximations from ~65-day bars. Server values (`serverRsi`, `serverMacd`, `serverSma50`) use full history and are fetched for all stocks during Scan Market. Client for scoring, server for display.
+- **Technical indicators dual source**: Client-side RSI/MACD from ~65-day bars are approximations. Server values (`serverRsi`, `serverMacd`, `serverSma50`) use full history via Polygon API. Both server full-scan and client Scan Market prefer server values for scoring when available (from cached `lastCandidateScores`), falling back to local calculation for uncovered stocks.
 - **Keyboard accessibility**: Collapsible sections use `<div onclick>` — should migrate to `<button>` with proper roles
 - **FVG detection partial**: Detected and scored (±0.5) but not used in reversal filtering
 - **RS not reconstructable**: Relative strength requires full market context at time of entry. For historical manual trades, RS is null unless cached from a prior Scan Market.

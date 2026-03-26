@@ -9824,6 +9824,19 @@
                 const signalAdj = getSignalAccuracyAdjustments();
                 if (Object.keys(signalAdj).length > 0) console.log('📊 Signal accuracy adjustments:', signalAdj);
 
+                // Build server indicator map BEFORE scoring so RSI/MACD from full-history
+                // Polygon API are used for scoring, not just display. Server values are more
+                // accurate than client's ~65-bar approximations.
+                const serverIndicatorMap = {};
+                (portfolio.lastCandidateScores?.candidates || []).forEach(c => {
+                    if (c.serverRsi != null || c.serverMacd || c.serverSma50 != null) {
+                        serverIndicatorMap[c.symbol] = c;
+                    }
+                });
+                if (Object.keys(serverIndicatorMap).length > 0) {
+                    console.log(`📊 Server indicators available for ${Object.keys(serverIndicatorMap).length} stocks (will use for scoring)`);
+                }
+
                 let structureStats = { bullish: 0, bearish: 0, choch: 0, bos: 0, sweeps: 0, fvg: 0 };
                 const dryRunScored = [];
                 Object.keys(marketData).forEach(symbol => {
@@ -9844,9 +9857,12 @@
                     const rsNorm = ((rs?.rsScore || 50) / 100) * 10;
                     const flow = sectorRotation[sector]?.moneyFlow;
                     const drBars = multiDayCache[symbol];
-                    const drRsi = calculateRSI(drBars);
+                    const serverInd = serverIndicatorMap[symbol];
+                    const drRsi = serverInd?.serverRsi ?? calculateRSI(drBars);
                     const drSma20 = calculateSMA(drBars, 20);
-                    const drMacd = calculateMACD(drBars);
+                    const drMacd = serverInd?.serverMacd
+                        ? { crossover: serverInd.serverMacd.histogram > 0 ? 'bullish' : 'bearish', histogram: serverInd.serverMacd.histogram }
+                        : calculateMACD(drBars);
                     const drSmaCrossover = calculateSMACrossover(drBars);
                     const drDtc = shortInterestCache[symbol]?.daysToCover || 0;
                     const drStructScore = struct?.structureScore || 0;
@@ -9901,21 +9917,11 @@
                 ])];
                 await fetchNewsForStocks(drNewsSymbols);
 
-                // Inject server indicators: prefer lastCandidateScores from Pi server scan,
-                // then fall back to fetching from Polygon API for uncovered symbols.
-                // This avoids 1,620 browser API calls (540×3) that took 7+ min due to
-                // the browser's 6-connection-per-host limit.
+                // Attach server indicator display fields (serverRsi, serverMacd, serverSma50)
+                // from the pre-scoring map. Scoring already used these values above.
                 let drInjected = 0;
-                const serverScoreMap = {};
-                (portfolio.lastCandidateScores?.candidates || []).forEach(c => {
-                    if (c.serverRsi != null || c.serverMacd || c.serverSma50 != null) {
-                        serverScoreMap[c.symbol] = c;
-                    }
-                });
-
-                // Inject from server scan cache first
                 dryRunScored.forEach(scored => {
-                    const cached = serverScoreMap[scored.symbol];
+                    const cached = serverIndicatorMap[scored.symbol];
                     if (cached) {
                         if (cached.serverRsi != null) scored.serverRsi = cached.serverRsi;
                         if (cached.serverMacd) scored.serverMacd = cached.serverMacd;
@@ -9923,10 +9929,10 @@
                         drInjected++;
                     }
                 });
-                if (drInjected > 0) console.log(`📊 Injected server indicators for ${drInjected} stocks from server scan cache`);
+                if (drInjected > 0) console.log(`📊 Attached server indicator display fields for ${drInjected} stocks`);
 
                 // Fetch remaining from Polygon API (top candidates + holdings not covered by server scan)
-                const coveredSymbols = new Set(Object.keys(serverScoreMap));
+                const coveredSymbols = new Set(Object.keys(serverIndicatorMap));
                 const drServerSymbols = [...new Set([
                     ...dryRunScored.slice(0, 50).map(s => s.symbol),
                     ...Object.keys(portfolio.holdings)
