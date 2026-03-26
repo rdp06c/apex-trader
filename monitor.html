@@ -193,6 +193,21 @@
     100% { background: transparent; }
   }
   .flash td { animation: flash-update 0.6s ease-out; }
+
+  /* Dollar toggle */
+  .dollar-toggle {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 13px; font-weight: 600;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    line-height: 1;
+  }
+  .dollar-toggle:hover { border-color: var(--accent); color: var(--accent-light); }
+  .dollar-toggle.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -210,6 +225,7 @@
     </div>
   </div>
   <div class="header-right">
+    <button class="dollar-toggle" id="dollarToggle" title="Toggle dollar amounts">$</button>
     <span class="refresh-info" id="refreshInfo">
       <span class="refresh-dot" id="refreshDot"></span>
       <span id="refreshText">Loading...</span>
@@ -260,6 +276,21 @@
   let sortCol = 'pl';        // default sort
   let sortAsc = true;        // ascending
   let holdingsData = [];     // current computed rows
+  let hideDollars = localStorage.getItem('monitorHideDollars') === 'true';
+
+  // ── Dollar toggle ────────────────────────────────────
+  const dollarToggle = document.getElementById('dollarToggle');
+  function updateToggleState() {
+    dollarToggle.classList.toggle('active', hideDollars);
+    dollarToggle.title = hideDollars ? 'Show dollar amounts' : 'Hide dollar amounts';
+  }
+  updateToggleState();
+  dollarToggle.addEventListener('click', () => {
+    hideDollars = !hideDollars;
+    localStorage.setItem('monitorHideDollars', hideDollars);
+    updateToggleState();
+    if (holdingsData.length) render(holdingsData);
+  });
 
   // ── Market hours check ──────────────────────────────
   // Count trading days (weekdays) between two dates
@@ -474,17 +505,34 @@
     const winners = rows.filter(r => r.plPct > 0).length;
     const losers = rows.filter(r => r.plPct < 0).length;
 
-    document.getElementById('totalValue').textContent = '$' + totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (hideDollars) {
+      document.getElementById('totalValue').textContent = '\u2022\u2022\u2022\u2022\u2022';
+      document.getElementById('totalChange').textContent = '';
+    } else {
+      document.getElementById('totalValue').textContent = '$' + totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
 
     const dayPLEl = document.getElementById('dayPL');
-    dayPLEl.textContent = (dayPLTotal >= 0 ? '+$' : '-$') + Math.abs(dayPLTotal).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    dayPLEl.className = 'summary-value ' + (dayPLTotal >= 0 ? 'positive' : 'negative');
-    document.getElementById('dayPLPct').innerHTML = `<span class="${dayPLPct >= 0 ? 'positive' : 'negative'}">${dayPLPct >= 0 ? '+' : ''}${dayPLPct.toFixed(2)}% today</span>`;
+    if (hideDollars) {
+      dayPLEl.textContent = (dayPLPct >= 0 ? '+' : '') + dayPLPct.toFixed(2) + '%';
+      dayPLEl.className = 'summary-value ' + (dayPLPct >= 0 ? 'positive' : 'negative');
+      document.getElementById('dayPLPct').innerHTML = `<span class="${dayPLPct >= 0 ? 'positive' : 'negative'}">today</span>`;
+    } else {
+      dayPLEl.textContent = (dayPLTotal >= 0 ? '+$' : '-$') + Math.abs(dayPLTotal).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      dayPLEl.className = 'summary-value ' + (dayPLTotal >= 0 ? 'positive' : 'negative');
+      document.getElementById('dayPLPct').innerHTML = `<span class="${dayPLPct >= 0 ? 'positive' : 'negative'}">${dayPLPct >= 0 ? '+' : ''}${dayPLPct.toFixed(2)}% today</span>`;
+    }
 
     const totalPLEl = document.getElementById('totalPL');
-    totalPLEl.textContent = (totalPL >= 0 ? '+$' : '-$') + Math.abs(totalPL).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    totalPLEl.className = 'summary-value ' + (totalPL >= 0 ? 'positive' : 'negative');
-    document.getElementById('totalPLPct').innerHTML = `<span class="${totalPLPct >= 0 ? 'positive' : 'negative'}">${totalPLPct >= 0 ? '+' : ''}${totalPLPct.toFixed(2)}% overall</span>`;
+    if (hideDollars) {
+      totalPLEl.textContent = (totalPLPct >= 0 ? '+' : '') + totalPLPct.toFixed(2) + '%';
+      totalPLEl.className = 'summary-value ' + (totalPLPct >= 0 ? 'positive' : 'negative');
+      document.getElementById('totalPLPct').innerHTML = `<span class="${totalPLPct >= 0 ? 'positive' : 'negative'}">overall</span>`;
+    } else {
+      totalPLEl.textContent = (totalPL >= 0 ? '+$' : '-$') + Math.abs(totalPL).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      totalPLEl.className = 'summary-value ' + (totalPL >= 0 ? 'positive' : 'negative');
+      document.getElementById('totalPLPct').innerHTML = `<span class="${totalPLPct >= 0 ? 'positive' : 'negative'}">${totalPLPct >= 0 ? '+' : ''}${totalPLPct.toFixed(2)}% overall</span>`;
+    }
 
     document.getElementById('posCount').textContent = rows.length;
     document.getElementById('winLoseCount').innerHTML = `<span class="positive">${winners}W</span> / <span class="negative">${losers}L</span>`;
@@ -548,9 +596,13 @@
       html += `<td style="font-weight:600">${esc(r.symbol)}</td>`;
       html += `<td>$${r.price.toFixed(2)}</td>`;
       html += `<td class="${r.dayChange >= 0 ? 'positive' : 'negative'}">${r.dayChange >= 0 ? '+' : ''}${r.dayChange.toFixed(2)}%</td>`;
-      html += `<td class="${r.dayPL >= 0 ? 'positive' : 'negative'}">${r.dayPL >= 0 ? '+' : ''}$${r.dayPL.toFixed(2)}</td>`;
+      html += hideDollars
+        ? `<td class="${r.dayPL >= 0 ? 'positive' : 'negative'}">\u2022\u2022\u2022</td>`
+        : `<td class="${r.dayPL >= 0 ? 'positive' : 'negative'}">${r.dayPL >= 0 ? '+' : ''}$${r.dayPL.toFixed(2)}</td>`;
       html += `<td class="${r.plPct >= 0 ? 'positive' : 'negative'}">${r.plPct >= 0 ? '+' : ''}${r.plPct.toFixed(1)}%</td>`;
-      html += `<td>$${r.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
+      html += hideDollars
+        ? '<td>\u2022\u2022\u2022</td>'
+        : `<td>$${r.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
       html += `<td>${stopDisplay}</td>`;
       html += `<td>${targetDisplay}</td>`;
       html += `<td>${daysDisplay}</td>`;
