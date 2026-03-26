@@ -405,7 +405,7 @@
       // Days held from earliest buy in current position
       let daysHeld = null;
       if (buys.length > 0) {
-        const earliest = new Date(buys[0].date);
+        const earliest = new Date(buys[0].timestamp);
         daysHeld = Math.floor((Date.now() - earliest.getTime()) / 86400000);
       }
 
