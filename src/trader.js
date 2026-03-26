@@ -10055,18 +10055,20 @@ Remember: You're managing real money to MAXIMIZE returns through INFORMED decisi
             for (const r of rows) {
                 const plColor = r.pl > 0 ? 'color:#22c55e' : r.pl < 0 ? 'color:#ef4444' : '';
 
-                // Stop: color by proximity (< 2% away = red, < 5% = yellow, else green)
+                // Stop: color by proximity (< 2% away = red, < 5% = yellow, else no color)
                 const stopDist = r.stopPrice && r.price ? ((r.price - r.stopPrice) / r.price * 100) : null;
                 const stopColor = stopDist != null
-                    ? (stopDist < 2 ? 'color:#ef4444' : stopDist < 5 ? 'color:#f59e0b' : 'color:#22c55e')
+                    ? (stopDist < 2 ? 'color:#ef4444' : stopDist < 5 ? 'color:#f59e0b' : '')
                     : '';
                 const stopDisplay = r.stopPrice != null
                     ? `<span style="${stopColor}" title="${stopDist != null ? stopDist.toFixed(1) + '% above stop' : ''}">$${r.stopPrice.toFixed(2)}</span>`
                     : '\u2014';
 
-                // Target: color by proximity (< 2% away = green)
+                // Target: color by proximity (< 2% away = bright green, < 5% = green, else no color)
                 const targetDist = r.targetPrice && r.price ? ((r.targetPrice - r.price) / r.price * 100) : null;
-                const targetColor = targetDist != null && targetDist <= 2 ? 'color:#22c55e' : '';
+                const targetColor = targetDist != null
+                    ? (targetDist <= 2 ? 'color:#4ade80' : targetDist <= 5 ? 'color:#22c55e' : '')
+                    : '';
                 const targetDisplay = r.targetPrice != null
                     ? `<span style="${targetColor}" title="${targetDist != null ? targetDist.toFixed(1) + '% to target' : ''}">$${r.targetPrice.toFixed(2)}</span>`
                     : '\u2014';

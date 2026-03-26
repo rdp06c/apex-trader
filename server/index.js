@@ -72,6 +72,11 @@ app.get('/journal', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'journal.html'));
 });
 
+// Holdings monitor (auto-refresh)
+app.get('/monitor', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'monitor.html'));
+});
+
 // Trading playbook (FORGE-validated)
 app.get('/playbook', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'playbook.html'));

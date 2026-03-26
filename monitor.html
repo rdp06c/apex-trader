@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APEX Holdings Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #121215;
+    --bg-surface: #1a1a22;
+    --bg-raised: #22222b;
+    --bg-inset: #161619;
+    --bg-hover: rgba(255, 200, 100, 0.04);
+
+    --border-subtle: rgba(255, 200, 100, 0.06);
+    --border-medium: rgba(255, 200, 100, 0.12);
+    --border-strong: rgba(255, 200, 100, 0.20);
+
+    --accent: #f59e0b;
+    --accent-light: #fbbf24;
+    --accent-dim: rgba(245, 158, 11, 0.12);
+    --accent-gradient: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    --accent-subtle: rgba(245, 158, 11, 0.08);
+    --accent-glow: rgba(245, 158, 11, 0.30);
+
+    --green: #34d399;
+    --green-dim: rgba(52, 211, 153, 0.10);
+    --green-border: rgba(52, 211, 153, 0.25);
+    --red: #f87171;
+    --red-dim: rgba(248, 113, 113, 0.10);
+    --red-border: rgba(248, 113, 113, 0.30);
+    --yellow: #fbbf24;
+    --blue: #60a5fa;
+
+    --text-primary: #f5f5f0;
+    --text-secondary: #a8a8a0;
+    --text-muted: #78786e;
+    --text-faint: #7a7a72;
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+    --transition-fast: 0.15s ease;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-base);
+    background-image: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(245,158,11,0.04) 0%, transparent 70%);
+    min-height: 100vh;
+    color: var(--text-secondary);
+    -webkit-font-smoothing: antialiased;
+    padding: 28px 32px;
+    line-height: 1.5;
+  }
+
+  /* Header */
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 28px;
+    padding-bottom: 20px; border-bottom: 1px solid var(--border-subtle);
+  }
+  .header-branding { display: flex; flex-direction: column; }
+  .header-subtitle {
+    font-size: 10px; color: var(--text-faint);
+    text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 4px;
+  }
+  h1 {
+    font-size: 28px; font-weight: 800;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header-title-row {
+    display: flex; align-items: baseline; gap: 16px;
+  }
+  .header-link {
+    font-size: 12px; color: var(--text-muted);
+    text-decoration: none; letter-spacing: 0.5px;
+    transition: color var(--transition-fast);
+  }
+  .header-link:hover { color: var(--accent-light); }
+  .header-link.active { color: var(--accent); font-weight: 600; }
+  .header-right {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .refresh-info {
+    font-size: 11px; color: var(--text-faint);
+  }
+  .refresh-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green); margin-right: 6px; vertical-align: middle;
+  }
+  .refresh-dot.paused { background: var(--text-faint); }
+
+  /* Summary cards */
+  .summary-row {
+    display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .summary-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 16px 20px; flex: 1; min-width: 160px;
+  }
+  .summary-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--text-faint); margin-bottom: 4px;
+  }
+  .summary-value {
+    font-size: 22px; font-weight: 700; color: var(--text-primary);
+  }
+  .summary-sub {
+    font-size: 12px; margin-top: 2px;
+  }
+
+  /* Risk pills */
+  .risk-pills {
+    display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .risk-pill {
+    font-size: 11px; font-weight: 600; padding: 4px 10px;
+    border-radius: 20px; letter-spacing: 0.5px;
+  }
+  .risk-pill-healthy { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+  .risk-pill-caution { background: rgba(251, 191, 36, 0.10); color: var(--yellow); border: 1px solid rgba(251, 191, 36, 0.25); }
+  .risk-pill-danger { background: var(--red-dim); color: var(--red); border: 1px solid var(--red-border); }
+
+  /* Table */
+  .table-wrap {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+  }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    text-align: left; padding: 10px 12px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-faint); border-bottom: 1px solid var(--border-medium);
+    white-space: nowrap; cursor: pointer; user-select: none;
+  }
+  th:hover { color: var(--accent-light); }
+  th .sort-arrow { font-size: 9px; margin-left: 3px; opacity: 0.5; }
+  th .sort-arrow.active { opacity: 1; color: var(--accent); }
+  td {
+    padding: 8px 12px; border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover { background: var(--bg-hover); }
+
+  /* Row risk levels */
+  tr.risk-danger td:first-child { border-left: 3px solid var(--red); }
+  tr.risk-caution td:first-child { border-left: 3px solid var(--yellow); }
+  tr.risk-healthy td:first-child { border-left: 3px solid transparent; }
+
+  /* Positive/negative colors */
+  .positive { color: var(--green); }
+  .negative { color: var(--red); }
+  .warn { color: var(--yellow); }
+
+  /* Landing / loading state */
+  .landing {
+    text-align: center; padding: 80px 20px;
+    color: var(--text-muted);
+  }
+  .landing .icon { font-size: 48px; margin-bottom: 16px; }
+  .spinner {
+    display: inline-block; width: 20px; height: 20px;
+    border: 2px solid var(--border-medium);
+    border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Pulse animation for live updates */
+  @keyframes flash-update {
+    0% { background: rgba(245, 158, 11, 0.15); }
+    100% { background: transparent; }
+  }
+  .flash td { animation: flash-update 0.6s ease-out; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-branding">
+    <div class="header-subtitle">Powered by ARC Investments</div>
+    <div class="header-title-row">
+      <h1>APEX</h1>
+      <a href="/" class="header-link">Dashboard</a>
+      <a href="/monitor" class="header-link active">Monitor</a>
+      <a href="/analytics" class="header-link">Analytics</a>
+      <a href="/journal" class="header-link">Journal</a>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="refresh-info" id="refreshInfo">
+      <span class="refresh-dot" id="refreshDot"></span>
+      <span id="refreshText">Loading...</span>
+    </span>
+  </div>
+</div>
+
+<div class="summary-row">
+  <div class="summary-card">
+    <div class="summary-label">Holdings Value</div>
+    <div class="summary-value" id="totalValue">--</div>
+    <div class="summary-sub" id="totalChange"></div>
+  </div>
+  <div class="summary-card">
+    <div class="summary-label">Day P&amp;L</div>
+    <div class="summary-value" id="dayPL">--</div>
+    <div class="summary-sub" id="dayPLPct"></div>
+  </div>
+  <div class="summary-card">
+    <div class="summary-label">Total P&amp;L</div>
+    <div class="summary-value" id="totalPL">--</div>
+    <div class="summary-sub" id="totalPLPct"></div>
+  </div>
+  <div class="summary-card">
+    <div class="summary-label">Positions</div>
+    <div class="summary-value" id="posCount">--</div>
+    <div class="summary-sub" id="winLoseCount"></div>
+  </div>
+</div>
+
+<div class="risk-pills" id="riskPills"></div>
+
+<div id="content">
+  <div class="landing" id="landing">
+    <div class="icon">&#128200;</div>
+    <p><span class="spinner"></span> Loading portfolio...</p>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  let portfolio = null;
+  let apiKey = '';
+  let refreshTimer = null;
+  let lastPrices = {};       // symbol -> price (for flash detection)
+  let sortCol = 'pl';        // default sort
+  let sortAsc = true;        // ascending
+  let holdingsData = [];     // current computed rows
+
+  // ── Market hours check ──────────────────────────────
+  function isMarketOpen() {
+    const now = new Date();
+    const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const day = et.getDay();
+    if (day === 0 || day === 6) return false;
+    const mins = et.getHours() * 60 + et.getMinutes();
+    return mins >= 570 && mins < 960; // 9:30 AM - 4:00 PM ET
+  }
+
+  // ── Escape HTML ─────────────────────────────────────
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ── Get current position buys (mirrors trader.js logic) ──
+  function getCurrentPositionBuys(symbol, transactions) {
+    let lastFullSellIdx = -1;
+    let runningShares = 0;
+    for (let i = 0; i < transactions.length; i++) {
+      const t = transactions[i];
+      if (t.symbol !== symbol) continue;
+      if (t.type === 'BUY') runningShares += t.shares;
+      if (t.type === 'SELL') {
+        runningShares -= t.shares;
+        if (runningShares <= 0) { lastFullSellIdx = i; runningShares = 0; }
+      }
+    }
+    return transactions.filter((t, idx) =>
+      t.type === 'BUY' && t.symbol === symbol && idx > lastFullSellIdx
+    );
+  }
+
+  // ── Load portfolio from server ──────────────────────
+  async function loadPortfolio() {
+    try {
+      const res = await fetch('/api/portfolio');
+      if (!res.ok) throw new Error('Server ' + res.status);
+      portfolio = await res.json();
+    } catch (e) {
+      try {
+        const stored = localStorage.getItem('aiTradingPortfolio');
+        if (stored) portfolio = JSON.parse(stored);
+      } catch (_) {}
+    }
+    if (!portfolio) {
+      document.getElementById('landing').innerHTML =
+        '<div class="icon">&#9888;&#65039;</div><p>Could not load portfolio. Open the main dashboard first.</p>';
+    }
+  }
+
+  // ── Load API key ────────────────────────────────────
+  async function loadApiKey() {
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const cfg = await res.json();
+        if (cfg.polygonApiKey) { apiKey = cfg.polygonApiKey; return; }
+      }
+    } catch (_) {}
+    apiKey = localStorage.getItem('polygon_api_key') || '';
+  }
+
+  // ── Fetch bulk snapshot ─────────────────────────────
+  async function fetchPrices(symbols) {
+    if (!apiKey || symbols.length === 0) return {};
+    const tickerParam = symbols.join(',');
+    const res = await fetch(
+      `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=${tickerParam}&apiKey=${apiKey}`
+    );
+    const data = await res.json();
+    if (!data || data.status !== 'OK' || !data.tickers) return {};
+
+    const marketOpen = isMarketOpen();
+    const result = {};
+    for (const ticker of data.tickers) {
+      const sym = ticker.ticker;
+      const day = ticker.day;
+      const prevDay = ticker.prevDay;
+      if (!day || !prevDay) continue;
+
+      let price;
+      if (marketOpen) {
+        price = (ticker.lastTrade && ticker.lastTrade.p) || day.c || day.l;
+      } else {
+        price = day.c || (ticker.lastTrade && ticker.lastTrade.p) || day.l;
+      }
+      const prevClose = prevDay.c;
+      if (!price || price === 0) price = prevClose;
+      if (!price || !prevClose) continue;
+
+      let change, changePct;
+      if (marketOpen && ticker.todaysChange != null) {
+        change = ticker.todaysChange;
+        changePct = ticker.todaysChangePerc;
+      } else {
+        change = price - prevClose;
+        changePct = (price - prevClose) / prevClose * 100;
+      }
+
+      result[sym] = {
+        price: parseFloat(price),
+        change: parseFloat(change),
+        changePct: parseFloat(changePct),
+        prevClose: parseFloat(prevClose)
+      };
+    }
+    return result;
+  }
+
+  // ── Compute holdings data ───────────────────────────
+  function computeHoldings(prices) {
+    const holdings = portfolio.holdings || {};
+    const transactions = portfolio.transactions || [];
+    const rows = [];
+
+    for (const [symbol, shares] of Object.entries(holdings)) {
+      if (shares <= 0) continue;
+      const snap = prices[symbol];
+      if (!snap) continue;
+
+      const buys = getCurrentPositionBuys(symbol, transactions);
+      const totalCost = buys.reduce((sum, b) => sum + b.shares * b.price, 0);
+      const totalShares = buys.reduce((sum, b) => sum + b.shares, 0);
+      const avgCost = totalShares > 0 ? totalCost / totalShares : 0;
+
+      const currentValue = shares * snap.price;
+      const costBasis = shares * avgCost;
+      const pl = currentValue - costBasis;
+      const plPct = costBasis > 0 ? (pl / costBasis) * 100 : 0;
+      const dayPL = shares * snap.change;
+
+      const stopPrice = avgCost > 0 ? avgCost * 0.9 : null;
+      const targetPrice = avgCost > 0 ? avgCost * 1.1 : null;
+
+      const stopDist = stopPrice && snap.price ? ((snap.price - stopPrice) / snap.price * 100) : null;
+      const targetDist = targetPrice && snap.price ? ((targetPrice - snap.price) / snap.price * 100) : null;
+
+      const level = plPct <= -8 ? 'danger' : plPct <= -5 ? 'caution' : 'healthy';
+
+      // Days held from earliest buy in current position
+      let daysHeld = null;
+      if (buys.length > 0) {
+        const earliest = new Date(buys[0].date);
+        daysHeld = Math.floor((Date.now() - earliest.getTime()) / 86400000);
+      }
+
+      rows.push({
+        symbol, shares, avgCost, currentValue, costBasis,
+        price: snap.price, dayChange: snap.changePct, dayPL,
+        pl, plPct, level, stopPrice, targetPrice, stopDist, targetDist, daysHeld
+      });
+    }
+
+    return rows;
+  }
+
+  // ── Sort rows ───────────────────────────────────────
+  function sortRows(rows) {
+    const levelOrder = { danger: 0, caution: 1, healthy: 2 };
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      let cmp = 0;
+      switch (sortCol) {
+        case 'symbol': cmp = a.symbol.localeCompare(b.symbol); break;
+        case 'price': cmp = a.price - b.price; break;
+        case 'dayChange': cmp = a.dayChange - b.dayChange; break;
+        case 'pl': cmp = a.plPct - b.plPct; break;
+        case 'dayPL': cmp = a.dayPL - b.dayPL; break;
+        case 'value': cmp = a.currentValue - b.currentValue; break;
+        case 'stop': cmp = (a.stopDist ?? 999) - (b.stopDist ?? 999); break;
+        case 'target': cmp = (a.targetDist ?? 999) - (b.targetDist ?? 999); break;
+        case 'days': cmp = (a.daysHeld ?? 0) - (b.daysHeld ?? 0); break;
+        case 'risk':
+        default:
+          cmp = (levelOrder[a.level] - levelOrder[b.level]) || (a.plPct - b.plPct);
+          break;
+      }
+      return sortAsc ? cmp : -cmp;
+    });
+    return copy;
+  }
+
+  // ── Render ──────────────────────────────────────────
+  function render(rows) {
+    holdingsData = rows;
+    const sorted = sortRows(rows);
+
+    // Summary
+    const totalValue = rows.reduce((s, r) => s + r.currentValue, 0);
+    const totalCost = rows.reduce((s, r) => s + r.costBasis, 0);
+    const totalPL = rows.reduce((s, r) => s + r.pl, 0);
+    const totalPLPct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
+    const dayPLTotal = rows.reduce((s, r) => s + r.dayPL, 0);
+    const dayPLPct = totalValue > 0 ? (dayPLTotal / (totalValue - dayPLTotal)) * 100 : 0;
+    const winners = rows.filter(r => r.plPct > 0).length;
+    const losers = rows.filter(r => r.plPct < 0).length;
+
+    document.getElementById('totalValue').textContent = '$' + totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    const dayPLEl = document.getElementById('dayPL');
+    dayPLEl.textContent = (dayPLTotal >= 0 ? '+$' : '-$') + Math.abs(dayPLTotal).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    dayPLEl.className = 'summary-value ' + (dayPLTotal >= 0 ? 'positive' : 'negative');
+    document.getElementById('dayPLPct').innerHTML = `<span class="${dayPLPct >= 0 ? 'positive' : 'negative'}">${dayPLPct >= 0 ? '+' : ''}${dayPLPct.toFixed(2)}% today</span>`;
+
+    const totalPLEl = document.getElementById('totalPL');
+    totalPLEl.textContent = (totalPL >= 0 ? '+$' : '-$') + Math.abs(totalPL).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    totalPLEl.className = 'summary-value ' + (totalPL >= 0 ? 'positive' : 'negative');
+    document.getElementById('totalPLPct').innerHTML = `<span class="${totalPLPct >= 0 ? 'positive' : 'negative'}">${totalPLPct >= 0 ? '+' : ''}${totalPLPct.toFixed(2)}% overall</span>`;
+
+    document.getElementById('posCount').textContent = rows.length;
+    document.getElementById('winLoseCount').innerHTML = `<span class="positive">${winners}W</span> / <span class="negative">${losers}L</span>`;
+
+    // Risk pills
+    const counts = { healthy: 0, caution: 0, danger: 0 };
+    rows.forEach(r => counts[r.level]++);
+    document.getElementById('riskPills').innerHTML =
+      `<span class="risk-pill risk-pill-healthy">${counts.healthy} Healthy</span>` +
+      `<span class="risk-pill risk-pill-caution">${counts.caution} Caution</span>` +
+      `<span class="risk-pill risk-pill-danger">${counts.danger} At Risk</span>`;
+
+    // Table
+    const cols = [
+      { key: 'symbol', label: 'Symbol' },
+      { key: 'price', label: 'Price' },
+      { key: 'dayChange', label: 'Day%' },
+      { key: 'dayPL', label: 'Day P&L' },
+      { key: 'pl', label: 'P&L %' },
+      { key: 'value', label: 'Value' },
+      { key: 'stop', label: 'Stop (-10%)' },
+      { key: 'target', label: 'Target (+10%)' },
+      { key: 'days', label: 'Days' },
+    ];
+
+    let html = '<div class="table-wrap"><table>';
+    html += '<thead><tr>';
+    for (const col of cols) {
+      const arrow = sortCol === col.key
+        ? `<span class="sort-arrow active">${sortAsc ? '\u25B2' : '\u25BC'}</span>`
+        : '<span class="sort-arrow">\u25B2</span>';
+      html += `<th data-col="${col.key}">${col.label} ${arrow}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+
+    for (const r of sorted) {
+      const priceChanged = lastPrices[r.symbol] != null && lastPrices[r.symbol] !== r.price;
+      const flashClass = priceChanged ? ' flash' : '';
+
+      // Stop coloring: only highlight when close
+      const stopColor = r.stopDist != null
+        ? (r.stopDist < 2 ? 'color:#ef4444' : r.stopDist < 5 ? 'color:#f59e0b' : '')
+        : '';
+      const stopDisplay = r.stopPrice != null
+        ? `<span style="${stopColor}" title="${r.stopDist != null ? r.stopDist.toFixed(1) + '% above stop' : ''}">$${r.stopPrice.toFixed(2)}</span>`
+        : '\u2014';
+
+      // Target coloring: highlight when approaching
+      const targetColor = r.targetDist != null
+        ? (r.targetDist <= 2 ? 'color:#4ade80' : r.targetDist <= 5 ? 'color:#22c55e' : '')
+        : '';
+      const targetDisplay = r.targetPrice != null
+        ? `<span style="${targetColor}" title="${r.targetDist != null ? r.targetDist.toFixed(1) + '% to target' : ''}">$${r.targetPrice.toFixed(2)}</span>`
+        : '\u2014';
+
+      const daysDisplay = r.daysHeld != null
+        ? `<span${r.daysHeld < 3 ? ' style="color:#f59e0b" title="3-day minimum hold"' : ''}>${r.daysHeld === 0 ? 'Today' : r.daysHeld}</span>`
+        : '\u2014';
+
+      html += `<tr class="risk-${r.level}${flashClass}">`;
+      html += `<td style="font-weight:600">${esc(r.symbol)}</td>`;
+      html += `<td>$${r.price.toFixed(2)}</td>`;
+      html += `<td class="${r.dayChange >= 0 ? 'positive' : 'negative'}">${r.dayChange >= 0 ? '+' : ''}${r.dayChange.toFixed(2)}%</td>`;
+      html += `<td class="${r.dayPL >= 0 ? 'positive' : 'negative'}">${r.dayPL >= 0 ? '+' : ''}$${r.dayPL.toFixed(2)}</td>`;
+      html += `<td class="${r.plPct >= 0 ? 'positive' : 'negative'}">${r.plPct >= 0 ? '+' : ''}${r.plPct.toFixed(1)}%</td>`;
+      html += `<td>$${r.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
+      html += `<td>${stopDisplay}</td>`;
+      html += `<td>${targetDisplay}</td>`;
+      html += `<td>${daysDisplay}</td>`;
+      html += '</tr>';
+    }
+
+    html += '</tbody></table></div>';
+
+    document.getElementById('content').innerHTML = html;
+
+    // Save prices for flash detection
+    rows.forEach(r => { lastPrices[r.symbol] = r.price; });
+
+    // Re-attach sort handlers
+    document.querySelectorAll('th[data-col]').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        if (sortCol === col) { sortAsc = !sortAsc; }
+        else { sortCol = col; sortAsc = true; }
+        render(holdingsData);
+      });
+    });
+  }
+
+  // ── Refresh cycle ───────────────────────────────────
+  async function refresh() {
+    if (!portfolio || !apiKey) return;
+
+    const symbols = Object.keys(portfolio.holdings || {}).filter(s => portfolio.holdings[s] > 0);
+    if (symbols.length === 0) {
+      document.getElementById('content').innerHTML =
+        '<div class="landing"><div class="icon">&#128200;</div><p>No holdings found.</p></div>';
+      return;
+    }
+
+    try {
+      const prices = await fetchPrices(symbols);
+      if (Object.keys(prices).length === 0) return;
+      const rows = computeHoldings(prices);
+      render(rows);
+    } catch (e) {
+      console.error('Refresh failed:', e);
+    }
+
+    updateRefreshStatus();
+  }
+
+  // ── Refresh status indicator ────────────────────────
+  function updateRefreshStatus() {
+    const dot = document.getElementById('refreshDot');
+    const text = document.getElementById('refreshText');
+    const open = isMarketOpen();
+
+    if (open) {
+      dot.className = 'refresh-dot';
+      text.textContent = 'Live \u2022 30s refresh';
+    } else {
+      dot.className = 'refresh-dot paused';
+      text.textContent = 'Market closed';
+    }
+  }
+
+  // ── Auto-refresh manager ────────────────────────────
+  function scheduleRefresh() {
+    if (refreshTimer) clearInterval(refreshTimer);
+
+    if (isMarketOpen()) {
+      refreshTimer = setInterval(refresh, 30000);
+    }
+
+    // Check market open/close every minute to start/stop auto-refresh
+    setInterval(() => {
+      const open = isMarketOpen();
+      if (open && !refreshTimer) {
+        refresh();
+        refreshTimer = setInterval(refresh, 30000);
+      } else if (!open && refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+        updateRefreshStatus();
+      }
+    }, 60000);
+  }
+
+  // ── Pause when tab is hidden ────────────────────────
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    } else {
+      refresh();
+      if (isMarketOpen()) {
+        refreshTimer = setInterval(refresh, 30000);
+      }
+    }
+  });
+
+  // ── Init ────────────────────────────────────────────
+  async function init() {
+    await Promise.all([loadPortfolio(), loadApiKey()]);
+
+    if (!portfolio) return;
+    if (!apiKey) {
+      document.getElementById('landing').innerHTML =
+        '<div class="icon">&#128273;</div><p>No API key found. Open the main dashboard first to configure your Massive API key.</p>';
+      return;
+    }
+
+    await refresh();
+    updateRefreshStatus();
+    scheduleRefresh();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
