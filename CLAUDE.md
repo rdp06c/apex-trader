@@ -29,6 +29,7 @@ server/
     backups/        ← Last 5 portfolio saves (gitignored)
     scanner-state.json ← Scanner readings and alert history (gitignored)
     scan-state.json ← Full scan results and top scorers (gitignored)
+monitor.html          ← Holdings monitor (standalone, auto-refresh prices during market hours)
 analytics.html        ← Analytics page (standalone, 20+ charts incl VIX zone, ATR%, exit compliance)
 journal.html          ← Trade journal page (standalone, trade detail modal)
 playbook.html         ← FORGE-validated trading playbook (printable reference card)
@@ -46,6 +47,7 @@ package.json          ← Express, node-cron dependencies
 Raspberry Pi (Express server, port 4000)
 ├── GET/POST /api/portfolio     ← Server-side portfolio storage (JSON file)
 ├── GET /api/scanner/status     ← Scanner health check
+├── GET /monitor                ← Holdings monitor (auto-refresh prices)
 ├── GET /admin                  ← Admin panel (status, logs, actions)
 ├── Static files (index.html)   ← Built dashboard
 ├── Background scanner (cron)   ← Structure monitoring every 15 min
@@ -145,6 +147,16 @@ All trades are entered manually via the Manual Trade modal (`openManualTradeModa
 **Chat Interface** (`sendMessage`): Conversational with portfolio context. Gated behind activation button. Special commands: `calibrate`, `backtest YYYY-MM-DD`. Uses Cloudflare Worker proxy to Claude API.
 
 **Google Drive**: OAuth 2.0 backup/restore. Optional — Pi server is the primary storage now.
+
+## Holdings Monitor (`monitor.html`)
+
+Standalone lightweight page for monitoring current holdings with auto-refreshing prices. Fetches portfolio from server (localStorage fallback) and API key from `/api/config` (localStorage fallback). Uses a single bulk snapshot API call for only held symbols (~25 tickers, ~2-3KB per request).
+
+**Auto-refresh:** Every 30 seconds during market hours. No refresh when market is closed (loads once). Pauses when browser tab is hidden (Page Visibility API), resumes on tab focus. Checks market open/close every 60 seconds to start/stop the timer.
+
+**Summary cards:** Holdings Value, Day P&L ($ and %), Total P&L ($ and %), Position count with W/L breakdown.
+
+**Table columns:** Symbol, Price, Day%, Day P&L, P&L%, Value, Stop (-10%), Target (+10%), Days (trading days). All columns sortable. Risk-level row highlighting (danger/caution/healthy). Stop/Target use proximity-based coloring (same thresholds as Risk Dashboard). Price flash animation on change.
 
 ## Analytics Page (`analytics.html`)
 
