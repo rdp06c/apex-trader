@@ -262,6 +262,20 @@
   let holdingsData = [];     // current computed rows
 
   // ── Market hours check ──────────────────────────────
+  // Count trading days (weekdays) between two dates
+  function countTradingDays(startDate, endDate) {
+    const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    let count = 0;
+    const d = new Date(start);
+    while (d < end) {
+      d.setDate(d.getDate() + 1);
+      const dow = d.getDay();
+      if (dow !== 0 && dow !== 6) count++;
+    }
+    return count;
+  }
+
   function isMarketOpen() {
     const now = new Date();
     const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -403,11 +417,10 @@
 
       const level = plPct <= -8 ? 'danger' : plPct <= -5 ? 'caution' : 'healthy';
 
-      // Days held from earliest buy in current position
+      // Days held (trading days) from earliest buy in current position
       let daysHeld = null;
       if (buys.length > 0) {
-        const earliest = new Date(buys[0].timestamp);
-        daysHeld = Math.floor((Date.now() - earliest.getTime()) / 86400000);
+        daysHeld = countTradingDays(new Date(buys[0].timestamp), new Date());
       }
 
       rows.push({
