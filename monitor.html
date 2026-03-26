@@ -438,7 +438,22 @@
       const costBasis = shares * avgCost;
       const pl = currentValue - costBasis;
       const plPct = costBasis > 0 ? (pl / costBasis) * 100 : 0;
-      const dayPL = shares * snap.change;
+
+      // Same-day buys: use entry price as baseline, not yesterday's close
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const earliestBuy = buys.length > 0 ? new Date(buys[0].timestamp) : null;
+      const buyDayStart = earliestBuy ? new Date(earliestBuy.getFullYear(), earliestBuy.getMonth(), earliestBuy.getDate()) : null;
+      const boughtToday = buyDayStart && todayStart.getTime() === buyDayStart.getTime();
+
+      let dayPL, dayChange;
+      if (boughtToday && avgCost > 0) {
+        dayPL = (snap.price - avgCost) * shares;
+        dayChange = ((snap.price - avgCost) / avgCost) * 100;
+      } else {
+        dayPL = shares * snap.change;
+        dayChange = snap.changePct;
+      }
 
       const stopPrice = avgCost > 0 ? avgCost * 0.9 : null;
       const targetPrice = avgCost > 0 ? avgCost * 1.1 : null;
@@ -456,7 +471,7 @@
 
       rows.push({
         symbol, shares, avgCost, currentValue, costBasis,
-        price: snap.price, dayChange: snap.changePct, dayPL,
+        price: snap.price, dayChange, dayPL,
         pl, plPct, level, stopPrice, targetPrice, stopDist, targetDist, daysHeld
       });
     }
