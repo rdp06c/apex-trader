@@ -169,6 +169,13 @@
             align-items: center;
             gap: 6px;
             margin-top: 4px;
+            flex-wrap: wrap;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
         }
 
         .header-link {
