@@ -161,7 +161,7 @@
             display: flex;
             align-items: baseline;
             gap: 6px;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
         }
 
         .header-meta-row {
@@ -169,13 +169,6 @@
             align-items: center;
             gap: 6px;
             margin-top: 4px;
-            flex-wrap: wrap;
-        }
-
-        .header-nav {
-            display: flex;
-            gap: 4px;
-            flex-wrap: wrap;
         }
 
         .header-link {
