@@ -15057,6 +15057,7 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                 c._tradePlan = generateTradePlan(c);
                 // Fall back to server-persisted trade plan when local computation fails (no bars)
                 if (!c._tradePlan && c.tradePlanTarget) {
+                    const atrPctVal = c.tradePlanAtrPct ?? null;
                     c._tradePlan = {
                         target: c.tradePlanTarget,
                         stop: c.tradePlanStop,
@@ -15066,7 +15067,8 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         support: c.tradePlanSupport ?? null,
                         resistance: c.tradePlanResistance ?? null,
                         atr: c.tradePlanAtr ?? null,
-                        atrPct: c.tradePlanAtrPct ?? null,
+                        atrPct: atrPctVal,
+                        atrPctOfPrice: atrPctVal,
                         targetInATRs: c.tradePlanTargetInATRs ?? null,
                         vixMult: c.tradePlanVixMult ?? null,
                         fib1272: c.tradePlanFib1272 ?? null,
@@ -15078,6 +15080,36 @@ Each holding has a Setup type indicating how it was entered. Evaluate health thr
                         entry: c.tradePlanEntry ?? c.price,
                         _fromServer: true
                     };
+                }
+                // Backfill calibration stats from client-side pattern evaluation
+                // when server trade plan didn't have them (server lacks entryPatternStats)
+                if (c._tradePlan && c._tradePlan.winRate == null && c._entrySignal) {
+                    const patId = c._entrySignal.bestPatternId;
+                    const matchQuality = c._entrySignal.bestMatch;
+                    const patternStats = portfolio.calibratedWeights?.entryPatternStats;
+                    if (patternStats && patId && matchQuality) {
+                        const tierStats = patternStats[patId]?.[matchQuality];
+                        if (tierStats && !tierStats.insufficient) {
+                            c._tradePlan.winRate = +tierStats.winRate10d.toFixed(0);
+                            c._tradePlan.avgReturn = +tierStats.avgReturn10d.toFixed(1);
+                            c._tradePlan.observations = tierStats.n;
+                            c._tradePlan.calConfidence = matchQuality === 'full' ? 'high' : matchQuality === 'strong' ? 'moderate' : 'low';
+                        }
+                    }
+                    // Fallback to combo data
+                    if (c._tradePlan.winRate == null && (matchQuality === 'full' || matchQuality === 'strong')) {
+                        const bestPat = patId ? c._entrySignal.patterns.find(p => p.id === patId) : null;
+                        const calKey = bestPat?.calibrationKey || (patId === 'reversal' ? 'rsi_low_structure_bull' : null);
+                        const comboData = calKey ? portfolio.calibratedWeights?.signalCombos?.combos?.[calKey] : null;
+                        const bestHot = c._comboHeat?.hotCombos?.[0];
+                        const rawWR = comboData?.winRate10d ?? bestHot?.winRate10d ?? null;
+                        if (rawWR != null) {
+                            c._tradePlan.winRate = +rawWR.toFixed(0);
+                            c._tradePlan.avgReturn = comboData?.avgReturn10d ? +comboData.avgReturn10d.toFixed(1) : bestHot?.avgReturn10d ? +bestHot.avgReturn10d.toFixed(1) : null;
+                            c._tradePlan.observations = comboData?.n ?? bestHot?.n ?? null;
+                            c._tradePlan.calConfidence = 'high';
+                        }
+                    }
                 }
                 // Prefer local computation (has bars for pullback target), fall back to server data
                 if (multiDayCache[c.symbol]?.length >= 5) {
