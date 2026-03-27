@@ -1970,10 +1970,6 @@
             <!-- Charts -->
             <div class="charts-grid">
                 <div class="chart-card card">
-                    <h2 class="chart-title">Portfolio Returns</h2>
-                    <canvas id="performanceChart"></canvas>
-                </div>
-                <div class="chart-card card">
                     <h2 class="chart-title">Sector Allocation</h2>
                     <div class="sector-chart-container">
                         <canvas id="sectorChart"></canvas>
@@ -2228,8 +2224,7 @@
 
         let preventAutoSave = false; // Prevent auto-save during recovery
 
-        // Chart instances
-        let performanceChart = null;
+        // Chart instance
         let sectorChart = null;
 
         // Stock full names mapping
@@ -3012,102 +3007,13 @@
         }
 
         function initChart() {
-            if (performanceChart) return;
-            const ctx = document.getElementById('performanceChart').getContext('2d');
-            performanceChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        { label: 'Total Return', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderWidth: 2.5, tension: 0.35, fill: true, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#f59e0b', pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2 },
-                        { label: 'SPY', data: [], borderColor: '#60a5fa', backgroundColor: 'transparent', borderWidth: 2, borderDash: [6, 3], tension: 0.35, fill: false, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#60a5fa', pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2 },
-                        { label: 'QQQ', data: [], borderColor: '#a78bfa', backgroundColor: 'transparent', borderWidth: 2, borderDash: [6, 3], tension: 0.35, fill: false, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#a78bfa', pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2 },
-                        { label: 'DIA', data: [], borderColor: '#34d399', backgroundColor: 'transparent', borderWidth: 2, borderDash: [6, 3], tension: 0.35, fill: false, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#34d399', pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2 }
-                    ]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    interaction: { intersect: false, mode: 'index' },
-                    plugins: {
-                        legend: { display: true, labels: { color: '#a8a8a0', font: { family: "'Inter', sans-serif", size: 11 }, boxWidth: 12, boxHeight: 12, padding: 16, usePointStyle: true } },
-                        tooltip: { backgroundColor: 'rgba(22, 22, 25, 0.95)', titleColor: '#f5f5f0', bodyColor: '#a8a8a0', borderColor: 'rgba(245, 158, 11, 0.3)', borderWidth: 1, padding: 12, cornerRadius: 8, titleFont: { family: "'Inter', sans-serif", size: 12, weight: '600' }, bodyFont: { family: "'Inter', sans-serif", size: 12 }, displayColors: true, boxWidth: 8, boxHeight: 8, boxPadding: 4,
-                            callbacks: {
-                                label: function(context) { const val = context.parsed.y; if (val == null) return null; const sign = val >= 0 ? '+' : ''; return ` ${context.dataset.label}: ${sign}${val.toFixed(2)}%`; },
-                                afterBody: function(contexts) { const totalVal = contexts[0]?.parsed?.y; const spyVal = contexts[1]?.parsed?.y; if (totalVal != null && spyVal != null) { const alpha = totalVal - spyVal; return `  Alpha: ${alpha >= 0 ? '+' : ''}${alpha.toFixed(2)}%`; } return ''; }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: { position: 'left', border: { display: false }, title: { display: true, text: 'Return %', color: '#78786e', font: { family: "'Inter', sans-serif", size: 10 } }, ticks: { color: '#78786e', font: { family: "'Inter', sans-serif", size: 11 }, padding: 8, callback: function(value) { return (value >= 0 ? '+' : '') + value.toFixed(1) + '%'; } }, grid: { color: function(context) { return context.tick.value === 0 ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 200, 100, 0.05)'; }, drawTicks: false } },
-                        x: { border: { display: false }, ticks: { color: '#78786e', font: { family: "'Inter', sans-serif", size: 10 }, padding: 6, maxRotation: 0 }, grid: { display: false } }
-                    }
-                }
-            });
+            if (sectorChart) return;
             const sectorCtx = document.getElementById('sectorChart').getContext('2d');
             sectorChart = new Chart(sectorCtx, {
                 type: 'doughnut',
                 data: { labels: [], datasets: [{ data: [], backgroundColor: ['#f59e0b','#a78bfa','#34d399','#60a5fa','#f97316','#ec4899','#fbbf24','#14b8a6','#8b5cf6','#f43f5e','#06b6d4','#84cc16'], borderWidth: 3, borderColor: '#1a1a22', hoverBorderColor: '#1a1a22', hoverOffset: 6 }] },
                 options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(22, 22, 25, 0.95)', titleColor: '#f5f5f0', bodyColor: '#a8a8a0', borderColor: 'rgba(255, 200, 100, 0.15)', borderWidth: 1, padding: 12, cornerRadius: 8, titleFont: { family: "'Inter', sans-serif", size: 12, weight: '600' }, bodyFont: { family: "'Inter', sans-serif", size: 12 }, callbacks: { label: function(context) { return ' ' + context.label + ': ' + context.parsed.toFixed(1) + '%'; } } } } }
             });
-        }
-
-        const BENCHMARK_CHART_TTL = 30 * 60 * 1000;
-        const benchmarkChartCaches = { SPY: null, QQQ: null, DIA: null };
-        async function fetchBenchmarkForChart(symbol, fromDate) {
-            const cached = benchmarkChartCaches[symbol];
-            if (cached && Date.now() - cached.fetchedAt < BENCHMARK_CHART_TTL) return cached.bars;
-            if (!POLYGON_API_KEY) return null;
-            try {
-                const toStr = new Date().toISOString().split('T')[0];
-                const resp = await fetch(`https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${fromDate}/${toStr}?adjusted=true&sort=asc&limit=50000&apiKey=${POLYGON_API_KEY}`);
-                if (!resp.ok) return null;
-                const data = await resp.json();
-                if (data.results && data.results.length > 0) { benchmarkChartCaches[symbol] = { bars: data.results, fetchedAt: Date.now() }; return data.results; }
-            } catch (e) { console.warn(`${symbol} chart fetch failed:`, e.message); }
-            return null;
-        }
-        async function fetchSPYForChart(fromDate) { return fetchBenchmarkForChart('SPY', fromDate); }
-
-        async function updatePerformanceChart() {
-            if (!performanceChart || portfolio.performanceHistory.length === 0) return;
-            const dailyMap = {};
-            for (const entry of portfolio.performanceHistory) {
-                const date = new Date(entry.timestamp).toISOString().split('T')[0];
-                if (!dailyMap[date] || entry.totalReturnPct != null) { dailyMap[date] = { value: entry.value, totalReturnPct: entry.totalReturnPct ?? null }; }
-            }
-            const allDates = Object.keys(dailyMap).sort();
-            const dates = allDates.filter(d => dailyMap[d].totalReturnPct != null);
-            if (dates.length < 1) return;
-            const cumulativeReturns = dates.map(d => dailyMap[d].totalReturnPct);
-            function computeBenchmarkReturns(bars, dates) {
-                const returns = new Array(dates.length).fill(null);
-                if (!bars || bars.length === 0) return returns;
-                const byDate = {};
-                for (const bar of bars) { const d = new Date(bar.t).toISOString().split('T')[0]; byDate[d] = bar.c; }
-                let baselinePrice = null;
-                for (const bar of bars) { const d = new Date(bar.t).toISOString().split('T')[0]; if (d <= dates[0]) baselinePrice = bar.c; else break; }
-                if (!baselinePrice) baselinePrice = bars[0].c;
-                let lastPrice = baselinePrice;
-                for (let i = 0; i < dates.length; i++) { if (byDate[dates[i]]) lastPrice = byDate[dates[i]]; returns[i] = Math.round(((lastPrice - baselinePrice) / baselinePrice) * 100 * 100) / 100; }
-                return returns;
-            }
-            let spyReturns = new Array(dates.length).fill(null);
-            let qqqReturns = new Array(dates.length).fill(null);
-            let diaReturns = new Array(dates.length).fill(null);
-            try {
-                const [spyBars, qqqBars, diaBars] = await Promise.all([fetchBenchmarkForChart('SPY', dates[0]), fetchBenchmarkForChart('QQQ', dates[0]), fetchBenchmarkForChart('DIA', dates[0])]);
-                spyReturns = computeBenchmarkReturns(spyBars, dates);
-                qqqReturns = computeBenchmarkReturns(qqqBars, dates);
-                diaReturns = computeBenchmarkReturns(diaBars, dates);
-            } catch (e) { console.warn('Benchmark chart data unavailable:', e.message); }
-            const today = new Date(); const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-            const labels = dates.map(d => { const date = new Date(d + 'T12:00:00'); if (date.toDateString() === today.toDateString()) return 'Today'; if (date.toDateString() === yesterday.toDateString()) return 'Yesterday'; return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); });
-            performanceChart.data.labels = labels;
-            performanceChart.data.datasets[0].data = cumulativeReturns;
-            performanceChart.data.datasets[1].data = spyReturns;
-            performanceChart.data.datasets[2].data = qqqReturns;
-            performanceChart.data.datasets[3].data = diaReturns;
-            performanceChart.update();
         }
 
         function initializeAccount() {
@@ -3714,7 +3620,6 @@
                 lastEntry.value = totalValue; lastEntry.timestamp = now.toISOString(); lastEntry.totalReturnPct = Math.round(_totalReturnPct * 100) / 100;
             }
 
-            await updatePerformanceChart();
             updatePerformanceAnalytics();
             updateSectorAllocation(priceData);
 
@@ -4200,7 +4105,6 @@
                 localStorage.removeItem('apexDecisionHistory');
                 document.getElementById('activityFeed').innerHTML = '<div class="empty-state">No activity yet</div>';
                 updateUI();
-                if (performanceChart) { performanceChart.data.labels = []; performanceChart.data.datasets.forEach(ds => { ds.data = []; }); performanceChart.update(); }
             }
         }
 
