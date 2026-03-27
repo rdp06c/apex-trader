@@ -1266,7 +1266,7 @@
                     <div class="sidebar-holding-compact">
                         <div class="compact-left">
                             <span class="compact-symbol">${h.symbol}</span>
-                            <span class="compact-shares">${h.shares} shares</span>
+                            <span class="compact-shares">${Number.isInteger(h.shares) ? h.shares : h.shares.toFixed(4)} shares</span>
                         </div>
                         <div class="compact-right">
                             <span class="compact-price">$${h.stockPrice.price.toFixed(2)}</span>
@@ -1284,7 +1284,7 @@
                             <div>
                                 <div class="holding-card-symbol">${h.symbol}</div>
                                 <div class="holding-card-name"><a href="https://stockanalysis.com/stocks/${encodeURIComponent(h.symbol.toLowerCase())}/" target="_blank" rel="noopener" class="holding-card-link">${h.stockName}</a> <span class="holding-card-sector">· ${h.stockSector}</span></div>
-                                <div class="holding-card-shares">${h.shares} shares · ${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'} · ${h.positionSizePercent.toFixed(1)}% of portfolio</div>
+                                <div class="holding-card-shares">${Number.isInteger(h.shares) ? h.shares : h.shares.toFixed(4)} shares · ${h.daysHeld === 0 ? 'Today' : h.daysHeld + 'd'} · ${h.positionSizePercent.toFixed(1)}% of portfolio</div>
                             </div>
                             <div>
                                 <div class="holding-card-value">$${h.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
@@ -1824,7 +1824,7 @@
 
         async function submitManualTrade() {
             const symbol = document.getElementById('manualTradeSymbol').value.trim().toUpperCase();
-            const shares = parseInt(document.getElementById('manualTradeShares').value);
+            const shares = parseFloat(document.getElementById('manualTradeShares').value);
             const price = parseFloat(document.getElementById('manualTradePrice').value);
             const dateStr = document.getElementById('manualTradeDate').value;
             const reason = document.getElementById('manualTradeReason').value.trim();
