@@ -2,7 +2,6 @@ const express = require('express');
 const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const scanner = require('./scanner/monitor');
 
 const router = express.Router();
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -11,7 +10,6 @@ const startTime = Date.now();
 
 // GET /admin — render admin panel
 router.get('/', (req, res) => {
-    const status = scanner.getStatus();
     const uptime = Math.floor((Date.now() - startTime) / 1000);
 
     res.send(`<!DOCTYPE html>
@@ -122,13 +120,6 @@ router.get('/', (req, res) => {
     .stat { text-align: center; padding: 8px; }
     .stat .value { font-size: 1.3rem; font-weight: 600; color: var(--accent); }
     .stat .label { font-size: 11px; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .reading { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
-    .reading:last-child { border-bottom: none; }
-    .reading .sym { font-weight: 600; width: 60px; color: var(--text-primary); }
-    .reading .struct { padding: 3px 10px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; letter-spacing: 0.3px; }
-    .bullish { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
-    .bearish { background: var(--red-dim); color: var(--red); border: 1px solid var(--red-border); }
-    .ranging, .contracting, .unknown { background: var(--yellow-dim); color: var(--yellow); border: 1px solid var(--yellow-border); }
     .btn {
         background: var(--accent);
         color: #000;
@@ -151,8 +142,6 @@ router.get('/', (req, res) => {
         border: 1px solid var(--border-medium);
     }
     .btn.secondary:hover { border-color: var(--border-strong); color: var(--text-primary); box-shadow: none; transform: none; }
-    .btn.danger { background: transparent; color: var(--red); border: 1px solid var(--red-border); }
-    .btn.danger:hover { background: var(--red-dim); border-color: var(--red); box-shadow: none; transform: none; }
     pre {
         background: var(--bg-inset);
         border: 1px solid var(--border-subtle);
@@ -169,40 +158,12 @@ router.get('/', (req, res) => {
     }
     .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
     .status-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    .status-dot.red { background: var(--red); box-shadow: 0 0 6px var(--red); }
-    .status-dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
     #result { margin-top: 12px; padding: 12px 16px; border-radius: var(--radius-sm); display: none; font-size: 13px; }
     #result.success { display: block; background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
     #result.error { display: block; background: var(--red-dim); color: var(--red); border: 1px solid var(--red-border); }
     a { color: var(--accent); text-decoration: none; }
     a:hover { color: var(--accent-light); }
     .empty-state { color: var(--text-muted); text-align: center; padding: 16px; font-size: 13px; }
-    .reading-price { font-size: 13px; color: var(--text-secondary); }
-    .reading-meta { font-size: 12px; color: var(--text-muted); }
-    .reading-meta .macd-bull { color: var(--green); }
-    .reading-meta .macd-bear { color: var(--red); }
-    .reading-choch { font-size: 12px; color: var(--red); font-weight: 600; }
-    .warning-badge {
-        font-size: 11px;
-        background: var(--red);
-        color: #fff;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-weight: 600;
-    }
-    .info-badge {
-        font-size: 11px;
-        background: rgba(100, 149, 237, 0.2);
-        color: #6495ed;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-weight: 600;
-    }
-    .time-ago { font-size: 11px; color: var(--text-faint); }
-    .scorer-rank { color: var(--text-faint); width: 24px; font-size: 13px; }
-    .scorer-score { font-size: 14px; color: var(--accent); font-weight: 600; }
-    .scorer-price { font-size: 13px; color: var(--text-muted); }
-    .scan-running { font-size: 12px; color: var(--accent); font-weight: 600; }
     .health-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
     .health-row:last-child { border-bottom: none; }
     .health-label { font-size: 13px; color: var(--text-secondary); }
@@ -219,8 +180,7 @@ router.get('/', (req, res) => {
     <div class="subtitle">System Administration</div>
     <h1>APEX Admin</h1>
     <a href="/" class="back-link">&larr; Dashboard</a>
-    <a href="/journal" class="back-link">Journal</a>
-    <a href="/analytics" class="back-link">Analytics</a>
+    <a href="/monitor" class="back-link">Monitor</a>
 </div>
 
 <h2>Server Status</h2>
@@ -230,63 +190,9 @@ router.get('/', (req, res) => {
         <div class="label">Uptime</div>
     </div>
     <div class="stat">
-        <div class="value"><span class="status-dot ${status.marketOpen ? 'green' : 'red'}"></span>${status.marketOpen ? 'Open' : 'Closed'}</div>
-        <div class="label">Market</div>
+        <div class="value"><span class="status-dot green"></span>Running</div>
+        <div class="label">Server</div>
     </div>
-    <div class="stat">
-        <div class="value">${status.lastRun ? timeAgo(status.lastRun) : 'Never'}</div>
-        <div class="label">Last Scan</div>
-    </div>
-    <div class="stat">
-        <div class="value">${status.alertsSent}</div>
-        <div class="label">Alerts Sent</div>
-    </div>
-    <div class="stat">
-        <div class="value">${status.fullScan?.isRunning
-            ? `<span class="scan-running">Running (${status.fullScan.runningInfo?.elapsed || 0}s)</span>`
-            : (status.fullScan?.lastRun ? timeAgo(status.fullScan.lastRun) : 'Never')}</div>
-        <div class="label">Last Full Scan</div>
-    </div>
-    <div class="stat">
-        <div class="value">${status.fullScan?.stocksScanned || 0}</div>
-        <div class="label">Stocks Scored</div>
-    </div>
-</div>
-
-${status.fullScan?.topScorers?.length > 0 ? `
-<h2>Top Scorers (Last Full Scan)</h2>
-<div class="card">
-    ${status.fullScan.topScorers.map((s, i) => `
-        <div class="reading">
-            <span class="scorer-rank">${i + 1}.</span>
-            <span class="sym">${s.symbol}</span>
-            <span class="scorer-score">${s.score}</span>
-            <span class="scorer-price">$${s.price?.toFixed(2) || '?'}</span>
-        </div>
-    `).join('')}
-</div>
-` : ''}
-
-<h2>Scanner Readings</h2>
-<div class="card">
-    ${Object.keys(status.readings).length === 0
-        ? '<div class="empty-state">No readings yet — scanner runs during market hours</div>'
-        : Object.entries(status.readings).map(([sym, r]) => `
-            <div class="reading">
-                <span class="sym">${sym}</span>
-                ${r.price ? `<span class="reading-price">$${r.price.toFixed(2)}</span>` : ''}
-                <span class="struct ${r.structure}">${r.structure}</span>
-                <span class="reading-meta">RSI: ${r.rsi != null ? Math.round(r.rsi) : '—'}</span>
-                <span class="reading-meta">MACD: ${r.macdCrossover === 'bullish' ? '<span class="macd-bull">▲</span>' : r.macdCrossover === 'bearish' ? '<span class="macd-bear">▼</span>' : '—'}</span>
-                ${r.tradePlan?.riskReward != null ? `<span class="reading-meta" style="color:${r.tradePlan.riskReward >= 2.0 ? 'var(--green)' : r.tradePlan.riskReward >= 1.5 ? 'var(--yellow)' : 'var(--red)'};font-weight:600">R:R ${r.tradePlan.riskReward.toFixed(1)}</span>` : ''}
-                ${r.choch ? `<span class="reading-choch">⚠ CHoCH ${r.chochType}</span>` : ''}
-                ${r.lossSignals && r.lossSignals.length > 0 ? `<span class="warning-badge" title="${r.lossSignals.join(', ')}">${r.lossSignals.length} warning${r.lossSignals.length > 1 ? 's' : ''}</span>` : ''}
-                ${r.infoSignals && r.infoSignals.length > 0 ? `<span class="info-badge" title="${r.infoSignals.join(', ')}">${r.infoSignals.length} dampened</span>` : ''}
-                ${r.intraday ? `<span class="reading-meta">5m: RSI ${r.intraday.rsi != null ? Math.round(r.intraday.rsi) : '—'} | MACD ${r.intraday.macd === 'bullish' ? '<span class="macd-bull">▲</span>' : r.intraday.macd === 'bearish' ? '<span class="macd-bear">▼</span>' : '—'} | ${r.intraday.structure || '—'}${r.intraday.choch ? ' ⚠CHoCH' + r.intraday.chochType : ''}</span>` : ''}
-                <span class="time-ago">${r.timestamp ? timeAgo(r.timestamp) : ''}</span>
-            </div>
-        `).join('')
-    }
 </div>
 
 <h2>Portfolio Health</h2>
@@ -297,10 +203,6 @@ ${status.fullScan?.topScorers?.length > 0 ? `
 <h2>Actions</h2>
 <div class="card">
     <button class="btn" onclick="doAction('pull')">Pull & Restart</button>
-    <button class="btn" onclick="doAction('scan')">Run Scanner Now</button>
-    <button class="btn" onclick="doAction('fullscan')" id="fullscanBtn" ${status.fullScan?.isRunning ? 'disabled' : ''}>
-        ${status.fullScan?.isRunning ? 'Scan Running...' : 'Run Full Scan'}
-    </button>
     <button class="btn secondary" onclick="loadLogs('server')">Server Logs</button>
     <button class="btn secondary" onclick="loadLogs('pull')">Pull Logs</button>
     <div id="result"></div>
@@ -308,23 +210,12 @@ ${status.fullScan?.topScorers?.length > 0 ? `
 </div>
 
 <script>
-const CONFIRM_MESSAGES = {
-    pull: 'This will pull latest code and restart the server. All browser connections will drop briefly. Continue?',
-    fullscan: 'Run full market scan? This takes 2-5 minutes. Continue?'
-};
-
 async function doAction(action) {
-    if (CONFIRM_MESSAGES[action] && !confirm(CONFIRM_MESSAGES[action])) return;
+    if (action === 'pull' && !confirm('This will pull latest code and restart the server. Continue?')) return;
 
     const el = document.getElementById('result');
     el.className = ''; el.style.display = 'none';
     el.textContent = 'Working...'; el.className = 'success'; el.style.display = 'block';
-
-    if (action === 'fullscan') {
-        const btn = document.getElementById('fullscanBtn');
-        btn.disabled = true;
-        btn.textContent = 'Scan Running...';
-    }
 
     try {
         const res = await fetch('/admin/action/' + action, { method: 'POST' });
@@ -411,30 +302,6 @@ router.post('/action/pull', (req, res) => {
     });
 });
 
-// POST /admin/action/scan — trigger scanner immediately
-router.post('/action/scan', (req, res) => {
-    scanner.runStructureCheck({ force: true })
-        .then(() => {
-            const status = scanner.getStatus();
-            const count = Object.keys(status.readings).length;
-            res.json({ message: `Scanner complete. ${count} holdings checked, ${status.alertsSent} total alerts.` });
-        })
-        .catch(err => {
-            res.status(500).json({ error: 'Scan failed: ' + err.message });
-        });
-});
-
-// POST /admin/action/fullscan — trigger full market scan
-router.post('/action/fullscan', (req, res) => {
-    if (scanner.isScanRunning()) {
-        return res.status(409).json({ error: 'Full scan already in progress. Please wait for it to complete.' });
-    }
-    res.json({ message: 'Full scan started — this takes 2-5 minutes. Check back for results.' });
-    scanner.runFullScan({ force: true }).catch(err => {
-        console.error('Admin full scan error:', err.message);
-    });
-});
-
 // GET /admin/logs/server — last 50 lines of service logs
 router.get('/logs/server', (req, res) => {
     execFile('journalctl', ['-u', 'apex', '--no-pager', '-n', '50'], { timeout: 5000 }, (err, stdout) => {
@@ -462,14 +329,6 @@ function formatUptime(seconds) {
     const m = Math.floor((seconds % 3600) / 60);
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
-}
-
-function timeAgo(isoStr) {
-    const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
-    if (diff < 60) return `${diff}s ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
 }
 
 module.exports = router;

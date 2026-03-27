@@ -8,14 +8,9 @@
                         <h1>APEX</h1>
                         <div class="header-nav-links">
                             <a href="/monitor" class="header-link">Monitor</a>
-                            <a href="/analytics" class="header-link">Analytics</a>
-                            <a href="/journal" class="header-link">Journal</a>
-                        </div>
-                        <span id="status" class="status">&#9679; Active</span>
-                        <div class="header-nav-links">
-                            <a href="/playbook" class="header-link">Playbook</a>
                             <a href="/admin" class="header-link">Admin</a>
                         </div>
+                        <span id="status" class="status">&#9679; Active</span>
                     </div>
                 </div>
             </div>
@@ -58,18 +53,12 @@
 
             <!-- Action Buttons -->
             <div class="sidebar-actions">
-                <button onclick="testDataFetch()" class="secondary">Scan Market</button>
                 <button onclick="refreshPrices()" class="secondary">Refresh Prices</button>
                 <button onclick="openManualTradeModal()" class="secondary">Manual Trade</button>
             </div>
             <div id="undoTradeContainer" class="undo-trade-container" style="display:none">
                 <button onclick="undoLastTrade()" class="undo-trade-btn">Undo Last Trade</button>
                 <span id="undoTradeLabel" class="undo-trade-label"></span>
-            </div>
-
-            <div class="ai-thinking" id="aiThinking">
-                <div class="thinking-text pulse">Scanning markets...</div>
-                <div class="thinking-detail" id="thinkingDetail">Fetching prices, bars, and indicators...</div>
             </div>
 
             <!-- Account Controls (collapsible) -->
@@ -98,34 +87,8 @@
                                 <input type="password" id="polygonKeyInput" placeholder="Enter your Massive API key">
                             </div>
 
-                            <div class="control-group">
-                                <label for="googleClientIdInput">Google Client ID</label>
-                                <input type="password" id="googleClientIdInput" placeholder="Enter your Google Client ID">
-                            </div>
-
-                            <div class="control-group">
-                                <label for="googleApiKeyInput">Google API Key</label>
-                                <input type="password" id="googleApiKeyInput" placeholder="Enter your Google API Key">
-                            </div>
-
-                            <div class="control-group">
-                                <label for="anthropicUrlInput">Anthropic API Worker URL</label>
-                                <input type="text" id="anthropicUrlInput" placeholder="https://apex-proxy.your-username.workers.dev">
-                                <div class="api-helper-text">
-                                    Your Cloudflare Worker URL (see setup guide)
-                                </div>
-                            </div>
-
                             <button class="btn-save" onclick="saveApiKeys()">
                                 Save Locally
-                            </button>
-
-                            <button class="btn-sync" onclick="syncKeysToGoogleDrive()">
-                                Sync to Google Drive
-                            </button>
-
-                            <button class="btn-download" onclick="downloadKeysFromGoogleDrive()">
-                                Download from Google Drive
                             </button>
 
                             <div id="apiKeySaveStatus"></div>
@@ -133,8 +96,6 @@
 
                         <div id="apiConfigStatus">
                             <div id="polygonStatus" class="api-status-line">Massive: Not configured</div>
-                            <div id="googleStatus" class="api-status-line">Google Drive: Not configured</div>
-                            <div id="anthropicStatus" class="api-status-line">Anthropic: Not configured</div>
                         </div>
 
                         <div id="apiUsageStatus">
@@ -148,19 +109,6 @@
                             Portfolio Backup & Recovery
                         </div>
 
-                        <!-- Save to Drive -->
-                        <div class="backup-section">
-                            <div class="backup-panel-description">
-                                Save your current portfolio to Google Drive as a backup.
-                            </div>
-                            <button class="btn-drive-save" onclick="manualSaveToDrive()">
-                                Save Portfolio to Google Drive
-                            </button>
-                        </div>
-
-                        <div class="backup-divider"></div>
-
-                        <!-- Restore from local file -->
                         <div>
                             <div class="backup-panel-description">
                                 Restore from a previously saved Apex_Portfolio.json file on your computer.
@@ -268,16 +216,6 @@
                 </div>
             </div>
 
-            <!-- Market Regime Indicator -->
-            <div class="regime-banner" id="regimeBanner" style="display: none;" aria-live="polite">
-                <div class="regime-banner-inner">
-                    <div class="regime-label" id="regimeLabel">--</div>
-                    <div class="regime-description" id="regimeDescription">Run Scan Market to detect regime</div>
-                    <div class="regime-timestamp" id="regimeTimestamp"></div>
-                    <div class="regime-vix" id="regimeVIX"></div>
-                </div>
-            </div>
-
             <!-- Holdings Detail (collapsible) -->
             <div class="card collapsible-section" id="holdingsDetailSection">
                 <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="holdingsDetailBody" onclick="toggleSection('holdingsDetail')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('holdingsDetail')}">
@@ -304,61 +242,6 @@
                 <div class="section-body" id="holdingsDetailBody">
                     <div class="holdings-detail-grid" id="holdingsDetailGrid">
                         <div class="empty-state">No positions yet</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Risk Dashboard (collapsible, collapsed by default) -->
-            <div class="card collapsible-section" id="riskDashboardSection">
-                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="riskDashboardBody" onclick="toggleSection('riskDashboard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('riskDashboard')}">
-                    <h2 class="chart-title">Risk Dashboard</h2>
-                    <span class="toggle-icon collapsed" id="riskDashboardToggle">&#9662;</span>
-                </div>
-                <div class="section-body collapsed" id="riskDashboardBody">
-                    <div id="riskDashboardContent">
-                        <div class="empty-state">Run Scan Market to populate risk data</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Candidate Scorecard (collapsible, expanded by default) -->
-            <div class="card collapsible-section" id="candidateScorecardSection">
-                <div class="section-header" role="button" tabindex="0" aria-expanded="true" aria-controls="candidateScorecardBody" onclick="toggleSection('candidateScorecard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('candidateScorecard')}">
-                    <h2 class="chart-title">Candidate Scorecard</h2>
-                    <span class="toggle-icon" id="candidateScorecardToggle">&#9662;</span>
-                </div>
-                <div class="section-body" id="candidateScorecardBody">
-                    <div id="candidateScorecardContent">
-                        <div class="empty-state">Run Scan Market to see scored candidates</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sector Rotation Heatmap (collapsible, collapsed by default) -->
-            <div class="card collapsible-section" id="sectorRotationSection">
-                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="sectorRotationBody" onclick="toggleSection('sectorRotation')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('sectorRotation')}">
-                    <h2 class="chart-title">Sector Rotation Heatmap</h2>
-                    <span class="toggle-icon collapsed" id="sectorRotationToggle">&#9662;</span>
-                </div>
-                <div class="section-body collapsed" id="sectorRotationBody">
-                    <div id="sectorRotationContent">
-                        <div class="empty-state">Run Scan Market to see sector rotation data</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Trade Insights Section (collapsible, collapsed by default) -->
-            <div class="card collapsible-section" id="learningInsightsSection">
-                <div class="section-header" role="button" tabindex="0" aria-expanded="false" aria-controls="learningInsightsBody" onclick="toggleSection('learningInsights')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection('learningInsights')}">
-                    <h2 class="chart-title">Trade Insights</h2>
-                    <span class="toggle-icon collapsed" id="learningInsightsToggle">&#9662;</span>
-                </div>
-                <div class="section-body collapsed" id="learningInsightsBody">
-                    <div class="learning-tag">Rules derived from trade history</div>
-                    <div id="learningInsights">
-                        <div class="empty-state">
-                            No trades yet - Learning will begin after your first completed trade
-                        </div>
                     </div>
                 </div>
             </div>
@@ -393,27 +276,6 @@
                 </div>
             </div>
 
-            <!-- Chat with APEX -->
-            <div class="chat-section card">
-                <h2 class="chart-title">Chat with APEX</h2>
-                <div id="chatGate" class="chat-gate">
-                    <div class="chat-gate-text">Chat uses API tokens per message</div>
-                    <button class="chat-gate-btn" onclick="activateChat()">Start Chat Session</button>
-                </div>
-                <div class="chat-messages" id="chatMessages" style="display: none;">
-                    <div class="agent-message">
-                        <div class="message-avatar">A</div>
-                        <div class="message-content">
-                            <div class="message-name">APEX</div>
-                            <div class="message-text">APEX online. Ask me about your portfolio, any stock, market conditions, or trading concepts. I can help you analyze setups and understand the signals behind the scorecard.</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="chat-input-container" id="chatInputContainer" style="display: none;">
-                    <input type="text" id="chatInput" placeholder="Ask APEX about trading decisions..." onkeydown="handleChatKeyPress(event)">
-                    <button onclick="sendMessage()">Send</button>
-                </div>
-            </div>
         </main>
     </div>
 
@@ -444,17 +306,6 @@
                     <div>
                         <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Date</label>
                         <input type="date" id="manualTradeDate" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px" />
-                    </div>
-                    <div id="manualTradeSetupWrap">
-                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Setup Type</label>
-                        <select id="manualTradeSetup" style="width:100%;padding:8px;background:var(--bg-main);border:1px solid var(--border-medium);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px">
-                            <option value="">Auto (best match)</option>
-                            <option value="reversal">REV — Reversal</option>
-                            <option value="momentum_continuation">MOM — Momentum</option>
-                            <option value="quiet_momentum">QMO — Quiet Momentum</option>
-                            <option value="squeeze">SQZ — Squeeze</option>
-                            <option value="sector_leader">LDR — Sector Leader</option>
-                        </select>
                     </div>
                     <div id="manualTradeReasonWrap">
                         <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Reason (optional)</label>

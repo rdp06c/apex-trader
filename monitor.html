@@ -439,18 +439,29 @@
       const pl = currentValue - costBasis;
       const plPct = costBasis > 0 ? (pl / costBasis) * 100 : 0;
 
-      // Same-day buys: use entry price as baseline, not yesterday's close
+      // Split today's buys vs prior buys for accurate daily P&L
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const earliestBuy = buys.length > 0 ? new Date(buys[0].timestamp) : null;
-      const buyDayStart = earliestBuy ? new Date(earliestBuy.getFullYear(), earliestBuy.getMonth(), earliestBuy.getDate()) : null;
-      const boughtToday = buyDayStart && todayStart.getTime() === buyDayStart.getTime();
+      const todayBuys = buys.filter(t => {
+        const bd = new Date(t.timestamp);
+        return new Date(bd.getFullYear(), bd.getMonth(), bd.getDate()).getTime() === todayStart.getTime();
+      });
+      const todayShares = todayBuys.reduce((sum, t) => sum + t.shares, 0);
+      const priorShares = shares - todayShares;
 
       let dayPL, dayChange;
-      if (boughtToday && avgCost > 0) {
+      if (todayShares > 0 && priorShares > 0) {
+        // Mixed: prior shares use prev close change, today's shares use entry price
+        const todayCost = todayBuys.reduce((sum, t) => sum + (t.cost || t.price * t.shares), 0);
+        const todayAvg = todayCost / todayShares;
+        dayPL = (snap.change * priorShares) + ((snap.price - todayAvg) * todayShares);
+        dayChange = snap.changePct; // Stock's actual day% (informational)
+      } else if (todayShares > 0 && avgCost > 0) {
+        // All shares bought today — use entry price as baseline
         dayPL = (snap.price - avgCost) * shares;
         dayChange = ((snap.price - avgCost) / avgCost) * 100;
       } else {
+        // All shares from before today — use prev close
         dayPL = shares * snap.change;
         dayChange = snap.changePct;
       }
