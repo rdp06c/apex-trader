@@ -3852,6 +3852,56 @@
                         if (fixed > 0) { console.log(`📊 MIGRATION: Fixed ${fixed} corrupted performanceHistory entries`); savePortfolio(true); }
                     }
 
+                    // MIGRATION: Reconstruct performanceHistory from transaction dates
+                    // (cost basis approximation — we don't have historical market prices)
+                    if (!portfolio._perfHistoryReconstructed) {
+                        const txs = (portfolio.transactions || []).slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                        if (txs.length > 0) {
+                            const reconstructed = [];
+                            const runningLots = {}; // symbol → [{shares, price}]
+                            let realizedPL = 0;
+
+                            // Group transactions by date
+                            const dateGroups = {};
+                            for (const tx of txs) {
+                                const date = new Date(tx.timestamp).toISOString().split('T')[0];
+                                if (!dateGroups[date]) dateGroups[date] = [];
+                                dateGroups[date].push(tx);
+                            }
+
+                            for (const date of Object.keys(dateGroups).sort()) {
+                                for (const tx of dateGroups[date]) {
+                                    if (tx.type === 'BUY') {
+                                        if (!runningLots[tx.symbol]) runningLots[tx.symbol] = [];
+                                        runningLots[tx.symbol].push({ shares: tx.shares, price: tx.price });
+                                    } else if (tx.type === 'SELL') {
+                                        const lots = runningLots[tx.symbol] || [];
+                                        const totalCost = lots.reduce((s, l) => s + l.shares * l.price, 0);
+                                        const totalShares = lots.reduce((s, l) => s + l.shares, 0);
+                                        const avgPrice = totalShares > 0 ? totalCost / totalShares : 0;
+                                        realizedPL += (tx.price - avgPrice) * tx.shares;
+                                        let toSell = tx.shares;
+                                        while (toSell > 0 && lots.length > 0) {
+                                            if (lots[0].shares <= toSell) { toSell -= lots[0].shares; lots.shift(); }
+                                            else { lots[0].shares -= toSell; toSell = 0; }
+                                        }
+                                        if (lots.length === 0) delete runningLots[tx.symbol];
+                                    }
+                                }
+                                let costBasis = 0;
+                                for (const lots of Object.values(runningLots)) {
+                                    for (const lot of lots) costBasis += lot.shares * lot.price;
+                                }
+                                const totalReturnPct = costBasis > 0 ? Math.round((realizedPL / costBasis) * 100 * 100) / 100 : 0;
+                                reconstructed.push({ timestamp: date + 'T16:00:00.000Z', value: costBasis, totalReturnPct });
+                            }
+                            portfolio.performanceHistory = reconstructed;
+                            console.log(`✅ Migration: Reconstructed ${reconstructed.length} performanceHistory entries from ${txs.length} transactions`);
+                            savePortfolio(true);
+                        }
+                        portfolio._perfHistoryReconstructed = true;
+                    }
+
                     // MIGRATION: Backfill closedTrades from orphaned SELL transactions
                     if (!portfolio._backfillClosedV1) {
                         portfolio.closedTrades = portfolio.closedTrades || [];
