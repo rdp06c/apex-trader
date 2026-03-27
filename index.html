@@ -733,6 +733,51 @@
             text-align: right;
         }
 
+        .holding-card-stats {
+            display: flex;
+            gap: 16px;
+            padding: 8px 0;
+            border-top: 1px solid var(--border-subtle);
+            margin-top: 8px;
+        }
+
+        .hc-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .hc-stat-lbl {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .hc-stat-val {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .hc-stat-val.positive { color: var(--green); }
+        .hc-stat-val.negative { color: var(--red); }
+
+        .holding-card-footer {
+            display: flex;
+            gap: 16px;
+            padding: 6px 0 0;
+            border-top: 1px solid var(--border-subtle);
+            font-size: 11px;
+        }
+
+        .holding-card-footer-label {
+            color: var(--text-muted);
+        }
+
+        .holding-card-footer-value {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
         .holding-card-catalyst {
             display: inline-block;
             margin: 8px 0;
