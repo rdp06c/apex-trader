@@ -130,8 +130,6 @@
 
         let preventAutoSave = false; // Prevent auto-save during recovery
 
-        // Chart instance
-        let sectorChart = null;
 
         // Stock full names mapping
         const stockNames = {
@@ -912,16 +910,6 @@
             return null;
         }
 
-        function initChart() {
-            if (sectorChart) return;
-            const sectorCtx = document.getElementById('sectorChart').getContext('2d');
-            sectorChart = new Chart(sectorCtx, {
-                type: 'doughnut',
-                data: { labels: [], datasets: [{ data: [], backgroundColor: ['#f59e0b','#a78bfa','#34d399','#60a5fa','#f97316','#ec4899','#fbbf24','#14b8a6','#8b5cf6','#f43f5e','#06b6d4','#84cc16'], borderWidth: 3, borderColor: '#1a1a22', hoverBorderColor: '#1a1a22', hoverOffset: 6 }] },
-                options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(22, 22, 25, 0.95)', titleColor: '#f5f5f0', bodyColor: '#a8a8a0', borderColor: 'rgba(255, 200, 100, 0.15)', borderWidth: 1, padding: 12, cornerRadius: 8, titleFont: { family: "'Inter', sans-serif", size: 12, weight: '600' }, bodyFont: { family: "'Inter', sans-serif", size: 12 }, callbacks: { label: function(context) { return ' ' + context.label + ': ' + context.parsed.toFixed(1) + '%'; } } } } }
-            });
-        }
-
         function initializeAccount() {
             const balance = parseFloat(document.getElementById('initialBalance').value);
             if (!balance || balance <= 0 || !Number.isFinite(balance)) { alert('Please enter a valid positive number for the starting balance.'); return; }
@@ -959,7 +947,7 @@
                     preventAutoSave = true;
                     portfolio = restoredPortfolio;
                     localStorage.setItem('aiTradingPortfolio', JSON.stringify(portfolio));
-                    updateUI(); updatePerformanceAnalytics(); updateSectorAllocation();
+                    updateUI(); updatePerformanceAnalytics();
                     preventAutoSave = false;
                     const holdingsCount = Object.keys(portfolio.holdings).length;
                     status.textContent = `✅ Portfolio restored from ${file.name}! ${holdingsCount} positions. Reloading...`;
@@ -1527,7 +1515,6 @@
             }
 
             updatePerformanceAnalytics();
-            updateSectorAllocation(priceData);
 
             } catch (error) {
                 console.error('Error updating UI:', error);
@@ -2014,34 +2001,6 @@
             }
         }
 
-        // === SECTOR ALLOCATION ===
-
-        async function updateSectorAllocation(priceData = null) {
-            if (!sectorChart) return;
-            const sectorValues = {}; let totalHoldingsValue = 0;
-            if (Object.keys(portfolio.holdings).length > 0) {
-                for (const [symbol, shares] of Object.entries(portfolio.holdings)) {
-                    let stockPrice;
-                    if (priceData && priceData[symbol]) stockPrice = priceData[symbol];
-                    else { try { stockPrice = await getStockPrice(symbol); } catch (error) { stockPrice = { price: 0, change: 0, changePercent: 0 }; } }
-                    const value = stockPrice.price * shares;
-                    const sector = stockSectors[symbol] || 'Other';
-                    sectorValues[sector] = (sectorValues[sector] || 0) + value;
-                    totalHoldingsValue += value;
-                }
-            }
-            const sectorPercentages = {};
-            if (totalHoldingsValue > 0) { for (const [sector, value] of Object.entries(sectorValues)) sectorPercentages[sector] = (value / totalHoldingsValue) * 100; }
-            const sectors = Object.keys(sectorPercentages); const percentages = Object.values(sectorPercentages);
-            sectorChart.data.labels = sectors; sectorChart.data.datasets[0].data = percentages; sectorChart.update();
-            const legendHtml = sectors.map((sector, index) => {
-                const percentage = sectorPercentages[sector]; const value = sectorValues[sector];
-                const color = sectorChart.data.datasets[0].backgroundColor[index % sectorChart.data.datasets[0].backgroundColor.length];
-                return `<div class="sector-legend-item"><div class="sector-legend-swatch" style="background: ${color};"></div><div class="sector-legend-text">${sector}: <strong>${percentage.toFixed(1)}%</strong> ($${value.toFixed(2)})</div></div>`;
-            }).join('');
-            document.getElementById('sectorLegend').innerHTML = legendHtml;
-        }
-
         // === PERFORMANCE ANALYTICS (SIMPLIFIED) ===
 
         function updatePerformanceAnalytics() {
@@ -2132,7 +2091,7 @@
         // === WINDOW.ONLOAD (SIMPLIFIED) ===
 
         window.onload = async function() {
-            initChart();
+
             await loadPortfolio();
             if (portfolioStorage._serverAvailable) {
                 try {
@@ -2146,7 +2105,6 @@
             }
             loadApiUsage();
             updatePerformanceAnalytics();
-            updateSectorAllocation();
             updateApiKeyStatus();
         };
 
