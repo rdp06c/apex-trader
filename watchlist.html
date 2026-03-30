@@ -281,6 +281,7 @@
   let sortCol = 'dayChange';
   let sortAsc = false;
   let watchlistData = [];
+  let historicalData = {};
 
   // ── Escape HTML ─────────────────────────────────────
   function esc(s) {
@@ -423,6 +424,32 @@
     return result;
   }
 
+  // ── Fetch historical daily bars ──────────────────
+  async function fetchHistoricalBars(symbols) {
+    if (!apiKey || symbols.length === 0) return;
+
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 25);
+    const fromStr = from.toISOString().split('T')[0];
+    const toStr = to.toISOString().split('T')[0];
+
+    await Promise.all(symbols.map(async (symbol) => {
+      if (historicalData[symbol]) return;
+      try {
+        const res = await fetch(
+          `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${fromStr}/${toStr}?adjusted=true&sort=asc&limit=14&apiKey=${apiKey}`
+        );
+        const data = await res.json();
+        if (data.status === 'OK' && data.results) {
+          historicalData[symbol] = data.results;
+        }
+      } catch (e) {
+        console.error('Historical bars failed for', symbol, e);
+      }
+    }));
+  }
+
   // ── Add symbol ──────────────────────────────────────
   const symbolInput = document.getElementById('symbolInput');
   const addBtn = document.getElementById('addBtn');
@@ -457,6 +484,7 @@
 
       await savePortfolio();
       symbolInput.value = '';
+      await fetchHistoricalBars([raw]);
       await refresh();
     } catch (e) {
       addError.textContent = 'Error adding symbol';
@@ -490,12 +518,31 @@
         returnPct = ((snap.price - entry.addedPrice) / entry.addedPrice) * 100;
       }
 
+      let avg5d = null, avg10d = null;
+      const bars = historicalData[entry.symbol];
+      if (bars && bars.length >= 2) {
+        const changes = [];
+        for (let i = 1; i < bars.length; i++) {
+          changes.push(((bars[i].c - bars[i-1].c) / bars[i-1].c) * 100);
+        }
+        if (changes.length >= 5) {
+          const last5 = changes.slice(-5);
+          avg5d = last5.reduce((s, v) => s + v, 0) / last5.length;
+        }
+        if (changes.length >= 10) {
+          const last10 = changes.slice(-10);
+          avg10d = last10.reduce((s, v) => s + v, 0) / last10.length;
+        }
+      }
+
       rows.push({
         symbol: entry.symbol,
         name: stockNames[entry.symbol] || '',
         price: snap.price,
         dayChange: snap.changePct,
         returnPct,
+        avg5d,
+        avg10d,
         addedAt: entry.addedAt,
         addedPrice: entry.addedPrice
       });
@@ -514,6 +561,8 @@
         case 'price': cmp = a.price - b.price; break;
         case 'dayChange': cmp = a.dayChange - b.dayChange; break;
         case 'returnPct': cmp = (a.returnPct ?? -9999) - (b.returnPct ?? -9999); break;
+        case 'avg5d': cmp = (a.avg5d ?? -9999) - (b.avg5d ?? -9999); break;
+        case 'avg10d': cmp = (a.avg10d ?? -9999) - (b.avg10d ?? -9999); break;
         case 'addedAt': cmp = (a.addedAt || '').localeCompare(b.addedAt || ''); break;
         default: cmp = a.dayChange - b.dayChange; break;
       }
@@ -547,6 +596,8 @@
       { key: 'symbol', label: 'Symbol' },
       { key: 'price', label: 'Price' },
       { key: 'dayChange', label: 'Day%' },
+      { key: 'avg5d', label: '5D Avg%' },
+      { key: 'avg10d', label: '10D Avg%' },
       { key: 'returnPct', label: 'Since Added' },
       { key: 'addedAt', label: 'Added' },
     ];
@@ -578,6 +629,14 @@
       html += `<td style="font-weight:600"${r.name ? ` title="${esc(r.name)}"` : ''}>${esc(r.symbol)}</td>`;
       html += `<td>$${fmtPrice(r.price)}</td>`;
       html += `<td class="${r.dayChange >= 0 ? 'positive' : 'negative'}">${r.dayChange >= 0 ? '+' : ''}${r.dayChange.toFixed(2)}%</td>`;
+      const avg5dHtml = r.avg5d != null
+        ? `<span class="${r.avg5d >= 0 ? 'positive' : 'negative'}">${r.avg5d >= 0 ? '+' : ''}${r.avg5d.toFixed(2)}%</span>`
+        : '\u2014';
+      const avg10dHtml = r.avg10d != null
+        ? `<span class="${r.avg10d >= 0 ? 'positive' : 'negative'}">${r.avg10d >= 0 ? '+' : ''}${r.avg10d.toFixed(2)}%</span>`
+        : '\u2014';
+      html += `<td>${avg5dHtml}</td>`;
+      html += `<td>${avg10dHtml}</td>`;
       html += `<td>${returnDisplay}</td>`;
       html += `<td style="color:var(--text-muted)">${addedDisplay}</td>`;
       html += `<td><button class="remove-btn" data-symbol="${esc(r.symbol)}" title="Remove ${esc(r.symbol)}">&times;</button></td>`;
@@ -686,6 +745,9 @@
         '<div class="icon">&#128273;</div><p>No API key found. Open the main dashboard first to configure your Massive API key.</p>';
       return;
     }
+
+    const symbols = (portfolio.watchlist || []).map(e => e.symbol);
+    await fetchHistoricalBars(symbols);
 
     await refresh();
     updateRefreshStatus();
