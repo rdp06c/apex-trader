@@ -219,6 +219,7 @@
       <h1>APEX</h1>
       <a href="/" class="header-link">Dashboard</a>
       <a href="/monitor" class="header-link active">Monitor</a>
+      <a href="/watchlist" class="header-link">Watchlist</a>
       <a href="/admin" class="header-link">Admin</a>
     </div>
   </div>
@@ -275,6 +276,7 @@
   let sortAsc = true;        // ascending
   let holdingsData = [];     // current computed rows
   let hideDollars = localStorage.getItem('monitorHideDollars') === 'true';
+  let stockNames = {};  // symbol -> display name
 
   // ── Dollar toggle ────────────────────────────────────
   const dollarToggle = document.getElementById('dollarToggle');
@@ -355,6 +357,17 @@
       document.getElementById('landing').innerHTML =
         '<div class="icon">&#9888;&#65039;</div><p>Could not load portfolio. Open the main dashboard first.</p>';
     }
+  }
+
+  // ── Load stock names ───────────────────────────────
+  async function loadStockNames() {
+    try {
+      const res = await fetch('/api/stocks');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.stockNames) stockNames = data.stockNames;
+      }
+    } catch (_) {}
   }
 
   // ── Load API key ────────────────────────────────────
@@ -617,7 +630,10 @@
         : '\u2014';
 
       html += `<tr class="risk-${r.level}${flashClass}">`;
-      html += `<td style="font-weight:600">${esc(r.symbol)}</td>`;
+      const name = stockNames[r.symbol] || '';
+      html += name
+        ? `<td style="font-weight:600">${esc(r.symbol)} <span style="font-weight:400;font-size:11px;color:var(--text-muted)">${esc(name)}</span></td>`
+        : `<td style="font-weight:600">${esc(r.symbol)}</td>`;
       html += `<td>$${r.price.toFixed(2)}</td>`;
       html += `<td class="${r.dayChange >= 0 ? 'positive' : 'negative'}">${r.dayChange >= 0 ? '+' : ''}${r.dayChange.toFixed(2)}%</td>`;
       html += hideDollars
@@ -725,7 +741,7 @@
 
   // ── Init ────────────────────────────────────────────
   async function init() {
-    await Promise.all([loadPortfolio(), loadApiKey()]);
+    await Promise.all([loadPortfolio(), loadApiKey(), loadStockNames()]);
 
     if (!portfolio) return;
     if (!apiKey) {

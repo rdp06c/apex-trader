@@ -27,7 +27,8 @@ const DEFAULT_PORTFOLIO = {
     holdSnapshots: [],
     blockedTrades: [],
     calibratedWeights: null,
-    portfolioHealth: null
+    portfolioHealth: null,
+    watchlist: []
 };
 
 // Simple in-process mutex to prevent concurrent file writes

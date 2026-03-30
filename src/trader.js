@@ -385,6 +385,7 @@
             'CNX': 'CNX Resources', 'RRC': 'Range Resources', 'WFRD': 'Weatherford',
             'LBRT': 'Liberty Energy', 'PTEN': 'Patterson-UTI',
             'HP': 'Helmerich & Payne',
+            'NFE': 'New Fortress Energy', 'AMPY': 'Amplify Energy',
 
             // Industrials
             'BA': 'Boeing', 'CAT': 'Caterpillar', 'DE': 'Deere & Co.', 'GE': 'GE Aerospace',
@@ -515,8 +516,14 @@
             'CORZ': 'Core Scientific', 'WULF': 'TeraWulf', 'IREN': 'Iris Energy',
             'CIFR': 'Cipher Mining',
 
+            // Chemicals
+            'LXU': 'LSB Industries',
+
             // Index Funds
-            'SPY': 'S&P 500 ETF', 'QQQ': 'Nasdaq 100 ETF', 'IWM': 'Russell 2000 ETF', 'VOO': 'Vanguard S&P 500'
+            'SPY': 'S&P 500 ETF', 'QQQ': 'Nasdaq 100 ETF', 'IWM': 'Russell 2000 ETF', 'VOO': 'Vanguard S&P 500',
+            'VONG': 'Vanguard Russell 1000 Growth ETF', 'XMMO': 'Invesco S&P MidCap Momentum ETF',
+            'SCHF': 'Schwab International Equity ETF', 'VSS': 'Vanguard FTSE All-World ex-US Small-Cap ETF',
+            'SPEM': 'SPDR Portfolio Emerging Markets ETF', 'VOOG': 'Vanguard S&P 500 Growth ETF'
         };
 
         const stockSectors = {
@@ -842,7 +849,11 @@
             'COIN': 'Crypto', 'MSTR': 'Crypto', 'MARA': 'Crypto', 'RIOT': 'Crypto',
             'CLSK': 'Crypto', 'HUT': 'Crypto', 'BTDR': 'Crypto', 'BITF': 'Crypto',
             'CORZ': 'Crypto', 'WULF': 'Crypto', 'IREN': 'Crypto', 'CIFR': 'Crypto',
-            'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund'
+            'LXU': 'Chemicals',
+            'NFE': 'Energy', 'AMPY': 'Energy',
+            'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund',
+            'VONG': 'Index Fund', 'XMMO': 'Index Fund', 'SCHF': 'Index Fund',
+            'VSS': 'Index Fund', 'SPEM': 'Index Fund', 'VOOG': 'Index Fund'
         };
 
         // API Configuration
@@ -2069,10 +2080,34 @@
 
         // === TRADE HISTORY ===
 
+        let tradeHistoryTab = 'closed';
+
         function updateTradeHistory() {
             const container = document.getElementById('tradeHistory');
+            const tabStyle = 'display:inline-block;padding:4px 12px;font-size:11px;font-weight:600;letter-spacing:0.5px;border-radius:6px;cursor:pointer;margin-right:4px;transition:all 0.15s ease;';
+            const activeStyle = 'background:var(--accent-dim);color:var(--accent);border:1px solid rgba(245,158,11,0.3);';
+            const inactiveStyle = 'background:transparent;color:var(--text-faint);border:1px solid transparent;';
+
+            let html = '<div style="margin-bottom:10px;">';
+            html += `<span class="trade-history-tab" data-tab="closed" style="${tabStyle}${tradeHistoryTab === 'closed' ? activeStyle : inactiveStyle}">Closed</span>`;
+            html += `<span class="trade-history-tab" data-tab="open" style="${tabStyle}${tradeHistoryTab === 'open' ? activeStyle : inactiveStyle}">Open</span>`;
+            html += '</div>';
+
+            if (tradeHistoryTab === 'closed') {
+                html += renderClosedTrades();
+            } else {
+                html += renderOpenPositions();
+            }
+
+            container.innerHTML = html;
+            container.querySelectorAll('.trade-history-tab').forEach(tab => {
+                tab.addEventListener('click', () => { tradeHistoryTab = tab.dataset.tab; updateTradeHistory(); });
+            });
+        }
+
+        function renderClosedTrades() {
             const closedTrades = portfolio.closedTrades || [];
-            if (closedTrades.length === 0) { container.innerHTML = '<div class="empty-state">No closed trades yet</div>'; return; }
+            if (closedTrades.length === 0) return '<div class="empty-state">No closed trades yet</div>';
             const sorted = [...closedTrades].reverse();
             let html = `<table class="signal-accuracy-table"><thead><tr><th>Symbol</th><th>Buy</th><th>Sell</th><th>Shares</th><th>P&L</th><th>Return</th><th>Hold</th></tr></thead><tbody>`;
             for (const t of sorted) {
@@ -2085,7 +2120,51 @@
                 html += `<tr><td style="font-weight:600;">${escapeHtml(t.symbol)}</td><td>${buyDate}</td><td>${sellDate}</td><td>${t.shares}</td><td style="color:${plColor};font-weight:600;">${plSign}$${t.profitLoss.toFixed(2)}</td><td style="color:${plColor};">${plSign}${t.returnPercent.toFixed(1)}%</td><td>${holdStr}</td></tr>`;
             }
             html += '</tbody></table>';
-            container.innerHTML = html;
+            return html;
+        }
+
+        function renderOpenPositions() {
+            const holdings = portfolio.holdings || {};
+            const openSymbols = Object.keys(holdings).filter(s => holdings[s] > 0);
+            if (openSymbols.length === 0) return '<div class="empty-state">No open positions</div>';
+
+            const rows = [];
+            for (const symbol of openSymbols) {
+                const buys = getCurrentPositionBuys(symbol);
+                if (buys.length === 0) continue;
+                const totalShares = buys.reduce((sum, b) => sum + b.shares, 0);
+                const totalCost = buys.reduce((sum, b) => sum + b.shares * b.price, 0);
+                const avgCost = totalShares > 0 ? totalCost / totalShares : 0;
+                const earliestBuy = buys[0].timestamp;
+                const holdDays = countTradingDays(new Date(earliestBuy), new Date());
+                const cached = getCachedPrice(symbol);
+                const currentPrice = cached ? cached.price : null;
+                let pl = null, plPct = null;
+                if (currentPrice && avgCost > 0) {
+                    pl = (currentPrice - avgCost) * totalShares;
+                    plPct = ((currentPrice - avgCost) / avgCost) * 100;
+                }
+                rows.push({ symbol, shares: totalShares, avgCost, buyDate: earliestBuy, holdDays, currentPrice, pl, plPct });
+            }
+
+            rows.sort((a, b) => new Date(b.buyDate) - new Date(a.buyDate));
+
+            let html = `<table class="signal-accuracy-table"><thead><tr><th>Symbol</th><th>Buy</th><th>Shares</th><th>Avg Cost</th><th>Price</th><th>P&L</th><th>Return</th><th>Hold</th></tr></thead><tbody>`;
+            for (const r of rows) {
+                const buyDate = new Date(r.buyDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const holdStr = r.holdDays <= 1 ? '<1d' : r.holdDays + 'd';
+                const priceStr = r.currentPrice ? '$' + r.currentPrice.toFixed(2) : '--';
+                let plStr = '--', retStr = '--', plColor = 'var(--text-faint)';
+                if (r.pl != null) {
+                    plColor = r.pl >= 0 ? 'var(--green)' : 'var(--red)';
+                    const plSign = r.pl >= 0 ? '+' : '';
+                    plStr = `${plSign}$${r.pl.toFixed(2)}`;
+                    retStr = `${plSign}${r.plPct.toFixed(1)}%`;
+                }
+                html += `<tr><td style="font-weight:600;">${escapeHtml(r.symbol)}</td><td>${buyDate}</td><td>${r.shares}</td><td>$${r.avgCost.toFixed(2)}</td><td>${priceStr}</td><td style="color:${plColor};font-weight:600;">${plStr}</td><td style="color:${plColor};">${retStr}</td><td>${holdStr}</td></tr>`;
+            }
+            html += '</tbody></table>';
+            return html;
         }
 
         // === WINDOW.ONLOAD (SIMPLIFIED) ===

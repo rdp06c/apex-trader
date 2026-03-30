@@ -24,6 +24,7 @@ server/
     portfolio.json  <- Server-side portfolio storage (gitignored)
     backups/        <- Last 5 portfolio saves (gitignored)
 monitor.html          <- Holdings monitor (standalone, auto-refresh prices)
+watchlist.html        <- Watchlist tracker (standalone, auto-refresh prices)
 build.cmd / build.sh  <- Build scripts
 index.html            <- Generated output (DO NOT EDIT DIRECTLY)
 package.json          <- Express dependencies
@@ -38,7 +39,9 @@ package.json          <- Express dependencies
 Raspberry Pi (Express server, port 4000)
 |-- GET/POST /api/portfolio     <- Server-side portfolio storage (JSON file)
 |-- GET /api/config             <- Serves Polygon API key to authenticated browsers
+|-- GET /api/stocks             <- Stock names for monitor/watchlist pages
 |-- GET /monitor                <- Holdings monitor (auto-refresh prices)
+|-- GET /watchlist              <- Watchlist tracker (auto-refresh prices)
 |-- GET /admin                  <- Admin panel (uptime, logs, pull & restart)
 |-- Static files (index.html)   <- Built dashboard
 |-- Cloudflare Tunnel           <- Remote access (dash.arc-apex.com)
@@ -120,6 +123,20 @@ Standalone lightweight page for monitoring current holdings with auto-refreshing
 **Summary cards:** Holdings Value, Day P&L ($ and %), Unrealized P&L ($ and %), Position count with W/L breakdown.
 
 **Table columns:** Symbol, Price, Day%, Day P&L, P&L%, Value, Stop (-10%), Target (+10%), Days (trading days). All columns sortable. Risk-level row highlighting (danger/caution/healthy). Price flash animation on change.
+
+## Watchlist (`watchlist.html`)
+
+Standalone page for tracking symbols of interest without holding them. Same auto-refresh pattern as monitor.html (30s during market hours, pause when hidden/closed).
+
+**Data:** Stored in `portfolio.watchlist` as `[{symbol, addedAt, addedPrice}]`. Legacy string-array format auto-migrated on first load.
+
+**Add:** Text input on the page. Fetches current price from Polygon on add (client-side), snapshots it as `addedPrice`. Invalid symbols rejected (no Polygon data = no add).
+
+**Remove:** X button per row. Saves portfolio immediately.
+
+**Table columns:** Symbol (with name), Price, Day%, Since Added (%), Added date. All columns sortable.
+
+**Summary cards:** Watching (count), Winners (return > 0), Losers (return < 0).
 
 ## Admin Panel
 

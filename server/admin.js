@@ -181,6 +181,7 @@ router.get('/', (req, res) => {
     <h1>APEX Admin</h1>
     <a href="/" class="back-link">&larr; Dashboard</a>
     <a href="/monitor" class="back-link">Monitor</a>
+    <a href="/watchlist" class="back-link">Watchlist</a>
 </div>
 
 <h2>Server Status</h2>

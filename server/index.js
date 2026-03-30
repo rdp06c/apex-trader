@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const portfolioRoutes = require('./api/portfolio');
 const adminRoutes = require('./admin');
+const { stockNames } = require('./lib/stocks');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -42,12 +43,22 @@ app.get('/api/config', (req, res) => {
     res.json(config);
 });
 
+// Stock names for monitor page
+app.get('/api/stocks', (req, res) => {
+    res.json({ stockNames });
+});
+
 // Admin panel
 app.use('/admin', adminRoutes);
 
 // Holdings monitor (auto-refresh)
 app.get('/monitor', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'monitor.html'));
+});
+
+// Watchlist page
+app.get('/watchlist', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'watchlist.html'));
 });
 
 app.use(express.static(path.join(__dirname, '..')));

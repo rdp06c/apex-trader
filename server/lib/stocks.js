@@ -234,6 +234,7 @@ const stockNames = {
     'CNX': 'CNX Resources', 'RRC': 'Range Resources', 'WFRD': 'Weatherford',
     'LBRT': 'Liberty Energy', 'PTEN': 'Patterson-UTI',
     'HP': 'Helmerich & Payne',
+    'NFE': 'New Fortress Energy', 'AMPY': 'Amplify Energy',
     // Industrials
     'BA': 'Boeing', 'CAT': 'Caterpillar', 'DE': 'Deere & Co.', 'GE': 'GE Aerospace',
     'HON': 'Honeywell', 'UPS': 'United Parcel Service', 'FDX': 'FedEx',
@@ -353,8 +354,14 @@ const stockNames = {
     // Crypto additions
     'CORZ': 'Core Scientific', 'WULF': 'TeraWulf', 'IREN': 'Iris Energy',
     'CIFR': 'Cipher Mining',
+    // Chemicals
+    'LXU': 'LSB Industries',
+
     // Index Funds
-    'SPY': 'S&P 500 ETF', 'QQQ': 'Nasdaq 100 ETF', 'IWM': 'Russell 2000 ETF', 'VOO': 'Vanguard S&P 500'
+    'SPY': 'S&P 500 ETF', 'QQQ': 'Nasdaq 100 ETF', 'IWM': 'Russell 2000 ETF', 'VOO': 'Vanguard S&P 500',
+    'VONG': 'Vanguard Russell 1000 Growth ETF', 'XMMO': 'Invesco S&P MidCap Momentum ETF',
+    'SCHF': 'Schwab International Equity ETF', 'VSS': 'Vanguard FTSE All-World ex-US Small-Cap ETF',
+    'SPEM': 'SPDR Portfolio Emerging Markets ETF', 'VOOG': 'Vanguard S&P 500 Growth ETF'
 };
 
 const stockSectors = {
@@ -695,7 +702,11 @@ const stockSectors = {
     // Crypto additions
     'CORZ': 'Crypto', 'WULF': 'Crypto', 'IREN': 'Crypto', 'CIFR': 'Crypto',
     // Index Funds
-    'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund'
+    'LXU': 'Chemicals',
+    'NFE': 'Energy', 'AMPY': 'Energy',
+    'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund',
+    'VONG': 'Index Fund', 'XMMO': 'Index Fund', 'SCHF': 'Index Fund',
+    'VSS': 'Index Fund', 'SPEM': 'Index Fund', 'VOOG': 'Index Fund'
 };
 
 // Returns deduplicated list of all scan symbols (matches screenStocks() in trader.js)
