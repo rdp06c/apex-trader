@@ -428,7 +428,8 @@
         price: parseFloat(price),
         change: parseFloat(change),
         changePct: parseFloat(changePct),
-        prevClose: parseFloat(prevClose)
+        prevClose: parseFloat(prevClose),
+        volume: day.v || 0
       };
     }
     return result;
@@ -482,12 +483,6 @@
         dayChange = snap.changePct;
       }
 
-      const stopPrice = avgCost > 0 ? avgCost * 0.9 : null;
-      const targetPrice = avgCost > 0 ? avgCost * 1.1 : null;
-
-      const stopDist = stopPrice && snap.price ? ((snap.price - stopPrice) / snap.price * 100) : null;
-      const targetDist = targetPrice && snap.price ? ((targetPrice - snap.price) / snap.price * 100) : null;
-
       const level = plPct <= -8 ? 'danger' : plPct <= -5 ? 'caution' : 'healthy';
 
       // Days held (trading days) from earliest buy in current position
@@ -499,7 +494,7 @@
       rows.push({
         symbol, shares, avgCost, currentValue, costBasis,
         price: snap.price, dayChange, dayPL,
-        pl, plPct, level, stopPrice, targetPrice, stopDist, targetDist, daysHeld
+        pl, plPct, level, volume: snap.volume, daysHeld
       });
     }
 
@@ -519,8 +514,8 @@
         case 'pl': cmp = a.plPct - b.plPct; break;
         case 'dayPL': cmp = a.dayPL - b.dayPL; break;
         case 'value': cmp = a.currentValue - b.currentValue; break;
-        case 'stop': cmp = (a.stopDist ?? 999) - (b.stopDist ?? 999); break;
-        case 'target': cmp = (a.targetDist ?? 999) - (b.targetDist ?? 999); break;
+        case 'plDollar': cmp = a.pl - b.pl; break;
+        case 'volume': cmp = a.volume - b.volume; break;
         case 'days': cmp = (a.daysHeld ?? 0) - (b.daysHeld ?? 0); break;
         case 'risk':
         default:
@@ -594,9 +589,9 @@
       { key: 'dayChange', label: 'Day%' },
       { key: 'dayPL', label: 'Day P&L' },
       { key: 'pl', label: 'P&L %' },
+      { key: 'plDollar', label: 'P&L $' },
       { key: 'value', label: 'Value' },
-      { key: 'stop', label: 'Stop (-10%)' },
-      { key: 'target', label: 'Target (+10%)' },
+      { key: 'volume', label: 'Volume' },
       { key: 'days', label: 'Days' },
     ];
 
@@ -614,22 +609,6 @@
       const priceChanged = lastPrices[r.symbol] != null && lastPrices[r.symbol] !== r.price;
       const flashClass = priceChanged ? ' flash' : '';
 
-      // Stop coloring: only highlight when close
-      const stopColor = r.stopDist != null
-        ? (r.stopDist < 2 ? 'color:#ef4444' : r.stopDist < 5 ? 'color:#f59e0b' : '')
-        : '';
-      const stopDisplay = r.stopPrice != null
-        ? `<span style="${stopColor}" title="${r.stopDist != null ? r.stopDist.toFixed(1) + '% above stop' : ''}">$${fmtPrice(r.stopPrice)}</span>`
-        : '\u2014';
-
-      // Target coloring: highlight when approaching
-      const targetColor = r.targetDist != null
-        ? (r.targetDist <= 2 ? 'color:#4ade80' : r.targetDist <= 5 ? 'color:#22c55e' : '')
-        : '';
-      const targetDisplay = r.targetPrice != null
-        ? `<span style="${targetColor}" title="${r.targetDist != null ? r.targetDist.toFixed(1) + '% to target' : ''}">$${fmtPrice(r.targetPrice)}</span>`
-        : '\u2014';
-
       const daysDisplay = r.daysHeld != null
         ? `<span${r.daysHeld < 3 ? ' style="color:#f59e0b" title="3-day minimum hold"' : ''}>${r.daysHeld === 0 ? 'Today' : r.daysHeld}</span>`
         : '\u2014';
@@ -644,10 +623,12 @@
         : `<td class="${r.dayPL >= 0 ? 'positive' : 'negative'}">${r.dayPL >= 0 ? '+' : ''}$${r.dayPL.toFixed(2)}</td>`;
       html += `<td class="${r.plPct >= 0 ? 'positive' : 'negative'}">${r.plPct >= 0 ? '+' : ''}${r.plPct.toFixed(1)}%</td>`;
       html += hideDollars
+        ? `<td class="${r.pl >= 0 ? 'positive' : 'negative'}">\u2022\u2022\u2022</td>`
+        : `<td class="${r.pl >= 0 ? 'positive' : 'negative'}">${r.pl >= 0 ? '+' : ''}$${r.pl.toFixed(2)}</td>`;
+      html += hideDollars
         ? '<td>\u2022\u2022\u2022</td>'
         : `<td>$${r.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
-      html += `<td>${stopDisplay}</td>`;
-      html += `<td>${targetDisplay}</td>`;
+      html += `<td style="color:var(--text-muted)">${r.volume >= 1e6 ? (r.volume / 1e6).toFixed(1) + 'M' : r.volume >= 1e3 ? (r.volume / 1e3).toFixed(0) + 'K' : r.volume.toLocaleString()}</td>`;
       html += `<td>${daysDisplay}</td>`;
       html += '</tr>';
     }
