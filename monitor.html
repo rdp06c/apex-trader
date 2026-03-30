@@ -511,6 +511,7 @@
         case 'symbol': cmp = a.symbol.localeCompare(b.symbol); break;
         case 'price': cmp = a.price - b.price; break;
         case 'avgCost': cmp = a.avgCost - b.avgCost; break;
+        case 'shares': cmp = a.shares - b.shares; break;
         case 'dayChange': cmp = a.dayChange - b.dayChange; break;
         case 'pl': cmp = a.plPct - b.plPct; break;
         case 'dayPL': cmp = a.dayPL - b.dayPL; break;
@@ -588,6 +589,7 @@
       { key: 'symbol', label: 'Symbol' },
       { key: 'price', label: 'Price' },
       { key: 'avgCost', label: 'Avg Cost' },
+      { key: 'shares', label: 'Shares' },
       { key: 'dayChange', label: 'Day%' },
       { key: 'dayPL', label: 'Day P&L' },
       { key: 'pl', label: 'P&L %' },
@@ -620,6 +622,7 @@
       html += `<td style="font-weight:600"${name ? ` title="${esc(name)}"` : ''}>${esc(r.symbol)}</td>`;
       html += `<td>$${fmtPrice(r.price)}</td>`;
       html += `<td style="color:var(--text-muted)">$${fmtPrice(r.avgCost)}</td>`;
+      html += `<td style="color:var(--text-muted)">${r.shares % 1 === 0 ? r.shares : r.shares.toFixed(4)}</td>`;
       html += `<td class="${r.dayChange >= 0 ? 'positive' : 'negative'}">${r.dayChange >= 0 ? '+' : ''}${r.dayChange.toFixed(2)}%</td>`;
       html += hideDollars
         ? `<td class="${r.dayPL >= 0 ? 'positive' : 'negative'}">\u2022\u2022\u2022</td>`
