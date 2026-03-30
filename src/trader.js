@@ -385,7 +385,8 @@
             'CNX': 'CNX Resources', 'RRC': 'Range Resources', 'WFRD': 'Weatherford',
             'LBRT': 'Liberty Energy', 'PTEN': 'Patterson-UTI',
             'HP': 'Helmerich & Payne',
-            'NFE': 'New Fortress Energy', 'AMPY': 'Amplify Energy',
+            'NFE': 'New Fortress Energy', 'AMPY': 'Amplify Energy', 'EE': 'Excelerate Energy',
+            'LEU': 'Centrus Energy',
 
             // Industrials
             'BA': 'Boeing', 'CAT': 'Caterpillar', 'DE': 'Deere & Co.', 'GE': 'GE Aerospace',
@@ -470,7 +471,7 @@
             'GOLD': 'Barrick Gold', 'AU': 'AngloGold Ashanti', 'AEM': 'Agnico Eagle', 'WPM': 'Wheaton Precious Metals',
             'FNV': 'Franco-Nevada', 'RGLD': 'Royal Gold', 'KGC': 'Kinross Gold', 'HL': 'Hecla Mining',
             'STLD': 'Steel Dynamics', 'RS': 'Reliance Steel', 'CLF': 'Cleveland-Cliffs', 'MT': 'ArcelorMittal',
-            'TX': 'Ternium', 'CMC': 'Commercial Metals', 'ATI': 'ATI Inc.',
+            'TX': 'Ternium', 'CMC': 'Commercial Metals', 'ATI': 'ATI Inc.', 'KALU': 'Kaiser Aluminum',
             'LYB': 'LyondellBasell', 'EMN': 'Eastman Chemical', 'CE': 'Celanese', 'DD': 'DuPont',
             'APD': 'Air Products', 'LIN': 'Linde', 'GTLS': 'Chart Industries', 'NUAI': 'New Era Helium', 'ASPI': 'ASP Isotopes', 'ECL': 'Ecolab',
             'SHW': 'Sherwin-Williams', 'PPG': 'PPG Industries', 'RPM': 'RPM International', 'AXTA': 'Axalta Coating',
@@ -850,7 +851,8 @@
             'CLSK': 'Crypto', 'HUT': 'Crypto', 'BTDR': 'Crypto', 'BITF': 'Crypto',
             'CORZ': 'Crypto', 'WULF': 'Crypto', 'IREN': 'Crypto', 'CIFR': 'Crypto',
             'LXU': 'Chemicals',
-            'NFE': 'Energy', 'AMPY': 'Energy',
+            'NFE': 'Energy', 'AMPY': 'Energy', 'EE': 'Energy', 'LEU': 'Energy',
+            'KALU': 'Materials',
             'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund',
             'VONG': 'Index Fund', 'XMMO': 'Index Fund', 'SCHF': 'Index Fund',
             'VSS': 'Index Fund', 'SPEM': 'Index Fund', 'VOOG': 'Index Fund'
@@ -1280,7 +1282,7 @@
                             <span class="compact-shares">${Number.isInteger(h.shares) ? h.shares : h.shares.toFixed(4)} shares</span>
                         </div>
                         <div class="compact-right">
-                            <span class="compact-price">$${h.stockPrice.price.toFixed(2)}</span>
+                            <span class="compact-price">$${fmtPrice(h.stockPrice.price)}</span>
                             <span class="compact-daily ${h.changeClass}">${h.stockPrice.changePercent >= 0 ? '+' : ''}${h.stockPrice.changePercent.toFixed(2)}%</span>
                         </div>
                     </div>
@@ -1309,13 +1311,13 @@
                             </div>
                         </div>
                         <div class="holding-card-stats">
-                            ${stopPrice ? '<span class="hc-stat"><span class="hc-stat-lbl">Stop</span><span class="hc-stat-val ' + (h.stockPrice.price <= stopPrice ? 'negative' : '') + '">$' + stopPrice.toFixed(2) + '</span></span>' : ''}
-                            ${targetPrice ? '<span class="hc-stat"><span class="hc-stat-lbl">Target</span><span class="hc-stat-val ' + (h.stockPrice.price >= targetPrice ? 'positive' : '') + '">$' + targetPrice.toFixed(2) + '</span></span>' : ''}
+                            ${stopPrice ? '<span class="hc-stat"><span class="hc-stat-lbl">Stop</span><span class="hc-stat-val ' + (h.stockPrice.price <= stopPrice ? 'negative' : '') + '">$' + fmtPrice(stopPrice) + '</span></span>' : ''}
+                            ${targetPrice ? '<span class="hc-stat"><span class="hc-stat-lbl">Target</span><span class="hc-stat-val ' + (h.stockPrice.price >= targetPrice ? 'positive' : '') + '">$' + fmtPrice(targetPrice) + '</span></span>' : ''}
                         </div>
                         <div class="holding-card-footer">
                             <div><span class="holding-card-footer-label">Entry:</span> <span class="holding-card-footer-value">${h.earliestDate ? h.earliestDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'N/A'}</span></div>
-                            <div><span class="holding-card-footer-label">Cost:</span> <span class="holding-card-footer-value">$${h.avgPurchasePrice.toFixed(2)}</span></div>
-                            <div><span class="holding-card-footer-label">Now:</span> <span class="holding-card-footer-value">$${h.stockPrice.price.toFixed(2)}</span></div>
+                            <div><span class="holding-card-footer-label">Cost:</span> <span class="holding-card-footer-value">$${fmtPrice(h.avgPurchasePrice)}</span></div>
+                            <div><span class="holding-card-footer-label">Now:</span> <span class="holding-card-footer-value">$${fmtPrice(h.stockPrice.price)}</span></div>
                         </div>
                     </div>
                 `;
@@ -1577,6 +1579,10 @@
         function escapeHtml(str) {
             if (typeof str !== 'string') return String(str ?? '');
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function fmtPrice(p) {
+            return p < 1 ? p.toFixed(4) : p.toFixed(2);
         }
 
         function addActivity(text, type = 'general') {
@@ -2153,7 +2159,7 @@
             for (const r of rows) {
                 const buyDate = new Date(r.buyDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 const holdStr = r.holdDays <= 1 ? '<1d' : r.holdDays + 'd';
-                const priceStr = r.currentPrice ? '$' + r.currentPrice.toFixed(2) : '--';
+                const priceStr = r.currentPrice ? '$' + fmtPrice(r.currentPrice) : '--';
                 let plStr = '--', retStr = '--', plColor = 'var(--text-faint)';
                 if (r.pl != null) {
                     plColor = r.pl >= 0 ? 'var(--green)' : 'var(--red)';
@@ -2161,7 +2167,7 @@
                     plStr = `${plSign}$${r.pl.toFixed(2)}`;
                     retStr = `${plSign}${r.plPct.toFixed(1)}%`;
                 }
-                html += `<tr><td style="font-weight:600;">${escapeHtml(r.symbol)}</td><td>${buyDate}</td><td>${r.shares}</td><td>$${r.avgCost.toFixed(2)}</td><td>${priceStr}</td><td style="color:${plColor};font-weight:600;">${plStr}</td><td style="color:${plColor};">${retStr}</td><td>${holdStr}</td></tr>`;
+                html += `<tr><td style="font-weight:600;">${escapeHtml(r.symbol)}</td><td>${buyDate}</td><td>${r.shares}</td><td>$${fmtPrice(r.avgCost)}</td><td>${priceStr}</td><td style="color:${plColor};font-weight:600;">${plStr}</td><td style="color:${plColor};">${retStr}</td><td>${holdStr}</td></tr>`;
             }
             html += '</tbody></table>';
             return html;

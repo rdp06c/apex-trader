@@ -289,6 +289,11 @@
     return d.innerHTML;
   }
 
+  // ── Format price (4 decimals for sub-$1, else 2) ───
+  function fmtPrice(p) {
+    return p < 1 ? p.toFixed(4) : p.toFixed(2);
+  }
+
   // ── Market hours check ──────────────────────────────
   function isMarketOpen() {
     const now = new Date();
@@ -569,13 +574,9 @@
         ? new Date(r.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         : '\u2014';
 
-      const nameSpan = r.name
-        ? ` <span style="font-weight:400;font-size:11px;color:var(--text-muted)">${esc(r.name)}</span>`
-        : '';
-
       html += `<tr class="${flashClass}">`;
-      html += `<td style="font-weight:600">${esc(r.symbol)}${nameSpan}</td>`;
-      html += `<td>$${r.price.toFixed(2)}</td>`;
+      html += `<td style="font-weight:600"${r.name ? ` title="${esc(r.name)}"` : ''}>${esc(r.symbol)}</td>`;
+      html += `<td>$${fmtPrice(r.price)}</td>`;
       html += `<td class="${r.dayChange >= 0 ? 'positive' : 'negative'}">${r.dayChange >= 0 ? '+' : ''}${r.dayChange.toFixed(2)}%</td>`;
       html += `<td>${returnDisplay}</td>`;
       html += `<td style="color:var(--text-muted)">${addedDisplay}</td>`;

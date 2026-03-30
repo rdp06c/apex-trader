@@ -234,7 +234,8 @@ const stockNames = {
     'CNX': 'CNX Resources', 'RRC': 'Range Resources', 'WFRD': 'Weatherford',
     'LBRT': 'Liberty Energy', 'PTEN': 'Patterson-UTI',
     'HP': 'Helmerich & Payne',
-    'NFE': 'New Fortress Energy', 'AMPY': 'Amplify Energy',
+    'NFE': 'New Fortress Energy', 'AMPY': 'Amplify Energy', 'EE': 'Excelerate Energy',
+    'LEU': 'Centrus Energy',
     // Industrials
     'BA': 'Boeing', 'CAT': 'Caterpillar', 'DE': 'Deere & Co.', 'GE': 'GE Aerospace',
     'HON': 'Honeywell', 'UPS': 'United Parcel Service', 'FDX': 'FedEx',
@@ -313,7 +314,7 @@ const stockNames = {
     'GOLD': 'Barrick Gold', 'AU': 'AngloGold Ashanti', 'AEM': 'Agnico Eagle', 'WPM': 'Wheaton Precious Metals',
     'FNV': 'Franco-Nevada', 'RGLD': 'Royal Gold', 'KGC': 'Kinross Gold', 'HL': 'Hecla Mining',
     'STLD': 'Steel Dynamics', 'RS': 'Reliance Steel', 'CLF': 'Cleveland-Cliffs', 'MT': 'ArcelorMittal',
-    'TX': 'Ternium', 'CMC': 'Commercial Metals', 'ATI': 'ATI Inc.',
+    'TX': 'Ternium', 'CMC': 'Commercial Metals', 'ATI': 'ATI Inc.', 'KALU': 'Kaiser Aluminum',
     'LYB': 'LyondellBasell', 'EMN': 'Eastman Chemical', 'CE': 'Celanese', 'DD': 'DuPont',
     'APD': 'Air Products', 'LIN': 'Linde', 'GTLS': 'Chart Industries', 'NUAI': 'New Era Helium', 'ASPI': 'ASP Isotopes', 'ECL': 'Ecolab',
     'SHW': 'Sherwin-Williams', 'PPG': 'PPG Industries', 'RPM': 'RPM International', 'AXTA': 'Axalta Coating',
@@ -703,7 +704,8 @@ const stockSectors = {
     'CORZ': 'Crypto', 'WULF': 'Crypto', 'IREN': 'Crypto', 'CIFR': 'Crypto',
     // Index Funds
     'LXU': 'Chemicals',
-    'NFE': 'Energy', 'AMPY': 'Energy',
+    'NFE': 'Energy', 'AMPY': 'Energy', 'EE': 'Energy', 'LEU': 'Energy',
+    'KALU': 'Materials',
     'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'VOO': 'Index Fund',
     'VONG': 'Index Fund', 'XMMO': 'Index Fund', 'SCHF': 'Index Fund',
     'VSS': 'Index Fund', 'SPEM': 'Index Fund', 'VOOG': 'Index Fund'
